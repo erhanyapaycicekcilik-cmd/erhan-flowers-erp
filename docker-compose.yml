@@ -1,0 +1,19 @@
+﻿services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: erhan-flowers-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: erhanflowers
+      POSTGRES_PASSWORD: ErhanFlowersDb123!
+      POSTGRES_DB: erhan_flowers_panel_mvp
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
+
+
+

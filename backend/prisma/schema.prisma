@@ -1,0 +1,1679 @@
+generator client {
+  provider   = "prisma-client-js"
+  engineType = "library"
+  output     = "../src/generated/prisma-client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum RecordStatus {
+  ACTIVE
+  PASSIVE
+}
+
+enum RecipeCostType {
+  LABOR
+  ELECTRICITY
+  SILICONE
+  PACKAGING
+  SHIPPING
+  OTHER
+}
+
+enum ProductionCostGroup {
+  LEAF
+  TRUNK
+  POT
+  CONSUMABLE
+  LABOR
+  ELECTRICITY
+  PACKAGING
+  OTHER
+}
+
+enum TemplateComponentScope {
+  COMMON
+  SIZE_VARIANT
+  POT_VARIANT
+}
+
+enum FinanceDirection {
+  IN
+  OUT
+  NEUTRAL
+}
+
+enum FinanceTransactionType {
+  INCOME
+  EXPENSE
+  DEBT
+  RECEIVABLE
+  PAYMENT
+  COLLECTION
+  TRANSFER
+  MARKETPLACE_SETTLEMENT
+  SALARY
+  REGULAR_PAYMENT
+}
+
+enum FinanceCategoryKind {
+  INCOME
+  EXPENSE
+  BOTH
+}
+
+enum FinanceAccountType {
+  BANK
+  CASH
+  CREDIT_CARD
+  MARKETPLACE_RECEIVABLE
+}
+
+enum FinancePaymentStatus {
+  PENDING
+  PARTIAL
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+enum FinanceRecordStatus {
+  ACTIVE
+  CANCELLED
+  CORRECTED
+}
+
+enum FinanceRecurringFrequency {
+  WEEKLY
+  MONTHLY
+  QUARTERLY
+  YEARLY
+}
+
+enum BambuLeafRoundingMode {
+  DOWN
+  UP
+  NEAREST
+}
+
+enum StockUsageEventType {
+  PRODUCTION_COMPLETED
+  ORDER_SHIPPED
+}
+
+enum ProductCostItemGroup {
+  LEAF_TRUNK
+  POT
+  CONSUMABLE
+  LABOR
+  PACKAGING
+  OTHER
+}
+
+enum ProductCostSource {
+  AUTO
+  MANUAL
+}
+
+enum ProductCostStatus {
+  DRAFT
+  APPROVED
+}
+
+enum StockCountStatus {
+  DRAFT
+  APPROVED
+  CANCELLED
+}
+
+enum PublishingActionType {
+  PREVIEW
+  TEST_UPDATE
+  LIVE_SEND
+}
+
+enum PublishingStatus {
+  PENDING
+  READY
+  SUCCESS
+  FAILED
+  BLOCKED
+}
+
+enum UserRole {
+  OWNER
+  STAFF
+}
+
+enum RetailSaleChannel {
+  STORE
+  PHONE
+  WHATSAPP
+  INSTAGRAM
+  WEBSITE
+  TRENDYOL
+  HEPSIBURADA
+  N11
+  AMAZON
+  OTHER
+}
+
+enum RetailSaleType {
+  STORE_SALE
+  DELIVERY_SALE
+  CUSTOM_PRODUCTION
+}
+
+enum RetailSaleStatus {
+  DRAFT
+  PAYMENT_PENDING
+  CONFIRMED
+  PREPARING
+  IN_PRODUCTION
+  READY
+  OUT_FOR_DELIVERY
+  DELIVERED
+  COMPLETED
+  CANCELLED
+}
+
+enum RetailInvoiceStatus {
+  WAITING
+  E_ARCHIVE
+  E_INVOICE
+  ISSUED
+  CANCELLED
+  RETURNED
+}
+
+enum StockFulfillmentType {
+  READY_STOCK
+  CUSTOM_PRODUCTION
+  NON_STOCK_SERVICE
+}
+
+enum RetailPaymentMethod {
+  CASH
+  CREDIT_CARD
+  BANK_TRANSFER
+  ON_ACCOUNT
+  OTHER
+}
+
+enum RetailDeliveryType {
+  STORE_PICKUP
+  OWN_VEHICLE
+  CARGO
+  COURIER
+}
+
+enum RetailDeliveryStatus {
+  NOT_REQUIRED
+  WAITING
+  PLANNED
+  PREPARING
+  OUT_FOR_DELIVERY
+  DELIVERED
+  CANCELLED
+}
+
+enum RetailPrintType {
+  ADDRESS_LABEL_10X15
+  DELIVERY_FORM_A5
+  ORDER_FORM_A4
+}
+
+enum KnowledgeAliasEntityType {
+  PLANT_TYPE
+  POT_PROFILE
+  MATERIAL_RULE
+}
+
+enum KnowledgeRecipeComponentType {
+  LEAF
+  TRUNK
+  POT
+  SILICONE
+  ELECTRICITY
+  LABOR
+  PACKAGING
+  OTHER
+}
+
+enum KnowledgeRuleType {
+  PRODUCT_NAME
+  HEIGHT
+  POT
+  MATERIAL
+  RECIPE
+}
+
+model User {
+  id                    Int                    @id @default(autoincrement())
+  name                  String
+  email                 String                 @unique
+  passwordHash          String                 @map("password_hash")
+  role                  UserRole               @default(OWNER)
+  status                RecordStatus           @default(ACTIVE)
+  rememberToken         String?                @map("remember_token")
+  createdAt             DateTime               @default(now()) @map("created_at")
+  updatedAt             DateTime               @updatedAt @map("updated_at")
+  financeTransactions   FinanceTransaction[]   @relation("FinanceTransactionRecordedBy")
+  financeAuditLogs      FinanceAuditLog[]      @relation("FinanceAuditUser")
+  financeDebts          FinanceDebt[]          @relation("FinanceDebtCreatedBy")
+  financeSalaries       FinanceSalaryRecord[]  @relation("FinanceSalaryRecordedBy")
+  stockUsageLogs        StockUsageLog[]
+  stockCountsCreated    StockCountSession[]    @relation("StockCountCreatedBy")
+  stockCountsApproved   StockCountSession[]    @relation("StockCountApprovedBy")
+  publishingLogs        PublishingLog[]        @relation("PublishingLogCreatedBy")
+  knowledgeAnalysisLogs KnowledgeAnalysisLog[] @relation("KnowledgeAnalysisLogCreatedBy")
+  knowledgeFeedbacks   KnowledgeFeedback[]    @relation("KnowledgeFeedbackCreatedBy")
+  retailCustomers       RetailCustomer[]       @relation("RetailCustomerCreatedBy")
+  retailAddresses       RetailCustomerAddress[] @relation("RetailAddressCreatedBy")
+  retailSalesCreated    RetailSale[]           @relation("RetailSaleCreatedBy")
+  retailSalesCompleted  RetailSale[]           @relation("RetailSaleCompletedBy")
+  retailSalesCancelled  RetailSale[]           @relation("RetailSaleCancelledBy")
+  retailPayments        RetailSalePayment[]    @relation("RetailPaymentCreatedBy")
+  retailDeliveries      RetailDelivery[]       @relation("RetailDeliveryAssignedTo")
+  retailDeliveriesDone  RetailDelivery[]       @relation("RetailDeliveryDeliveredBy")
+  retailPrintLogs       RetailPrintLog[]       @relation("RetailPrintLogPrintedBy")
+  retailStatusChanges   RetailSaleStatusHistory[] @relation("RetailStatusHistoryChangedBy")
+  stockMovementsCreated StockMovement[]        @relation("StockMovementCreatedBy")
+
+  @@map("users")
+}
+
+model Category {
+  id                 Int                @id @default(autoincrement())
+  name               String             @unique
+  codePrefix         String             @map("code_prefix")
+  startCode          Int                @map("start_code")
+  currentCode        Int                @map("current_code")
+  status             RecordStatus       @default(ACTIVE)
+  createdAt          DateTime           @default(now()) @map("created_at")
+  updatedAt          DateTime           @updatedAt @map("updated_at")
+  products           Product[]
+  productionFamilies ProductionFamily[]
+
+  @@map("categories")
+}
+
+model Product {
+  id                 Int            @id @default(autoincrement())
+  productName        String         @map("product_name")
+  modelCode          String         @unique @map("model_code")
+  categoryId         Int            @map("category_id")
+  barcode            String?        @unique
+  stockQuantity      Int            @default(0) @map("stock_quantity")
+  criticalStockLevel Int            @default(0) @map("critical_stock_level")
+  status             RecordStatus   @default(ACTIVE)
+  description        String?
+  createdAt          DateTime       @default(now()) @map("created_at")
+  updatedAt          DateTime       @updatedAt @map("updated_at")
+  category           Category       @relation(fields: [categoryId], references: [id])
+  mediaFiles         MediaFile[]
+  barcodeLogs        BarcodeLog[]
+  recipe             ProductRecipe?
+
+  @@map("products")
+}
+
+model StockCard {
+  id                              Int                           @id @default(autoincrement())
+  name                            String
+  sku                             String?                       @unique
+  category                        String?
+  color                           String?
+  model                           String?
+  size                            String?
+  productFamily                   String?                       @map("product_family")
+  productType                     String?                       @map("product_type")
+  height                          String?
+  width                           String?
+  potType                         String?                       @map("pot_type")
+  potColor                        String?                       @map("pot_color")
+  potSize                         String?                       @map("pot_size")
+  trunkType                       String?                       @map("trunk_type")
+  leafFlowerType                  String?                       @map("leaf_flower_type")
+  brand                           String?
+  oldModelCode                    String?                       @map("old_model_code")
+  barcode                         String?
+  salePrice                       Decimal                       @default(0) @map("sale_price") @db.Decimal(12, 2)
+  warehouse                       String?
+  shelfLocation                   String?                       @map("shelf_location")
+  shortDescription                String?                       @map("short_description")
+  technicalSpecs                  String?                       @map("technical_specs")
+  seoTitle                        String?                       @map("seo_title")
+  metaDescription                 String?                       @map("meta_description")
+  imagePath                       String?                       @map("image_path")
+  description                     String?
+  criticalStockLevel              Decimal                       @default(0) @map("critical_stock_level") @db.Decimal(12, 3)
+  supplierName                    String?                       @map("supplier_name")
+  lastMovementAt                  DateTime?                     @map("last_movement_at")
+  purchaseUnit                    String                        @default("Adet") @map("purchase_unit")
+  purchaseQuantity                Decimal                       @default(1) @map("purchase_quantity") @db.Decimal(12, 3)
+  unit                            String
+  packageContent                  Decimal                       @default(1) @map("package_content") @db.Decimal(12, 3)
+  purchasePrice                   Decimal                       @default(0) @map("purchase_price") @db.Decimal(12, 2)
+  manualUnitCostEnabled           Boolean                       @default(false) @map("manual_unit_cost_enabled")
+  manualUnitCost                  Decimal                       @default(0) @map("manual_unit_cost") @db.Decimal(12, 4)
+  automaticUnitCost               Decimal                       @default(0) @map("automatic_unit_cost") @db.Decimal(12, 4)
+  stockQuantity                   Decimal                       @default(0) @map("stock_quantity") @db.Decimal(12, 3)
+  reservedQuantity                Decimal                       @default(0) @map("reserved_quantity") @db.Decimal(12, 3)
+  status                          RecordStatus                  @default(ACTIVE)
+  createdAt                       DateTime                      @default(now()) @map("created_at")
+  updatedAt                       DateTime                      @updatedAt @map("updated_at")
+  recipeItems                     RecipeItem[]
+  templateComponents              ProductionTemplateComponent[]
+  potOptions                      ProductionPotOption[]
+  bambuLeafRules                  BambuCostRule[]               @relation("BambuLeafStockCard")
+  bambuTrunkRules                 BambuCostRule[]               @relation("BambuTrunkStockCard")
+  usageLogs                       StockUsageLog[]
+  stockCountItems                 StockCountItem[]
+  movements                       StockMovement[]
+  retailSaleItems                 RetailSaleItem[]
+  productCostItems                ProductCostItem[]
+  productPotItems                 ProductPotItem[]
+  images                          StockCardImage[]
+  knowledgeDefaultLeafPlantTypes  KnowledgePlantType[]          @relation("KnowledgePlantDefaultLeafStockCard")
+  knowledgeDefaultTrunkPlantTypes KnowledgePlantType[]          @relation("KnowledgePlantDefaultTrunkStockCard")
+  knowledgeDefaultPotPlantTypes   KnowledgePlantType[]          @relation("KnowledgePlantDefaultPotStockCard")
+  knowledgePotProfiles            KnowledgePotProfile[]
+  knowledgeRecipeItems            KnowledgeRecipeItem[]
+  knowledgeRules                  KnowledgeRule[]
+
+  @@map("stock_cards")
+}
+
+model StockCardImage {
+  id          Int       @id @default(autoincrement())
+  stockCardId Int       @map("stock_card_id")
+  fileName    String    @map("file_name")
+  filePath    String    @map("file_path")
+  folderName  String    @map("folder_name")
+  fileType    String    @map("file_type")
+  isMain      Boolean   @default(false) @map("is_main")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  stockCard   StockCard @relation(fields: [stockCardId], references: [id], onDelete: Cascade)
+
+  @@map("stock_card_images")
+}
+
+model StockMovement {
+  id            Int       @id @default(autoincrement())
+  stockCardId   Int       @map("stock_card_id")
+  type          String
+  quantity      Decimal   @db.Decimal(12, 3)
+  unit          String
+  previousStock Decimal   @map("previous_stock") @db.Decimal(12, 3)
+  nextStock     Decimal   @map("next_stock") @db.Decimal(12, 3)
+  reason        String?
+  supplierName  String?   @map("supplier_name")
+  documentNo    String?   @map("document_no")
+  paymentStatus String?   @map("payment_status")
+  note          String?
+  referenceType String?   @map("reference_type")
+  referenceId   String?   @map("reference_id")
+  eventKey      String?   @unique @map("event_key")
+  createdById   Int?      @map("created_by_id")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  stockCard     StockCard @relation(fields: [stockCardId], references: [id])
+  createdBy     User?     @relation("StockMovementCreatedBy", fields: [createdById], references: [id])
+
+  @@index([referenceType, referenceId])
+  @@map("stock_movements")
+}
+
+model ProductFamilyMaster {
+  id                 Int                @id @default(autoincrement())
+  name               String
+  categoryName       String             @map("category_name")
+  familyCode         String?            @unique @map("family_code")
+  description        String?
+  defaultKeywords    String[]           @default([]) @map("default_keywords")
+  defaultSizeOptions String[]           @default([]) @map("default_size_options")
+  defaultPotOptions  String[]           @default([]) @map("default_pot_options")
+  sortOrder          Int                @default(0) @map("sort_order")
+  status             RecordStatus       @default(ACTIVE)
+  createdAt          DateTime           @default(now()) @map("created_at")
+  updatedAt          DateTime           @updatedAt @map("updated_at")
+  families           ProductionFamily[]
+
+  @@unique([categoryName, name])
+  @@map("product_family_masters")
+}
+
+model ProductionFamily {
+  id                      Int                        @id @default(autoincrement())
+  masterId                Int?                       @map("master_id")
+  familyName              String                     @unique @map("family_name")
+  familyCode              String?                    @unique @map("family_code")
+  categoryId              Int?                       @map("category_id")
+  mainModelCode           String?                    @map("main_model_code")
+  description             String?
+  keywords                String[]                   @default([])
+  autoMatchingEnabled     Boolean                    @default(false) @map("auto_matching_enabled")
+  status                  RecordStatus               @default(ACTIVE)
+  createdAt               DateTime                   @default(now()) @map("created_at")
+  updatedAt               DateTime                   @updatedAt @map("updated_at")
+  master                  ProductFamilyMaster?       @relation(fields: [masterId], references: [id])
+  category                Category?                  @relation(fields: [categoryId], references: [id])
+  templates               ProductionRecipeTemplate[]
+  variants                TrendyolProductVariant[]
+  sizeOptions             ProductionSizeOption[]
+  potOptions              ProductionPotOption[]
+  bambuCostRule           BambuCostRule?
+  knowledgePlantTypes     KnowledgePlantType[]
+  knowledgeRecipeProfiles KnowledgeRecipeProfile[]
+  knowledgeAnalysisLogs   KnowledgeAnalysisLog[]     @relation("KnowledgeAnalysisLogProductFamily")
+
+  @@map("production_families")
+}
+
+model KnowledgePlantType {
+  id                      Int                      @id @default(autoincrement())
+  name                    String
+  code                    String?                  @unique
+  normalizedName          String                   @map("normalized_name")
+  description             String?
+  productFamilyId         Int?                     @map("product_family_id")
+  defaultLeafStockCardId  Int?                     @map("default_leaf_stock_card_id")
+  defaultTrunkStockCardId Int?                     @map("default_trunk_stock_card_id")
+  defaultPotStockCardId   Int?                     @map("default_pot_stock_card_id")
+  defaultRecipeId         Int?                     @unique @map("default_recipe_id")
+  isActive                Boolean                  @default(true) @map("is_active")
+  createdAt               DateTime                 @default(now()) @map("created_at")
+  updatedAt               DateTime                 @updatedAt @map("updated_at")
+  productFamily           ProductionFamily?        @relation(fields: [productFamilyId], references: [id], onDelete: SetNull)
+  defaultLeafStockCard    StockCard?               @relation("KnowledgePlantDefaultLeafStockCard", fields: [defaultLeafStockCardId], references: [id], onDelete: SetNull)
+  defaultTrunkStockCard   StockCard?               @relation("KnowledgePlantDefaultTrunkStockCard", fields: [defaultTrunkStockCardId], references: [id], onDelete: SetNull)
+  defaultPotStockCard     StockCard?               @relation("KnowledgePlantDefaultPotStockCard", fields: [defaultPotStockCardId], references: [id], onDelete: SetNull)
+  defaultRecipe           KnowledgeRecipeProfile?  @relation("KnowledgePlantDefaultRecipe", fields: [defaultRecipeId], references: [id], onDelete: SetNull)
+  aliases                 KnowledgeAlias[]
+  recipeProfiles          KnowledgeRecipeProfile[] @relation("KnowledgeRecipeProfilePlantType")
+  analysisLogs            KnowledgeAnalysisLog[]   @relation("KnowledgeAnalysisLogPlantType")
+  rules                   KnowledgeRule[]
+
+  @@index([normalizedName])
+  @@index([isActive])
+  @@map("knowledge_plant_types")
+}
+
+model KnowledgeAlias {
+  id              Int                      @id @default(autoincrement())
+  alias           String
+  normalizedAlias String                   @map("normalized_alias")
+  entityType      KnowledgeAliasEntityType @map("entity_type")
+  plantTypeId     Int?                     @map("plant_type_id")
+  potProfileId    Int?                     @map("pot_profile_id")
+  materialRuleId  Int?                     @map("material_rule_id")
+  priority        Int                      @default(100)
+  isActive        Boolean                  @default(true) @map("is_active")
+  createdAt       DateTime                 @default(now()) @map("created_at")
+  updatedAt       DateTime                 @updatedAt @map("updated_at")
+  plantType       KnowledgePlantType?      @relation(fields: [plantTypeId], references: [id], onDelete: SetNull)
+  potProfile      KnowledgePotProfile?     @relation(fields: [potProfileId], references: [id], onDelete: SetNull)
+  materialRule    KnowledgeRule?           @relation(fields: [materialRuleId], references: [id], onDelete: SetNull)
+
+  @@index([normalizedAlias])
+  @@index([entityType, isActive])
+  @@map("knowledge_aliases")
+}
+
+model KnowledgePotProfile {
+  id             Int                    @id @default(autoincrement())
+  name           String
+  normalizedName String                 @map("normalized_name")
+  materialType   String?                @map("material_type")
+  color          String?
+  width          Decimal?               @db.Decimal(12, 2)
+  depth          Decimal?               @db.Decimal(12, 2)
+  height         Decimal?               @db.Decimal(12, 2)
+  diameter       Decimal?               @db.Decimal(12, 2)
+  stockCardId    Int?                   @map("stock_card_id")
+  priority       Int                    @default(100)
+  isActive       Boolean                @default(true) @map("is_active")
+  createdAt      DateTime               @default(now()) @map("created_at")
+  updatedAt      DateTime               @updatedAt @map("updated_at")
+  stockCard      StockCard?             @relation(fields: [stockCardId], references: [id], onDelete: SetNull)
+  aliases        KnowledgeAlias[]
+  analysisLogs   KnowledgeAnalysisLog[] @relation("KnowledgeAnalysisLogPotProfile")
+
+  @@index([normalizedName])
+  @@index([isActive])
+  @@map("knowledge_pot_profiles")
+}
+
+model KnowledgeRecipeProfile {
+  id                  Int                   @id @default(autoincrement())
+  name                String
+  plantTypeId         Int?                  @map("plant_type_id")
+  productFamilyId     Int?                  @map("product_family_id")
+  minHeightCm         Int?                  @map("min_height_cm")
+  maxHeightCm         Int?                  @map("max_height_cm")
+  priority            Int                   @default(100)
+  isDefault           Boolean               @default(false) @map("is_default")
+  isActive            Boolean               @default(true) @map("is_active")
+  createdAt           DateTime              @default(now()) @map("created_at")
+  updatedAt           DateTime              @updatedAt @map("updated_at")
+  plantType           KnowledgePlantType?   @relation("KnowledgeRecipeProfilePlantType", fields: [plantTypeId], references: [id], onDelete: SetNull)
+  defaultForPlantType KnowledgePlantType?   @relation("KnowledgePlantDefaultRecipe")
+  productFamily       ProductionFamily?     @relation(fields: [productFamilyId], references: [id], onDelete: SetNull)
+  items               KnowledgeRecipeItem[]
+
+  @@index([plantTypeId, isActive])
+  @@index([productFamilyId, isActive])
+  @@map("knowledge_recipe_profiles")
+}
+
+model KnowledgeRecipeItem {
+  id              Int                          @id @default(autoincrement())
+  recipeProfileId Int                          @map("recipe_profile_id")
+  stockCardId     Int?                         @map("stock_card_id")
+  componentType   KnowledgeRecipeComponentType @map("component_type")
+  quantity        Decimal                      @default(0) @db.Decimal(12, 3)
+  unit            String
+  isOptional      Boolean                      @default(false) @map("is_optional")
+  sortOrder       Int                          @default(0) @map("sort_order")
+  createdAt       DateTime                     @default(now()) @map("created_at")
+  updatedAt       DateTime                     @updatedAt @map("updated_at")
+  recipeProfile   KnowledgeRecipeProfile       @relation(fields: [recipeProfileId], references: [id], onDelete: Cascade)
+  stockCard       StockCard?                   @relation(fields: [stockCardId], references: [id], onDelete: SetNull)
+
+  @@index([recipeProfileId, sortOrder])
+  @@map("knowledge_recipe_items")
+}
+
+model KnowledgeRule {
+  id            Int                @id @default(autoincrement())
+  name          String
+  ruleType      KnowledgeRuleType  @map("rule_type")
+  ruleKind      String             @default("GENERAL") @map("rule_kind")
+  plantTypeId   Int?               @map("plant_type_id")
+  heightCm      Int?               @map("height_cm")
+  stockCardId   Int?               @map("stock_card_id")
+  quantity      Decimal?           @db.Decimal(12, 3)
+  unit          String?
+  amountTl      Decimal?           @map("amount_tl") @db.Decimal(14, 2)
+  conditionJson Json               @map("condition_json")
+  actionJson    Json               @map("action_json")
+  priority      Int                @default(100)
+  isActive      Boolean            @default(true) @map("is_active")
+  createdAt     DateTime           @default(now()) @map("created_at")
+  updatedAt     DateTime           @updatedAt @map("updated_at")
+  plantType     KnowledgePlantType? @relation(fields: [plantTypeId], references: [id], onDelete: Cascade)
+  stockCard     StockCard?          @relation(fields: [stockCardId], references: [id], onDelete: SetNull)
+  aliases       KnowledgeAlias[]
+  feedbacks     KnowledgeFeedback[]
+
+  @@index([ruleType, isActive])
+  @@index([ruleKind, plantTypeId, heightCm, isActive])
+  @@map("knowledge_rules")
+}
+
+model KnowledgeAnalysisLog {
+  id                      Int                  @id @default(autoincrement())
+  inputText               String               @map("input_text")
+  normalizedInput         String               @map("normalized_input")
+  detectedPlantTypeId     Int?                 @map("detected_plant_type_id")
+  detectedProductFamilyId Int?                 @map("detected_product_family_id")
+  detectedPotProfileId    Int?                 @map("detected_pot_profile_id")
+  detectedHeightCm        Int?                 @map("detected_height_cm")
+  confidenceScore         Decimal              @default(0) @map("confidence_score") @db.Decimal(5, 4)
+  resultJson              Json?                @map("result_json")
+  acceptedByUser          Boolean              @default(false) @map("accepted_by_user")
+  decisionStatus          String               @default("REVIEW_REQUIRED") @map("decision_status")
+  matchedRecipeId         Int?                 @map("matched_recipe_id")
+  appliedAutomatically    Boolean              @default(false) @map("applied_automatically")
+  createdById             Int?                 @map("created_by_id")
+  createdAt               DateTime             @default(now()) @map("created_at")
+  detectedPlantType       KnowledgePlantType?  @relation("KnowledgeAnalysisLogPlantType", fields: [detectedPlantTypeId], references: [id], onDelete: SetNull)
+  detectedProductFamily   ProductionFamily?    @relation("KnowledgeAnalysisLogProductFamily", fields: [detectedProductFamilyId], references: [id], onDelete: SetNull)
+  detectedPotProfile      KnowledgePotProfile? @relation("KnowledgeAnalysisLogPotProfile", fields: [detectedPotProfileId], references: [id], onDelete: SetNull)
+  createdBy               User?                @relation("KnowledgeAnalysisLogCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  feedbacks               KnowledgeFeedback[]
+
+  @@index([normalizedInput])
+  @@index([createdAt])
+  @@map("knowledge_analysis_logs")
+}
+
+model KnowledgeFeedback {
+  id             Int                   @id @default(autoincrement())
+  analysisLogId  Int                   @map("analysis_log_id")
+  fieldName      String                @map("field_name")
+  detectedValue  Json?                 @map("detected_value")
+  correctedValue Json                  @map("corrected_value")
+  note           String?
+  promotedRuleId Int?                  @map("promoted_rule_id")
+  createdById    Int                   @map("created_by_id")
+  createdAt      DateTime              @default(now()) @map("created_at")
+  analysisLog    KnowledgeAnalysisLog  @relation(fields: [analysisLogId], references: [id], onDelete: Cascade)
+  promotedRule   KnowledgeRule?        @relation(fields: [promotedRuleId], references: [id], onDelete: SetNull)
+  createdBy      User                  @relation("KnowledgeFeedbackCreatedBy", fields: [createdById], references: [id])
+
+  @@index([analysisLogId, createdAt])
+  @@index([fieldName, createdAt])
+  @@map("knowledge_feedbacks")
+}
+
+model ProductionSizeOption {
+  id        Int                      @id @default(autoincrement())
+  familyId  Int                      @map("family_id")
+  sizeLabel String                   @map("size_label")
+  sortOrder Int                      @default(0) @map("sort_order")
+  family    ProductionFamily         @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  variants  TrendyolProductVariant[]
+
+  @@unique([familyId, sizeLabel])
+  @@map("production_size_options")
+}
+
+model ProductionPotOption {
+  id          Int                      @id @default(autoincrement())
+  familyId    Int                      @map("family_id")
+  potName     String                   @map("pot_name")
+  stockCardId Int?                     @map("stock_card_id")
+  sortOrder   Int                      @default(0) @map("sort_order")
+  family      ProductionFamily         @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  stockCard   StockCard?               @relation(fields: [stockCardId], references: [id])
+  variants    TrendyolProductVariant[]
+
+  @@unique([familyId, potName])
+  @@map("production_pot_options")
+}
+
+model ProductionRecipeTemplate {
+  id                       Int                           @id @default(autoincrement())
+  familyId                 Int                           @map("family_id")
+  templateName             String                        @map("template_name")
+  description              String?
+  vatPercent               Decimal                       @default(20) @map("vat_percent") @db.Decimal(5, 2)
+  defaultCommissionPercent Decimal                       @default(20) @map("default_commission_percent") @db.Decimal(5, 2)
+  status                   RecordStatus                  @default(ACTIVE)
+  createdAt                DateTime                      @default(now()) @map("created_at")
+  updatedAt                DateTime                      @updatedAt @map("updated_at")
+  family                   ProductionFamily              @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  components               ProductionTemplateComponent[]
+  variants                 TrendyolProductVariant[]
+
+  @@map("production_recipe_templates")
+}
+
+model ProductionTemplateComponent {
+  id            Int                      @id @default(autoincrement())
+  templateId    Int                      @map("template_id")
+  stockCardId   Int?                     @map("stock_card_id")
+  componentName String                   @map("component_name")
+  costGroup     ProductionCostGroup      @map("cost_group")
+  scope         TemplateComponentScope   @default(COMMON)
+  sizeLabel     String?                  @map("size_label")
+  potName       String?                  @map("pot_name")
+  quantity      Decimal                  @default(0) @db.Decimal(12, 3)
+  unit          String
+  manualAmount  Decimal?                 @map("manual_amount") @db.Decimal(12, 2)
+  createdAt     DateTime                 @default(now()) @map("created_at")
+  updatedAt     DateTime                 @updatedAt @map("updated_at")
+  template      ProductionRecipeTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  stockCard     StockCard?               @relation(fields: [stockCardId], references: [id])
+
+  @@map("production_template_components")
+}
+
+model TrendyolProductVariant {
+  id                    Int                       @id @default(autoincrement())
+  barcode               String                    @unique
+  productName           String                    @map("product_name")
+  currentModelCode      String?                   @map("current_model_code")
+  supplierStockCode     String?                   @map("supplier_stock_code")
+  brand                 String?
+  trendyolCategoryName  String?                   @map("trendyol_category_name")
+  productColor          String?                   @map("product_color")
+  productDescription    String?                   @map("product_description")
+  stockQuantity         Int                       @default(0) @map("stock_quantity")
+  trendyolProductUrl    String?                   @map("trendyol_product_url")
+  images                Json?
+  suggestedFamilyName   String?                   @map("suggested_family_name")
+  detectedSize          String?                   @map("detected_size")
+  detectedPot           String?                   @map("detected_pot")
+  proposedModelCode     String?                   @map("proposed_model_code")
+  seoProductName        String?                   @map("seo_product_name")
+  seoManualProductName  String?                   @map("seo_manual_product_name")
+  seoDistinctiveFeature String?                   @map("seo_distinctive_feature")
+  seoMarketTitle        String?                   @map("seo_market_title")
+  seoWebTitle           String?                   @map("seo_web_title")
+  seoShortDescription   String?                   @map("seo_short_description")
+  seoLongDescription    String?                   @map("seo_long_description")
+  seoMetaTitle          String?                   @map("seo_meta_title")
+  seoMetaDescription    String?                   @map("seo_meta_description")
+  seoKeywords           String[]                  @default([]) @map("seo_keywords")
+  seoImageAltText       String?                   @map("seo_image_alt_text")
+  seoProperties         Json?                     @map("seo_properties")
+  seoImageHistory       Json?                     @map("seo_image_history")
+  seoChangeHistory      Json?                     @map("seo_change_history")
+  seoApprovalStatus     String                    @default("Eksik Bilgi") @map("seo_approval_status")
+  seoApprovedAt         DateTime?                 @map("seo_approved_at")
+  recipeStatus          String                    @default("Eşleşmedi") @map("recipe_status")
+  costStatus            String                    @default("Bekliyor") @map("cost_status")
+  importSource          String?                   @map("import_source")
+  importedAt            DateTime?                 @map("imported_at")
+  familyId              Int?                      @map("family_id")
+  sizeOptionId          Int?                      @map("size_option_id")
+  potOptionId           Int?                      @map("pot_option_id")
+  templateId            Int?                      @map("template_id")
+  trendyolSalePrice     Decimal                   @default(0) @map("trendyol_sale_price") @db.Decimal(12, 2)
+  commissionPercent     Decimal                   @default(20) @map("commission_percent") @db.Decimal(5, 2)
+  status                RecordStatus              @default(ACTIVE)
+  createdAt             DateTime                  @default(now()) @map("created_at")
+  updatedAt             DateTime                  @updatedAt @map("updated_at")
+  family                ProductionFamily?         @relation(fields: [familyId], references: [id])
+  sizeOption            ProductionSizeOption?     @relation(fields: [sizeOptionId], references: [id])
+  potOption             ProductionPotOption?      @relation(fields: [potOptionId], references: [id])
+  template              ProductionRecipeTemplate? @relation(fields: [templateId], references: [id])
+  costHistory           ProductionCostHistory[]
+  stockUsageLogs        StockUsageLog[]
+  publishingLogs        PublishingLog[]
+  productCostDraft      ProductCostDraft?
+  retailSaleItems       RetailSaleItem[]
+
+  @@map("trendyol_product_variants")
+}
+
+model ProductCostDraft {
+  id                       Int                    @id @default(autoincrement())
+  variantId                Int                    @unique @map("variant_id")
+  salePrice                Decimal                @default(0) @map("sale_price") @db.Decimal(12, 2)
+  profitMarginPercent      Decimal                @default(45) @map("profit_margin_percent") @db.Decimal(5, 2)
+  commissionPercent        Decimal                @default(21) @map("commission_percent") @db.Decimal(5, 2)
+  vatPercent               Decimal                @default(20) @map("vat_percent") @db.Decimal(5, 2)
+  shippingCost             Decimal                @default(0) @map("shipping_cost") @db.Decimal(12, 2)
+  desi                     Decimal                @default(0) @db.Decimal(8, 2)
+  marketplaceMarkupPercent Decimal                @default(25) @map("marketplace_markup_percent") @db.Decimal(5, 2)
+  campaignBufferPercent    Decimal                @default(10) @map("campaign_buffer_percent") @db.Decimal(5, 2)
+  totalCost                Decimal                @default(0) @map("total_cost") @db.Decimal(12, 2)
+  status                   ProductCostStatus      @default(DRAFT)
+  approvedAt               DateTime?              @map("approved_at")
+  createdAt                DateTime               @default(now()) @map("created_at")
+  updatedAt                DateTime               @updatedAt @map("updated_at")
+  variant                  TrendyolProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  items                    ProductCostItem[]
+  pots                     ProductPotItem[]
+
+  @@map("product_cost_drafts")
+}
+
+model ProductCostItem {
+  id                Int                  @id @default(autoincrement())
+  draftId           Int                  @map("draft_id")
+  stockCardId       Int?                 @map("stock_card_id")
+  name              String
+  group             ProductCostItemGroup
+  quantity          Decimal              @default(0) @db.Decimal(12, 3)
+  unit              String
+  source            ProductCostSource    @default(AUTO)
+  manualUnitCost    Decimal              @default(0) @map("manual_unit_cost") @db.Decimal(12, 4)
+  isActive          Boolean              @default(true) @map("is_active")
+  isDefaultExpense  Boolean              @default(false) @map("is_default_expense")
+  defaultExpenseKey String?              @map("default_expense_key")
+  defaultAmount     Decimal?             @map("default_amount") @db.Decimal(12, 2)
+  createdAt         DateTime             @default(now()) @map("created_at")
+  updatedAt         DateTime             @updatedAt @map("updated_at")
+  draft             ProductCostDraft     @relation(fields: [draftId], references: [id], onDelete: Cascade)
+  stockCard         StockCard?           @relation(fields: [stockCardId], references: [id])
+
+  @@map("product_cost_items")
+}
+
+model DefaultProductExpense {
+  id                Int                            @id @default(autoincrement())
+  expenseKey        String                         @unique @map("expense_key")
+  name              String
+  defaultAmount     Decimal                        @default(0) @map("default_amount") @db.Decimal(12, 2)
+  applyCategories   String[]                       @default([]) @map("apply_categories")
+  excludeCategories String[]                       @default([]) @map("exclude_categories")
+  isActive          Boolean                        @default(true) @map("is_active")
+  validFrom         DateTime                       @default(now()) @map("valid_from")
+  description       String?
+  status            RecordStatus                   @default(ACTIVE)
+  createdAt         DateTime                       @default(now()) @map("created_at")
+  updatedAt         DateTime                       @updatedAt @map("updated_at")
+  history           DefaultProductExpenseHistory[]
+
+  @@map("default_product_expenses")
+}
+
+model DefaultProductExpenseHistory {
+  id                 Int                   @id @default(autoincrement())
+  expenseId          Int                   @map("expense_id")
+  oldAmount          Decimal               @default(0) @map("old_amount") @db.Decimal(12, 2)
+  newAmount          Decimal               @default(0) @map("new_amount") @db.Decimal(12, 2)
+  changedByUserId    Int?                  @map("changed_by_user_id")
+  affectedDraftCount Int                   @default(0) @map("affected_draft_count")
+  changeScope        String                @default("future_only") @map("change_scope")
+  reason             String?
+  createdAt          DateTime              @default(now()) @map("created_at")
+  expense            DefaultProductExpense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+
+  @@map("default_product_expense_history")
+}
+
+model ProductPotItem {
+  id             Int               @id @default(autoincrement())
+  draftId        Int               @map("draft_id")
+  stockCardId    Int?              @map("stock_card_id")
+  name           String
+  potType        String?           @map("pot_type")
+  color          String?
+  width          Decimal           @default(0) @db.Decimal(12, 2)
+  length         Decimal           @default(0) @db.Decimal(12, 2)
+  height         Decimal           @default(0) @db.Decimal(12, 2)
+  diameter       Decimal           @default(0) @db.Decimal(12, 2)
+  quantity       Decimal           @default(1) @db.Decimal(12, 3)
+  source         ProductCostSource @default(AUTO)
+  manualUnitCost Decimal           @default(0) @map("manual_unit_cost") @db.Decimal(12, 4)
+  createdAt      DateTime          @default(now()) @map("created_at")
+  updatedAt      DateTime          @updatedAt @map("updated_at")
+  draft          ProductCostDraft  @relation(fields: [draftId], references: [id], onDelete: Cascade)
+  stockCard      StockCard?        @relation(fields: [stockCardId], references: [id])
+
+  @@map("product_pot_items")
+}
+
+model PublishingLog {
+  id             Int                    @id @default(autoincrement())
+  variantId      Int                    @map("variant_id")
+  actionType     PublishingActionType   @map("action_type")
+  status         PublishingStatus       @default(PENDING)
+  missingFields  String[]               @default([]) @map("missing_fields")
+  requestPayload Json?                  @map("request_payload")
+  responseBody   Json?                  @map("response_body")
+  errorMessage   String?                @map("error_message")
+  createdById    Int                    @map("created_by_id")
+  createdAt      DateTime               @default(now()) @map("created_at")
+  variant        TrendyolProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  createdBy      User                   @relation("PublishingLogCreatedBy", fields: [createdById], references: [id])
+
+  @@map("publishing_logs")
+}
+
+model ProductionCostHistory {
+  id                  Int                    @id @default(autoincrement())
+  variantId           Int                    @map("variant_id")
+  totalProductionCost Decimal                @map("total_production_cost") @db.Decimal(12, 2)
+  trendyolCommission  Decimal                @map("trendyol_commission") @db.Decimal(12, 2)
+  vatAmount           Decimal                @map("vat_amount") @db.Decimal(12, 2)
+  estimatedNetProfit  Decimal                @map("estimated_net_profit") @db.Decimal(12, 2)
+  profitRate          Decimal                @map("profit_rate") @db.Decimal(7, 2)
+  createdAt           DateTime               @default(now()) @map("created_at")
+  variant             TrendyolProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  @@map("production_cost_history")
+}
+
+model ProductRecipe {
+  id                       Int               @id @default(autoincrement())
+  productId                Int               @unique @map("product_id")
+  shopMarginPercent        Decimal           @default(30) @map("shop_margin_percent") @db.Decimal(5, 2)
+  siteMarginPercent        Decimal           @default(45) @map("site_margin_percent") @db.Decimal(5, 2)
+  marketplaceMarginPercent Decimal           @default(65) @map("marketplace_margin_percent") @db.Decimal(5, 2)
+  createdAt                DateTime          @default(now()) @map("created_at")
+  updatedAt                DateTime          @updatedAt @map("updated_at")
+  product                  Product           @relation(fields: [productId], references: [id])
+  items                    RecipeItem[]
+  extraCosts               RecipeExtraCost[]
+
+  @@map("product_recipes")
+}
+
+model RecipeItem {
+  id          Int           @id @default(autoincrement())
+  recipeId    Int           @map("recipe_id")
+  stockCardId Int           @map("stock_card_id")
+  quantity    Decimal       @db.Decimal(12, 3)
+  unit        String
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+  recipe      ProductRecipe @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  stockCard   StockCard     @relation(fields: [stockCardId], references: [id])
+
+  @@map("recipe_items")
+}
+
+model RecipeExtraCost {
+  id        Int            @id @default(autoincrement())
+  recipeId  Int            @map("recipe_id")
+  type      RecipeCostType
+  name      String
+  amount    Decimal        @db.Decimal(12, 2)
+  createdAt DateTime       @default(now()) @map("created_at")
+  updatedAt DateTime       @updatedAt @map("updated_at")
+  recipe    ProductRecipe  @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+
+  @@map("recipe_extra_costs")
+}
+
+model MediaFile {
+  id         Int      @id @default(autoincrement())
+  productId  Int?     @map("product_id")
+  fileName   String   @map("file_name")
+  filePath   String   @map("file_path")
+  folderName String   @map("folder_name")
+  fileType   String   @map("file_type")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+  product    Product? @relation(fields: [productId], references: [id])
+
+  @@map("media_files")
+}
+
+model BarcodeLog {
+  id        Int      @id @default(autoincrement())
+  productId Int      @map("product_id")
+  barcode   String
+  pdfPath   String?  @map("pdf_path")
+  createdAt DateTime @default(now()) @map("created_at")
+  product   Product  @relation(fields: [productId], references: [id])
+
+  @@map("barcode_logs")
+}
+
+model RetailCustomer {
+  id              Int                     @id @default(autoincrement())
+  customerCode    String                  @unique @map("customer_code")
+  customerType    String                  @default("INDIVIDUAL") @map("customer_type")
+  firstName       String                  @map("first_name")
+  lastName        String?                 @map("last_name")
+  displayName     String                  @map("display_name")
+  companyTitle    String?                 @map("company_title")
+  taxOffice       String?                 @map("tax_office")
+  taxNumber       String?                 @map("tax_number")
+  nationalId      String?                 @map("national_id")
+  isEInvoicePayer Boolean                 @default(false) @map("is_e_invoice_payer")
+  currentAccountCode String?              @map("current_account_code")
+  phone           String?
+  normalizedPhone String?                 @unique @map("normalized_phone")
+  secondaryPhone  String?                 @map("secondary_phone")
+  whatsappPhone   String?                 @map("whatsapp_phone")
+  email           String?
+  customerNote    String?                 @map("customer_note")
+  birthDate       DateTime?               @map("birth_date") @db.Date
+  website         String?
+  instagram       String?
+  rating          Int                     @default(0)
+  riskStatus      String                  @default("NORMAL") @map("risk_status")
+  lastContactAt   DateTime?               @map("last_contact_at")
+  source          RetailSaleChannel?
+  orderCommunicationAllowed Boolean       @default(true) @map("order_communication_allowed")
+  whatsappMarketingAllowed Boolean        @default(false) @map("whatsapp_marketing_allowed")
+  smsMarketingAllowed Boolean             @default(false) @map("sms_marketing_allowed")
+  emailMarketingAllowed Boolean           @default(false) @map("email_marketing_allowed")
+  consentAt       DateTime?               @map("consent_at")
+  consentSource   String?                 @map("consent_source")
+  consentWithdrawnAt DateTime?            @map("consent_withdrawn_at")
+  isActive        Boolean                 @default(true) @map("is_active")
+  createdAt       DateTime                @default(now()) @map("created_at")
+  updatedAt       DateTime                @updatedAt @map("updated_at")
+  createdById     Int                     @map("created_by_id")
+  createdBy       User                    @relation("RetailCustomerCreatedBy", fields: [createdById], references: [id])
+  addresses       RetailCustomerAddress[]
+  sales           RetailSale[]
+  tags            RetailCustomerTag[]
+  notes           RetailCustomerNote[]
+  reminders       RetailCustomerReminder[]
+  sourceDefinitionId Int?                  @map("source_definition_id")
+  sourceDefinition RetailCustomerSourceDefinition? @relation(fields: [sourceDefinitionId], references: [id])
+  files           RetailCustomerFile[]
+
+  @@index([displayName])
+  @@map("retail_customers")
+}
+
+model RetailCustomerFile {
+  id          Int            @id @default(autoincrement())
+  customerId  Int            @map("customer_id")
+  fileName    String         @map("file_name")
+  filePath    String         @map("file_path")
+  fileType    String         @map("file_type")
+  description String?
+  isActive    Boolean        @default(true) @map("is_active")
+  createdById Int            @map("created_by_id")
+  createdAt   DateTime       @default(now()) @map("created_at")
+  customer    RetailCustomer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId, createdAt])
+  @@map("retail_customer_files")
+}
+
+model RetailCustomerNote {
+  id          Int            @id @default(autoincrement())
+  customerId  Int            @map("customer_id")
+  note        String
+  isActive    Boolean        @default(true) @map("is_active")
+  createdById Int            @map("created_by_id")
+  createdAt   DateTime       @default(now()) @map("created_at")
+  customer    RetailCustomer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId, createdAt])
+  @@map("retail_customer_notes")
+}
+
+model RetailCustomerReminder {
+  id          Int            @id @default(autoincrement())
+  customerId  Int            @map("customer_id")
+  title       String
+  description String?
+  remindAt    DateTime       @map("remind_at")
+  status      String         @default("PENDING")
+  completedAt DateTime?      @map("completed_at")
+  createdById Int            @map("created_by_id")
+  createdAt   DateTime       @default(now()) @map("created_at")
+  updatedAt   DateTime       @updatedAt @map("updated_at")
+  customer    RetailCustomer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([status, remindAt])
+  @@index([customerId])
+  @@map("retail_customer_reminders")
+}
+
+model RetailCustomerSourceDefinition {
+  id          Int              @id @default(autoincrement())
+  code        String           @unique
+  name        String           @unique
+  isActive    Boolean          @default(true) @map("is_active")
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+  customers   RetailCustomer[]
+
+  @@map("retail_customer_source_definitions")
+}
+
+model RetailCustomerTagDefinition {
+  id          Int                 @id @default(autoincrement())
+  name        String              @unique
+  color       String?             @default("#64748b")
+  isActive    Boolean             @default(true) @map("is_active")
+  createdAt   DateTime            @default(now()) @map("created_at")
+  updatedAt   DateTime            @updatedAt @map("updated_at")
+  customers   RetailCustomerTag[]
+
+  @@map("retail_customer_tag_definitions")
+}
+
+model RetailCustomerTag {
+  customerId Int                         @map("customer_id")
+  tagId      Int                         @map("tag_id")
+  createdAt  DateTime                    @default(now()) @map("created_at")
+  customer   RetailCustomer              @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  tag        RetailCustomerTagDefinition @relation(fields: [tagId], references: [id])
+
+  @@id([customerId, tagId])
+  @@map("retail_customer_tags")
+}
+
+model RetailCustomerAddress {
+  id                  Int              @id @default(autoincrement())
+  customerId          Int              @map("customer_id")
+  title               String
+  recipientName       String           @map("recipient_name")
+  recipientPhone      String?          @map("recipient_phone")
+  city                String?
+  district            String?
+  neighborhood        String?
+  postalCode          String?          @map("postal_code")
+  fullAddress         String           @map("full_address")
+  locationDescription String?          @map("location_description")
+  deliveryNote        String?          @map("delivery_note")
+  isDefault           Boolean          @default(false) @map("is_default")
+  isActive            Boolean          @default(true) @map("is_active")
+  createdAt           DateTime         @default(now()) @map("created_at")
+  updatedAt           DateTime         @updatedAt @map("updated_at")
+  createdById         Int              @map("created_by_id")
+  customer            RetailCustomer   @relation(fields: [customerId], references: [id])
+  createdBy           User             @relation("RetailAddressCreatedBy", fields: [createdById], references: [id])
+  sales               RetailSale[]
+  deliveries          RetailDelivery[]
+
+  @@index([customerId])
+  @@map("retail_customer_addresses")
+}
+
+model RetailSale {
+  id              Int                 @id @default(autoincrement())
+  saleNumber      String              @unique @map("sale_number")
+  customerId      Int                 @map("customer_id")
+  addressId       Int?                @map("address_id")
+  channel         RetailSaleChannel   @default(STORE)
+  saleType        RetailSaleType      @default(STORE_SALE) @map("sale_type")
+  status          RetailSaleStatus    @default(DRAFT)
+  currency        String              @default("TRY")
+  subtotal        Decimal             @default(0) @db.Decimal(14, 2)
+  discountTotal   Decimal             @default(0) @map("discount_total") @db.Decimal(14, 2)
+  deliveryFee     Decimal             @default(0) @map("delivery_fee") @db.Decimal(14, 2)
+  grandTotal      Decimal             @default(0) @map("grand_total") @db.Decimal(14, 2)
+  paidTotal       Decimal             @default(0) @map("paid_total") @db.Decimal(14, 2)
+  remainingTotal  Decimal             @default(0) @map("remaining_total") @db.Decimal(14, 2)
+  customerNote    String?             @map("customer_note")
+  internalNote    String?             @map("internal_note")
+  eventKey        String              @unique @map("event_key")
+  platformOrderNumber String?         @map("platform_order_number")
+  externalOrderId     String?         @map("external_order_id")
+  idempotencyKey      String?         @unique @map("idempotency_key")
+  integrationSyncStatus String        @default("MANUAL") @map("integration_sync_status")
+  lastSyncedAt        DateTime?       @map("last_synced_at")
+  cargoProvider       String?         @map("cargo_provider")
+  cargoTrackingNumber String?         @map("cargo_tracking_number")
+  orderDate           DateTime?       @map("order_date")
+  deliveryDueAt       DateTime?       @map("delivery_due_at")
+  completedAt     DateTime?           @map("completed_at")
+  cancelledAt     DateTime?           @map("cancelled_at")
+  createdAt       DateTime            @default(now()) @map("created_at")
+  updatedAt       DateTime            @updatedAt @map("updated_at")
+  createdById     Int                 @map("created_by_id")
+  completedById   Int?                @map("completed_by_id")
+  cancelledById   Int?                @map("cancelled_by_id")
+  customer        RetailCustomer      @relation(fields: [customerId], references: [id])
+  address         RetailCustomerAddress? @relation(fields: [addressId], references: [id])
+  createdBy       User                @relation("RetailSaleCreatedBy", fields: [createdById], references: [id])
+  completedBy     User?               @relation("RetailSaleCompletedBy", fields: [completedById], references: [id])
+  cancelledBy     User?               @relation("RetailSaleCancelledBy", fields: [cancelledById], references: [id])
+  items           RetailSaleItem[]
+  payments        RetailSalePayment[]
+  delivery        RetailDelivery?
+  printLogs       RetailPrintLog[]
+  statusHistory   RetailSaleStatusHistory[]
+  invoiceStatus   RetailInvoiceStatus @default(WAITING) @map("invoice_status")
+  invoiceNote     String?             @map("invoice_note")
+
+  @@index([createdAt])
+  @@index([customerId])
+  @@map("retail_sales")
+}
+
+model RetailSaleStatusHistory {
+  id          Int              @id @default(autoincrement())
+  saleId      Int              @map("sale_id")
+  oldStatus   RetailSaleStatus? @map("old_status")
+  newStatus   RetailSaleStatus @map("new_status")
+  note        String?
+  changedById Int              @map("changed_by_id")
+  changedAt   DateTime         @default(now()) @map("changed_at")
+  sale        RetailSale       @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  changedBy   User             @relation("RetailStatusHistoryChangedBy", fields: [changedById], references: [id])
+
+  @@index([saleId])
+  @@map("retail_sale_status_history")
+}
+
+model RetailSaleItem {
+  id                   Int                  @id @default(autoincrement())
+  saleId               Int                  @map("sale_id")
+  variantId            Int?                 @map("variant_id")
+  stockCardId          Int?                 @map("stock_card_id")
+  barcode              String?
+  modelCode            String?              @map("model_code")
+  productNameSnapshot  String               @map("product_name_snapshot")
+  externalLineId       String?              @map("external_line_id")
+  externalVariantId    String?              @map("external_variant_id")
+  variationText        String?              @map("variation_text")
+  quantity             Decimal              @db.Decimal(12, 3)
+  unitPrice            Decimal              @map("unit_price") @db.Decimal(14, 2)
+  discountAmount       Decimal              @default(0) @map("discount_amount") @db.Decimal(14, 2)
+  lineTotal            Decimal              @map("line_total") @db.Decimal(14, 2)
+  unitCostSnapshot     Decimal?             @map("unit_cost_snapshot") @db.Decimal(14, 4)
+  stockFulfillmentType StockFulfillmentType @default(READY_STOCK) @map("stock_fulfillment_type")
+  createdAt            DateTime             @default(now()) @map("created_at")
+  sale                 RetailSale           @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  variant              TrendyolProductVariant? @relation(fields: [variantId], references: [id])
+  stockCard            StockCard?           @relation(fields: [stockCardId], references: [id])
+
+  @@index([saleId])
+  @@index([variantId])
+  @@index([stockCardId])
+  @@map("retail_sale_items")
+}
+
+model RetailSalePayment {
+  id                   Int                 @id @default(autoincrement())
+  saleId               Int                 @map("sale_id")
+  method               RetailPaymentMethod
+  amount               Decimal             @db.Decimal(14, 2)
+  accountId            Int?                @map("account_id")
+  financeTransactionId Int?                @map("finance_transaction_id")
+  eventKey             String              @unique @map("event_key")
+  paidAt               DateTime            @default(now()) @map("paid_at")
+  note                 String?
+  createdAt            DateTime            @default(now()) @map("created_at")
+  createdById          Int                 @map("created_by_id")
+  sale                 RetailSale          @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  account              FinanceAccount?     @relation(fields: [accountId], references: [id])
+  financeTransaction   FinanceTransaction? @relation(fields: [financeTransactionId], references: [id])
+  createdBy            User                @relation("RetailPaymentCreatedBy", fields: [createdById], references: [id])
+
+  @@index([saleId])
+  @@map("retail_sale_payments")
+}
+
+model RetailDelivery {
+  id             Int                  @id @default(autoincrement())
+  saleId         Int                  @unique @map("sale_id")
+  addressId      Int?                 @map("address_id")
+  deliveryType   RetailDeliveryType   @default(STORE_PICKUP) @map("delivery_type")
+  status         RetailDeliveryStatus @default(WAITING)
+  plannedDate    DateTime?            @map("planned_date")
+  plannedTime    String?              @map("planned_time")
+  assignedUserId Int?                 @map("assigned_user_id")
+  deliveryNote   String?              @map("delivery_note")
+  deliveredAt    DateTime?            @map("delivered_at")
+  deliveredById  Int?                 @map("delivered_by_id")
+  eventKey       String               @unique @map("event_key")
+  createdAt      DateTime             @default(now()) @map("created_at")
+  updatedAt      DateTime             @updatedAt @map("updated_at")
+  sale           RetailSale           @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  address        RetailCustomerAddress? @relation(fields: [addressId], references: [id])
+  assignedUser   User?                @relation("RetailDeliveryAssignedTo", fields: [assignedUserId], references: [id])
+  deliveredBy    User?                @relation("RetailDeliveryDeliveredBy", fields: [deliveredById], references: [id])
+
+  @@map("retail_deliveries")
+}
+
+model RetailPrintLog {
+  id          Int             @id @default(autoincrement())
+  saleId      Int             @map("sale_id")
+  printType   RetailPrintType @map("print_type")
+  printedAt   DateTime        @default(now()) @map("printed_at")
+  printedById Int             @map("printed_by_id")
+  sale        RetailSale      @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  printedBy   User            @relation("RetailPrintLogPrintedBy", fields: [printedById], references: [id])
+
+  @@index([saleId])
+  @@map("retail_print_logs")
+}
+
+model StockReservation {
+  id          Int      @id @default(autoincrement())
+  stockCardId Int      @map("stock_card_id")
+  saleId      Int      @map("sale_id")
+  saleItemId  Int?     @map("sale_item_id")
+  quantity    Decimal  @db.Decimal(12, 3)
+  unit        String
+  status      String   @default("ACTIVE")
+  eventKey    String   @unique @map("event_key")
+  createdById Int?     @map("created_by_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  releasedAt  DateTime? @map("released_at")
+
+  @@index([stockCardId])
+  @@index([saleId])
+  @@map("stock_reservations")
+}
+
+model IntegrationConnection {
+  id                 Int      @id @default(autoincrement())
+  platform           String   @unique
+  displayName        String   @map("display_name")
+  status             String   @default("NOT_CONFIGURED")
+  usesEnvCredentials Boolean  @default(true) @map("uses_env_credentials")
+  lastTestAt         DateTime? @map("last_test_at")
+  lastSyncAt         DateTime? @map("last_sync_at")
+  lastError          String?  @map("last_error")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  @@map("integration_connections")
+}
+
+model IntegrationTenantSetting {
+  id              Int      @id @default(autoincrement())
+  tenant          String
+  platform        String
+  siteUrl         String?  @map("site_url")
+  serviceEndpoint String?  @map("service_endpoint")
+  wsdlUrl         String?  @map("wsdl_url")
+  secretValue     String?  @map("secret_value")
+  status          String   @default("NOT_CONFIGURED")
+  lastTestAt      DateTime? @map("last_test_at")
+  lastError       String?  @map("last_error")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@unique([tenant, platform])
+  @@index([platform])
+  @@map("integration_tenant_settings")
+}
+
+model IntegrationSyncLog {
+  id              Int      @id @default(autoincrement())
+  platform        String
+  action          String
+  status          String
+  message         String?
+  externalOrderId String?  @map("external_order_id")
+  saleId          Int?     @map("sale_id")
+  startedAt       DateTime @default(now()) @map("started_at")
+  completedAt     DateTime? @map("completed_at")
+  payloadSummary  Json?    @map("payload_summary")
+
+  @@index([platform, startedAt])
+  @@index([status])
+  @@map("integration_sync_logs")
+}
+
+model ProductionStaffTask {
+  id              Int      @id @default(autoincrement())
+  saleId          Int      @map("sale_id")
+  saleItemId      Int?     @map("sale_item_id")
+  taskType        String   @map("task_type")
+  status          String   @default("NEW")
+  assignmentGroup String?  @map("assignment_group")
+  assignedUserId  Int?     @map("assigned_user_id")
+  priority        String   @default("NORMAL")
+  dueAt           DateTime? @map("due_at")
+  seenAt          DateTime? @map("seen_at")
+  startedAt       DateTime? @map("started_at")
+  completedAt     DateTime? @map("completed_at")
+  blockedReason   String?  @map("blocked_reason")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@index([saleId])
+  @@index([assignedUserId])
+  @@index([assignmentGroup])
+  @@index([status])
+  @@map("production_staff_tasks")
+}
+
+model ProductionTaskProof {
+  id                  Int      @id @default(autoincrement())
+  taskId              Int      @map("task_id")
+  saleId              Int      @map("sale_id")
+  saleItemId          Int?     @map("sale_item_id")
+  productNameSnapshot String   @map("product_name_snapshot")
+  barcode             String?
+  photoPath           String?  @map("photo_path")
+  barcodeVerified     Boolean  @default(false) @map("barcode_verified")
+  uploadedById        Int      @map("uploaded_by_id")
+  createdAt           DateTime @default(now()) @map("created_at")
+
+  @@index([taskId])
+  @@index([saleId])
+  @@map("production_task_proofs")
+}
+
+model FinanceAccount {
+  id                 Int                             @id @default(autoincrement())
+  name               String                          @unique
+  type               FinanceAccountType
+  openingBalance     Decimal                         @default(0) @map("opening_balance") @db.Decimal(14, 2)
+  status             RecordStatus                    @default(ACTIVE)
+  createdAt          DateTime                        @default(now()) @map("created_at")
+  updatedAt          DateTime                        @updatedAt @map("updated_at")
+  transactions       FinanceTransaction[]
+  debts              FinanceDebt[]
+  marketplaceRecords FinanceMarketplaceDailyRecord[]
+  recurringPayments  FinanceRecurringPayment[]
+  salaries           FinanceSalaryRecord[]
+  retailPayments     RetailSalePayment[]
+
+  @@map("finance_accounts")
+}
+
+model FinanceCategory {
+  id                Int                       @id @default(autoincrement())
+  name              String
+  kind              FinanceCategoryKind
+  isSystem          Boolean                   @default(false) @map("is_system")
+  status            RecordStatus              @default(ACTIVE)
+  createdAt         DateTime                  @default(now()) @map("created_at")
+  updatedAt         DateTime                  @updatedAt @map("updated_at")
+  transactions      FinanceTransaction[]
+  recurringPayments FinanceRecurringPayment[]
+
+  @@unique([name, kind])
+  @@map("finance_categories")
+}
+
+model FinanceSalesChannel {
+  id                 Int                             @id @default(autoincrement())
+  name               String                          @unique
+  status             RecordStatus                    @default(ACTIVE)
+  createdAt          DateTime                        @default(now()) @map("created_at")
+  updatedAt          DateTime                        @updatedAt @map("updated_at")
+  marketplaceRecords FinanceMarketplaceDailyRecord[]
+
+  @@map("finance_sales_channels")
+}
+
+model FinanceTransaction {
+  id               Int                    @id @default(autoincrement())
+  transactionType  FinanceTransactionType @map("transaction_type")
+  direction        FinanceDirection
+  categoryId       Int?                   @map("category_id")
+  amount           Decimal                @db.Decimal(14, 2)
+  transactionDate  DateTime               @map("transaction_date")
+  accountId        Int                    @map("account_id")
+  description      String
+  linkedRecordType String?                @map("linked_record_type")
+  linkedRecordId   String?                @map("linked_record_id")
+  externalKey      String?                @unique @map("external_key")
+  recordedByUserId Int                    @map("recorded_by_user_id")
+  status           FinanceRecordStatus    @default(ACTIVE)
+  cancelReason     String?                @map("cancel_reason")
+  correctionOfId   Int?                   @map("correction_of_id")
+  createdAt        DateTime               @default(now()) @map("created_at")
+  updatedAt        DateTime               @updatedAt @map("updated_at")
+  category         FinanceCategory?       @relation(fields: [categoryId], references: [id])
+  account          FinanceAccount         @relation(fields: [accountId], references: [id])
+  recordedBy       User                   @relation("FinanceTransactionRecordedBy", fields: [recordedByUserId], references: [id])
+  correctionOf     FinanceTransaction?    @relation("FinanceCorrections", fields: [correctionOfId], references: [id])
+  corrections      FinanceTransaction[]   @relation("FinanceCorrections")
+  auditLogs        FinanceAuditLog[]
+  retailPayments   RetailSalePayment[]
+
+  @@index([transactionDate])
+  @@index([linkedRecordType, linkedRecordId])
+  @@map("finance_transactions")
+}
+
+model FinanceDebt {
+  id               Int                    @id @default(autoincrement())
+  debtType         FinanceTransactionType @map("debt_type")
+  title            String
+  partyName        String?                @map("party_name")
+  amount           Decimal                @db.Decimal(14, 2)
+  remainingAmount  Decimal                @map("remaining_amount") @db.Decimal(14, 2)
+  dueDate          DateTime               @map("due_date")
+  accountId        Int?                   @map("account_id")
+  linkedRecordType String?                @map("linked_record_type")
+  linkedRecordId   String?                @map("linked_record_id")
+  status           FinancePaymentStatus   @default(PENDING)
+  createdByUserId  Int                    @map("created_by_user_id")
+  createdAt        DateTime               @default(now()) @map("created_at")
+  updatedAt        DateTime               @updatedAt @map("updated_at")
+  account          FinanceAccount?        @relation(fields: [accountId], references: [id])
+  createdBy        User                   @relation("FinanceDebtCreatedBy", fields: [createdByUserId], references: [id])
+
+  @@index([dueDate])
+  @@map("finance_debts")
+}
+
+model FinanceMarketplaceDailyRecord {
+  id                   Int                  @id @default(autoincrement())
+  channelId            Int                  @map("channel_id")
+  recordDate           DateTime             @map("record_date")
+  orderCount           Int                  @default(0) @map("order_count")
+  grossSales           Decimal              @default(0) @map("gross_sales") @db.Decimal(14, 2)
+  cancellationAmount   Decimal              @default(0) @map("cancellation_amount") @db.Decimal(14, 2)
+  returnAmount         Decimal              @default(0) @map("return_amount") @db.Decimal(14, 2)
+  commissionAmount     Decimal              @default(0) @map("commission_amount") @db.Decimal(14, 2)
+  cargoDeduction       Decimal              @default(0) @map("cargo_deduction") @db.Decimal(14, 2)
+  advertisingDeduction Decimal              @default(0) @map("advertising_deduction") @db.Decimal(14, 2)
+  otherDeduction       Decimal              @default(0) @map("other_deduction") @db.Decimal(14, 2)
+  netSettlement        Decimal              @default(0) @map("net_settlement") @db.Decimal(14, 2)
+  expectedPaymentDate  DateTime?            @map("expected_payment_date")
+  actualPayment        Decimal              @default(0) @map("actual_payment") @db.Decimal(14, 2)
+  paymentStatus        FinancePaymentStatus @default(PENDING) @map("payment_status")
+  accountId            Int?                 @map("account_id")
+  transactionId        Int?                 @map("transaction_id")
+  createdAt            DateTime             @default(now()) @map("created_at")
+  updatedAt            DateTime             @updatedAt @map("updated_at")
+  channel              FinanceSalesChannel  @relation(fields: [channelId], references: [id])
+  account              FinanceAccount?      @relation(fields: [accountId], references: [id])
+
+  @@unique([channelId, recordDate])
+  @@map("finance_marketplace_daily_records")
+}
+
+model FinanceRecurringPayment {
+  id          Int                       @id @default(autoincrement())
+  title       String
+  categoryId  Int                       @map("category_id")
+  accountId   Int?                      @map("account_id")
+  amount      Decimal                   @db.Decimal(14, 2)
+  frequency   FinanceRecurringFrequency
+  nextDueDate DateTime                  @map("next_due_date")
+  description String?
+  status      RecordStatus              @default(ACTIVE)
+  createdAt   DateTime                  @default(now()) @map("created_at")
+  updatedAt   DateTime                  @updatedAt @map("updated_at")
+  category    FinanceCategory           @relation(fields: [categoryId], references: [id])
+  account     FinanceAccount?           @relation(fields: [accountId], references: [id])
+
+  @@map("finance_recurring_payments")
+}
+
+model FinanceSalaryRecord {
+  id               Int                  @id @default(autoincrement())
+  staffId          String?              @map("staff_id")
+  staffName        String               @map("staff_name")
+  period           String
+  netSalary        Decimal              @map("net_salary") @db.Decimal(14, 2)
+  advance          Decimal              @default(0) @db.Decimal(14, 2)
+  bonus            Decimal              @default(0) @db.Decimal(14, 2)
+  deduction        Decimal              @default(0) @db.Decimal(14, 2)
+  paidAmount       Decimal              @default(0) @map("paid_amount") @db.Decimal(14, 2)
+  remainingAmount  Decimal              @map("remaining_amount") @db.Decimal(14, 2)
+  paymentDate      DateTime?            @map("payment_date")
+  accountId        Int?                 @map("account_id")
+  status           FinancePaymentStatus @default(PENDING)
+  transactionId    Int?                 @map("transaction_id")
+  recordedByUserId Int                  @map("recorded_by_user_id")
+  createdAt        DateTime             @default(now()) @map("created_at")
+  updatedAt        DateTime             @updatedAt @map("updated_at")
+  account          FinanceAccount?      @relation(fields: [accountId], references: [id])
+  recordedBy       User                 @relation("FinanceSalaryRecordedBy", fields: [recordedByUserId], references: [id])
+
+  @@unique([staffName, period])
+  @@map("finance_salary_records")
+}
+
+model FinanceAuditLog {
+  id            Int                 @id @default(autoincrement())
+  transactionId Int?                @map("transaction_id")
+  userId        Int                 @map("user_id")
+  action        String
+  reason        String?
+  oldValue      Json?               @map("old_value")
+  newValue      Json?               @map("new_value")
+  createdAt     DateTime            @default(now()) @map("created_at")
+  transaction   FinanceTransaction? @relation(fields: [transactionId], references: [id])
+  user          User                @relation("FinanceAuditUser", fields: [userId], references: [id])
+
+  @@map("finance_audit_logs")
+}
+
+model BambuCostRule {
+  id                Int                   @id @default(autoincrement())
+  familyId          Int                   @unique @map("family_id")
+  leafStockCardId   Int?                  @map("leaf_stock_card_id")
+  trunkStockCardId  Int?                  @map("trunk_stock_card_id")
+  leavesPerStep     Decimal               @default(1) @map("leaves_per_step") @db.Decimal(12, 3)
+  leafStepCm        Decimal               @default(10) @map("leaf_step_cm") @db.Decimal(12, 3)
+  roundingMode      BambuLeafRoundingMode @default(NEAREST) @map("rounding_mode")
+  trunkLengthCm     Decimal               @default(220) @map("trunk_length_cm") @db.Decimal(12, 3)
+  siliconeAmount    Decimal               @default(1) @map("silicone_gr") @db.Decimal(12, 3)
+  laborAmount       Decimal               @default(10) @map("labor_amount") @db.Decimal(12, 2)
+  overheadAmount    Decimal               @default(5) @map("overhead_amount") @db.Decimal(12, 2)
+  electricityAmount Decimal               @default(0) @map("electricity_amount") @db.Decimal(12, 2)
+  packagingAmount   Decimal               @default(0) @map("packaging_amount") @db.Decimal(12, 2)
+  createdAt         DateTime              @default(now()) @map("created_at")
+  updatedAt         DateTime              @updatedAt @map("updated_at")
+  family            ProductionFamily      @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  leafStockCard     StockCard?            @relation("BambuLeafStockCard", fields: [leafStockCardId], references: [id])
+  trunkStockCard    StockCard?            @relation("BambuTrunkStockCard", fields: [trunkStockCardId], references: [id])
+  exceptions        BambuCostException[]
+
+  @@map("bambu_cost_rules")
+}
+
+model BambuCostException {
+  id             Int           @id @default(autoincrement())
+  ruleId         Int           @map("rule_id")
+  sizeCm         Int           @map("size_cm")
+  leafCount      Decimal?      @map("leaf_count") @db.Decimal(12, 3)
+  siliconeAmount Decimal?      @map("silicone_gr") @db.Decimal(12, 3)
+  laborAmount    Decimal?      @map("labor_amount") @db.Decimal(12, 2)
+  overheadAmount Decimal?      @map("overhead_amount") @db.Decimal(12, 2)
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+  rule           BambuCostRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+
+  @@unique([ruleId, sizeCm])
+  @@map("bambu_cost_exceptions")
+}
+
+model StockUsageLog {
+  id            Int                     @id @default(autoincrement())
+  stockCardId   Int                     @map("stock_card_id")
+  variantId     Int?                    @map("variant_id")
+  eventType     StockUsageEventType     @map("event_type")
+  eventKey      String                  @unique @map("event_key")
+  quantity      Decimal                 @db.Decimal(12, 3)
+  unit          String
+  previousStock Decimal                 @map("previous_stock") @db.Decimal(12, 3)
+  nextStock     Decimal                 @map("next_stock") @db.Decimal(12, 3)
+  userId        Int                     @map("user_id")
+  createdAt     DateTime                @default(now()) @map("created_at")
+  stockCard     StockCard               @relation(fields: [stockCardId], references: [id])
+  variant       TrendyolProductVariant? @relation(fields: [variantId], references: [id])
+  user          User                    @relation(fields: [userId], references: [id])
+
+  @@map("stock_usage_logs")
+}
+
+model StockCountSession {
+  id           Int              @id @default(autoincrement())
+  title        String
+  note         String?
+  status       StockCountStatus @default(DRAFT)
+  createdById  Int              @map("created_by_id")
+  approvedById Int?             @map("approved_by_id")
+  approvedAt   DateTime?        @map("approved_at")
+  createdAt    DateTime         @default(now()) @map("created_at")
+  updatedAt    DateTime         @updatedAt @map("updated_at")
+  createdBy    User             @relation("StockCountCreatedBy", fields: [createdById], references: [id])
+  approvedBy   User?            @relation("StockCountApprovedBy", fields: [approvedById], references: [id])
+  items        StockCountItem[]
+
+  @@map("stock_count_sessions")
+}
+
+model StockCountItem {
+  id               Int               @id @default(autoincrement())
+  sessionId        Int               @map("session_id")
+  stockCardId      Int               @map("stock_card_id")
+  snapshotQuantity Decimal           @map("snapshot_quantity") @db.Decimal(12, 3)
+  countedQuantity  Decimal?          @map("counted_quantity") @db.Decimal(12, 3)
+  difference       Decimal           @default(0) @db.Decimal(12, 3)
+  note             String?
+  createdAt        DateTime          @default(now()) @map("created_at")
+  updatedAt        DateTime          @updatedAt @map("updated_at")
+  session          StockCountSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  stockCard        StockCard         @relation(fields: [stockCardId], references: [id])
+
+  @@unique([sessionId, stockCardId])
+  @@map("stock_count_items")
+}

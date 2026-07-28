@@ -1,0 +1,35 @@
+node_modules/
+.next/
+.next*/
+dist/
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+*.log
+*.err
+*.out
+
+# Yerel arac ve isletim sistemi dosyalari
+.agents/
+.project/
+.DS_Store
+Thumbs.db
+
+# Calisma zamani ve uretilen dosyalar
+backend/generated/
+backend/src/generated/
+backend/tmp/
+backend/import-reports/
+backend/0
+*.tmp
+
+# Veri, dis aktarim ve eski kopyalar kaynak kod gecmisine alinmaz
+backups/
+releases/
+rollback-backups/
+snapshots/
+*.dump
+
+backend/uploads/*
+!backend/uploads/.gitkeep

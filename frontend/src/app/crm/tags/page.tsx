@@ -1,0 +1,6 @@
+'use client';
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { AdminShell } from '@/components/AdminShell';
+import { api } from '@/lib/api';
+export default function TagsPage(){const [rows,setRows]=useState<any[]>([]);const [name,setName]=useState('');const load=()=>api<any[]>('/sales/customer-tags/list').then(setRows);useEffect(()=>{load()},[]);return <AdminShell title="Etiket Yönetimi"><div className="space-y-4"><Link className="btn btn-secondary" href="/crm">CRM'e Dön</Link><section className="panel p-5"><div className="grid gap-2 sm:grid-cols-[1fr_auto]"><input className="field" placeholder="Yeni etiket adı" value={name} onChange={e=>setName(e.target.value)}/><button className="btn btn-primary" onClick={async()=>{if(!name.trim())return;await api('/sales/customer-tags',{method:'POST',json:{name}});setName('');load()}}>Etiket Ekle</button></div><div className="mt-4 space-y-2">{rows.map(row=><div key={row.id} className="flex items-center justify-between rounded border border-line p-3"><span>{row.name}</span><button className="btn btn-secondary" onClick={async()=>{await api(`/sales/customer-tags/${row.id}`,{method:'PATCH',json:{isActive:!row.isActive}});load()}}>{row.isActive?'Pasife Al':'Aktif Yap'}</button></div>)}</div></section></div></AdminShell>}

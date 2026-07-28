@@ -1,0 +1,1621 @@
+// Erhan Flowers ERP PostgreSQL schema
+// Source: backend/prisma/schema.prisma
+// Generated for dbdiagram.io. Do not run as a migration.
+
+Enum RecordStatus {
+  ACTIVE
+  PASSIVE
+}
+
+Enum RecipeCostType {
+  LABOR
+  ELECTRICITY
+  SILICONE
+  PACKAGING
+  SHIPPING
+  OTHER
+}
+
+Enum ProductionCostGroup {
+  LEAF
+  TRUNK
+  POT
+  CONSUMABLE
+  LABOR
+  ELECTRICITY
+  PACKAGING
+  OTHER
+}
+
+Enum TemplateComponentScope {
+  COMMON
+  SIZE_VARIANT
+  POT_VARIANT
+}
+
+Enum FinanceDirection {
+  IN
+  OUT
+  NEUTRAL
+}
+
+Enum FinanceTransactionType {
+  INCOME
+  EXPENSE
+  DEBT
+  RECEIVABLE
+  PAYMENT
+  COLLECTION
+  TRANSFER
+  MARKETPLACE_SETTLEMENT
+  SALARY
+  REGULAR_PAYMENT
+}
+
+Enum FinanceCategoryKind {
+  INCOME
+  EXPENSE
+  BOTH
+}
+
+Enum FinanceAccountType {
+  BANK
+  CASH
+  CREDIT_CARD
+  MARKETPLACE_RECEIVABLE
+}
+
+Enum FinancePaymentStatus {
+  PENDING
+  PARTIAL
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+Enum FinanceRecordStatus {
+  ACTIVE
+  CANCELLED
+  CORRECTED
+}
+
+Enum FinanceRecurringFrequency {
+  WEEKLY
+  MONTHLY
+  QUARTERLY
+  YEARLY
+}
+
+Enum BambuLeafRoundingMode {
+  DOWN
+  UP
+  NEAREST
+}
+
+Enum StockUsageEventType {
+  PRODUCTION_COMPLETED
+  ORDER_SHIPPED
+}
+
+Enum ProductCostItemGroup {
+  LEAF_TRUNK
+  POT
+  CONSUMABLE
+  LABOR
+  PACKAGING
+  OTHER
+}
+
+Enum ProductCostSource {
+  AUTO
+  MANUAL
+}
+
+Enum ProductCostStatus {
+  DRAFT
+  APPROVED
+}
+
+Enum StockCountStatus {
+  DRAFT
+  APPROVED
+  CANCELLED
+}
+
+Enum PublishingActionType {
+  PREVIEW
+  TEST_UPDATE
+  LIVE_SEND
+}
+
+Enum PublishingStatus {
+  PENDING
+  READY
+  SUCCESS
+  FAILED
+  BLOCKED
+}
+
+Enum UserRole {
+  OWNER
+  STAFF
+}
+
+Enum RetailSaleChannel {
+  STORE
+  PHONE
+  WHATSAPP
+  INSTAGRAM
+  WEBSITE
+  TRENDYOL
+  HEPSIBURADA
+  N11
+  AMAZON
+  OTHER
+}
+
+Enum RetailSaleType {
+  STORE_SALE
+  DELIVERY_SALE
+  CUSTOM_PRODUCTION
+}
+
+Enum RetailSaleStatus {
+  DRAFT
+  PAYMENT_PENDING
+  CONFIRMED
+  PREPARING
+  IN_PRODUCTION
+  READY
+  OUT_FOR_DELIVERY
+  DELIVERED
+  COMPLETED
+  CANCELLED
+}
+
+Enum RetailInvoiceStatus {
+  WAITING
+  E_ARCHIVE
+  E_INVOICE
+  ISSUED
+  CANCELLED
+  RETURNED
+}
+
+Enum StockFulfillmentType {
+  READY_STOCK
+  CUSTOM_PRODUCTION
+  NON_STOCK_SERVICE
+}
+
+Enum RetailPaymentMethod {
+  CASH
+  CREDIT_CARD
+  BANK_TRANSFER
+  ON_ACCOUNT
+  OTHER
+}
+
+Enum RetailDeliveryType {
+  STORE_PICKUP
+  OWN_VEHICLE
+  CARGO
+  COURIER
+}
+
+Enum RetailDeliveryStatus {
+  NOT_REQUIRED
+  WAITING
+  PLANNED
+  PREPARING
+  OUT_FOR_DELIVERY
+  DELIVERED
+  CANCELLED
+}
+
+Enum RetailPrintType {
+  ADDRESS_LABEL_10X15
+  DELIVERY_FORM_A5
+  ORDER_FORM_A4
+}
+
+Enum KnowledgeAliasEntityType {
+  PLANT_TYPE
+  POT_PROFILE
+  MATERIAL_RULE
+}
+
+Enum KnowledgeRecipeComponentType {
+  LEAF
+  TRUNK
+  POT
+  SILICONE
+  ELECTRICITY
+  LABOR
+  PACKAGING
+  OTHER
+}
+
+Enum KnowledgeRuleType {
+  PRODUCT_NAME
+  HEIGHT
+  POT
+  MATERIAL
+  RECIPE
+}
+
+Table users {
+  id int [pk, increment]
+  name varchar [not null]
+  email varchar [unique, not null]
+  password_hash varchar [not null, note: "Prisma: passwordHash"]
+  role UserRole [not null, default: 'OWNER']
+  status RecordStatus [not null, default: 'ACTIVE']
+  remember_token varchar [note: "Prisma: rememberToken"]
+  created_at timestamp [not null, default: `now()`, note: "Prisma: createdAt"]
+  updated_at timestamp [not null, note: "Prisma: updatedAt; @updatedAt"]
+}
+
+Table categories {
+  id int [pk, increment]
+  name varchar [unique, not null]
+  code_prefix varchar [not null, note: "Prisma: codePrefix"]
+  start_code int [not null, note: "Prisma: startCode"]
+  current_code int [not null, note: "Prisma: currentCode"]
+  status RecordStatus [not null, default: 'ACTIVE']
+  created_at timestamp [not null, default: `now()`, note: "Prisma: createdAt"]
+  updated_at timestamp [not null, note: "Prisma: updatedAt; @updatedAt"]
+}
+
+Table products {
+  id int [pk, increment]
+  product_name varchar [not null, note: "Prisma: productName"]
+  model_code varchar [unique, not null, note: "Prisma: modelCode"]
+  category_id int [not null, note: "Prisma: categoryId"]
+  barcode varchar [unique]
+  stock_quantity int [not null, default: 0, note: "Prisma: stockQuantity"]
+  critical_stock_level int [not null, default: 0, note: "Prisma: criticalStockLevel"]
+  status RecordStatus [not null, default: 'ACTIVE']
+  description varchar
+  created_at timestamp [not null, default: `now()`, note: "Prisma: createdAt"]
+  updated_at timestamp [not null, note: "Prisma: updatedAt; @updatedAt"]
+}
+
+Table stock_cards {
+  id int [pk, increment]
+  name varchar [not null]
+  sku varchar [unique]
+  category varchar
+  color varchar
+  model varchar
+  size varchar
+  product_family varchar [note: "Prisma: productFamily"]
+  product_type varchar [note: "Prisma: productType"]
+  height varchar
+  width varchar
+  pot_type varchar [note: "Prisma: potType"]
+  pot_color varchar [note: "Prisma: potColor"]
+  pot_size varchar [note: "Prisma: potSize"]
+  trunk_type varchar [note: "Prisma: trunkType"]
+  leaf_flower_type varchar [note: "Prisma: leafFlowerType"]
+  brand varchar
+  old_model_code varchar [note: "Prisma: oldModelCode"]
+  barcode varchar
+  sale_price decimal(12,2) [not null, default: 0, note: "Prisma: salePrice"]
+  warehouse varchar
+  shelf_location varchar [note: "Prisma: shelfLocation"]
+  short_description varchar [note: "Prisma: shortDescription"]
+  technical_specs varchar [note: "Prisma: technicalSpecs"]
+  seo_title varchar [note: "Prisma: seoTitle"]
+  meta_description varchar [note: "Prisma: metaDescription"]
+  image_path varchar [note: "Prisma: imagePath"]
+  description varchar
+  critical_stock_level decimal(12,3) [not null, default: 0, note: "Prisma: criticalStockLevel"]
+  supplier_name varchar [note: "Prisma: supplierName"]
+  last_movement_at timestamp [note: "Prisma: lastMovementAt"]
+  purchase_unit varchar [not null, default: 'Adet', note: "Prisma: purchaseUnit"]
+  purchase_quantity decimal(12,3) [not null, default: 1, note: "Prisma: purchaseQuantity"]
+  unit varchar [not null]
+  package_content decimal(12,3) [not null, default: 1, note: "Prisma: packageContent"]
+  purchase_price decimal(12,2) [not null, default: 0, note: "Prisma: purchasePrice"]
+  manual_unit_cost_enabled boolean [not null, default: false, note: "Prisma: manualUnitCostEnabled"]
+  manual_unit_cost decimal(12,4) [not null, default: 0, note: "Prisma: manualUnitCost"]
+  automatic_unit_cost decimal(12,4) [not null, default: 0, note: "Prisma: automaticUnitCost"]
+  stock_quantity decimal(12,3) [not null, default: 0, note: "Prisma: stockQuantity"]
+  reserved_quantity decimal(12,3) [not null, default: 0, note: "Prisma: reservedQuantity"]
+  status RecordStatus [not null, default: 'ACTIVE']
+  created_at timestamp [not null, default: `now()`, note: "Prisma: createdAt"]
+  updated_at timestamp [not null, note: "Prisma: updatedAt; @updatedAt"]
+}
+
+Table stock_card_images {
+  id int [pk, increment]
+  stock_card_id int [not null, note: "Prisma: stockCardId"]
+  file_name varchar [not null, note: "Prisma: fileName"]
+  file_path varchar [not null, note: "Prisma: filePath"]
+  folder_name varchar [not null, note: "Prisma: folderName"]
+  file_type varchar [not null, note: "Prisma: fileType"]
+  is_main boolean [not null, default: false, note: "Prisma: isMain"]
+  created_at timestamp [not null, default: `now()`, note: "Prisma: createdAt"]
+}
+
+Table stock_movements {
+  id int [pk, increment]
+  stock_card_id int [not null, note: "Prisma: stockCardId"]
+  type varchar [not null]
+  quantity decimal(12,3) [not null]
+  unit varchar [not null]
+  previous_stock decimal(12,3) [not null, note: "Prisma: previousStock"]
+  next_stock decimal(12,3) [not null, note: "Prisma: nextStock"]
+  reason varchar
+  supplier_name varchar [note: "Prisma: supplierName"]
+  document_no varchar [note: "Prisma: documentNo"]
+  payment_status varchar [note: "Prisma: paymentStatus"]
+  note varchar
+  reference_type varchar [note: "Prisma: referenceType"]
+  reference_id varchar [note: "Prisma: referenceId"]
+  event_key varchar [unique, note: "Prisma: eventKey"]
+  created_by_id int [note: "Prisma: createdById"]
+  created_at timestamp [not null, default: `now()`, note: "Prisma: createdAt"]
+
+  indexes {
+    (reference_type, reference_id)
+  }
+}
+
+Table product_family_masters {
+  id int [pk, increment]
+  name varchar [not null]
+  category_name varchar [not null, note: "Prisma: categoryName"]
+  family_code varchar [unique, note: "Prisma: familyCode"]
+  description varchar
+  default_keywords varchar[] [default: `[]`, note: "Prisma: defaultKeywords"]
+  default_size_options varchar[] [default: `[]`, note: "Prisma: defaultSizeOptions"]
+  default_pot_options varchar[] [default: `[]`, note: "Prisma: defaultPotOptions"]
+  sort_order int [not null, default: 0, note: "Prisma: sortOrder"]
+  status RecordStatus [not null, default: 'ACTIVE']
+  created_at timestamp [not null, default: `now()`, note: "Prisma: createdAt"]
+  updated_at timestamp [not null, note: "Prisma: updatedAt; @updatedAt"]
+
+  indexes {
+    (category_name, name) [unique]
+  }
+}
+
+Table production_families {
+  id int [pk, increment]
+  master_id int [note: "Prisma: masterId"]
+  family_name varchar [unique, not null, note: "Prisma: familyName"]
+  family_code varchar [unique, note: "Prisma: familyCode"]
+  category_id int [note: "Prisma: categoryId"]
+  main_model_code varchar [note: "Prisma: mainModelCode"]
+  description varchar
+  keywords varchar[] [default: `[]`]
+  auto_matching_enabled boolean [not null, default: false, note: "Prisma: autoMatchingEnabled"]
+  status RecordStatus [not null, default: 'ACTIVE']
+  created_at timestamp [not null, default: `now()`, note: "Prisma: createdAt"]
+  updated_at timestamp [not null, note: "Prisma: updatedAt; @updatedAt"]
+}
+
+Table knowledge_plant_types {
+  id int [pk, increment]
+  name varchar [not null]
+  code varchar [unique]
+  normalized_name varchar [not null, note: "Prisma: normalizedName"]
+  description varchar
+  product_family_id int [note: "Prisma: productFamilyId"]
+  default_leaf_stock_card_id int [note: "Prisma: defaultLeafStockCardId"]
+  default_trunk_stock_card_id int [note: "Prisma: defaultTrunkStockCardId"]
+  default_pot_stock_card_id int [note: "Prisma: defaultPotStockCardId"]
+  default_recipe_id int [unique, note: "Prisma: defaultRecipeId"]
+  is_active boolean [not null, default: true, note: "Prisma: isActive"]
+  created_at timestamp [not null, default: `now()`, note: "Prisma: createdAt"]
+  updated_at timestamp [not null, note: "Prisma: updatedAt; @updatedAt"]
+
+  indexes {
+    (normalized_name)
+    (is_active)
+  }
+}
+
+Table knowledge_aliases {
+  id int [pk, increment]
+  alias varchar [not null]
+  normalized_alias varchar [not null, note: "Prisma: normalizedAlias"]
+  entity_type KnowledgeAliasEntityType [not null, note: "Prisma: entityType"]
+  plant_type_id int [note: "Prisma: plantTypeId"]
+  pot_profile_id int [note: "Prisma: potProfileId"]
+  material_rule_id int [note: "Prisma: materialRuleId"]
+  priority int [not null, default: 100]
+  is_active boolean [not null, default: true, note: "Prisma: isActive"]
+  created_at timestamp [not null, default: `now()`, note: "Prisma: createdAt"]
+  updated_at timestamp [not null, note: "Prisma: updatedAt; @updatedAt"]
+
+  indexes {
+    (normalized_alias)
+    (entity_type, is_active)
+  }
+}
+
+Table knowledge_pot_profiles {
+  id int [pk, increment]
+  name varchar [not null]
+  normalized_name varchar [not null, note: "Prisma: normalizedName"]
+  material_type varchar [note: "Prisma: materialType"]
+  color varchar
+  width decimal(12,2)
+  depth decimal(12,2)
+  height decimal(12,2)
+  diameter decimal(12,2)
+  stock_card_id int [note: "Prisma: stockCardId"]
+  priority int [not null, default: 100]
+  is_active boolean [not null, default: true, note: "Prisma: isActive"]
+  created_at timestamp [not null, default: `now()`, note: "Prisma: createdAt"]
+  updated_at timestamp [not null, note: "Prisma: updatedAt; @updatedAt"]
+
+  indexes {
+    (normalized_name)
+    (is_active)
+  }
+}
+
+Table knowledge_recipe_profiles {
+  id int [pk, increment]
+  name varchar [not null]
+  plant_type_id int [note: "Prisma: plantTypeId"]
+  product_family_id int [note: "Prisma: productFamilyId"]
+  min_height_cm int [note: "Prisma: minHeightCm"]
+  max_height_cm int [note: "Prisma: maxHeightCm"]
+  priority int [not null, default: 100]
+  is_default boolean [not null, default: false, note: "Prisma: isDefault"]
+  is_active boolean [not null, default: true, note: "Prisma: isActive"]
+  created_at timestamp [not null, default: `now()`, note: "Prisma: createdAt"]
+  updated_at timestamp [not null, note: "Prisma: updatedAt; @updatedAt"]
+
+  indexes {
+    (plant_type_id, is_active)
+    (product_family_id, is_active)
+  }
+}
+
+Table knowledge_recipe_items {
+  id int [pk, increment]
+  recipe_profile_id int [not null, note: "Prisma: recipeProfileId"]
+  stock_card_id int [note: "Prisma: stockCardId"]
+  component_type KnowledgeRecipeComponentType [not null, note: "Prisma: componentType"]
+  quantity decimal(12,3) [not null, default: 0]
+  unit varchar [not null]
+  is_optional boolean [not null, default: false, note: "Prisma: isOptional"]
+  sort_order int [not null, default: 0, note: "Prisma: sortOrder"]
+  created_at timestamp [not null, default: `now()`, note: "Prisma: createdAt"]
+  updated_at timestamp [not null, note: "Prisma: updatedAt; @updatedAt"]
+
+  indexes {
+    (recipe_profile_id, sort_order)
+  }
+}
+
+Table knowledge_rules {
+  id int [pk, increment]
+  name varchar [not null]
+  rule_type KnowledgeRuleType [not null, note: "Prisma: ruleType"]
+  rule_kind varchar [not null, default: 'GENERAL', note: "Prisma: ruleKind"]
+  plant_type_id int [note: "Prisma: plantTypeId"]
+  height_cm int [note: "Prisma: heightCm"]
+  stock_card_id int [note: "Prisma: stockCardId"]
+  quantity decimal(12,3)
+  unit varchar
+  amount_tl decimal(14,2) [note: "Prisma: amountTl"]
+  condition_json jsonb [not null, note: "Prisma: conditionJson"]
+  action_json jsonb [not null, note: "Prisma: actionJson"]
+  priority int [not null, default: 100]
+  is_active boolean [not null, default: true, note: "Prisma: isActive"]
+  created_at timestamp [not null, default: `now()`, note: "Prisma: createdAt"]
+  updated_at timestamp [not null, note: "Prisma: updatedAt; @updatedAt"]
+
+  indexes {
+    (rule_type, is_active)
+    (rule_kind, plant_type_id, height_cm, is_active)
+  }
+}
+
+Table knowledge_analysis_logs {
+  id int [pk, increment]
+  input_text varchar [not null, note: "Prisma: inputText"]
+  normalized_input varchar [not null, note: "Prisma: normalizedInput"]
+  detected_plant_type_id int [note: "Prisma: detectedPlantTypeId"]
+  detected_product_family_id int [note: "Prisma: detectedProductFamilyId"]
+  detected_pot_profile_id int [note: "Prisma: detectedPotProfileId"]
+  detected_height_cm int [note: "Prisma: detectedHeightCm"]
+  confidence_score decimal(5,4) [not null, default: 0, note: "Prisma: confidenceScore"]
+  result_json jsonb [note: "Prisma: resultJson"]
+  accepted_by_user boolean [not null, default: false, note: "Prisma: acceptedByUser"]
+  decision_status varchar [not null, default: 'REVIEW_REQUIRED', note: "Prisma: decisionStatus"]
+  matched_recipe_id int [note: "Prisma: matchedRecipeId"]
+  applied_automatically boolean [not null, default: false, note: "Prisma: appliedAutomatically"]
+  created_by_id int [note: "Prisma: createdById"]
+  created_at timestamp [not null, default: `now()`, note: "Prisma: createdAt"]
+
+  indexes {
+    (normalized_input)
+    (created_at)
+  }
+}
+
+Table knowledge_feedbacks {
+  id int [pk, increment]
+  analysis_log_id int [not null, note: "Prisma: analysisLogId"]
+  field_name varchar [not null, note: "Prisma: fieldName"]
+  detected_value jsonb [note: "Prisma: detectedValue"]
+  corrected_value jsonb [not null, note: "Prisma: correctedValue"]
+  note varchar
+  promoted_rule_id int [note: "Prisma: promotedRuleId"]
+  created_by_id int [not null, note: "Prisma: createdById"]
+  created_at timestamp [not null, default: `now()`, note: "Prisma: createdAt"]
+
+  indexes {
+    (analysis_log_id, created_at)
+    (field_name, created_at)
+  }
+}
+
+Table production_size_options {
+  id int [pk, increment]
+  family_id int [not null, note: "Prisma: familyId"]
+  size_label varchar [not null, note: "Prisma: sizeLabel"]
+  sort_order int [not null, default: 0, note: "Prisma: sortOrder"]
+
+  indexes {
+    (family_id, size_label) [unique]
+  }
+}
+
+Table production_pot_options {
+  id int [pk, increment]
+  family_id int [not null, note: "Prisma: familyId"]
+  pot_name varchar [not null, note: "Prisma: potName"]
+  stock_card_id int [note: "Prisma: stockCardId"]
+  sort_order int [not null, default: 0, note: "Prisma: sortOrder"]
+
+  indexes {
+    (family_id, pot_name) [unique]
+  }
+}
+
+Table production_recipe_templates {
+  id int [pk, increment]
+  family_id int [not null, note: "Prisma: familyId"]
+  template_name varchar [not null, note: "Prisma: templateName"]
+  description varchar
+  vat_percent decimal(5,2) [not null, default: 20, note: "Prisma: vatPercent"]
+  default_commission_percent decimal(5,2) [not null, default: 20, note: "Prisma: defaultCommissionPercent"]
+  status RecordStatus [not null, default: 'ACTIVE']
+  created_at timestamp [not null, default: `now()`, note: "Prisma: createdAt"]
+  updated_at timestamp [not null, note: "Prisma: updatedAt; @updatedAt"]
+}
+
+Table production_template_components {
+  id int [pk, increment]
+  template_id int [not null, note: "Prisma: templateId"]
+  stock_card_id int [note: "Prisma: stockCardId"]
+  component_name varchar [not null, note: "Prisma: componentName"]
+  cost_group ProductionCostGroup [not null, note: "Prisma: costGroup"]
+  scope TemplateComponentScope [not null, default: 'COMMON']
+  size_label varchar [note: "Prisma: sizeLabel"]
+  pot_name varchar [note: "Prisma: potName"]
+  quantity decimal(12,3) [not null, default: 0]
+  unit varchar [not null]
+  manual_amount decimal(12,2) [note: "Prisma: manualAmount"]
+  created_at timestamp [not null, default: `now()`, note: "Prisma: createdAt"]
+  updated_at timestamp [not null, note: "Prisma: updatedAt; @updatedAt"]
+}
+
+Table trendyol_product_variants {
+  id int [pk, increment]
+  barcode varchar [unique, not null]
+  product_name varchar [not null, note: "Prisma: productName"]
+  current_model_code varchar [note: "Prisma: currentModelCode"]
+  supplier_stock_code varchar [note: "Prisma: supplierStockCode"]
+  brand varchar
+  trendyol_category_name varchar [note: "Prisma: trendyolCategoryName"]
+  product_color varchar [note: "Prisma: productColor"]
+  product_description varchar [note: "Prisma: productDescription"]
+  stock_quantity int [not null, default: 0, note: "Prisma: stockQuantity"]
+  trendyol_product_url varchar [note: "Prisma: trendyolProductUrl"]
+  images jsonb
+  suggested_family_name varchar [note: "Prisma: suggestedFamilyName"]
+  detected_size varchar [note: "Prisma: detectedSize"]
+  detected_pot varchar [note: "Prisma: detectedPot"]
+  proposed_model_code varchar [note: "Prisma: proposedModelCode"]
+  seo_product_name varchar [note: "Prisma: seoProductName"]
+  seo_manual_product_name varchar [note: "Prisma: seoManualProductName"]
+  seo_distinctive_feature varchar [note: "Prisma: seoDistinctiveFeature"]
+  seo_market_title varchar [note: "Prisma: seoMarketTitle"]
+  seo_web_title varchar [note: "Prisma: seoWebTitle"]
+  seo_short_description varchar [note: "Prisma: seoShortDescription"]
+  seo_long_description varchar [note: "Prisma: seoLongDescription"]
+  seo_meta_title varchar [note: "Prisma: seoMetaTitle"]
+  seo_meta_description varchar [note: "Prisma: seoMetaDescription"]
+  seo_keywords varchar[] [default: `[]`, note: "Prisma: seoKeywords"]
+  seo_image_alt_text varchar [note: "Prisma: seoImageAltText"]
+  seo_properties jsonb [note: "Prisma: seoProperties"]
+  seo_image_history jsonb [note: "Prisma: seoImageHistory"]
+  seo_change_history jsonb [note: "Prisma: seoChangeHistory"]
+  seo_approval_status varchar [not null, default: 'Eksik Bilgi', note: "Prisma: seoApprovalStatus"]
+  seo_approved_at timestamp [note: "Prisma: seoApprovedAt"]
+  recipe_status varchar [not null, default: 'Eşleşmedi', note: "Prisma: recipeStatus"]
+  cost_status varchar [not null, default: 'Bekliyor', note: "Prisma: costStatus"]
+  import_source varchar [note: "Prisma: importSource"]
+  imported_at timestamp [note: "Prisma: importedAt"]
+  family_id int [note: "Prisma: familyId"]
+  size_option_id int [note: "Prisma: sizeOptionId"]
+  pot_option_id int [note: "Prisma: potOptionId"]
+  template_id int [note: "Prisma: templateId"]
+  trendyol_sale_price decimal(12,2) [not null, default: 0, note: "Prisma: trendyolSalePrice"]
+  commission_percent decimal(5,2) [not null, default: 20, note: "Prisma: commissionPercent"]
+  status RecordStatus [not null, default: 'ACTIVE']
+  created_at timestamp [not null, default: `now()`, note: "Prisma: createdAt"]
+  updated_at timestamp [not null, note: "Prisma: updatedAt; @updatedAt"]
+}
+
+Table product_cost_drafts {
+  id int [pk, increment]
+  variant_id int [unique, not null, note: "Prisma: variantId"]
+  sale_price decimal(12,2) [not null, default: 0, note: "Prisma: salePrice"]
+  profit_margin_percent decimal(5,2) [not null, default: 45, note: "Prisma: profitMarginPercent"]
+  commission_percent decimal(5,2) [not null, default: 21, note: "Prisma: commissionPercent"]
+  vat_percent decimal(5,2) [not null, default: 20, note: "Prisma: vatPercent"]
+  shipping_cost decimal(12,2) [not null, default: 0, note: "Prisma: shippingCost"]
+  desi decimal(8,2) [not null, default: 0]
+  marketplace_markup_percent decimal(5,2) [not null, default: 25, note: "Prisma: marketplaceMarkupPercent"]
+  campaign_buffer_percent decimal(5,2) [not null, default: 10, note: "Prisma: campaignBufferPercent"]
+  total_cost decimal(12,2) [not null, default: 0, note: "Prisma: totalCost"]
+  status ProductCostStatus [not null, default: 'DRAFT']
+  approved_at timestamp [note: "Prisma: approvedAt"]
+  created_at timestamp [not null, default: `now()`, note: "Prisma: createdAt"]
+  updated_at timestamp [not null, note: "Prisma: updatedAt; @updatedAt"]
+}
+
+Table product_cost_items {
+  id int [pk, increment]
+  draft_id int [not null, note: "Prisma: draftId"]
+  stock_card_id int [note: "Prisma: stockCardId"]
+  name varchar [not null]
+  group ProductCostItemGroup [not null]
+  quantity decimal(12,3) [not null, default: 0]
+  unit varchar [not null]
+  source ProductCostSource [not null, default: 'AUTO']
+  manual_unit_cost decimal(12,4) [not null, default: 0, note: "Prisma: manualUnitCost"]
+  is_active boolean [not null, default: true, note: "Prisma: isActive"]
+  is_default_expense boolean [not null, default: false, note: "Prisma: isDefaultExpense"]
+  default_expense_key varchar [note: "Prisma: defaultExpenseKey"]
+  default_amount decimal(12,2) [note: "Prisma: defaultAmount"]
+  created_at timestamp [not null, default: `now()`, note: "Prisma: createdAt"]
+  updated_at timestamp [not null, note: "Prisma: updatedAt; @updatedAt"]
+}
+
+Table default_product_expenses {
+  id int [pk, increment]
+  expense_key varchar [unique, not null, note: "Prisma: expenseKey"]
+  name varchar [not null]
+  default_amount decimal(12,2) [not null, default: 0, note: "Prisma: defaultAmount"]
+  apply_categories varchar[] [default: `[]`, note: "Prisma: applyCategories"]
+  exclude_categories varchar[] [default: `[]`, note: "Prisma: excludeCategories"]
+  is_active boolean [not null, default: true, note: "Prisma: isActive"]
+  valid_from timestamp [not null, default: `now()`, note: "Prisma: validFrom"]
+  description varchar
+  status RecordStatus [not null, default: 'ACTIVE']
+  created_at timestamp [not null, default: `now()`, note: "Prisma: createdAt"]
+  updated_at timestamp [not null, note: "Prisma: updatedAt; @updatedAt"]
+}
+
+Table default_product_expense_history {
+  id int [pk, increment]
+  expense_id int [not null, note: "Prisma: expenseId"]
+  old_amount decimal(12,2) [not null, default: 0, note: "Prisma: oldAmount"]
+  new_amount decimal(12,2) [not null, default: 0, note: "Prisma: newAmount"]
+  changed_by_user_id int [note: "Prisma: changedByUserId"]
+  affected_draft_count int [not null, default: 0, note: "Prisma: affectedDraftCount"]
+  change_scope varchar [not null, default: 'future_only', note: "Prisma: changeScope"]
+  reason varchar
+  created_at timestamp [not null, default: `now()`, note: "Prisma: createdAt"]
+}
+
+Table product_pot_items {
+  id int [pk, increment]
+  draft_id int [not null, note: "Prisma: draftId"]
+  stock_card_id int [note: "Prisma: stockCardId"]
+  name varchar [not null]
+  pot_type varchar [note: "Prisma: potType"]
+  color varchar
+  width decimal(12,2) [not null, default: 0]
+  length decimal(12,2) [not null, default: 0]
+  height decimal(12,2) [not null, default: 0]
+  diameter decimal(12,2) [not null, default: 0]
+  quantity decimal(12,3) [not null, default: 1]
+  source ProductCostSource [not null, default: 'AUTO']
+  manual_unit_cost decimal(12,4) [not null, default: 0, note: "Prisma: manualUnitCost"]
+  created_at timestamp [not null, default: `now()`, note: "Prisma: createdAt"]
+  updated_at timestamp [not null, note: "Prisma: updatedAt; @updatedAt"]
+}
+
+Table publishing_logs {
+  id int [pk, increment]
+  variant_id int [not null, note: "Prisma: variantId"]
+  action_type PublishingActionType [not null, note: "Prisma: actionType"]
+  status PublishingStatus [not null, default: 'PENDING']
+  missing_fields varchar[] [default: `[]`, note: "Prisma: missingFields"]
+  request_payload jsonb [note: "Prisma: requestPayload"]
+  response_body jsonb [note: "Prisma: responseBody"]
+  error_message varchar [note: "Prisma: errorMessage"]
+  created_by_id int [not null, note: "Prisma: createdById"]
+  created_at timestamp [not null, default: `now()`, note: "Prisma: createdAt"]
+}
+
+Table production_cost_history {
+  id int [pk, increment]
+  variant_id int [not null, note: "Prisma: variantId"]
+  total_production_cost decimal(12,2) [not null, note: "Prisma: totalProductionCost"]
+  trendyol_commission decimal(12,2) [not null, note: "Prisma: trendyolCommission"]
+  vat_amount decimal(12,2) [not null, note: "Prisma: vatAmount"]
+  estimated_net_profit decimal(12,2) [not null, note: "Prisma: estimatedNetProfit"]
+  profit_rate decimal(7,2) [not null, note: "Prisma: profitRate"]
+  created_at timestamp [not null, default: `now()`, note: "Prisma: createdAt"]
+}
+
+Table product_recipes {
+  id int [pk, increment]
+  product_id int [unique, not null, note: "Prisma: productId"]
+  shop_margin_percent decimal(5,2) [not null, default: 30, note: "Prisma: shopMarginPercent"]
+  site_margin_percent decimal(5,2) [not null, default: 45, note: "Prisma: siteMarginPercent"]
+  marketplace_margin_percent decimal(5,2) [not null, default: 65, note: "Prisma: marketplaceMarginPercent"]
+  created_at timestamp [not null, default: `now()`, note: "Prisma: createdAt"]
+  updated_at timestamp [not null, note: "Prisma: updatedAt; @updatedAt"]
+}
+
+Table recipe_items {
+  id int [pk, increment]
+  recipe_id int [not null, note: "Prisma: recipeId"]
+  stock_card_id int [not null, note: "Prisma: stockCardId"]
+  quantity decimal(12,3) [not null]
+  unit varchar [not null]
+  created_at timestamp [not null, default: `now()`, note: "Prisma: createdAt"]
+  updated_at timestamp [not null, note: "Prisma: updatedAt; @updatedAt"]
+}
+
+Table recipe_extra_costs {
+  id int [pk, increment]
+  recipe_id int [not null, note: "Prisma: recipeId"]
+  type RecipeCostType [not null]
+  name varchar [not null]
+  amount decimal(12,2) [not null]
+  created_at timestamp [not null, default: `now()`, note: "Prisma: createdAt"]
+  updated_at timestamp [not null, note: "Prisma: updatedAt; @updatedAt"]
+}
+
+Table media_files {
+  id int [pk, increment]
+  product_id int [note: "Prisma: productId"]
+  file_name varchar [not null, note: "Prisma: fileName"]
+  file_path varchar [not null, note: "Prisma: filePath"]
+  folder_name varchar [not null, note: "Prisma: folderName"]
+  file_type varchar [not null, note: "Prisma: fileType"]
+  created_at timestamp [not null, default: `now()`, note: "Prisma: createdAt"]
+  updated_at timestamp [not null, note: "Prisma: updatedAt; @updatedAt"]
+}
+
+Table barcode_logs {
+  id int [pk, increment]
+  product_id int [not null, note: "Prisma: productId"]
+  barcode varchar [not null]
+  pdf_path varchar [note: "Prisma: pdfPath"]
+  created_at timestamp [not null, default: `now()`, note: "Prisma: createdAt"]
+}
+
+Table retail_customers {
+  id int [pk, increment]
+  customer_code varchar [unique, not null, note: "Prisma: customerCode"]
+  customer_type varchar [not null, default: 'INDIVIDUAL', note: "Prisma: customerType"]
+  first_name varchar [not null, note: "Prisma: firstName"]
+  last_name varchar [note: "Prisma: lastName"]
+  display_name varchar [not null, note: "Prisma: displayName"]
+  company_title varchar [note: "Prisma: companyTitle"]
+  tax_office varchar [note: "Prisma: taxOffice"]
+  tax_number varchar [note: "Prisma: taxNumber"]
+  national_id varchar [note: "Prisma: nationalId"]
+  is_e_invoice_payer boolean [not null, default: false, note: "Prisma: isEInvoicePayer"]
+  current_account_code varchar [note: "Prisma: currentAccountCode"]
+  phone varchar
+  normalized_phone varchar [unique, note: "Prisma: normalizedPhone"]
+  secondary_phone varchar [note: "Prisma: secondaryPhone"]
+  whatsapp_phone varchar [note: "Prisma: whatsappPhone"]
+  email varchar
+  customer_note varchar [note: "Prisma: customerNote"]
+  birth_date date [note: "Prisma: birthDate"]
+  website varchar
+  instagram varchar
+  rating int [not null, default: 0]
+  risk_status varchar [not null, default: 'NORMAL', note: "Prisma: riskStatus"]
+  last_contact_at timestamp [note: "Prisma: lastContactAt"]
+  source RetailSaleChannel
+  order_communication_allowed boolean [not null, default: true, note: "Prisma: orderCommunicationAllowed"]
+  whatsapp_marketing_allowed boolean [not null, default: false, note: "Prisma: whatsappMarketingAllowed"]
+  sms_marketing_allowed boolean [not null, default: false, note: "Prisma: smsMarketingAllowed"]
+  email_marketing_allowed boolean [not null, default: false, note: "Prisma: emailMarketingAllowed"]
+  consent_at timestamp [note: "Prisma: consentAt"]
+  consent_source varchar [note: "Prisma: consentSource"]
+  consent_withdrawn_at timestamp [note: "Prisma: consentWithdrawnAt"]
+  is_active boolean [not null, default: true, note: "Prisma: isActive"]
+  created_at timestamp [not null, default: `now()`, note: "Prisma: createdAt"]
+  updated_at timestamp [not null, note: "Prisma: updatedAt; @updatedAt"]
+  created_by_id int [not null, note: "Prisma: createdById"]
+  source_definition_id int [note: "Prisma: sourceDefinitionId"]
+
+  indexes {
+    (display_name)
+  }
+}
+
+Table retail_customer_files {
+  id int [pk, increment]
+  customer_id int [not null, note: "Prisma: customerId"]
+  file_name varchar [not null, note: "Prisma: fileName"]
+  file_path varchar [not null, note: "Prisma: filePath"]
+  file_type varchar [not null, note: "Prisma: fileType"]
+  description varchar
+  is_active boolean [not null, default: true, note: "Prisma: isActive"]
+  created_by_id int [not null, note: "Prisma: createdById"]
+  created_at timestamp [not null, default: `now()`, note: "Prisma: createdAt"]
+
+  indexes {
+    (customer_id, created_at)
+  }
+}
+
+Table retail_customer_notes {
+  id int [pk, increment]
+  customer_id int [not null, note: "Prisma: customerId"]
+  note varchar [not null]
+  is_active boolean [not null, default: true, note: "Prisma: isActive"]
+  created_by_id int [not null, note: "Prisma: createdById"]
+  created_at timestamp [not null, default: `now()`, note: "Prisma: createdAt"]
+
+  indexes {
+    (customer_id, created_at)
+  }
+}
+
+Table retail_customer_reminders {
+  id int [pk, increment]
+  customer_id int [not null, note: "Prisma: customerId"]
+  title varchar [not null]
+  description varchar
+  remind_at timestamp [not null, note: "Prisma: remindAt"]
+  status varchar [not null, default: 'PENDING']
+  completed_at timestamp [note: "Prisma: completedAt"]
+  created_by_id int [not null, note: "Prisma: createdById"]
+  created_at timestamp [not null, default: `now()`, note: "Prisma: createdAt"]
+  updated_at timestamp [not null, note: "Prisma: updatedAt; @updatedAt"]
+
+  indexes {
+    (status, remind_at)
+    (customer_id)
+  }
+}
+
+Table retail_customer_source_definitions {
+  id int [pk, increment]
+  code varchar [unique, not null]
+  name varchar [unique, not null]
+  is_active boolean [not null, default: true, note: "Prisma: isActive"]
+  created_at timestamp [not null, default: `now()`, note: "Prisma: createdAt"]
+  updated_at timestamp [not null, note: "Prisma: updatedAt; @updatedAt"]
+}
+
+Table retail_customer_tag_definitions {
+  id int [pk, increment]
+  name varchar [unique, not null]
+  color varchar [default: '#64748b']
+  is_active boolean [not null, default: true, note: "Prisma: isActive"]
+  created_at timestamp [not null, default: `now()`, note: "Prisma: createdAt"]
+  updated_at timestamp [not null, note: "Prisma: updatedAt; @updatedAt"]
+}
+
+Table retail_customer_tags {
+  customer_id int [not null, note: "Prisma: customerId"]
+  tag_id int [not null, note: "Prisma: tagId"]
+  created_at timestamp [not null, default: `now()`, note: "Prisma: createdAt"]
+}
+
+Table retail_customer_addresses {
+  id int [pk, increment]
+  customer_id int [not null, note: "Prisma: customerId"]
+  title varchar [not null]
+  recipient_name varchar [not null, note: "Prisma: recipientName"]
+  recipient_phone varchar [note: "Prisma: recipientPhone"]
+  city varchar
+  district varchar
+  neighborhood varchar
+  postal_code varchar [note: "Prisma: postalCode"]
+  full_address varchar [not null, note: "Prisma: fullAddress"]
+  location_description varchar [note: "Prisma: locationDescription"]
+  delivery_note varchar [note: "Prisma: deliveryNote"]
+  is_default boolean [not null, default: false, note: "Prisma: isDefault"]
+  is_active boolean [not null, default: true, note: "Prisma: isActive"]
+  created_at timestamp [not null, default: `now()`, note: "Prisma: createdAt"]
+  updated_at timestamp [not null, note: "Prisma: updatedAt; @updatedAt"]
+  created_by_id int [not null, note: "Prisma: createdById"]
+
+  indexes {
+    (customer_id)
+  }
+}
+
+Table retail_sales {
+  id int [pk, increment]
+  sale_number varchar [unique, not null, note: "Prisma: saleNumber"]
+  customer_id int [not null, note: "Prisma: customerId"]
+  address_id int [note: "Prisma: addressId"]
+  channel RetailSaleChannel [not null, default: 'STORE']
+  sale_type RetailSaleType [not null, default: 'STORE_SALE', note: "Prisma: saleType"]
+  status RetailSaleStatus [not null, default: 'DRAFT']
+  currency varchar [not null, default: 'TRY']
+  subtotal decimal(14,2) [not null, default: 0]
+  discount_total decimal(14,2) [not null, default: 0, note: "Prisma: discountTotal"]
+  delivery_fee decimal(14,2) [not null, default: 0, note: "Prisma: deliveryFee"]
+  grand_total decimal(14,2) [not null, default: 0, note: "Prisma: grandTotal"]
+  paid_total decimal(14,2) [not null, default: 0, note: "Prisma: paidTotal"]
+  remaining_total decimal(14,2) [not null, default: 0, note: "Prisma: remainingTotal"]
+  customer_note varchar [note: "Prisma: customerNote"]
+  internal_note varchar [note: "Prisma: internalNote"]
+  event_key varchar [unique, not null, note: "Prisma: eventKey"]
+  platform_order_number varchar [note: "Prisma: platformOrderNumber"]
+  external_order_id varchar [note: "Prisma: externalOrderId"]
+  idempotency_key varchar [unique, note: "Prisma: idempotencyKey"]
+  integration_sync_status varchar [not null, default: 'MANUAL', note: "Prisma: integrationSyncStatus"]
+  last_synced_at timestamp [note: "Prisma: lastSyncedAt"]
+  cargo_provider varchar [note: "Prisma: cargoProvider"]
+  cargo_tracking_number varchar [note: "Prisma: cargoTrackingNumber"]
+  order_date timestamp [note: "Prisma: orderDate"]
+  delivery_due_at timestamp [note: "Prisma: deliveryDueAt"]
+  completed_at timestamp [note: "Prisma: completedAt"]
+  cancelled_at timestamp [note: "Prisma: cancelledAt"]
+  created_at timestamp [not null, default: `now()`, note: "Prisma: createdAt"]
+  updated_at timestamp [not null, note: "Prisma: updatedAt; @updatedAt"]
+  created_by_id int [not null, note: "Prisma: createdById"]
+  completed_by_id int [note: "Prisma: completedById"]
+  cancelled_by_id int [note: "Prisma: cancelledById"]
+  invoice_status RetailInvoiceStatus [not null, default: 'WAITING', note: "Prisma: invoiceStatus"]
+  invoice_note varchar [note: "Prisma: invoiceNote"]
+
+  indexes {
+    (created_at)
+    (customer_id)
+  }
+}
+
+Table retail_sale_status_history {
+  id int [pk, increment]
+  sale_id int [not null, note: "Prisma: saleId"]
+  old_status RetailSaleStatus [note: "Prisma: oldStatus"]
+  new_status RetailSaleStatus [not null, note: "Prisma: newStatus"]
+  note varchar
+  changed_by_id int [not null, note: "Prisma: changedById"]
+  changed_at timestamp [not null, default: `now()`, note: "Prisma: changedAt"]
+
+  indexes {
+    (sale_id)
+  }
+}
+
+Table retail_sale_items {
+  id int [pk, increment]
+  sale_id int [not null, note: "Prisma: saleId"]
+  variant_id int [note: "Prisma: variantId"]
+  stock_card_id int [note: "Prisma: stockCardId"]
+  barcode varchar
+  model_code varchar [note: "Prisma: modelCode"]
+  product_name_snapshot varchar [not null, note: "Prisma: productNameSnapshot"]
+  external_line_id varchar [note: "Prisma: externalLineId"]
+  external_variant_id varchar [note: "Prisma: externalVariantId"]
+  variation_text varchar [note: "Prisma: variationText"]
+  quantity decimal(12,3) [not null]
+  unit_price decimal(14,2) [not null, note: "Prisma: unitPrice"]
+  discount_amount decimal(14,2) [not null, default: 0, note: "Prisma: discountAmount"]
+  line_total decimal(14,2) [not null, note: "Prisma: lineTotal"]
+  unit_cost_snapshot decimal(14,4) [note: "Prisma: unitCostSnapshot"]
+  stock_fulfillment_type StockFulfillmentType [not null, default: 'READY_STOCK', note: "Prisma: stockFulfillmentType"]
+  created_at timestamp [not null, default: `now()`, note: "Prisma: createdAt"]
+
+  indexes {
+    (sale_id)
+    (variant_id)
+    (stock_card_id)
+  }
+}
+
+Table retail_sale_payments {
+  id int [pk, increment]
+  sale_id int [not null, note: "Prisma: saleId"]
+  method RetailPaymentMethod [not null]
+  amount decimal(14,2) [not null]
+  account_id int [note: "Prisma: accountId"]
+  finance_transaction_id int [note: "Prisma: financeTransactionId"]
+  event_key varchar [unique, not null, note: "Prisma: eventKey"]
+  paid_at timestamp [not null, default: `now()`, note: "Prisma: paidAt"]
+  note varchar
+  created_at timestamp [not null, default: `now()`, note: "Prisma: createdAt"]
+  created_by_id int [not null, note: "Prisma: createdById"]
+
+  indexes {
+    (sale_id)
+  }
+}
+
+Table retail_deliveries {
+  id int [pk, increment]
+  sale_id int [unique, not null, note: "Prisma: saleId"]
+  address_id int [note: "Prisma: addressId"]
+  delivery_type RetailDeliveryType [not null, default: 'STORE_PICKUP', note: "Prisma: deliveryType"]
+  status RetailDeliveryStatus [not null, default: 'WAITING']
+  planned_date timestamp [note: "Prisma: plannedDate"]
+  planned_time varchar [note: "Prisma: plannedTime"]
+  assigned_user_id int [note: "Prisma: assignedUserId"]
+  delivery_note varchar [note: "Prisma: deliveryNote"]
+  delivered_at timestamp [note: "Prisma: deliveredAt"]
+  delivered_by_id int [note: "Prisma: deliveredById"]
+  event_key varchar [unique, not null, note: "Prisma: eventKey"]
+  created_at timestamp [not null, default: `now()`, note: "Prisma: createdAt"]
+  updated_at timestamp [not null, note: "Prisma: updatedAt; @updatedAt"]
+}
+
+Table retail_print_logs {
+  id int [pk, increment]
+  sale_id int [not null, note: "Prisma: saleId"]
+  print_type RetailPrintType [not null, note: "Prisma: printType"]
+  printed_at timestamp [not null, default: `now()`, note: "Prisma: printedAt"]
+  printed_by_id int [not null, note: "Prisma: printedById"]
+
+  indexes {
+    (sale_id)
+  }
+}
+
+Table stock_reservations {
+  id int [pk, increment]
+  stock_card_id int [not null, note: "Prisma: stockCardId"]
+  sale_id int [not null, note: "Prisma: saleId"]
+  sale_item_id int [note: "Prisma: saleItemId"]
+  quantity decimal(12,3) [not null]
+  unit varchar [not null]
+  status varchar [not null, default: 'ACTIVE']
+  event_key varchar [unique, not null, note: "Prisma: eventKey"]
+  created_by_id int [note: "Prisma: createdById"]
+  created_at timestamp [not null, default: `now()`, note: "Prisma: createdAt"]
+  updated_at timestamp [not null, note: "Prisma: updatedAt; @updatedAt"]
+  released_at timestamp [note: "Prisma: releasedAt"]
+
+  indexes {
+    (stock_card_id)
+    (sale_id)
+  }
+}
+
+Table integration_connections {
+  id int [pk, increment]
+  platform varchar [unique, not null]
+  display_name varchar [not null, note: "Prisma: displayName"]
+  status varchar [not null, default: 'NOT_CONFIGURED']
+  uses_env_credentials boolean [not null, default: true, note: "Prisma: usesEnvCredentials"]
+  last_test_at timestamp [note: "Prisma: lastTestAt"]
+  last_sync_at timestamp [note: "Prisma: lastSyncAt"]
+  last_error varchar [note: "Prisma: lastError"]
+  created_at timestamp [not null, default: `now()`, note: "Prisma: createdAt"]
+  updated_at timestamp [not null, note: "Prisma: updatedAt; @updatedAt"]
+}
+
+Table integration_tenant_settings {
+  id int [pk, increment]
+  tenant varchar [not null]
+  platform varchar [not null]
+  site_url varchar [note: "Prisma: siteUrl"]
+  service_endpoint varchar [note: "Prisma: serviceEndpoint"]
+  wsdl_url varchar [note: "Prisma: wsdlUrl"]
+  secret_value varchar [note: "Prisma: secretValue"]
+  status varchar [not null, default: 'NOT_CONFIGURED']
+  last_test_at timestamp [note: "Prisma: lastTestAt"]
+  last_error varchar [note: "Prisma: lastError"]
+  created_at timestamp [not null, default: `now()`, note: "Prisma: createdAt"]
+  updated_at timestamp [not null, note: "Prisma: updatedAt; @updatedAt"]
+
+  indexes {
+    (tenant, platform) [unique]
+    (platform)
+  }
+}
+
+Table integration_sync_logs {
+  id int [pk, increment]
+  platform varchar [not null]
+  action varchar [not null]
+  status varchar [not null]
+  message varchar
+  external_order_id varchar [note: "Prisma: externalOrderId"]
+  sale_id int [note: "Prisma: saleId"]
+  started_at timestamp [not null, default: `now()`, note: "Prisma: startedAt"]
+  completed_at timestamp [note: "Prisma: completedAt"]
+  payload_summary jsonb [note: "Prisma: payloadSummary"]
+
+  indexes {
+    (platform, started_at)
+    (status)
+  }
+}
+
+Table production_staff_tasks {
+  id int [pk, increment]
+  sale_id int [not null, note: "Prisma: saleId"]
+  sale_item_id int [note: "Prisma: saleItemId"]
+  task_type varchar [not null, note: "Prisma: taskType"]
+  status varchar [not null, default: 'NEW']
+  assignment_group varchar [note: "Prisma: assignmentGroup"]
+  assigned_user_id int [note: "Prisma: assignedUserId"]
+  priority varchar [not null, default: 'NORMAL']
+  due_at timestamp [note: "Prisma: dueAt"]
+  seen_at timestamp [note: "Prisma: seenAt"]
+  started_at timestamp [note: "Prisma: startedAt"]
+  completed_at timestamp [note: "Prisma: completedAt"]
+  blocked_reason varchar [note: "Prisma: blockedReason"]
+  created_at timestamp [not null, default: `now()`, note: "Prisma: createdAt"]
+  updated_at timestamp [not null, note: "Prisma: updatedAt; @updatedAt"]
+
+  indexes {
+    (sale_id)
+    (assigned_user_id)
+    (assignment_group)
+    (status)
+  }
+}
+
+Table production_task_proofs {
+  id int [pk, increment]
+  task_id int [not null, note: "Prisma: taskId"]
+  sale_id int [not null, note: "Prisma: saleId"]
+  sale_item_id int [note: "Prisma: saleItemId"]
+  product_name_snapshot varchar [not null, note: "Prisma: productNameSnapshot"]
+  barcode varchar
+  photo_path varchar [note: "Prisma: photoPath"]
+  barcode_verified boolean [not null, default: false, note: "Prisma: barcodeVerified"]
+  uploaded_by_id int [not null, note: "Prisma: uploadedById"]
+  created_at timestamp [not null, default: `now()`, note: "Prisma: createdAt"]
+
+  indexes {
+    (task_id)
+    (sale_id)
+  }
+}
+
+Table finance_accounts {
+  id int [pk, increment]
+  name varchar [unique, not null]
+  type FinanceAccountType [not null]
+  opening_balance decimal(14,2) [not null, default: 0, note: "Prisma: openingBalance"]
+  status RecordStatus [not null, default: 'ACTIVE']
+  created_at timestamp [not null, default: `now()`, note: "Prisma: createdAt"]
+  updated_at timestamp [not null, note: "Prisma: updatedAt; @updatedAt"]
+}
+
+Table finance_categories {
+  id int [pk, increment]
+  name varchar [not null]
+  kind FinanceCategoryKind [not null]
+  is_system boolean [not null, default: false, note: "Prisma: isSystem"]
+  status RecordStatus [not null, default: 'ACTIVE']
+  created_at timestamp [not null, default: `now()`, note: "Prisma: createdAt"]
+  updated_at timestamp [not null, note: "Prisma: updatedAt; @updatedAt"]
+
+  indexes {
+    (name, kind) [unique]
+  }
+}
+
+Table finance_sales_channels {
+  id int [pk, increment]
+  name varchar [unique, not null]
+  status RecordStatus [not null, default: 'ACTIVE']
+  created_at timestamp [not null, default: `now()`, note: "Prisma: createdAt"]
+  updated_at timestamp [not null, note: "Prisma: updatedAt; @updatedAt"]
+}
+
+Table finance_transactions {
+  id int [pk, increment]
+  transaction_type FinanceTransactionType [not null, note: "Prisma: transactionType"]
+  direction FinanceDirection [not null]
+  category_id int [note: "Prisma: categoryId"]
+  amount decimal(14,2) [not null]
+  transaction_date timestamp [not null, note: "Prisma: transactionDate"]
+  account_id int [not null, note: "Prisma: accountId"]
+  description varchar [not null]
+  linked_record_type varchar [note: "Prisma: linkedRecordType"]
+  linked_record_id varchar [note: "Prisma: linkedRecordId"]
+  external_key varchar [unique, note: "Prisma: externalKey"]
+  recorded_by_user_id int [not null, note: "Prisma: recordedByUserId"]
+  status FinanceRecordStatus [not null, default: 'ACTIVE']
+  cancel_reason varchar [note: "Prisma: cancelReason"]
+  correction_of_id int [note: "Prisma: correctionOfId"]
+  created_at timestamp [not null, default: `now()`, note: "Prisma: createdAt"]
+  updated_at timestamp [not null, note: "Prisma: updatedAt; @updatedAt"]
+
+  indexes {
+    (transaction_date)
+    (linked_record_type, linked_record_id)
+  }
+}
+
+Table finance_debts {
+  id int [pk, increment]
+  debt_type FinanceTransactionType [not null, note: "Prisma: debtType"]
+  title varchar [not null]
+  party_name varchar [note: "Prisma: partyName"]
+  amount decimal(14,2) [not null]
+  remaining_amount decimal(14,2) [not null, note: "Prisma: remainingAmount"]
+  due_date timestamp [not null, note: "Prisma: dueDate"]
+  account_id int [note: "Prisma: accountId"]
+  linked_record_type varchar [note: "Prisma: linkedRecordType"]
+  linked_record_id varchar [note: "Prisma: linkedRecordId"]
+  status FinancePaymentStatus [not null, default: 'PENDING']
+  created_by_user_id int [not null, note: "Prisma: createdByUserId"]
+  created_at timestamp [not null, default: `now()`, note: "Prisma: createdAt"]
+  updated_at timestamp [not null, note: "Prisma: updatedAt; @updatedAt"]
+
+  indexes {
+    (due_date)
+  }
+}
+
+Table finance_marketplace_daily_records {
+  id int [pk, increment]
+  channel_id int [not null, note: "Prisma: channelId"]
+  record_date timestamp [not null, note: "Prisma: recordDate"]
+  order_count int [not null, default: 0, note: "Prisma: orderCount"]
+  gross_sales decimal(14,2) [not null, default: 0, note: "Prisma: grossSales"]
+  cancellation_amount decimal(14,2) [not null, default: 0, note: "Prisma: cancellationAmount"]
+  return_amount decimal(14,2) [not null, default: 0, note: "Prisma: returnAmount"]
+  commission_amount decimal(14,2) [not null, default: 0, note: "Prisma: commissionAmount"]
+  cargo_deduction decimal(14,2) [not null, default: 0, note: "Prisma: cargoDeduction"]
+  advertising_deduction decimal(14,2) [not null, default: 0, note: "Prisma: advertisingDeduction"]
+  other_deduction decimal(14,2) [not null, default: 0, note: "Prisma: otherDeduction"]
+  net_settlement decimal(14,2) [not null, default: 0, note: "Prisma: netSettlement"]
+  expected_payment_date timestamp [note: "Prisma: expectedPaymentDate"]
+  actual_payment decimal(14,2) [not null, default: 0, note: "Prisma: actualPayment"]
+  payment_status FinancePaymentStatus [not null, default: 'PENDING', note: "Prisma: paymentStatus"]
+  account_id int [note: "Prisma: accountId"]
+  transaction_id int [note: "Prisma: transactionId"]
+  created_at timestamp [not null, default: `now()`, note: "Prisma: createdAt"]
+  updated_at timestamp [not null, note: "Prisma: updatedAt; @updatedAt"]
+
+  indexes {
+    (channel_id, record_date) [unique]
+  }
+}
+
+Table finance_recurring_payments {
+  id int [pk, increment]
+  title varchar [not null]
+  category_id int [not null, note: "Prisma: categoryId"]
+  account_id int [note: "Prisma: accountId"]
+  amount decimal(14,2) [not null]
+  frequency FinanceRecurringFrequency [not null]
+  next_due_date timestamp [not null, note: "Prisma: nextDueDate"]
+  description varchar
+  status RecordStatus [not null, default: 'ACTIVE']
+  created_at timestamp [not null, default: `now()`, note: "Prisma: createdAt"]
+  updated_at timestamp [not null, note: "Prisma: updatedAt; @updatedAt"]
+}
+
+Table finance_salary_records {
+  id int [pk, increment]
+  staff_id varchar [note: "Prisma: staffId"]
+  staff_name varchar [not null, note: "Prisma: staffName"]
+  period varchar [not null]
+  net_salary decimal(14,2) [not null, note: "Prisma: netSalary"]
+  advance decimal(14,2) [not null, default: 0]
+  bonus decimal(14,2) [not null, default: 0]
+  deduction decimal(14,2) [not null, default: 0]
+  paid_amount decimal(14,2) [not null, default: 0, note: "Prisma: paidAmount"]
+  remaining_amount decimal(14,2) [not null, note: "Prisma: remainingAmount"]
+  payment_date timestamp [note: "Prisma: paymentDate"]
+  account_id int [note: "Prisma: accountId"]
+  status FinancePaymentStatus [not null, default: 'PENDING']
+  transaction_id int [note: "Prisma: transactionId"]
+  recorded_by_user_id int [not null, note: "Prisma: recordedByUserId"]
+  created_at timestamp [not null, default: `now()`, note: "Prisma: createdAt"]
+  updated_at timestamp [not null, note: "Prisma: updatedAt; @updatedAt"]
+
+  indexes {
+    (staff_name, period) [unique]
+  }
+}
+
+Table finance_audit_logs {
+  id int [pk, increment]
+  transaction_id int [note: "Prisma: transactionId"]
+  user_id int [not null, note: "Prisma: userId"]
+  action varchar [not null]
+  reason varchar
+  old_value jsonb [note: "Prisma: oldValue"]
+  new_value jsonb [note: "Prisma: newValue"]
+  created_at timestamp [not null, default: `now()`, note: "Prisma: createdAt"]
+}
+
+Table bambu_cost_rules {
+  id int [pk, increment]
+  family_id int [unique, not null, note: "Prisma: familyId"]
+  leaf_stock_card_id int [note: "Prisma: leafStockCardId"]
+  trunk_stock_card_id int [note: "Prisma: trunkStockCardId"]
+  leaves_per_step decimal(12,3) [not null, default: 1, note: "Prisma: leavesPerStep"]
+  leaf_step_cm decimal(12,3) [not null, default: 10, note: "Prisma: leafStepCm"]
+  rounding_mode BambuLeafRoundingMode [not null, default: 'NEAREST', note: "Prisma: roundingMode"]
+  trunk_length_cm decimal(12,3) [not null, default: 220, note: "Prisma: trunkLengthCm"]
+  silicone_gr decimal(12,3) [not null, default: 1, note: "Prisma: siliconeAmount"]
+  labor_amount decimal(12,2) [not null, default: 10, note: "Prisma: laborAmount"]
+  overhead_amount decimal(12,2) [not null, default: 5, note: "Prisma: overheadAmount"]
+  electricity_amount decimal(12,2) [not null, default: 0, note: "Prisma: electricityAmount"]
+  packaging_amount decimal(12,2) [not null, default: 0, note: "Prisma: packagingAmount"]
+  created_at timestamp [not null, default: `now()`, note: "Prisma: createdAt"]
+  updated_at timestamp [not null, note: "Prisma: updatedAt; @updatedAt"]
+}
+
+Table bambu_cost_exceptions {
+  id int [pk, increment]
+  rule_id int [not null, note: "Prisma: ruleId"]
+  size_cm int [not null, note: "Prisma: sizeCm"]
+  leaf_count decimal(12,3) [note: "Prisma: leafCount"]
+  silicone_gr decimal(12,3) [note: "Prisma: siliconeAmount"]
+  labor_amount decimal(12,2) [note: "Prisma: laborAmount"]
+  overhead_amount decimal(12,2) [note: "Prisma: overheadAmount"]
+  created_at timestamp [not null, default: `now()`, note: "Prisma: createdAt"]
+  updated_at timestamp [not null, note: "Prisma: updatedAt; @updatedAt"]
+
+  indexes {
+    (rule_id, size_cm) [unique]
+  }
+}
+
+Table stock_usage_logs {
+  id int [pk, increment]
+  stock_card_id int [not null, note: "Prisma: stockCardId"]
+  variant_id int [note: "Prisma: variantId"]
+  event_type StockUsageEventType [not null, note: "Prisma: eventType"]
+  event_key varchar [unique, not null, note: "Prisma: eventKey"]
+  quantity decimal(12,3) [not null]
+  unit varchar [not null]
+  previous_stock decimal(12,3) [not null, note: "Prisma: previousStock"]
+  next_stock decimal(12,3) [not null, note: "Prisma: nextStock"]
+  user_id int [not null, note: "Prisma: userId"]
+  created_at timestamp [not null, default: `now()`, note: "Prisma: createdAt"]
+}
+
+Table stock_count_sessions {
+  id int [pk, increment]
+  title varchar [not null]
+  note varchar
+  status StockCountStatus [not null, default: 'DRAFT']
+  created_by_id int [not null, note: "Prisma: createdById"]
+  approved_by_id int [note: "Prisma: approvedById"]
+  approved_at timestamp [note: "Prisma: approvedAt"]
+  created_at timestamp [not null, default: `now()`, note: "Prisma: createdAt"]
+  updated_at timestamp [not null, note: "Prisma: updatedAt; @updatedAt"]
+}
+
+Table stock_count_items {
+  id int [pk, increment]
+  session_id int [not null, note: "Prisma: sessionId"]
+  stock_card_id int [not null, note: "Prisma: stockCardId"]
+  snapshot_quantity decimal(12,3) [not null, note: "Prisma: snapshotQuantity"]
+  counted_quantity decimal(12,3) [note: "Prisma: countedQuantity"]
+  difference decimal(12,3) [not null, default: 0]
+  note varchar
+  created_at timestamp [not null, default: `now()`, note: "Prisma: createdAt"]
+  updated_at timestamp [not null, note: "Prisma: updatedAt; @updatedAt"]
+
+  indexes {
+    (session_id, stock_card_id) [unique]
+  }
+}
+
+Ref: products.category_id > categories.id
+Ref: stock_card_images.stock_card_id > stock_cards.id [delete: cascade]
+Ref: stock_movements.stock_card_id > stock_cards.id
+Ref: stock_movements.created_by_id > users.id
+Ref: production_families.master_id > product_family_masters.id
+Ref: production_families.category_id > categories.id
+Ref: knowledge_plant_types.product_family_id > production_families.id [delete: set null]
+Ref: knowledge_plant_types.default_leaf_stock_card_id > stock_cards.id [delete: set null]
+Ref: knowledge_plant_types.default_trunk_stock_card_id > stock_cards.id [delete: set null]
+Ref: knowledge_plant_types.default_pot_stock_card_id > stock_cards.id [delete: set null]
+Ref: knowledge_plant_types.default_recipe_id > knowledge_recipe_profiles.id [delete: set null]
+Ref: knowledge_aliases.plant_type_id > knowledge_plant_types.id [delete: set null]
+Ref: knowledge_aliases.pot_profile_id > knowledge_pot_profiles.id [delete: set null]
+Ref: knowledge_aliases.material_rule_id > knowledge_rules.id [delete: set null]
+Ref: knowledge_pot_profiles.stock_card_id > stock_cards.id [delete: set null]
+Ref: knowledge_recipe_profiles.plant_type_id > knowledge_plant_types.id [delete: set null]
+Ref: knowledge_recipe_profiles.product_family_id > production_families.id [delete: set null]
+Ref: knowledge_recipe_items.recipe_profile_id > knowledge_recipe_profiles.id [delete: cascade]
+Ref: knowledge_recipe_items.stock_card_id > stock_cards.id [delete: set null]
+Ref: knowledge_rules.plant_type_id > knowledge_plant_types.id [delete: cascade]
+Ref: knowledge_rules.stock_card_id > stock_cards.id [delete: set null]
+Ref: knowledge_analysis_logs.detected_plant_type_id > knowledge_plant_types.id [delete: set null]
+Ref: knowledge_analysis_logs.detected_product_family_id > production_families.id [delete: set null]
+Ref: knowledge_analysis_logs.detected_pot_profile_id > knowledge_pot_profiles.id [delete: set null]
+Ref: knowledge_analysis_logs.created_by_id > users.id [delete: set null]
+Ref: knowledge_feedbacks.analysis_log_id > knowledge_analysis_logs.id [delete: cascade]
+Ref: knowledge_feedbacks.promoted_rule_id > knowledge_rules.id [delete: set null]
+Ref: knowledge_feedbacks.created_by_id > users.id
+Ref: production_size_options.family_id > production_families.id [delete: cascade]
+Ref: production_pot_options.family_id > production_families.id [delete: cascade]
+Ref: production_pot_options.stock_card_id > stock_cards.id
+Ref: production_recipe_templates.family_id > production_families.id [delete: cascade]
+Ref: production_template_components.template_id > production_recipe_templates.id [delete: cascade]
+Ref: production_template_components.stock_card_id > stock_cards.id
+Ref: trendyol_product_variants.family_id > production_families.id
+Ref: trendyol_product_variants.size_option_id > production_size_options.id
+Ref: trendyol_product_variants.pot_option_id > production_pot_options.id
+Ref: trendyol_product_variants.template_id > production_recipe_templates.id
+Ref: product_cost_drafts.variant_id > trendyol_product_variants.id [delete: cascade]
+Ref: product_cost_items.draft_id > product_cost_drafts.id [delete: cascade]
+Ref: product_cost_items.stock_card_id > stock_cards.id
+Ref: default_product_expense_history.expense_id > default_product_expenses.id [delete: cascade]
+Ref: product_pot_items.draft_id > product_cost_drafts.id [delete: cascade]
+Ref: product_pot_items.stock_card_id > stock_cards.id
+Ref: publishing_logs.variant_id > trendyol_product_variants.id [delete: cascade]
+Ref: publishing_logs.created_by_id > users.id
+Ref: production_cost_history.variant_id > trendyol_product_variants.id [delete: cascade]
+Ref: product_recipes.product_id > products.id
+Ref: recipe_items.recipe_id > product_recipes.id [delete: cascade]
+Ref: recipe_items.stock_card_id > stock_cards.id
+Ref: recipe_extra_costs.recipe_id > product_recipes.id [delete: cascade]
+Ref: media_files.product_id > products.id
+Ref: barcode_logs.product_id > products.id
+Ref: retail_customers.created_by_id > users.id
+Ref: retail_customers.source_definition_id > retail_customer_source_definitions.id
+Ref: retail_customer_files.customer_id > retail_customers.id [delete: cascade]
+Ref: retail_customer_notes.customer_id > retail_customers.id [delete: cascade]
+Ref: retail_customer_reminders.customer_id > retail_customers.id [delete: cascade]
+Ref: retail_customer_tags.customer_id > retail_customers.id [delete: cascade]
+Ref: retail_customer_tags.tag_id > retail_customer_tag_definitions.id
+Ref: retail_customer_addresses.customer_id > retail_customers.id
+Ref: retail_customer_addresses.created_by_id > users.id
+Ref: retail_sales.customer_id > retail_customers.id
+Ref: retail_sales.address_id > retail_customer_addresses.id
+Ref: retail_sales.created_by_id > users.id
+Ref: retail_sales.completed_by_id > users.id
+Ref: retail_sales.cancelled_by_id > users.id
+Ref: retail_sale_status_history.sale_id > retail_sales.id [delete: cascade]
+Ref: retail_sale_status_history.changed_by_id > users.id
+Ref: retail_sale_items.sale_id > retail_sales.id [delete: cascade]
+Ref: retail_sale_items.variant_id > trendyol_product_variants.id
+Ref: retail_sale_items.stock_card_id > stock_cards.id
+Ref: retail_sale_payments.sale_id > retail_sales.id [delete: cascade]
+Ref: retail_sale_payments.account_id > finance_accounts.id
+Ref: retail_sale_payments.finance_transaction_id > finance_transactions.id
+Ref: retail_sale_payments.created_by_id > users.id
+Ref: retail_deliveries.sale_id > retail_sales.id [delete: cascade]
+Ref: retail_deliveries.address_id > retail_customer_addresses.id
+Ref: retail_deliveries.assigned_user_id > users.id
+Ref: retail_deliveries.delivered_by_id > users.id
+Ref: retail_print_logs.sale_id > retail_sales.id [delete: cascade]
+Ref: retail_print_logs.printed_by_id > users.id
+Ref: finance_transactions.category_id > finance_categories.id
+Ref: finance_transactions.account_id > finance_accounts.id
+Ref: finance_transactions.recorded_by_user_id > users.id
+Ref: finance_transactions.correction_of_id > finance_transactions.id
+Ref: finance_debts.account_id > finance_accounts.id
+Ref: finance_debts.created_by_user_id > users.id
+Ref: finance_marketplace_daily_records.channel_id > finance_sales_channels.id
+Ref: finance_marketplace_daily_records.account_id > finance_accounts.id
+Ref: finance_recurring_payments.category_id > finance_categories.id
+Ref: finance_recurring_payments.account_id > finance_accounts.id
+Ref: finance_salary_records.account_id > finance_accounts.id
+Ref: finance_salary_records.recorded_by_user_id > users.id
+Ref: finance_audit_logs.transaction_id > finance_transactions.id
+Ref: finance_audit_logs.user_id > users.id
+Ref: bambu_cost_rules.family_id > production_families.id [delete: cascade]
+Ref: bambu_cost_rules.leaf_stock_card_id > stock_cards.id
+Ref: bambu_cost_rules.trunk_stock_card_id > stock_cards.id
+Ref: bambu_cost_exceptions.rule_id > bambu_cost_rules.id [delete: cascade]
+Ref: stock_usage_logs.stock_card_id > stock_cards.id
+Ref: stock_usage_logs.variant_id > trendyol_product_variants.id
+Ref: stock_usage_logs.user_id > users.id
+Ref: stock_count_sessions.created_by_id > users.id
+Ref: stock_count_sessions.approved_by_id > users.id
+Ref: stock_count_items.session_id > stock_count_sessions.id [delete: cascade]
+Ref: stock_count_items.stock_card_id > stock_cards.id
+
+TableGroup "Kimlik ve urun cekirdegi" {
+  users
+  categories
+  products
+  product_family_masters
+  production_families
+}
+
+TableGroup "Stok, gorsel ve sayim" {
+  stock_cards
+  stock_card_images
+  stock_movements
+  media_files
+  barcode_logs
+  stock_usage_logs
+  stock_count_sessions
+  stock_count_items
+  stock_reservations
+}
+
+TableGroup "Uretim ve maliyet" {
+  production_size_options
+  production_pot_options
+  production_recipe_templates
+  production_template_components
+  trendyol_product_variants
+  product_cost_drafts
+  product_cost_items
+  default_product_expenses
+  default_product_expense_history
+  product_pot_items
+  production_cost_history
+  product_recipes
+  recipe_items
+  recipe_extra_costs
+  bambu_cost_rules
+  bambu_cost_exceptions
+  production_staff_tasks
+  production_task_proofs
+}
+
+TableGroup "Bilgi motoru" {
+  knowledge_plant_types
+  knowledge_aliases
+  knowledge_pot_profiles
+  knowledge_recipe_profiles
+  knowledge_recipe_items
+  knowledge_rules
+  knowledge_analysis_logs
+  knowledge_feedbacks
+}
+
+TableGroup "CRM, satis ve teslimat" {
+  retail_customers
+  retail_customer_files
+  retail_customer_notes
+  retail_customer_reminders
+  retail_customer_source_definitions
+  retail_customer_tag_definitions
+  retail_customer_tags
+  retail_customer_addresses
+  retail_sales
+  retail_sale_status_history
+  retail_sale_items
+  retail_sale_payments
+  retail_deliveries
+  retail_print_logs
+}
+
+TableGroup "Finans" {
+  finance_accounts
+  finance_categories
+  finance_sales_channels
+  finance_transactions
+  finance_debts
+  finance_marketplace_daily_records
+  finance_recurring_payments
+  finance_salary_records
+  finance_audit_logs
+}
+
+TableGroup "Entegrasyon ve yayinlama" {
+  publishing_logs
+  integration_connections
+  integration_tenant_settings
+  integration_sync_logs
+}

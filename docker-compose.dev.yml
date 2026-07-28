@@ -1,0 +1,16 @@
+services:
+  postgres-dev:
+    image: postgres:16-alpine
+    container_name: erhan-flowers-postgres-dev
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: erhanflowers_dev
+      POSTGRES_PASSWORD: ErhanFlowersDevDb123!
+      POSTGRES_DB: erhan_flowers_panel_dev
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_dev_data:
