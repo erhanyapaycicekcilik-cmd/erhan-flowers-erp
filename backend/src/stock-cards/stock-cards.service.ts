@@ -2,8 +2,9 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { Prisma } from '../generated/prisma-client';
 import * as fs from 'fs';
 import { extname, join } from 'path';
+import { cleanMojibakeDeep } from '../common/mojibake';
 import { PrismaService } from '../prisma/prisma.service';
-import { stockImageRoot } from '../stock-image-paths';
+import { stockImageFallbackRoots, stockImageRoot } from '../stock-image-paths';
 
 type StockCardPayload = {
   name?: string;
@@ -132,6 +133,9 @@ export class StockCardsService {
     if (!data.name || !data.unit) {
       throw new BadRequestException('Stok adı ve birim zorunludur.');
     }
+    if (!data.category) {
+      throw new BadRequestException('Stok kategorisi zorunludur.');
+    }
     if (this.isStoneStock(data)) {
       const candidates = await this.prisma.stockCard.findMany({
         where: {
@@ -216,6 +220,9 @@ export class StockCardsService {
     try {
       const existing = await this.prisma.stockCard.findUnique({ where: { id } });
       if (!existing) throw new NotFoundException('Stok kartı bulunamadı.');
+      if (this.hasField(body, 'category') && !data.category) {
+        throw new BadRequestException('Stok kategorisi zorunludur.');
+      }
       const automaticUnitCost = this.calculateUnitCost(
         data.purchasePrice ?? (existing ? Number(existing.purchasePrice) : undefined),
         data.packageContent ?? (existing ? Number(existing.packageContent) : undefined),
@@ -653,9 +660,11 @@ export class StockCardsService {
   }
 
   private stockImageFolders() {
-    const root = stockImageRoot();
-    if (!fs.existsSync(root)) return [];
-    return fs.readdirSync(root, { withFileTypes: true }).filter((entry) => entry.isDirectory()).map((entry) => entry.name);
+    const roots = [stockImageRoot(), ...stockImageFallbackRoots()];
+    return roots.flatMap((root) => {
+      if (!fs.existsSync(root)) return [];
+      return fs.readdirSync(root, { withFileTypes: true }).filter((entry) => entry.isDirectory()).map((entry) => entry.name);
+    });
   }
 
   private normalizeText(value: string) {
@@ -684,9 +693,13 @@ export class StockCardsService {
       return `/stock-images/${relative}`;
     }
 
-    if (value.startsWith('/uploads/stock-cards/legacy/')) {
+    if (normalizedValue.startsWith('/uploads/stock-cards/legacy/')) {
       const resolved = this.resolveLegacyUploadPath(value);
       if (resolved) return resolved;
+    }
+
+    if (normalizedValue.startsWith('/uploads/stock-cards/')) {
+      return normalizedValue.replace(/^\/uploads\/stock-cards\//, '/stock-images/stock-cards/');
     }
 
     return value;
@@ -700,21 +713,27 @@ export class StockCardsService {
     if (!folderName || !fileName) return null;
 
     const directPath = join(process.cwd(), 'uploads', 'stock-cards', 'legacy', folderName, fileName);
-    if (fs.existsSync(directPath)) return publicPath;
+    if (fs.existsSync(directPath)) return `/stock-images/stock-cards/legacy/${folderName}/${fileName}`;
 
     const skuPrefix = folderName.split('_')[0];
     if (!skuPrefix) return null;
-    const legacyRoot = join(process.cwd(), 'uploads', 'stock-cards', 'legacy');
-    if (!fs.existsSync(legacyRoot)) return null;
+    const legacyRoots = [
+      { root: join(process.cwd(), 'uploads', 'stock-cards', 'legacy'), publicPrefix: '/stock-images/stock-cards/legacy' },
+      ...stockImageFallbackRoots().map((root) => ({ root, publicPrefix: '/stock-images' })),
+    ];
 
-    const matchingFolder = fs
-      .readdirSync(legacyRoot, { withFileTypes: true })
-      .find((entry) => entry.isDirectory() && entry.name.toLocaleLowerCase('tr-TR').startsWith(`${skuPrefix.toLocaleLowerCase('tr-TR')}_`));
-    if (!matchingFolder) return null;
+    for (const { root: legacyRoot, publicPrefix } of legacyRoots) {
+      if (!fs.existsSync(legacyRoot)) continue;
+      const matchingFolder = fs
+        .readdirSync(legacyRoot, { withFileTypes: true })
+        .find((entry) => entry.isDirectory() && entry.name.toLocaleLowerCase('tr-TR').startsWith(`${skuPrefix.toLocaleLowerCase('tr-TR')}_`));
+      if (!matchingFolder) continue;
 
-    const matchedPath = join(legacyRoot, matchingFolder.name, fileName);
-    if (!fs.existsSync(matchedPath)) return null;
-    return `${prefix}${matchingFolder.name}/${fileName}`;
+      const matchedPath = join(legacyRoot, matchingFolder.name, fileName);
+      if (fs.existsSync(matchedPath)) return `${publicPrefix}/${matchingFolder.name}/${fileName}`;
+    }
+
+    return null;
   }
 
   private stockImageFolderName(stockCard: Record<string, unknown>) {
@@ -804,7 +823,7 @@ export class StockCardsService {
     const imagePath = this.normalizePublicImagePath(stockCard.imagePath);
 
     if (userRole === 'STAFF') {
-      return {
+      return cleanMojibakeDeep({
         ...stockCard,
         imagePath,
         images,
@@ -820,10 +839,10 @@ export class StockCardsService {
         criticalStockLevel: null,
         lastMovementAt: null,
         movements: undefined,
-      };
+      });
     }
 
-    return {
+    return cleanMojibakeDeep({
       ...stockCard,
       imagePath,
       images,
@@ -837,7 +856,7 @@ export class StockCardsService {
       salePrice: Number(stockCard.salePrice ?? 0),
       stockQuantity: Number(stockCard.stockQuantity),
       criticalStockLevel: Number(stockCard.criticalStockLevel ?? 0),
-    };
+    });
   }
 
   private async ensureStockCard(id: number) {

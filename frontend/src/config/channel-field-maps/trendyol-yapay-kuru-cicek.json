@@ -1,0 +1,38 @@
+{
+  "channel": "TRENDYOL",
+  "label": "Trendyol Yapay / Kuru Çiçek",
+  "categoryCode": "2995",
+  "templateSheet": "Ürünlerinizi Burada Listeleyin",
+  "requiredFields": [
+    { "channelField": "Barkod", "erpField": "barcode", "fill": "erp", "critical": true },
+    { "channelField": "Model Kodu", "erpField": "modelCode", "fill": "erp", "critical": true },
+    { "channelField": "Marka", "erpField": "brand", "fill": "erpOrDefault", "defaultValue": "Erhan Flowers", "critical": true },
+    { "channelField": "Kategori", "erpField": "channelCategoryName", "fill": "templateDefault", "defaultValue": "2995", "critical": true },
+    { "channelField": "Para Birimi", "erpField": null, "fill": "constant", "defaultValue": "TRY", "critical": true },
+    { "channelField": "Ürün Adı", "erpField": "productName", "fill": "erp", "critical": true },
+    { "channelField": "Ürün Açıklaması", "erpField": "description", "fill": "erpOrSuggestion", "critical": true },
+    { "channelField": "Piyasa Satış Fiyatı (KDV Dahil)", "erpField": "salePrice", "fill": "erp", "critical": true },
+    { "channelField": "Trendyol'da Satılacak Fiyat (KDV Dahil)", "erpField": "salePrice", "fill": "erp", "critical": true },
+    { "channelField": "Ürün Stok Adedi", "erpField": "stockQuantity", "fill": "erp", "critical": true },
+    { "channelField": "KDV Oranı", "erpField": "vatPercent", "fill": "ownerConfirm", "defaultValue": 20, "critical": true }
+  ],
+  "recommendedFields": [
+    { "channelField": "Stok Kodu", "erpField": "stockCode", "fill": "erpOrModelCode" },
+    { "channelField": "Desi", "erpField": "desi", "fill": "userInput" },
+    { "channelField": "Görsel 1", "erpField": "images[0]", "fill": "erp" },
+    { "channelField": "Görsel 2", "erpField": "images[1]", "fill": "erp" },
+    { "channelField": "Görsel 3", "erpField": "images[2]", "fill": "erp" },
+    { "channelField": "Görsel 4", "erpField": "images[3]", "fill": "erp" },
+    { "channelField": "Görsel 5", "erpField": "images[4]", "fill": "erp" },
+    { "channelField": "Görsel 6", "erpField": "images[5]", "fill": "erp" },
+    { "channelField": "Sevkiyat Süresi", "erpField": null, "fill": "defaultSuggestion", "defaultValue": 2 },
+    { "channelField": "Sevkiyat Tipi", "erpField": null, "fill": "defaultSuggestion", "defaultValue": "" }
+  ],
+  "acceptedValues": {
+    "Para Birimi": ["TRY"],
+    "KDV Oranı": [0, 1, 10, 20],
+    "Sevkiyat Tipi": ["Hızlı Teslimat", "Bugün Kargoda"],
+    "Çiçek Türü": ["Ağaç", "Çiçek Buketi", "Demet", "Gül", "Lale", "Lavanta", "Saksı", "Sarmaşık"],
+    "Web Color": ["Altın", "Bej", "Beyaz", "Bordo", "Çok Renkli", "Gri", "Gümüş", "Kahverengi", "Kırmızı", "Pembe", "Siyah", "Yeşil"]
+  }
+}

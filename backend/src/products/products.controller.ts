@@ -1,11 +1,15 @@
 import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '../auth/auth.guard';
+import { GeminiContentService } from './gemini-content.service';
 import { ProductsService } from './products.service';
 
 @UseGuards(AuthGuard)
 @Controller('products')
 export class ProductsController {
-  constructor(private readonly products: ProductsService) {}
+  constructor(
+    private readonly products: ProductsService,
+    private readonly geminiContent: GeminiContentService,
+  ) {}
 
   @Get()
   list() {
@@ -15,6 +19,21 @@ export class ProductsController {
   @Post()
   create(@Body() body: unknown) {
     return this.products.create(body);
+  }
+
+  @Post('gemini-seo')
+  generateSeoContent(@Body() body: unknown) {
+    return this.geminiContent.generate(body);
+  }
+
+  @Post('barcode')
+  generateBarcode(@Body() body: unknown) {
+    return this.products.generateBarcode(body);
+  }
+
+  @Post('identity-check')
+  checkIdentity(@Body() body: unknown) {
+    return this.products.checkIdentity(body);
   }
 
   @Patch(':id')
@@ -27,4 +46,3 @@ export class ProductsController {
     return this.products.passive(Number(id));
   }
 }
-

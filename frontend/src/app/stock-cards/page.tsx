@@ -1,10 +1,10 @@
 'use client';
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { Edit3, FileText, History, ImagePlus, Minus, Plus, Save, Trash2, X } from 'lucide-react';
+import { Edit3, FileText, History, ImagePlus, Minus, Plus, Printer, Save, Trash2, X } from 'lucide-react';
 import { AdminShell } from '@/components/AdminShell';
 import { api, apiFileUrl } from '@/lib/api';
-import type { CurrentUser, Status, StockCard } from '@/types';
+import type { Category, CurrentUser, Status, StockCard } from '@/types';
 
 type PanelMode = 'create' | 'edit' | 'in' | 'out' | 'history' | null;
 type Movement = {
@@ -22,13 +22,171 @@ type Movement = {
   createdAt: string;
 };
 
-const emptyForm = {
+type StockCategoryField = {
+  key: string;
+  label: string;
+};
+
+type StockFormState = {
+  id: number;
+  name: string;
+  sku: string;
+  model: string;
+  productFamily: string;
+  category: string;
+  categoryAttributes: Record<string, string>;
+  color: string;
+  size: string;
+  productType: string;
+  height: string;
+  width: string;
+  potType: string;
+  potColor: string;
+  potSize: string;
+  trunkType: string;
+  leafFlowerType: string;
+  brand: string;
+  oldModelCode: string;
+  barcode: string;
+  salePrice: number;
+  warehouse: string;
+  shelfLocation: string;
+  shortDescription: string;
+  technicalSpecs: string;
+  seoTitle: string;
+  metaDescription: string;
+  purchaseUnit: string;
+  purchaseQuantity: number;
+  unit: string;
+  packageContent: number;
+  purchasePrice: number;
+  manualUnitCostEnabled: boolean;
+  manualUnitCost: number;
+  stockQuantity: number;
+  criticalStockLevel: number;
+  supplierName: string;
+  description: string;
+  status: Status;
+};
+
+const DEFAULT_STOCK_CATEGORIES = [
+  'Ağaç Gövdeleri',
+  'Yapraklar',
+  'Saksılar',
+  'Taşlar',
+  'Yapay Çiçekler',
+  'Dallar',
+  'Demir / Metal',
+  'Plastik Parçalar',
+  'Ambalaj',
+  'Sarf Malzemeleri',
+  'Yardımcı Malzemeler',
+  'Diğer',
+];
+
+const CATEGORY_FIELD_GROUPS: Record<string, StockCategoryField[]> = {
+  trunks: [
+    { key: 'trunkType', label: 'Gövde tipi' },
+    { key: 'treeType', label: 'Ağaç türü' },
+    { key: 'lengthHeight', label: 'Uzunluk / yükseklik' },
+    { key: 'trunkDiameter', label: 'Gövde çapı' },
+    { key: 'color', label: 'Renk' },
+    { key: 'material', label: 'Malzeme' },
+    { key: 'unit', label: 'Birim' },
+    { key: 'packageContent', label: 'Paket / demet içeriği' },
+  ],
+  leaves: [
+    { key: 'leafType', label: 'Yaprak tipi' },
+    { key: 'plantTreeType', label: 'Bitki / ağaç türü' },
+    { key: 'color', label: 'Renk' },
+    { key: 'size', label: 'Boy' },
+    { key: 'leafCountOnBranch', label: 'Dal üzerindeki yaprak adedi' },
+    { key: 'packageContent', label: 'Paket / demet içeriği' },
+    { key: 'unit', label: 'Birim' },
+  ],
+  pots: [
+    { key: 'potType', label: 'Saksı tipi' },
+    { key: 'material', label: 'Malzeme' },
+    { key: 'color', label: 'Renk' },
+    { key: 'diameter', label: 'Çap' },
+    { key: 'height', label: 'Yükseklik' },
+    { key: 'mouthDiameter', label: 'Ağız çapı' },
+    { key: 'innerVolume', label: 'İç hacim / ölçü' },
+    { key: 'unit', label: 'Birim' },
+  ],
+  stones: [
+    { key: 'stoneType', label: 'Taş tipi' },
+    { key: 'color', label: 'Renk' },
+    { key: 'caliberSize', label: 'Kalibre / boyut' },
+    { key: 'packageWeight', label: 'Paket ağırlığı' },
+    { key: 'unit', label: 'Birim' },
+  ],
+  flowers: [
+    { key: 'flowerType', label: 'Çiçek türü' },
+    { key: 'color', label: 'Renk' },
+    { key: 'branchLength', label: 'Dal uzunluğu' },
+    { key: 'flowerCountOnBranch', label: 'Dal üzerindeki çiçek sayısı' },
+    { key: 'packageContent', label: 'Paket / demet içeriği' },
+    { key: 'unit', label: 'Birim' },
+  ],
+  branches: [
+    { key: 'branchType', label: 'Dal tipi' },
+    { key: 'plantType', label: 'Bitki türü' },
+    { key: 'color', label: 'Renk' },
+    { key: 'length', label: 'Uzunluk' },
+    { key: 'leafFlowerCount', label: 'Dal üzerindeki yaprak / çiçek adedi' },
+    { key: 'packageContent', label: 'Paket içeriği' },
+    { key: 'unit', label: 'Birim' },
+  ],
+  metal: [
+    { key: 'materialType', label: 'Malzeme tipi' },
+    { key: 'profileDiameter', label: 'Profil / çap' },
+    { key: 'thickness', label: 'Kalınlık' },
+    { key: 'length', label: 'Uzunluk' },
+    { key: 'colorCoating', label: 'Renk / kaplama' },
+    { key: 'unit', label: 'Birim' },
+  ],
+  plastic: [
+    { key: 'partType', label: 'Parça tipi' },
+    { key: 'size', label: 'Ölçü' },
+    { key: 'color', label: 'Renk' },
+    { key: 'materialType', label: 'Malzeme tipi' },
+    { key: 'packageContent', label: 'Paket içeriği' },
+    { key: 'unit', label: 'Birim' },
+  ],
+  packaging: [
+    { key: 'packagingType', label: 'Ambalaj tipi' },
+    { key: 'size', label: 'Ölçü' },
+    { key: 'color', label: 'Renk' },
+    { key: 'material', label: 'Malzeme' },
+    { key: 'packageContent', label: 'Paket içeriği' },
+    { key: 'unit', label: 'Birim' },
+  ],
+  consumables: [
+    { key: 'consumableType', label: 'Sarf tipi' },
+    { key: 'brand', label: 'Marka' },
+    { key: 'size', label: 'Ölçü' },
+    { key: 'color', label: 'Renk' },
+    { key: 'packageQuantity', label: 'Paket miktarı' },
+    { key: 'unit', label: 'Birim' },
+  ],
+  auxiliary: [
+    { key: 'materialType', label: 'Malzeme tipi' },
+    { key: 'size', label: 'Ölçü' },
+    { key: 'color', label: 'Renk' },
+    { key: 'packageContent', label: 'Paket içeriği' },
+    { key: 'unit', label: 'Birim' },
+  ],
+};
+
+const emptyForm: StockFormState = {
   id: 0,
   name: '',
   sku: '',
   model: '',
   productFamily: '',
   category: '',
+  categoryAttributes: {},
   color: '',
   size: '',
   productType: '',
@@ -82,12 +240,14 @@ export default function StockCardsPage() {
   const [movementForm, setMovementForm] = useState(emptyMovement);
   const [movements, setMovements] = useState<Movement[]>([]);
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
+  const [categoryRecords, setCategoryRecords] = useState<Category[]>([]);
+  const [showStockCountPrint, setShowStockCountPrint] = useState(false);
   const [message, setMessage] = useState('');
   const [filters, setFilters] = useState({
     name: '',
     sku: '',
     category: '',
-    stockStatus: 'ACTIVE',
+    stockStatus: '',
     criticalOnly: false,
     missingImage: false,
     outOfStock: false,
@@ -98,7 +258,11 @@ export default function StockCardsPage() {
   }
 
   useEffect(() => {
-    Promise.all([load(), api<CurrentUser>('/auth/me').then(setCurrentUser)]).catch((error) => setMessage(error.message));
+    Promise.all([
+      load(),
+      api<CurrentUser>('/auth/me').then(setCurrentUser),
+      api<Category[]>('/categories').then(setCategoryRecords).catch(() => setCategoryRecords([])),
+    ]).catch((error) => setMessage(error.message));
   }, []);
 
   useEffect(() => {
@@ -111,7 +275,7 @@ export default function StockCardsPage() {
       name: stockCard.name,
       sku: '',
       category: '',
-      stockStatus: 'ACTIVE',
+      stockStatus: '',
       criticalOnly: false,
       missingImage: false,
       outOfStock: false,
@@ -122,16 +286,21 @@ export default function StockCardsPage() {
   const isStaff = currentUser?.role === 'STAFF';
 
   const categories = useMemo(() => {
-    return Array.from(new Set(stockCards.map((item) => item.category).filter(Boolean) as string[])).sort((a, b) => a.localeCompare(b, 'tr'));
-  }, [stockCards]);
+    const values = [
+      ...DEFAULT_STOCK_CATEGORIES,
+      ...categoryRecords.map((item) => item.name),
+      ...(stockCards.map((item) => item.category).filter(Boolean) as string[]),
+    ];
+    return Array.from(new Set(values.map((item) => item.trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'tr'));
+  }, [categoryRecords, stockCards]);
 
   const filtered = useMemo(() => {
     return stockCards.filter((item) => {
       const criticalLevel = Number(item.criticalStockLevel ?? 0);
       const stockQuantity = Number(item.stockQuantity ?? 0);
       const isCritical = !isStaff && criticalLevel > 0 && stockQuantity <= criticalLevel;
-      if (filters.name && !normalize(item.name).includes(normalize(filters.name))) return false;
-      if (filters.sku && !normalize(item.sku ?? '').includes(normalize(filters.sku))) return false;
+      if (filters.name && !stockSearchText(item).includes(normalize(filters.name))) return false;
+      if (filters.sku && !normalize([item.sku, item.model, item.barcode].filter(Boolean).join(' ')).includes(normalize(filters.sku))) return false;
       if (filters.category && item.category !== filters.category) return false;
       if (filters.stockStatus && item.status !== filters.stockStatus) return false;
       if (!isStaff && filters.criticalOnly && !isCritical) return false;
@@ -161,12 +330,17 @@ export default function StockCardsPage() {
   async function submitStock(event: FormEvent) {
     event.preventDefault();
     try {
+    const selectedCategory = form.category.trim();
+    if (!selectedCategory) {
+      setMessage('Stok kategorisi seçilmeden stok kartı kaydedilemez.');
+      return;
+    }
     const payload = {
       name: form.name,
       sku: form.sku,
       model: form.model,
       barcode: form.barcode,
-      category: form.category,
+      category: selectedCategory,
       color: form.color,
       size: form.size,
       productFamily: form.productFamily,
@@ -184,7 +358,7 @@ export default function StockCardsPage() {
       warehouse: form.warehouse,
       shelfLocation: form.shelfLocation,
       shortDescription: form.shortDescription,
-      technicalSpecs: form.technicalSpecs,
+      technicalSpecs: serializeCategoryTechnicalSpecs(selectedCategory, form.categoryAttributes, form.technicalSpecs),
       seoTitle: form.seoTitle,
       metaDescription: form.metaDescription,
       purchaseUnit: form.purchaseUnit,
@@ -305,21 +479,29 @@ export default function StockCardsPage() {
   async function passiveStock(stockCard: StockCard) {
     const confirmed = window.confirm(`${stockCard.name} pasife alınacak. Aktif stok listesinde görünmeyecek. Devam edilsin mi?`);
     if (!confirmed) return;
-    await api(`/stock-cards/${stockCard.id}`, { method: 'DELETE' });
-    setStockCards((current) => current.filter((item) => item.id !== stockCard.id));
-    setSelected(null);
-    setMessage('Stok kartı pasife alındı.');
-    await load();
+    try {
+      await api(`/stock-cards/${stockCard.id}`, { method: 'DELETE' });
+      setStockCards((current) => current.map((item) => item.id === stockCard.id ? { ...item, status: 'PASSIVE' } : item));
+      setSelected(null);
+      setMessage('Stok kartı pasife alındı ve aktif listeden kaldırıldı.');
+      await load();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Stok kartı pasife alınamadı.');
+    }
   }
 
   async function deleteTestStock(stockCard: StockCard) {
     const confirmed = window.confirm('Bu deneme/test stok kartı kalıcı olarak silinecek. Devam edilsin mi?');
     if (!confirmed) return;
-    await api(`/stock-cards/${stockCard.id}?hard=true`, { method: 'DELETE' });
-    setStockCards((current) => current.filter((item) => item.id !== stockCard.id));
-    setSelected(null);
-    setMessage('Deneme/test stok kartı silindi.');
-    await load();
+    try {
+      await api(`/stock-cards/${stockCard.id}?hard=true`, { method: 'DELETE' });
+      setStockCards((current) => current.filter((item) => item.id !== stockCard.id));
+      setSelected(null);
+      setMessage('Deneme/test stok kartı silindi.');
+      await load();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Deneme/test stok kartı silinemedi.');
+    }
   }
 
   function openStockForm(mode: 'create' | 'edit', stockCard?: StockCard) {
@@ -328,6 +510,7 @@ export default function StockCardsPage() {
       setSelected(null);
       setFormImageFiles([]);
     } else if (stockCard) {
+      const parsedTechnicalSpecs = parseCategoryTechnicalSpecs(stockCard.technicalSpecs);
       setSelected(stockCard);
       setFormImageFiles([]);
       setForm({
@@ -337,6 +520,7 @@ export default function StockCardsPage() {
         model: stockCard.model ?? '',
         productFamily: stockCard.productFamily ?? '',
         category: stockCard.category ?? '',
+        categoryAttributes: parsedTechnicalSpecs.attributes,
         color: stockCard.color ?? '',
         size: stockCard.size ?? '',
         productType: stockCard.productType ?? '',
@@ -354,7 +538,7 @@ export default function StockCardsPage() {
         warehouse: stockCard.warehouse ?? '',
         shelfLocation: stockCard.shelfLocation ?? '',
         shortDescription: stockCard.shortDescription ?? '',
-        technicalSpecs: stockCard.technicalSpecs ?? '',
+        technicalSpecs: parsedTechnicalSpecs.note,
         seoTitle: stockCard.seoTitle ?? '',
         metaDescription: stockCard.metaDescription ?? '',
         purchaseUnit: stockCard.purchaseUnit ?? stockCard.unit,
@@ -399,6 +583,15 @@ export default function StockCardsPage() {
     });
   }
 
+  if (showStockCountPrint) {
+    return (
+      <StockCountPrintView
+        items={stockCards}
+        onBack={() => setShowStockCountPrint(false)}
+      />
+    );
+  }
+
   return (
     <AdminShell title="Stok Kartları">
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
@@ -406,10 +599,16 @@ export default function StockCardsPage() {
           <h2 className="text-xl font-bold">Görselli Stok Merkezi</h2>
           <p className="text-sm text-slate-500">Eski görselli kart yapısı ERP içinde kullanılır. Stok fiyatı maliyet sisteminin ana kaynağıdır.</p>
         </div>
-        <button className="btn btn-primary" onClick={() => openStockForm('create')}>
-          <Plus size={18} />
-          Yeni Stok Kartı
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button className="btn btn-secondary" type="button" onClick={() => setShowStockCountPrint(true)}>
+            <Printer size={18} />
+            A4 Sayım Listesi
+          </button>
+          <button className="btn btn-primary" onClick={() => openStockForm('create')}>
+            <Plus size={18} />
+            Yeni Stok Kartı
+          </button>
+        </div>
       </div>
 
       {message && <div className="mb-4 rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{message}</div>}
@@ -433,7 +632,7 @@ export default function StockCardsPage() {
 
       <section className="panel mb-5 p-5">
         <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
-          <input className="field" placeholder="Ürün ara" value={filters.name} onChange={(event) => setFilters({ ...filters, name: event.target.value })} />
+          <input className="field" placeholder="Ürün / kategori / model ara" value={filters.name} onChange={(event) => setFilters({ ...filters, name: event.target.value })} />
           <input className="field" placeholder="Stok kodu ara" value={filters.sku} onChange={(event) => setFilters({ ...filters, sku: event.target.value })} />
           <select className="field" value={filters.category} onChange={(event) => setFilters({ ...filters, category: event.target.value })}>
             <option value="">Tüm kategoriler</option>
@@ -514,6 +713,7 @@ export default function StockCardsPage() {
                   form={form}
                   setForm={setForm}
                   isStaff={isStaff}
+                  categoryOptions={categories}
                   imageFiles={formImageFiles}
                   setImageFiles={setFormImageFiles}
                   existingImagePath={panelMode === 'edit' ? selected?.imagePath ?? null : null}
@@ -584,6 +784,176 @@ export default function StockCardsPage() {
   );
 }
 
+function StockCountPrintView({ items, onBack }: { items: StockCard[]; onBack: () => void }) {
+  const activeItems = useMemo(() => {
+    return [...items]
+      .filter((item) => item.status !== 'PASSIVE')
+      .sort((a, b) => {
+        const categoryCompare = String(a.category ?? '').localeCompare(String(b.category ?? ''), 'tr');
+        if (categoryCompare !== 0) return categoryCompare;
+        return a.name.localeCompare(b.name, 'tr');
+      });
+  }, [items]);
+  const totalQuantity = activeItems.reduce((sum, item) => sum + Number(item.stockQuantity ?? 0), 0);
+  const printDate = new Intl.DateTimeFormat('tr-TR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date());
+
+  return (
+    <main className="min-h-screen bg-slate-100 text-ink">
+      <div className="stock-print-toolbar sticky top-0 z-20 flex flex-wrap items-center justify-center gap-3 bg-slate-900 px-4 py-3">
+        <button className="inline-flex min-h-10 items-center gap-2 rounded-md bg-white px-4 py-2 text-sm font-bold text-slate-900" type="button" onClick={onBack}>
+          <X size={16} />
+          Stok Merkezine Dön
+        </button>
+        <button className="inline-flex min-h-10 items-center gap-2 rounded-md bg-emerald-600 px-5 py-2 text-sm font-bold text-white" type="button" onClick={() => window.print()}>
+          <Printer size={16} />
+          Yazdır / PDF Kaydet
+        </button>
+      </div>
+
+      <section className="stock-count-sheet mx-auto my-6 bg-white p-6 shadow-xl">
+        <header className="mb-4 flex items-end justify-between gap-4 border-b border-slate-300 pb-3">
+          <div>
+            <h1 className="text-2xl font-black tracking-normal">Stok Sayım Listesi</h1>
+            <p className="mt-1 text-sm text-slate-600">Görselli ürün adı ve adet kontrol listesi</p>
+          </div>
+          <div className="text-right text-xs font-semibold text-slate-600">
+            <div>Çıktı: {printDate}</div>
+            <div>Ürün: {activeItems.length.toLocaleString('tr-TR')}</div>
+            <div>Sistem toplamı: {totalQuantity.toLocaleString('tr-TR')}</div>
+          </div>
+        </header>
+
+        <table className="stock-count-table w-full border-collapse text-left">
+          <thead>
+            <tr>
+              <th>Görsel</th>
+              <th>Ürün</th>
+              <th>Stok kodu</th>
+              <th>Kategori</th>
+              <th>Sistem adedi</th>
+              <th>Sayım</th>
+            </tr>
+          </thead>
+          <tbody>
+            {activeItems.map((item) => {
+              const image = stockImages(item)[0];
+              return (
+                <tr key={item.id}>
+                  <td className="stock-count-image-cell">
+                    {image ? (
+                      <img className="stock-count-image" src={apiFileUrl(image.filePath)} alt={item.name} />
+                    ) : (
+                      <div className="stock-count-no-image">Yok</div>
+                    )}
+                  </td>
+                  <td>
+                    <div className="stock-count-name">{item.name}</div>
+                    {item.model && <div className="stock-count-sub">Model: {item.model}</div>}
+                  </td>
+                  <td>{item.sku || '-'}</td>
+                  <td>{item.category || 'Kategorisiz'}</td>
+                  <td className="stock-count-quantity">{Number(item.stockQuantity ?? 0).toLocaleString('tr-TR')} {item.unit}</td>
+                  <td><div className="stock-count-blank" /></td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </section>
+
+      <style jsx>{`
+        .stock-count-sheet {
+          width: 210mm;
+          min-height: 297mm;
+        }
+        .stock-count-table th {
+          border: 1px solid #cbd5e1;
+          background: #f1f5f9;
+          padding: 7px 8px;
+          font-size: 11px;
+          font-weight: 900;
+        }
+        .stock-count-table td {
+          border: 1px solid #cbd5e1;
+          padding: 6px 8px;
+          font-size: 11px;
+          vertical-align: middle;
+        }
+        .stock-count-image-cell {
+          width: 56px;
+        }
+        .stock-count-image,
+        .stock-count-no-image {
+          width: 44px;
+          height: 44px;
+          border: 1px solid #cbd5e1;
+          border-radius: 4px;
+        }
+        .stock-count-image {
+          object-fit: contain;
+          background: #fff;
+        }
+        .stock-count-no-image {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: #f8fafc;
+          color: #94a3b8;
+          font-size: 10px;
+          font-weight: 800;
+        }
+        .stock-count-name {
+          max-width: 250px;
+          font-weight: 900;
+          line-height: 1.25;
+        }
+        .stock-count-sub {
+          margin-top: 2px;
+          color: #64748b;
+          font-size: 10px;
+          font-weight: 700;
+        }
+        .stock-count-quantity {
+          white-space: nowrap;
+          font-weight: 900;
+        }
+        .stock-count-blank {
+          height: 24px;
+          min-width: 74px;
+          border-bottom: 1px solid #64748b;
+        }
+        @page {
+          size: A4 portrait;
+          margin: 9mm;
+        }
+        @media print {
+          .stock-print-toolbar {
+            display: none !important;
+          }
+          main {
+            min-height: 0 !important;
+            background: white !important;
+          }
+          .stock-count-sheet {
+            width: auto !important;
+            min-height: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            box-shadow: none !important;
+          }
+          .stock-count-table {
+            page-break-inside: auto;
+          }
+          .stock-count-table tr {
+            break-inside: avoid;
+            page-break-inside: avoid;
+          }
+        }
+      `}</style>
+    </main>
+  );
+}
+
 function StockVisualCard({
   item,
   onEdit,
@@ -614,6 +984,7 @@ function StockVisualCard({
   const usageUnitCost = unitCost(item);
   const usedInProductCount = Number(item._count?.productCostItems ?? 0) + Number(item._count?.productPotItems ?? 0);
   const images = stockImages(item);
+  const categorySpecs = visibleCategorySpecs(item);
   return (
     <article className="overflow-hidden rounded-md border border-line bg-white shadow-sm">
       <div className="relative h-56 bg-slate-50">
@@ -662,6 +1033,12 @@ function StockVisualCard({
           <Info label="Kullanan ürün" value={usedInProductCount > 0 ? `${usedInProductCount} ürün` : '-'} />
           {!isStaff && <Info label="Son hareket" value={item.lastMovementAt ? new Date(item.lastMovementAt).toLocaleDateString('tr-TR') : '-'} />}
         </div>
+
+        {categorySpecs.length > 0 && (
+          <div className="grid grid-cols-2 gap-2 text-sm">
+            {categorySpecs.map((spec) => <Info key={spec.label} label={spec.label} value={spec.value} />)}
+          </div>
+        )}
 
         {item.description && <p className="line-clamp-2 text-sm text-slate-500">{item.description}</p>}
         {isCritical && <div className="rounded-md bg-amber-50 px-3 py-2 text-xs font-bold text-amber-700">Kritik stok seviyesinde</div>}
@@ -730,26 +1107,97 @@ function Info({ label, value, strong = false }: { label: string; value: string; 
   );
 }
 
+function categoryGroupKey(category: string | null | undefined) {
+  const value = normalize(category ?? '');
+  if (!value) return '';
+  if (value.includes('tas')) return 'stones';
+  if (value.includes('saksi')) return 'pots';
+  if (value.includes('yaprak')) return 'leaves';
+  if (value.includes('govde') || value.includes('agac govde')) return 'trunks';
+  if (value.includes('cicek')) return 'flowers';
+  if (value.includes('dal')) return 'branches';
+  if (value.includes('demir') || value.includes('metal')) return 'metal';
+  if (value.includes('plastik')) return 'plastic';
+  if (value.includes('ambalaj')) return 'packaging';
+  if (value.includes('sarf')) return 'consumables';
+  if (value.includes('yardimci')) return 'auxiliary';
+  return '';
+}
+
+function categoryFieldsFor(category: string | null | undefined) {
+  const key = categoryGroupKey(category);
+  return key ? CATEGORY_FIELD_GROUPS[key] ?? [] : [];
+}
+
+function isStoneCategory(category: string | null | undefined) {
+  return categoryGroupKey(category) === 'stones';
+}
+
+function parseCategoryTechnicalSpecs(value: string | null | undefined): { attributes: Record<string, string>; note: string } {
+  const text = String(value ?? '').trim();
+  if (!text) return { attributes: {}, note: '' };
+  try {
+    const parsed = JSON.parse(text) as { attributes?: Record<string, unknown>; note?: unknown };
+    if (!parsed || typeof parsed !== 'object' || !parsed.attributes || typeof parsed.attributes !== 'object') {
+      return { attributes: {}, note: text };
+    }
+    const attributes = Object.fromEntries(
+      Object.entries(parsed.attributes).map(([key, item]) => [key, String(item ?? '')]),
+    );
+    return { attributes, note: typeof parsed.note === 'string' ? parsed.note : '' };
+  } catch {
+    return { attributes: {}, note: text };
+  }
+}
+
+function serializeCategoryTechnicalSpecs(category: string, attributes: Record<string, string>, note: string) {
+  const cleanAttributes = Object.fromEntries(
+    Object.entries(attributes)
+      .map(([key, value]) => [key, String(value ?? '').trim()])
+      .filter(([, value]) => value),
+  );
+  const cleanNote = note.trim();
+  if (Object.keys(cleanAttributes).length === 0) return cleanNote || null;
+  return JSON.stringify({
+    version: 1,
+    category,
+    attributes: cleanAttributes,
+    note: cleanNote || undefined,
+  });
+}
+
+function visibleCategorySpecs(item: StockCard) {
+  const parsed = parseCategoryTechnicalSpecs(item.technicalSpecs);
+  const fields = categoryFieldsFor(item.category);
+  return fields
+    .map((field) => ({ label: field.label, value: parsed.attributes[field.key]?.trim() ?? '' }))
+    .filter((field) => field.value);
+}
+
 function StockForm({
   form,
   setForm,
   isStaff,
+  categoryOptions,
   imageFiles,
   setImageFiles,
   existingImagePath,
 }: {
-  form: typeof emptyForm;
-  setForm: (form: typeof emptyForm) => void;
+  form: StockFormState;
+  setForm: (form: StockFormState) => void;
   isStaff: boolean;
+  categoryOptions: string[];
   imageFiles: File[];
   setImageFiles: (files: File[]) => void;
   existingImagePath: string | null;
 }) {
+  const categoryFields = categoryFieldsFor(form.category);
+
   function prepareStone(name?: string) {
     setForm({
       ...form,
       name: name ?? form.name,
-      category: 'Taş',
+      category: 'Taşlar',
       productFamily: 'Taş',
       productType: name ?? form.productType ?? 'Dekoratif Taş',
       purchaseUnit: 'KG',
@@ -757,6 +1205,27 @@ function StockForm({
       purchaseQuantity: 1,
       packageContent: 1,
       brand: form.brand || 'Erhan Flowers',
+    });
+  }
+
+  function updateCategory(nextCategory: string) {
+    const hasCategoryAttributes = Object.values(form.categoryAttributes).some((value) => String(value ?? '').trim());
+    if (form.category && form.category !== nextCategory && hasCategoryAttributes) {
+      const confirmed = window.confirm('Kategori değiştirildiğinde önceki kategoriye özel özellikler temizlenecek. Devam etmek istiyor musunuz?');
+      if (!confirmed) return;
+      setForm({ ...form, category: nextCategory, categoryAttributes: {} });
+      return;
+    }
+    setForm({ ...form, category: nextCategory });
+  }
+
+  function updateCategoryAttribute(key: string, value: string) {
+    setForm({
+      ...form,
+      categoryAttributes: {
+        ...form.categoryAttributes,
+        [key]: value,
+      },
     });
   }
 
@@ -774,24 +1243,47 @@ function StockForm({
         </div>
       </div>
 
-      <label className="block space-y-1.5"><span className="label">Stok adı</span><input className="field" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} required /></label>
+      <label className="block space-y-1.5">
+        <span className="label">Stok kategorisi</span>
+        <select className="field" value={form.category} onChange={(event) => updateCategory(event.target.value)} required>
+          <option value="">Kategori seçin</option>
+          {categoryOptions.map((category) => <option key={category} value={category}>{category}</option>)}
+        </select>
+      </label>
+
+      {isStoneCategory(form.category) && (
       <div className="rounded-md border border-emerald-100 bg-emerald-50 p-3">
         <div className="mb-2 text-xs font-bold text-emerald-800">Taş stok kartı hızlı hazırlık</div>
         <div className="flex flex-wrap gap-2">
-          <button className="rounded-md bg-emerald-700 px-3 py-1.5 text-xs font-bold text-white" type="button" onClick={() => prepareStone()}>Kategori: Taş</button>
           {['Beyaz Dolomit Taşı', 'Siyah Dekoratif Taş', 'Dere Taşı', 'Beyaz Çakıl Taşı', 'Siyah Çakıl Taşı', 'Mermer Kırığı'].map((name) => (
             <button key={name} className="rounded-md border border-emerald-200 bg-white px-2 py-1.5 text-xs font-semibold text-emerald-800" type="button" onClick={() => prepareStone(name)}>{name}</button>
           ))}
         </div>
       </div>
+      )}
+
+      <label className="block space-y-1.5"><span className="label">Stok adı</span><input className="field" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} required /></label>
       <div className="grid grid-cols-2 gap-3">
         <label className="block space-y-1.5"><span className="label">Stok kodu</span><input className="field" value={form.sku} onChange={(event) => setForm({ ...form, sku: event.target.value })} /></label>
         <label className="block space-y-1.5"><span className="label">Model kodu</span><input className="field" value={form.model} onChange={(event) => setForm({ ...form, model: event.target.value })} /></label>
         <label className="block space-y-1.5"><span className="label">Barkod</span><input className="field" value={form.barcode} onChange={(event) => setForm({ ...form, barcode: event.target.value })} /></label>
-        <label className="block space-y-1.5"><span className="label">Kategori</span><input className="field" list="stock-category-options" value={form.category} onChange={(event) => setForm({ ...form, category: event.target.value })} /><datalist id="stock-category-options"><option value="Taş" /><option value="Saksı" /><option value="Yaprak" /><option value="Gövde" /><option value="Sarf Malzeme" /></datalist></label>
         <label className="block space-y-1.5"><span className="label">Depo</span><input className="field" value={form.warehouse} onChange={(event) => setForm({ ...form, warehouse: event.target.value })} /></label>
         <label className="block space-y-1.5"><span className="label">Raf</span><input className="field" value={form.shelfLocation} onChange={(event) => setForm({ ...form, shelfLocation: event.target.value })} /></label>
       </div>
+
+      {categoryFields.length > 0 && (
+        <div className="rounded-md border border-line bg-white p-3">
+          <div className="mb-3 text-sm font-bold">Kategoriye özel teknik özellikler</div>
+          <div className="grid grid-cols-2 gap-3">
+            {categoryFields.map((field) => (
+              <label key={field.key} className="block space-y-1.5">
+                <span className="label">{field.label}</span>
+                <input className="field" value={form.categoryAttributes[field.key] ?? ''} onChange={(event) => updateCategoryAttribute(field.key, event.target.value)} />
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-3">
         {!isStaff && <NumberField label="Mevcut stok" value={form.stockQuantity} onChange={(stockQuantity) => setForm({ ...form, stockQuantity })} />}
@@ -1000,7 +1492,42 @@ function roundQuantity(value: number) {
 }
 
 function normalize(value: string) {
-  return value.toLocaleLowerCase('tr-TR').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  return value
+    .toLocaleLowerCase('tr-TR')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/ı/g, 'i')
+    .replace(/ğ/g, 'g')
+    .replace(/ü/g, 'u')
+    .replace(/ş/g, 's')
+    .replace(/ö/g, 'o')
+    .replace(/ç/g, 'c');
+}
+
+function stockSearchText(item: StockCard) {
+  return normalize([
+    item.name,
+    item.sku,
+    item.model,
+    item.oldModelCode,
+    item.barcode,
+    item.category,
+    item.productFamily,
+    item.productType,
+    item.color,
+    item.size,
+    item.height,
+    item.width,
+    item.potType,
+    item.potColor,
+    item.potSize,
+    item.trunkType,
+    item.leafFlowerType,
+    item.brand,
+    item.supplierName,
+    item.shortDescription,
+    item.description,
+  ].filter(Boolean).join(' '));
 }
 
 function isTestStockCard(item: StockCard) {

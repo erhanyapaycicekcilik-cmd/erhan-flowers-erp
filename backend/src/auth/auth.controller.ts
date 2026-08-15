@@ -13,7 +13,7 @@ export class AuthController {
     @Res({ passthrough: true }) response: Response,
   ) {
     const result = await this.auth.login(body.email, body.password, Boolean(body.rememberMe));
-    response.cookie('auth_token', result.token, {
+    response.cookie(this.cookieName(), result.token, {
       httpOnly: true,
       sameSite: 'lax',
       secure: false,
@@ -30,7 +30,12 @@ export class AuthController {
 
   @Post('logout')
   logout(@Res({ passthrough: true }) response: Response) {
+    response.clearCookie(this.cookieName());
     response.clearCookie('auth_token');
     return { ok: true };
+  }
+
+  private cookieName() {
+    return process.env.AUTH_COOKIE_NAME?.trim() || 'auth_token';
   }
 }

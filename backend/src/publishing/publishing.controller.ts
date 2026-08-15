@@ -27,8 +27,16 @@ export class PublishingController {
   }
 
   @Post('send')
-  send(@Body() body: { variantIds?: number[] }, @Req() request: AuthenticatedRequest) {
-    return this.publishing.send(body.variantIds ?? [], request.user!.id);
+  send(@Body() body: { variantIds?: number[]; allowIncomplete?: boolean; platforms?: string[] }, @Req() request: AuthenticatedRequest) {
+    return this.publishing.send(body.variantIds ?? [], request.user!.id, {
+      allowIncomplete: body.allowIncomplete === true,
+      platforms: body.platforms as any,
+    });
+  }
+
+  @Post('excel-export')
+  exportExcel(@Body() body: { variantIds?: number[]; platform?: string }, @Req() request: AuthenticatedRequest) {
+    return this.publishing.exportExcel(body.variantIds ?? [], request.user!.id, body.platform as any);
   }
 
   @Get('history')

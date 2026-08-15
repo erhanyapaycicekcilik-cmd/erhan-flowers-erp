@@ -2,6 +2,8 @@ $ErrorActionPreference = "Stop"
 
 $root = Resolve-Path (Join-Path $PSScriptRoot "..")
 
+& (Join-Path $root "scripts\stop-extra-dev-servers.ps1")
+
 docker compose -f (Join-Path $root "docker-compose.dev.yml") up -d postgres-dev
 
 New-Item -ItemType Directory -Force -Path "D:\stok-gorseller-dev" | Out-Null

@@ -4,6 +4,8 @@
 
 Bu proje artik sirket icinde kullanilan ERP sistemidir. Yeni gelistirme yaparken calisan sistemi kesmek, veriyi riske atmak veya mevcut akisleri bozmak kabul edilemez.
 
+Proje Erhan Flowers ERP coklu firma ve white-label platformudur.
+
 ## Oncelik Sirasi
 
 1. Login ve erisim calisacak.
@@ -14,11 +16,16 @@ Bu proje artik sirket icinde kullanilan ERP sistemidir. Yeni gelistirme yaparken
 
 ## Kesinlikle Yapilmayacaklar
 
+- Gorevde acikca istenmeyen dosyalari degistirme.
+- Gereksiz refactor yapma.
+- Yeni paket kurma; gerekirse once bildir.
+- Backend, Prisma, migration ve veritabanina yalnizca acik talimat varsa dokun.
 - Kullanici onayi olmadan veritabani sifirlama.
 - Kullanici onayi olmadan migration calistirma.
 - Kullanici onayi olmadan gercek kayit silme.
 - Kullanici onayi olmadan klasor tasima veya gorsel silme.
 - Calisan frontend/backend sureclerini gerekmedikce durdurma.
+- Production 3001 ve 8001 servislerini durdurma veya yeniden baslatma.
 - Canli veritabani uzerinde test kaydi birakma.
 - Eski stok kodlarini, barkodlari veya model kodlarini toplu degistirme.
 - Yeni ozellik icin mevcut calisan modulun davranisini bozma.
@@ -35,6 +42,9 @@ Bu proje artik sirket icinde kullanilan ERP sistemidir. Yeni gelistirme yaparken
 
 - Backend build kontrol edilecek.
 - Frontend build kontrol edilecek.
+- Her gorev sonunda ilgili frontend icin `npx tsc --noEmit` calistirilacak.
+- Her gorev sonunda ilgili frontend icin `npm run build` calistirilacak.
+- Veritabani degisiklikleri once bagimsiz test DB'de dogrulanacak.
 - Login sistem sahibi ve personel ile test edilecek.
 - Stok degisikligi varsa stok karti olusturma, stok giris/cikis, barkod/model/stok kodu ve gorsel klasoru test edilecek.
 - Test kaydi kullanildiysa test sonunda temizlenecek.
@@ -51,13 +61,20 @@ Bu proje artik sirket icinde kullanilan ERP sistemidir. Yeni gelistirme yaparken
   - PostgreSQL dev: 5433 veya ayri database adi
 - Gelistirme sirasinda canli servisler durdurulmayacak.
 - Testler development veritabani uzerinde yapilacak.
+- Development ve production ortamlari karistirilmayacak.
+
+## Yedekleme
+
+- Gun basinda ve sonunda kod, veritabani ve kritik medya yedegi alinmali.
+- En az 7 gunluk yedek saklanmali.
+- Hata halinde en fazla 1 gunluk calisma kaybiyla geri donus mumkun olmali.
 
 ## Raporlama
 
 Her is sonunda kisa rapor ver:
 
-- Ne degisti?
-- Hangi dosyalar degisti?
-- Hangi testler yapildi?
-- Veri kaybi var mi?
-- Canli sistem calisiyor mu?
+- Degisen dosyalar.
+- Test sonuclari.
+- Veritabani etkisi.
+- Canli servis etkisi.
+- Kalan risk.

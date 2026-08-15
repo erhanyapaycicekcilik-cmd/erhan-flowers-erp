@@ -12,7 +12,7 @@ export class AuthGuard implements CanActivate {
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<Request & { user?: unknown }>();
-    const token = request.cookies?.auth_token ?? this.getBearerToken(request) ?? this.getQueryToken(request);
+    const token = request.cookies?.[this.cookieName()] ?? this.getBearerToken(request) ?? this.getQueryToken(request);
 
     if (!token) {
       throw new UnauthorizedException('Oturum bulunamadı.');
@@ -42,5 +42,9 @@ export class AuthGuard implements CanActivate {
   private getQueryToken(request: Request) {
     const token = request.query?.token;
     return typeof token === 'string' && token.trim() ? token.trim() : null;
+  }
+
+  private cookieName() {
+    return process.env.AUTH_COOKIE_NAME?.trim() || 'auth_token';
   }
 }

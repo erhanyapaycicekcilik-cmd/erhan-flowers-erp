@@ -1,12 +1,14 @@
 'use client';
 
-import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { FormEvent, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { CreditCard, Eye, FileText, MapPin, Phone, Plus, Printer, Search, ShoppingCart, Trash2, Truck, UserRound } from 'lucide-react';
+import { useSearchParams } from 'next/navigation';
 import { AdminShell } from '@/components/AdminShell';
-import { api } from '@/lib/api';
+import { api, apiFileUrl } from '@/lib/api';
 
 type SaleProduct = {
   id: number;
+  variantId?: number | null;
   barcode: string;
   productName: string;
   originalProductName: string;
@@ -121,7 +123,17 @@ const emptyDelivery = {
 };
 
 export default function SalesCenterPage() {
+  return (
+    <Suspense fallback={<div className="p-6 text-sm text-slate-500">Yukleniyor...</div>}>
+      <SalesCenterPageContent />
+    </Suspense>
+  );
+}
+
+function SalesCenterPageContent() {
+  const searchParams = useSearchParams();
   const clientRequestId = useRef(crypto.randomUUID());
+  const quickBarcodeLoaded = useRef('');
   const [saleNumber, setSaleNumber] = useState('');
   const [customer, setCustomer] = useState(emptyCustomer);
   const [address, setAddress] = useState(emptyAddress);
@@ -139,6 +151,8 @@ export default function SalesCenterPage() {
   const [sales, setSales] = useState<SaleListRow[]>([]);
   const [selectedSale, setSelectedSale] = useState<Record<string, any> | null>(null);
   const [loadingSaleId, setLoadingSaleId] = useState<string | number | null>(null);
+  const [quickSaleLoading, setQuickSaleLoading] = useState(false);
+  const quickBarcode = searchParams.get('barcode')?.trim() ?? '';
 
   useEffect(() => {
     api<{ saleNumber: string }>('/sales/next-number')
@@ -156,6 +170,38 @@ export default function SalesCenterPage() {
   }, [customerSources]);
 
   const isStorePickup = delivery.method === STORE_PICKUP;
+
+  useEffect(() => {
+    if (!quickBarcode || quickBarcodeLoaded.current === quickBarcode) return;
+    quickBarcodeLoaded.current = quickBarcode;
+    setQuery(quickBarcode);
+    setDelivery((current) => ({ ...current, method: STORE_PICKUP }));
+    setCustomer((current) => ({
+      ...current,
+      firstName: current.firstName || 'Dukkan',
+      lastName: current.lastName || 'Satis',
+      phone: current.phone || '0000000000',
+      whatsappPhone: current.whatsappPhone || current.phone || '0000000000',
+      source: 'STORE',
+    }));
+    api<SaleProduct[]>(`/sales/products/search?q=${encodeURIComponent(quickBarcode)}`)
+      .then((data) => {
+        setResults(data);
+        const exact = data.find((product) =>
+          [product.barcode, product.currentModelCode, product.proposedModelCode, product.supplierStockCode]
+            .filter(Boolean)
+            .some((value) => String(value).toLocaleLowerCase('tr-TR') === quickBarcode.toLocaleLowerCase('tr-TR')),
+        );
+        const product = exact ?? data[0];
+        if (product) {
+          addItem(product);
+          setMessage('QR kod okutuldu. Urun sepete eklendi, dukkan satisi tek tikla tamamlanabilir.');
+        } else {
+          setMessage('QR barkodu ile eslesen urun bulunamadi.');
+        }
+      })
+      .catch((error) => setMessage(error instanceof Error ? error.message : 'QR barkodu aranirken hata olustu.'));
+  }, [quickBarcode]);
 
   async function loadSales() {
     try {
@@ -254,10 +300,10 @@ export default function SalesCenterPage() {
     setNewTagName('');
   }
 
-  async function saveSale(status: 'DRAFT' | 'CONFIRMED' = 'DRAFT') {
+  async function saveSale(status: 'DRAFT' | 'CONFIRMED' = 'DRAFT', overrides: { customer?: typeof emptyCustomer; delivery?: typeof emptyDelivery; payments?: typeof payments } = {}) {
     setMessage('');
-    if (!validateSale()) return null;
-    const payload = buildSalePayload(status);
+    if (!validateSale(overrides.customer, overrides.delivery)) return null;
+    const payload = buildSalePayload(status, overrides);
     const sale = await api<Record<string, any>>('/sales', { method: 'POST', json: payload });
     setSavedSale(sale);
     setSelectedSale(sale);
@@ -277,8 +323,41 @@ export default function SalesCenterPage() {
     await loadSales();
   }
 
-  function validateSale() {
-    if (!customer.firstName.trim() || !customer.lastName.trim() || !customer.phone.trim()) {
+  async function completeQuickStoreSale() {
+    if (items.length === 0) {
+      setMessage('Stoktan dusmek icin once QR urununun sepete eklenmesi gerekir.');
+      return;
+    }
+    setQuickSaleLoading(true);
+    const quickCustomer = {
+      ...customer,
+      firstName: customer.firstName || 'Dukkan',
+      lastName: customer.lastName || 'Satis',
+      phone: customer.phone || '0000000000',
+      whatsappPhone: customer.whatsappPhone || customer.phone || '0000000000',
+      source: 'STORE',
+    };
+    const quickDelivery = { ...delivery, method: STORE_PICKUP };
+    const quickPayments = [{ ...(payments[0] ?? emptyPayment), clientKey: payments[0]?.clientKey ?? crypto.randomUUID(), method: 'Nakit', paidAmount: totals.total }];
+    setCustomer(quickCustomer);
+    setDelivery(quickDelivery);
+    setPayments(quickPayments);
+    try {
+      const sale = savedSale ?? await saveSale('CONFIRMED', { customer: quickCustomer, delivery: quickDelivery, payments: quickPayments });
+      if (!sale) return;
+      const completed = await api<Record<string, any>>(`/sales/${sale.id}/complete`, { method: 'POST' });
+      setSavedSale(completed);
+      setSelectedSale(completed);
+      setMessage('Dukkan satisi tamamlandi. Stok hareketi islendi.');
+      await loadSales();
+    } finally {
+      setQuickSaleLoading(false);
+    }
+  }
+
+  function validateSale(nextCustomer = customer, nextDelivery = delivery) {
+    const nextIsStorePickup = nextDelivery.method === STORE_PICKUP;
+    if (!nextCustomer.firstName.trim() || !nextCustomer.lastName.trim() || !nextCustomer.phone.trim()) {
       setMessage('Ad soyad ve telefon alanları zorunludur.');
       return false;
     }
@@ -286,7 +365,7 @@ export default function SalesCenterPage() {
       setMessage('Siparişi kaydetmek için en az bir ürün ekleyin.');
       return false;
     }
-    if (!isStorePickup && (!address.title.trim() || !address.city.trim() || !address.district.trim() || !address.fullAddress.trim())) {
+    if (!nextIsStorePickup && (!address.title.trim() || !address.city.trim() || !address.district.trim() || !address.fullAddress.trim())) {
       setMessage('Eve teslim siparişlerinde adres başlığı, il, ilçe ve açık adres zorunludur.');
       return false;
     }
@@ -317,20 +396,24 @@ export default function SalesCenterPage() {
     if (customerId) window.open(`/customers/${customerId}`, '_blank', 'noopener,noreferrer');
   }
 
-  function buildSalePayload(status: 'DRAFT' | 'CONFIRMED') {
+  function buildSalePayload(status: 'DRAFT' | 'CONFIRMED', overrides: { customer?: typeof emptyCustomer; delivery?: typeof emptyDelivery; payments?: typeof payments } = {}) {
+    const effectiveCustomer = overrides.customer ?? customer;
+    const effectiveDelivery = overrides.delivery ?? delivery;
+    const effectivePayments = overrides.payments ?? payments;
+    const effectiveIsStorePickup = effectiveDelivery.method === STORE_PICKUP;
     return {
       clientRequestId: clientRequestId.current,
       status,
-      channel: customer.source,
-      saleType: isStorePickup ? 'STORE_SALE' : 'DELIVERY_SALE',
-      customer,
+      channel: effectiveCustomer.source,
+      saleType: effectiveIsStorePickup ? 'STORE_SALE' : 'DELIVERY_SALE',
+      customer: effectiveCustomer,
       address: {
         ...address,
-        recipientName: `${customer.firstName} ${customer.lastName}`.trim(),
-        recipientPhone: customer.phone,
+        recipientName: `${effectiveCustomer.firstName} ${effectiveCustomer.lastName}`.trim(),
+        recipientPhone: effectiveCustomer.phone,
       },
       items: items.map((item) => ({
-        variantId: item.id,
+        variantId: 'variantId' in item ? item.variantId : item.id,
         stockCardId: item.stockCardId,
         barcode: item.barcode,
         modelCode: item.proposedModelCode || item.currentModelCode,
@@ -340,14 +423,14 @@ export default function SalesCenterPage() {
         discountAmount: item.discount,
         stockFulfillmentType: 'READY_STOCK',
       })),
-      payments: payments.map((payment) => ({
+      payments: effectivePayments.map((payment) => ({
           method: payment.method,
           amount: Number(payment.paidAmount || 0),
           clientKey: payment.clientKey,
         })),
       delivery: {
-        ...delivery,
-        note: delivery.note || address.deliveryNote,
+        ...effectiveDelivery,
+        note: effectiveDelivery.note || address.deliveryNote,
       },
     };
   }
@@ -383,6 +466,12 @@ export default function SalesCenterPage() {
                   <ShoppingCart size={17} />
                   Satışı Tamamla
                 </button>
+                {quickBarcode && (
+                  <button className="btn btn-primary" type="button" onClick={completeQuickStoreSale} disabled={quickSaleLoading || items.length === 0}>
+                    <ShoppingCart size={17} />
+                    Dukkandan Sat - Stoktan Dus
+                  </button>
+                )}
               </div>
             </div>
             {message && <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">{message}</div>}
@@ -531,7 +620,7 @@ export default function SalesCenterPage() {
               {results.map((product) => (
                 <button key={product.id} type="button" className="rounded-md border border-line bg-white p-3 text-left hover:border-brand" onClick={() => addItem(product)}>
                   <div className="flex gap-3">
-                    {product.imageUrl ? <img src={product.imageUrl} alt="" className="h-16 w-16 rounded object-cover" /> : <div className="h-16 w-16 rounded bg-slate-100" />}
+                    {product.imageUrl ? <img src={apiFileUrl(product.imageUrl)} alt="" className="h-16 w-16 rounded object-cover" /> : <div className="h-16 w-16 rounded bg-slate-100" />}
                     <div className="min-w-0 flex-1">
                       <div className="font-semibold text-ink">{product.productName}</div>
                       <div className="mt-1 text-xs text-slate-500">Barkod: {product.barcode} | Model: {product.proposedModelCode || product.currentModelCode || '-'}</div>

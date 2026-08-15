@@ -1,4 +1,4 @@
-import { AdapterConnectionResult, ExternalOrder, IntegrationAdapter, IntegrationPlatform } from './integration-adapter.interface';
+import { AdapterConnectionResult, ExternalOrder, ExternalOrderSummary, IntegrationAdapter, IntegrationPlatform } from './integration-adapter.interface';
 
 export abstract class BaseIntegrationAdapter implements IntegrationAdapter {
   abstract platform: IntegrationPlatform;
@@ -28,23 +28,40 @@ export abstract class BaseIntegrationAdapter implements IntegrationAdapter {
     return [];
   }
 
+  async fetchOrderSummary(): Promise<ExternalOrderSummary> {
+    return {
+      total: 0,
+      new: 0,
+      processing: 0,
+      ready: 0,
+      transit: 0,
+      delivered: 0,
+      reshipment: 0,
+      hold: 0,
+      cancelled: 0,
+      returned: 0,
+      lastUpdatedAt: new Date().toISOString(),
+      source: 'LOCAL',
+    };
+  }
+
   async fetchOrderDetail(): Promise<ExternalOrder | null> {
     return null;
   }
 
-  async pushStock(): Promise<AdapterConnectionResult> {
+  async pushStock(_payload?: unknown): Promise<AdapterConnectionResult> {
     return this.notImplemented('stok gönderme');
   }
 
-  async pushPrice(): Promise<AdapterConnectionResult> {
+  async pushPrice(_payload?: unknown): Promise<AdapterConnectionResult> {
     return this.notImplemented('fiyat gönderme');
   }
 
-  async pushProduct(): Promise<AdapterConnectionResult> {
+  async pushProduct(_payload?: unknown): Promise<AdapterConnectionResult> {
     return this.notImplemented('ürün gönderme');
   }
 
-  async updateOrderStatus(): Promise<AdapterConnectionResult> {
+  async updateOrderStatus(_payload?: unknown): Promise<AdapterConnectionResult> {
     return this.notImplemented('sipariş durum güncelleme');
   }
 }

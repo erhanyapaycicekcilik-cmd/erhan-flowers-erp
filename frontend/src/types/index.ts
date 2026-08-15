@@ -25,11 +25,34 @@ export type Product = {
   barcode: string | null;
   stockQuantity: number;
   criticalStockLevel: number;
+  costPrice: number;
+  desi: number;
+  shippingCost: number;
+  shopPrice: number;
+  sitePrice: number;
+  marketPrice: number;
+  listPrice: number;
+  imageUrls: string[];
+  brand: string;
+  vatRate: number;
+  origin: string;
+  colorVariant: string | null;
+  material: string | null;
+  packageDimensions: string | null;
+  warrantyMonths: number;
+  warrantyType: string | null;
   status: Status;
   description: string | null;
+  publishingStatus?: {
+    trendyol: { ready: boolean; missingFields: string[] };
+    hepsiburada: { ready: boolean; missingFields: string[] };
+    ciceksepeti: { ready: boolean; missingFields: string[] };
+    ticimax: { ready: boolean; missingFields: string[] };
+  };
   createdAt: string;
   updatedAt: string;
   category?: Category;
+  mediaFiles?: MediaFile[];
 };
 
 export type MediaFile = {

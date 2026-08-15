@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { CheckCircle2, Eye, RefreshCw, Send, TestTube2, XCircle } from 'lucide-react';
+import { CheckCircle2, Download, Eye, FileSpreadsheet, RefreshCw, Send, TestTube2, XCircle } from 'lucide-react';
 import { AdminShell } from '@/components/AdminShell';
 import { api } from '@/lib/api';
 
@@ -38,6 +38,14 @@ type PreviewData = {
   payload: Record<string, unknown>;
 };
 
+type ExcelExportResult = {
+  fileName: string;
+  mimeType: string;
+  contentBase64: string;
+  total: number;
+  missingByProduct: Array<{ id: number; productName: string; missingFields: string[] }>;
+};
+
 const actionLabels = {
   PREVIEW: 'Ön izleme',
   TEST_UPDATE: 'Test güncellemesi',
@@ -52,12 +60,20 @@ const statusLabels = {
   BLOCKED: 'Eksik alan',
 };
 
+const platformOptions = [
+  { value: 'TRENDYOL', label: 'Trendyol' },
+  { value: 'HEPSIBURADA', label: 'Hepsiburada' },
+  { value: 'N11', label: 'N11' },
+  { value: 'TICIMAX', label: 'Ticimax' },
+];
+
 export default function PublishingPage() {
   const [products, setProducts] = useState<PublishProduct[]>([]);
   const [history, setHistory] = useState<PublishHistory[]>([]);
   const [selected, setSelected] = useState<number[]>([]);
   const [search, setSearch] = useState('');
   const [onlyReady, setOnlyReady] = useState(false);
+  const [excelPlatform, setExcelPlatform] = useState('TRENDYOL');
   const [preview, setPreview] = useState<PreviewData | null>(null);
   const [message, setMessage] = useState('');
 
@@ -86,6 +102,14 @@ export default function PublishingPage() {
     setSelected((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
   }
 
+  function selectVisible() {
+    setSelected(visibleProducts.map((item) => item.id));
+  }
+
+  function selectReadyVisible() {
+    setSelected(visibleProducts.filter((item) => item.ready).map((item) => item.id));
+  }
+
   async function createPreview(id: number) {
     const data = await api<PreviewData>(`/publishing/products/${id}/preview`);
     setPreview(data);
@@ -100,8 +124,24 @@ export default function PublishingPage() {
   }
 
   async function sendSelected() {
-    const result = await api<any>('/publishing/send', { method: 'POST', json: { variantIds: selected } });
+    const result = await api<any>('/publishing/send', { method: 'POST', json: { variantIds: selected, platforms: [excelPlatform] } });
     setMessage(`Gönderim tamamlandı. Başarılı: ${result.success}, Hatalı: ${result.failed}`);
+    await load();
+  }
+
+  async function exportExcel(ids: number[], label: string) {
+    const variantIds = Array.from(new Set(ids.filter(Boolean)));
+    if (!variantIds.length) {
+      setMessage('Excel için önce ürün seçin veya listede ürün bırakacak bir filtre uygulayın.');
+      return;
+    }
+    const result = await api<ExcelExportResult>('/publishing/excel-export', {
+      method: 'POST',
+      json: { variantIds, platform: excelPlatform },
+    });
+    downloadBase64File(result);
+    const blocked = result.missingByProduct.filter((item) => item.missingFields.length > 0).length;
+    setMessage(`${label} Excel hazırlandı. Ürün: ${result.total}, eksik alan uyarısı olan: ${blocked}.`);
     await load();
   }
 
@@ -128,15 +168,40 @@ export default function PublishingPage() {
       </section>
 
       <section className="panel mb-4 p-4">
-        <div className="grid gap-3 lg:grid-cols-[1fr_auto_auto]">
+        <div className="grid gap-3 lg:grid-cols-[1fr_auto_auto_auto]">
           <input className="field" placeholder="Barkod, ürün adı, model veya kategori ara" value={search} onChange={(event) => setSearch(event.target.value)} />
           <label className="flex items-center gap-2 rounded-md border border-line px-3 py-2 text-sm font-semibold">
             <input type="checkbox" checked={onlyReady} onChange={(event) => setOnlyReady(event.target.checked)} />
             Sadece hazır ürünler
           </label>
+          <select className="field min-w-44" value={excelPlatform} onChange={(event) => setExcelPlatform(event.target.value)}>
+            {platformOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+          </select>
           <button className="btn btn-primary" onClick={sendSelected} disabled={selected.length === 0}>
             <Send size={17} />
-            Trendyol’a Gönder
+            Entegrasyonla Gönder
+          </button>
+        </div>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button className="btn btn-secondary" type="button" onClick={selectVisible} disabled={!visibleProducts.length}>
+            <CheckCircle2 size={16} />
+            Listedekileri Seç
+          </button>
+          <button className="btn btn-secondary" type="button" onClick={selectReadyVisible} disabled={!visibleProducts.some((item) => item.ready)}>
+            <CheckCircle2 size={16} />
+            Hazırları Seç
+          </button>
+          <button className="btn btn-secondary" type="button" onClick={() => exportExcel(selected, 'Seçili ürünler')} disabled={!selected.length}>
+            <FileSpreadsheet size={16} />
+            Seçili Excel
+          </button>
+          <button className="btn btn-secondary" type="button" onClick={() => exportExcel(visibleProducts.map((item) => item.id), 'Listedeki ürünler')} disabled={!visibleProducts.length}>
+            <Download size={16} />
+            Liste Excel
+          </button>
+          <button className="btn btn-secondary" type="button" onClick={() => exportExcel(visibleProducts.filter((item) => item.ready).map((item) => item.id), 'Hazır ürünler')} disabled={!visibleProducts.some((item) => item.ready)}>
+            <Download size={16} />
+            Hazır Excel
           </button>
         </div>
       </section>
@@ -262,6 +327,20 @@ function ReadyBadge() {
 
 function MissingBadge() {
   return <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700"><XCircle size={14} /> Eksik</span>;
+}
+
+function downloadBase64File(result: ExcelExportResult) {
+  const binary = atob(result.contentBase64);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  const blob = new Blob([bytes], { type: result.mimeType || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = result.fileName || `urunler-${new Date().toISOString().slice(0, 10)}.xlsx`;
+  link.click();
+  URL.revokeObjectURL(link.href);
 }
 
 function normalize(value: string) {

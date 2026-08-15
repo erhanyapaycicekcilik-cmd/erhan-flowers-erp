@@ -31,5 +31,11 @@ rollback-backups/
 snapshots/
 *.dump
 
+# Yerel ERP veritabani kasasi: canli veri ve manifestler Git'e alinmaz
+database-vault/production/*
+!database-vault/production/.gitkeep
+database-vault/development/*
+!database-vault/development/.gitkeep
+
 backend/uploads/*
 !backend/uploads/.gitkeep

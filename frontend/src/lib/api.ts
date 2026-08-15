@@ -39,6 +39,12 @@ export async function api<T>(path: string, options: ApiOptions = {}): Promise<T>
 
   if (!response.ok) {
     const data = await response.json().catch(() => null);
+    if (response.status === 401 && path === '/auth/me' && typeof window !== 'undefined') {
+      clearAuthToken();
+      if (!window.location.pathname.startsWith('/login')) {
+        window.location.href = '/login';
+      }
+    }
     throw new Error(data?.message ?? 'İşlem tamamlanamadı.');
   }
 
@@ -57,7 +63,8 @@ export function apiFileUrl(path: string) {
   const webPath = cleanPath
     .replace(/\\/g, '/')
     .replace(/^[A-Za-z]:\/.*\/stock-images\//, '/stock-images/')
-    .replace(/^[A-Za-z]:\/.*\/uploads\//, '/uploads/');
+    .replace(/^[A-Za-z]:\/.*\/uploads\//, '/uploads/')
+    .replace(/^\/uploads\/stock-cards\//, '/stock-images/stock-cards/');
 
   const normalizedPath = webPath.startsWith('/') ? webPath : `/${webPath}`;
   return `${apiBaseUrl}${encodeURI(normalizedPath)}`;
@@ -65,15 +72,21 @@ export function apiFileUrl(path: string) {
 
 export function saveAuthToken(token: string) {
   if (typeof window === 'undefined') return;
-  localStorage.setItem('auth_token', token);
+  localStorage.setItem(authStorageKey(), token);
 }
 
 export function clearAuthToken() {
   if (typeof window === 'undefined') return;
+  localStorage.removeItem(authStorageKey());
   localStorage.removeItem('auth_token');
 }
 
 function getStoredToken() {
   if (typeof window === 'undefined') return null;
-  return localStorage.getItem('auth_token');
+  return localStorage.getItem(authStorageKey()) ?? localStorage.getItem('auth_token');
+}
+
+function authStorageKey() {
+  if (typeof window === 'undefined') return 'auth_token';
+  return `auth_token_${window.location.hostname}_${window.location.port || 'default'}`;
 }

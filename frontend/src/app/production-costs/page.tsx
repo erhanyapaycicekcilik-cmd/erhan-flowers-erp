@@ -6,8 +6,6 @@ import { FileSpreadsheet, ImageIcon, Search, Upload } from 'lucide-react';
 import { AdminShell } from '@/components/AdminShell';
 import { api, apiFileUrl } from '@/lib/api';
 
-const COST_LOAD_ERROR = 'Maliyet verileri yüklenemedi. Veritabanı bağlantısını kontrol edin.';
-
 type Variant = {
   id: number;
   barcode: string;
@@ -40,7 +38,6 @@ export default function ProductCostListPage() {
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [message, setMessage] = useState('');
-  const [loadError, setLoadError] = useState('');
   const [loadingImport, setLoadingImport] = useState(false);
 
   useEffect(() => {
@@ -48,18 +45,8 @@ export default function ProductCostListPage() {
   }, []);
 
   function loadProducts() {
-    api<Variant[]>('/production-costs/variants')
-      .then((data) => {
-        setVariants(data);
-        setLoadError('');
-      })
-      .catch(() => {
-        setVariants([]);
-        setLoadError(COST_LOAD_ERROR);
-      });
-    api<{ completed: number; total: number }>('/production-costs/progress')
-      .then(setProgress)
-      .catch(() => setLoadError(COST_LOAD_ERROR));
+    api<Variant[]>('/production-costs/variants').then(setVariants).catch(() => setVariants([]));
+    api<{ completed: number; total: number }>('/production-costs/progress').then(setProgress).catch(() => setProgress(null));
   }
 
   const filtered = useMemo(() => {
@@ -117,7 +104,6 @@ export default function ProductCostListPage() {
         <section className="panel p-5">
           <h2 className="text-xl font-bold">Ürün Listesi</h2>
           <p className="mt-1 text-sm text-slate-500">Ürün kartına, adına veya görseline tıklayınca maliyet detay ekranı açılır.</p>
-          {loadError && <div className="mt-3 rounded-md bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">{loadError}</div>}
           {progress && <div className="mt-3 rounded-md bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-800">Tamamlanan: {progress.completed} / {progress.total}</div>}
           <div className="mt-4 flex items-center gap-2 rounded-md border border-line bg-white px-3 py-2">
             <Search size={18} className="text-slate-400" />
@@ -177,9 +163,6 @@ export default function ProductCostListPage() {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-        {loadError && filtered.length === 0 && (
-          <div className="panel p-5 text-sm font-semibold text-red-700">{loadError}</div>
-        )}
         {filtered.map((variant) => (
           <Link
             key={variant.id}

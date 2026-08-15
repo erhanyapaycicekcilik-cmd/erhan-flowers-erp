@@ -8,8 +8,6 @@ import { AdminShell } from '@/components/AdminShell';
 import { api, apiFileUrl } from '@/lib/api';
 import type { StockCard } from '@/types';
 
-const COST_LOAD_ERROR = 'Maliyet verileri yüklenemedi. Veritabanı bağlantısını kontrol edin.';
-
 type CostGroup = 'LEAF_TRUNK' | 'POT' | 'CONSUMABLE' | 'LABOR' | 'PACKAGING' | 'OTHER';
 type CostSource = 'AUTO' | 'MANUAL';
 
@@ -51,7 +49,6 @@ type MaterialItem = {
   stockCardId: number | '';
   manualUnitCost: number;
   automaticUnitCost: number;
-  totalCost?: number;
 };
 
 type PotItem = {
@@ -65,7 +62,6 @@ type PotItem = {
   stockCardId: number | '';
   manualUnitCost: number;
   automaticUnitCost: number;
-  totalCost?: number;
 };
 
 type ExpenseItem = {
@@ -231,7 +227,7 @@ export default function ProductCostDetailPage() {
         setVariants(variantData);
         const savedMaterials = data.costDraft.items
           .filter((item: any) => !(item.source === 'MANUAL' && (item.isDefaultExpense || ['LABOR', 'OTHER', 'PACKAGING'].includes(item.group))))
-          .map((item) => hydrateMaterialItem(item, stockData));
+          .map((item) => ({ ...item, key: crypto.randomUUID(), stockCardId: item.stockCardId ? Number(item.stockCardId) : '' as const }));
         const savedExpenses = data.costDraft.items
           .filter((item: any) => item.source === 'MANUAL' && (item.isDefaultExpense || ['LABOR', 'OTHER', 'PACKAGING'].includes(item.group)))
           .map((item: any) => ({
@@ -279,7 +275,7 @@ export default function ProductCostDetailPage() {
           }).finally(() => setKnowledgeLoading(false));
         }
       })
-      .catch(() => setMessage(COST_LOAD_ERROR));
+      .catch(() => setMessage('Ürün detayı açılamadı.'));
   }, [productId]);
 
   const totals = useMemo(() => {
@@ -446,7 +442,7 @@ export default function ProductCostDetailPage() {
         key: crypto.randomUUID(),
         name: saved.name,
         group: 'CONSUMABLE',
-        quantity: 1,
+        quantity: 0,
         unit: saved.unit || stoneForm.unit,
         source: 'AUTO',
         stockCardId: saved.id,
@@ -652,7 +648,7 @@ export default function ProductCostDetailPage() {
     setDetail(refreshed);
     setMaterials(refreshed.costDraft.items
       .filter((item: any) => !(item.source === 'MANUAL' && (item.isDefaultExpense || ['LABOR', 'OTHER', 'PACKAGING'].includes(item.group))))
-      .map((item) => hydrateMaterialItem(item, stockCards)));
+      .map((item) => ({ ...item, key: crypto.randomUUID(), stockCardId: item.stockCardId ? Number(item.stockCardId) : '' as const })));
     setExpenses(refreshed.costDraft.items
       .filter((item: any) => item.source === 'MANUAL' && (item.isDefaultExpense || ['LABOR', 'OTHER', 'PACKAGING'].includes(item.group)))
       .map((item: any) => ({
@@ -1198,54 +1194,12 @@ function Warning({ text }: { text: string }) {
   return <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">{text}</div>;
 }
 
-function hydrateMaterialItem(item: any, stockCards: StockCard[]): MaterialItem {
-  const stockCardId = item.stockCardId ? Number(item.stockCardId) : '';
-  const stock = stockCardId ? stockCards.find((card) => card.id === stockCardId) : undefined;
-  const quantity = Number(item.quantity ?? 0);
-  const automaticUnitCost = stockUnitCost(stock) || Number(item.automaticUnitCost ?? 0);
-  return {
-    ...item,
-    key: crypto.randomUUID(),
-    stockCardId,
-    quantity,
-    manualUnitCost: Number(item.manualUnitCost ?? 0),
-    automaticUnitCost,
-    totalCost: Number(item.totalCost ?? quantity * automaticUnitCost),
-  };
-}
-
-function hydratePotItem(pot: any, stockCards: StockCard[]): PotItem {
-  const stockCardId = pot.stockCardId ? Number(pot.stockCardId) : '';
-  const stock = stockCardId ? stockCards.find((card) => card.id === stockCardId) : undefined;
-  const quantity = Number(pot.quantity ?? 1);
-  const automaticUnitCost = stockUnitCost(stock) || Number(pot.automaticUnitCost ?? 0);
-  return {
-    key: crypto.randomUUID(),
-    id: pot.id,
-    name: pot.name ?? 'Saksı',
-    color: pot.color ?? '',
-    sizeText: [pot.width, pot.length, pot.height, pot.diameter].filter((value) => Number(value) > 0).join(' x '),
-    quantity,
-    source: pot.source ?? 'AUTO',
-    stockCardId,
-    manualUnitCost: Number(pot.manualUnitCost ?? 0),
-    automaticUnitCost,
-    totalCost: Number(pot.totalCost ?? quantity * automaticUnitCost),
-  };
-}
-
 function materialTotal(item: MaterialItem) {
-  const quantity = Number(item.quantity || 0);
-  const unitCost = Number(item.source === 'MANUAL' ? item.manualUnitCost : item.automaticUnitCost) || 0;
-  const liveTotal = quantity * unitCost;
-  return liveTotal > 0 ? liveTotal : Number(item.totalCost || 0);
+  return item.quantity * (item.source === 'MANUAL' ? item.manualUnitCost : item.automaticUnitCost);
 }
 
 function potTotal(item: PotItem) {
-  const quantity = Number(item.quantity || 0);
-  const unitCost = Number(item.source === 'MANUAL' ? item.manualUnitCost : item.automaticUnitCost) || 0;
-  const liveTotal = quantity * unitCost;
-  return liveTotal > 0 ? liveTotal : Number(item.totalCost || 0);
+  return item.quantity * (item.source === 'MANUAL' ? item.manualUnitCost : item.automaticUnitCost);
 }
 
 function knowledgeComponentLabel(value: KnowledgeRecipeItem['componentType']) {

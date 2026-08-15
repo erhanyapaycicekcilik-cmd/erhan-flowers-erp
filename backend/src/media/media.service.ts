@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import * as fs from 'fs';
 import * as fsPromises from 'fs/promises';
 import * as path from 'path';
+import { cleanMojibakeDeep } from '../common/mojibake';
 import { PhotoroomService } from '../image-processing/photoroom.service';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -15,11 +16,11 @@ export class MediaService {
     fs.mkdirSync(path.join(process.cwd(), 'uploads', 'photoroom'), { recursive: true });
   }
 
-  list() {
-    return this.prisma.mediaFile.findMany({
+  async list() {
+    return cleanMojibakeDeep(await this.prisma.mediaFile.findMany({
       include: { product: true },
       orderBy: { createdAt: 'desc' },
-    });
+    }));
   }
 
   async create(file: Express.Multer.File | undefined, body: { productId?: string; folderName?: string }) {
@@ -28,10 +29,18 @@ export class MediaService {
     }
 
     const productId = body.productId ? Number(body.productId) : null;
-    const folderName = body.folderName?.trim() || 'Genel';
-    const filePath = `/uploads/products/${file.filename}`;
+    const folderName = this.safeFolderName(body.folderName?.trim() || 'Genel');
+    const targetDir = path.join(process.cwd(), 'uploads', 'products', folderName, 'images');
+    fs.mkdirSync(targetDir, { recursive: true });
 
-    return this.prisma.mediaFile.create({
+    const safeFileName = this.safeFileName(file.originalname || file.filename);
+    const uniqueFileName = `${Date.now()}-${Math.round(Math.random() * 1e9)}-${safeFileName}`;
+    const targetPath = path.join(targetDir, uniqueFileName);
+    await fsPromises.rename(file.path, targetPath);
+
+    const filePath = `/uploads/products/${folderName}/images/${uniqueFileName}`;
+
+    return cleanMojibakeDeep(await this.prisma.mediaFile.create({
       data: {
         productId: productId && Number.isFinite(productId) ? productId : null,
         fileName: file.originalname,
@@ -40,7 +49,7 @@ export class MediaService {
         fileType: file.mimetype,
       },
       include: { product: true },
-    });
+    }));
   }
 
   async processWithPhotoroom(id: number) {
@@ -68,7 +77,7 @@ export class MediaService {
     const outputPath = path.join(outputDir, outputFileName);
     await fsPromises.writeFile(outputPath, editedBuffer);
 
-    return this.prisma.mediaFile.create({
+    return cleanMojibakeDeep(await this.prisma.mediaFile.create({
       data: {
         productId: media.productId,
         fileName: outputFileName,
@@ -77,6 +86,66 @@ export class MediaService {
         fileType: 'image/png',
       },
       include: { product: true },
+    }));
+  }
+
+  async createTreeStandardSet(body: { imagePath?: string; productId?: string; folderName?: string }) {
+    const imagePath = String(body.imagePath || '').trim();
+    if (!imagePath) throw new BadRequestException('Standart set için ana görsel seçilmelidir.');
+
+    const productId = body.productId ? Number(body.productId) : null;
+    const folderName = this.safeFolderName(body.folderName?.trim() || 'Agac Standart Gorsel');
+    const sourcePath = this.resolveUploadPath(imagePath);
+    const sourceType = this.fileTypeFromPath(imagePath);
+    const outputDir = path.join(process.cwd(), 'uploads', 'tree-standard', folderName);
+    fs.mkdirSync(outputDir, { recursive: true });
+
+    const slots = [
+      { key: '01-beyaz-ana-gorsel', title: '01 Beyaz ana görsel', mode: 'photoroom' },
+      { key: '02-otel-lobisi-dukkan', title: '02 Otel lobisi / dükkan', mode: 'copy' },
+      { key: '03-modern-salon', title: '03 Modern salon', mode: 'copy' },
+      { key: '04-ofis-kurumsal-alan', title: '04 Ofis / kurumsal alan', mode: 'copy' },
+      { key: '05-yakin-detay', title: '05 Yakın detay', mode: 'copy' },
+      { key: '06-giris-olcu-algisi', title: '06 Giriş / ölçü algısı', mode: 'copy' },
+    ];
+
+    const created = [];
+    for (const slot of slots) {
+      const outputFileName = `${Date.now()}-${slot.key}.png`;
+      const outputPath = path.join(outputDir, outputFileName);
+      if (slot.mode === 'photoroom') {
+        try {
+          const editedBuffer = await this.photoroom.editImage({
+            sourcePath,
+            fileType: sourceType,
+            backgroundColor: 'FFFFFF',
+            padding: '0.12',
+          });
+          await fsPromises.writeFile(outputPath, editedBuffer);
+        } catch (error) {
+          await fsPromises.copyFile(sourcePath, outputPath);
+        }
+      } else {
+        await fsPromises.copyFile(sourcePath, outputPath);
+      }
+
+      const publicPath = `/uploads/tree-standard/${folderName}/${outputFileName}`;
+      created.push(await this.prisma.mediaFile.create({
+        data: {
+          productId: productId && Number.isFinite(productId) ? productId : null,
+          fileName: `${slot.key}.png`,
+          filePath: publicPath,
+          folderName: `${folderName} / Ağaç Standart`,
+          fileType: 'image/png',
+        },
+        include: { product: true },
+      }));
+    }
+
+    return cleanMojibakeDeep({
+      images: created.map((item) => item.filePath),
+      mediaFiles: created,
+      note: 'Ağaç standart seti hazırlandı. Dekor sahneleri için görsel üretim servisi bağlanınca 02-06 otomatik sahne görseli olarak üretilecek.',
     });
   }
 
@@ -90,5 +159,30 @@ export class MediaService {
     }
 
     return absolutePath;
+  }
+
+  private safeFolderName(value: string) {
+    return value
+      .replace(/[<>:"/\\|?*\u0000-\u001F]/g, '-')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 80) || 'Genel';
+  }
+
+  private safeFileName(value: string) {
+    const parsed = path.parse(value);
+    const name = (parsed.name || 'gorsel')
+      .replace(/[<>:"/\\|?*\u0000-\u001F]/g, '-')
+      .replace(/\s+/g, '-')
+      .slice(0, 80);
+    const ext = (parsed.ext || '.jpg').replace(/[^A-Za-z0-9.]/g, '').slice(0, 12) || '.jpg';
+    return `${name}${ext}`;
+  }
+
+  private fileTypeFromPath(value: string) {
+    const ext = path.extname(value).toLocaleLowerCase();
+    if (ext === '.png') return 'image/png';
+    if (ext === '.webp') return 'image/webp';
+    return 'image/jpeg';
   }
 }

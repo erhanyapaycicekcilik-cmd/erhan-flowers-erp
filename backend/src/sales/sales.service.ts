@@ -37,10 +37,29 @@ export class SalesService {
       take: 20,
     });
 
+    const products = await this.prisma.product.findMany({
+      where: {
+        status: 'ACTIVE',
+        OR: [
+          { barcode: { contains: cleanQuery, mode: 'insensitive' } },
+          { productName: { contains: cleanQuery, mode: 'insensitive' } },
+          { modelCode: { contains: cleanQuery, mode: 'insensitive' } },
+        ],
+      },
+      include: {
+        category: true,
+        mediaFiles: true,
+      },
+      orderBy: { updatedAt: 'desc' },
+      take: 20,
+    });
+
     const lookupValues = Array.from(
       new Set(
-        variants
-          .flatMap((variant) => [variant.barcode, variant.currentModelCode, variant.proposedModelCode, variant.supplierStockCode])
+        [
+          ...variants.flatMap((variant) => [variant.barcode, variant.currentModelCode, variant.proposedModelCode, variant.supplierStockCode]),
+          ...products.flatMap((product) => [product.barcode, product.modelCode]),
+        ]
           .filter(Boolean) as string[],
       ),
     );
@@ -55,13 +74,14 @@ export class SalesService {
           })
         : [];
 
-    return variants.map((variant) => {
+    const variantResults = variants.map((variant) => {
       const stockCard = stockCards.find((card) =>
         [card.barcode, card.sku, card.oldModelCode].some((value) => value && [variant.barcode, variant.currentModelCode, variant.proposedModelCode, variant.supplierStockCode].includes(value)),
       );
 
       return {
         id: variant.id,
+        variantId: variant.id,
         barcode: variant.barcode,
         productName: variant.seoManualProductName || variant.seoProductName || variant.productName,
         originalProductName: variant.productName,
@@ -81,6 +101,36 @@ export class SalesService {
         imageUrl: this.firstImage(variant.images),
       };
     });
+
+    const productResults = products.map((product) => {
+      const stockCard = stockCards.find((card) =>
+        [card.barcode, card.sku, card.oldModelCode].some((value) => value && [product.barcode, product.modelCode].includes(value)),
+      );
+      const mediaPath = product.mediaFiles.find((file) => file.fileType?.startsWith('image/'))?.filePath ?? null;
+      return {
+        id: -product.id,
+        variantId: null,
+        barcode: product.barcode ?? product.modelCode,
+        productName: product.productName,
+        originalProductName: product.productName,
+        currentModelCode: product.modelCode,
+        proposedModelCode: product.modelCode,
+        supplierStockCode: null,
+        categoryName: product.category?.name ?? null,
+        familyName: product.brand ?? null,
+        size: null,
+        pot: null,
+        stockQuantity: Number(stockCard?.stockQuantity ?? product.stockQuantity ?? 0),
+        stockUnit: stockCard?.unit ?? 'Adet',
+        stockCardId: stockCard?.id ?? null,
+        salePrice: Number(product.shopPrice ?? product.sitePrice ?? product.marketPrice ?? 0),
+        trendyolSalePrice: Number(product.marketPrice ?? product.shopPrice ?? 0),
+        trendyolProductUrl: null,
+        imageUrl: mediaPath ?? this.firstImage(product.imageUrls),
+      };
+    });
+
+    return [...variantResults, ...productResults].slice(0, 30);
   }
 
   async searchCustomers(query: string) {
@@ -494,6 +544,7 @@ export class SalesService {
       const items = sale.items as Array<Record<string, unknown>>;
       const payments = sale.payments as Array<Record<string, unknown>>;
       await this.ensureReadyStock(tx, id, items, userId);
+      await this.deductRecipeStock(tx, id, items, userId);
       await this.createFinanceForPayments(tx, id, payments, userId);
 
       await tx.$executeRaw`
@@ -569,18 +620,21 @@ export class SalesService {
     });
   }
 
-  async printData(id: number, printType: 'ADDRESS_LABEL_10X15' | 'DELIVERY_FORM_A5' | 'ORDER_FORM_A4', userId: number) {
+  async printData(id: number, printType: 'ADDRESS_LABEL_10X15' | 'DELIVERY_FORM_A5' | 'ORDER_FORM_A4', userId: number, options: { recordPrint?: boolean } = {}) {
     const sale = await this.getSale(id);
-    await this.prisma.$executeRaw`
-      INSERT INTO retail_print_logs (sale_id, print_type, printed_at, printed_by_id)
-      VALUES (${id}, ${printType}::"RetailPrintType", NOW(), ${userId})
-    `;
+    if (options.recordPrint !== false) {
+      await this.prisma.$executeRaw`
+        INSERT INTO retail_print_logs (sale_id, print_type, printed_at, printed_by_id)
+        VALUES (${id}, ${printType}::"RetailPrintType", NOW(), ${userId})
+      `;
+    }
     return {
       printType,
       company: {
         name: 'Erhan Flowers',
         website: 'www.erhanflowers.com',
         phone: '0544 654 62 20',
+        address: 'Sarılar Mahallesi Cumhuriyet Caddesi No: 52, Manavgat / Antalya',
       },
       sale,
     };
@@ -837,6 +891,64 @@ export class SalesService {
     }
   }
 
+  private async deductRecipeStock(tx: Prisma.TransactionClient, saleId: number, items: Array<Record<string, unknown>>, userId: number) {
+    for (const item of items) {
+      const variantId = item.variant_id ? Number(item.variant_id) : null;
+      const saleItemId = Number(item.id);
+      const saleQuantity = Number(item.quantity ?? 0);
+      if (!variantId || !saleItemId || saleQuantity <= 0) continue;
+
+      const draft = await tx.productCostDraft.findUnique({
+        where: { variantId },
+        include: { items: true, pots: true },
+      });
+      if (!draft || draft.status !== 'APPROVED') continue;
+
+      const recipeRows = [...draft.items, ...draft.pots]
+        .filter((row) => row.source !== 'MANUAL' && row.stockCardId && Number(row.quantity) > 0)
+        .map((row) => ({
+          stockCardId: Number(row.stockCardId),
+          quantity: Number(row.quantity) * saleQuantity,
+          unit: 'unit' in row ? row.unit : 'adet',
+        }));
+
+      for (const row of recipeRows) {
+        const eventKey = `SALE_RECIPE_STOCK_OUT:${saleId}:${saleItemId}:${row.stockCardId}`;
+        const existing = await tx.stockUsageLog.findUnique({ where: { eventKey } });
+        if (existing) continue;
+
+        await tx.$queryRaw`SELECT id FROM stock_cards WHERE id = ${row.stockCardId} FOR UPDATE`;
+        const stockCard = await tx.stockCard.findUnique({ where: { id: row.stockCardId } });
+        if (!stockCard) continue;
+
+        const previousStock = Number(stockCard.stockQuantity);
+        const nextStock = previousStock - row.quantity;
+        if (nextStock < 0) {
+          throw new BadRequestException(`${stockCard.name} için reçete stoku yetersiz. Eksik: ${this.quantityText(Math.abs(nextStock))} ${row.unit}`);
+        }
+
+        const updated = await tx.stockCard.update({
+          where: { id: row.stockCardId },
+          data: { stockQuantity: nextStock, lastMovementAt: new Date() },
+        });
+
+        await tx.stockUsageLog.create({
+          data: {
+            stockCardId: row.stockCardId,
+            variantId,
+            eventType: 'ORDER_SHIPPED',
+            eventKey,
+            quantity: row.quantity,
+            unit: row.unit,
+            previousStock,
+            nextStock: Number(updated.stockQuantity),
+            userId,
+          },
+        });
+      }
+    }
+  }
+
   private async createFinanceForPayments(tx: Prisma.TransactionClient, saleId: number, payments: Array<Record<string, unknown>>, userId: number) {
     for (const payment of payments) {
       if (payment.method === 'ON_ACCOUNT') continue;
@@ -1034,12 +1146,12 @@ export class SalesService {
 
   private optionalNumber(value: unknown) {
     if (value === undefined || value === null || value === '') return null;
-    const number = Number(value);
+    const number = Number(String(value).replace(',', '.'));
     return Number.isFinite(number) ? number : null;
   }
 
   private number(value: unknown, fallback: number) {
-    const number = Number(value);
+    const number = Number(String(value).replace(',', '.'));
     return Number.isFinite(number) ? number : fallback;
   }
 
@@ -1057,5 +1169,9 @@ export class SalesService {
 
   private roundMoney(value: number) {
     return Math.round(value * 100) / 100;
+  }
+
+  private quantityText(value: number) {
+    return (Math.round(value * 1000) / 1000).toLocaleString('tr-TR', { maximumFractionDigits: 3 });
   }
 }

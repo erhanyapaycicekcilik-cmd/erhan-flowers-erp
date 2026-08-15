@@ -1,11 +1,16 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'crypto';
+import * as XLSX from 'xlsx';
 import { Prisma } from '../generated/prisma-client';
 import { PrismaService } from '../prisma/prisma.service';
 import { StaffTasksService } from '../staff-tasks/staff-tasks.service';
 import { GenericMarketplaceAdapter } from './adapters/generic-marketplace.adapter';
-import { ExternalOrder, IntegrationAdapter, IntegrationPlatform } from './adapters/integration-adapter.interface';
+import { HepsiburadaAdapter } from './adapters/hepsiburada.adapter';
+import { ExternalOrder, ExternalOrderSummary, IntegrationAdapter, IntegrationPlatform } from './adapters/integration-adapter.interface';
+import { N11Adapter } from './adapters/n11.adapter';
+import { TicimaxAdapter } from './adapters/ticimax.adapter';
 import { TrendyolAdapter } from './adapters/trendyol.adapter';
+import { IntegrationCenterService } from './services/integration-center.service';
 
 const platforms: Array<{ platform: IntegrationPlatform; displayName: string }> = [
   { platform: 'TRENDYOL', displayName: 'Trendyol' },
@@ -50,6 +55,7 @@ export class IntegrationsService {
     private readonly prisma: PrismaService,
     private readonly staffTasks: StaffTasksService,
     private readonly trendyolAdapter: TrendyolAdapter,
+    private readonly integrationCenter: IntegrationCenterService,
   ) {}
 
   async listConnections() {
@@ -128,8 +134,8 @@ export class IntegrationsService {
   async testConnection(platformValue: string) {
     const platform = this.platform(platformValue);
     if (platform === TICIMAX_PLATFORM) return this.testTicimaxSettings();
-    const adapter = this.adapter(platform);
-    const result = await adapter.testConnection();
+    const adapter = await this.adapter(platform);
+    const result = await this.safeAdapterTest(adapter);
     await this.prisma.$executeRaw`
       INSERT INTO integration_connections (platform, display_name, status, uses_env_credentials, last_test_at, last_error, created_at, updated_at)
       VALUES (${platform}, ${this.displayName(platform)}, ${result.status}, true, NOW(), ${result.ok ? null : result.message}, NOW(), NOW())
@@ -141,55 +147,308 @@ export class IntegrationsService {
 
   async syncOrders(platformValue: string, userId: number) {
     const platform = this.platform(platformValue);
-    if (platform === TICIMAX_PLATFORM) {
-      throw new BadRequestException('Ticimax için sipariş çekme veya ürün gönderme henüz aktif değil.');
-    }
-    const adapter = this.adapter(platform);
-    const connection = await adapter.testConnection();
+    const adapter = await this.adapter(platform);
+    const connection = await this.safeAdapterTest(adapter);
     if (!connection.ok) {
       await this.log(platform, 'FETCH_ORDERS', connection.status, connection.message);
       return { ok: false, imported: 0, duplicated: 0, message: connection.message, missingKeys: connection.missingKeys ?? [] };
     }
 
-    const orders = await adapter.fetchOrders();
+    let orders: ExternalOrder[] = [];
+    try {
+      orders = await adapter.fetchOrders();
+    } catch (error) {
+      const message = `${this.displayName(platform)} siparişleri alınamadı: ${this.errorMessage(error)}`;
+      await this.log(platform, 'FETCH_ORDERS', 'FAILED', message);
+      return { ok: false, imported: 0, duplicated: 0, unknownStatus: 0, failed: 0, message, missingKeys: [] };
+    }
     let imported = 0;
     let duplicated = 0;
+    let unknownStatus = 0;
+    let failed = 0;
     for (const order of orders) {
-      const result = await this.importExternalOrder(order, userId);
-      if (result.created) imported += 1;
-      else duplicated += 1;
+      if (order.unknownStatus) {
+        unknownStatus += 1;
+        await this.log(platform, 'IMPORT_ORDER', 'UNKNOWN', 'Trendyol sipariş durumu eşleştirilemedi; sipariş yeni olarak kaydedilmedi.', order.externalOrderId, null, {
+          platformOrderNumber: order.platformOrderNumber,
+          externalStatus: order.externalStatus ?? null,
+        });
+        continue;
+      }
+      try {
+        const result = await this.importExternalOrder(order, userId);
+        if (result.created) imported += 1;
+        else duplicated += 1;
+      } catch (error) {
+        failed += 1;
+        await this.log(platform, 'IMPORT_ORDER', 'FAILED', this.errorMessage(error), order.externalOrderId, null, {
+          platformOrderNumber: order.platformOrderNumber,
+          customerName: order.customerName,
+        });
+      }
     }
     await this.prisma.$executeRaw`
       UPDATE integration_connections SET status = 'CONNECTED', last_sync_at = NOW(), last_error = NULL, updated_at = NOW()
       WHERE platform = ${platform}
     `;
-    await this.log(platform, 'FETCH_ORDERS', 'SUCCESS', `${imported} yeni, ${duplicated} mükerrer sipariş işlendi.`, null, null, { imported, duplicated });
-    return { ok: true, imported, duplicated };
+    await this.log(platform, 'FETCH_ORDERS', 'SUCCESS', `${imported} yeni, ${duplicated} mükerrer, ${unknownStatus} bilinmeyen durum işlendi.`, null, null, { imported, duplicated, unknownStatus });
+    return { ok: true, imported, duplicated, unknownStatus, failed };
+  }
+
+  async importOrderExcel(platformValue: string, file: Express.Multer.File | undefined, userId: number) {
+    const platform = this.platform(platformValue);
+    if (platform !== 'TRENDYOL') {
+      return { ok: false, imported: 0, duplicated: 0, failed: 0, total: 0, message: 'Excel sipariş içe aktarma şu an Trendyol için hazır.' };
+    }
+    if (!file?.buffer?.length) {
+      return { ok: false, imported: 0, duplicated: 0, failed: 0, total: 0, message: 'Excel dosyası seçilmedi.' };
+    }
+
+    const workbook = XLSX.read(file.buffer, { type: 'buffer', cellDates: true });
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    if (!sheet) return { ok: false, imported: 0, duplicated: 0, failed: 0, total: 0, message: 'Excel sayfası okunamadı.' };
+
+    const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: '', raw: false });
+    const orders = this.parseTrendyolOrderRows(rows);
+    let imported = 0;
+    let duplicated = 0;
+    let failed = 0;
+
+    for (const order of orders) {
+      try {
+        const result = await this.importExternalOrder(order, userId);
+        if (result.created) imported += 1;
+        else duplicated += 1;
+      } catch (error) {
+        failed += 1;
+        await this.log(platform, 'IMPORT_ORDER_EXCEL', 'FAILED', this.errorMessage(error), order.externalOrderId, null, {
+          platformOrderNumber: order.platformOrderNumber,
+          itemCount: order.items.length,
+        });
+      }
+    }
+
+    const message = `${imported} yeni, ${duplicated} mükerrer sipariş Excel ile işlendi.`;
+    await this.log(platform, 'IMPORT_ORDER_EXCEL', failed ? 'FAILED' : 'SUCCESS', message, null, null, {
+      sourceFile: file.originalname,
+      rowCount: rows.length,
+      orderCount: orders.length,
+      imported,
+      duplicated,
+      failed,
+    });
+    return { ok: failed === 0, imported, duplicated, failed, total: orders.length, message };
+  }
+
+  private async safeAdapterTest(adapter: IntegrationAdapter) {
+    try {
+      return await adapter.testConnection();
+    } catch (error) {
+      return {
+        ok: false,
+        status: 'FAILED' as const,
+        message: `${this.displayName(adapter.platform)} API bağlantısı kurulamadı: ${this.errorMessage(error)}`,
+        missingKeys: [],
+      };
+    }
+  }
+
+  private parseTrendyolOrderRows(rows: Array<Record<string, unknown>>): ExternalOrder[] {
+    const grouped = new Map<string, ExternalOrder>();
+    for (const row of rows) {
+      const platformOrderNumber = this.rowText(row, ['siparis no', 'siparis numarasi', 'order number', 'order no']);
+      const packageNumber = this.rowText(row, ['paket no', 'paket numarasi', 'teslimat no', 'shipment package', 'package']);
+      const barcode = this.rowText(row, ['barkod', 'barcode']);
+      const modelCode = this.rowText(row, ['stok kodu', 'model kodu', 'stok no', 'stock code', 'sku']);
+      const productName = this.rowText(row, ['urun adi', 'urun', 'product name', 'product']);
+      if (!platformOrderNumber && !packageNumber && !barcode && !productName) continue;
+
+      const key = packageNumber || platformOrderNumber || `ROW:${grouped.size + 1}`;
+      const existing = grouped.get(key);
+      const totalAmount = this.rowNumber(row, ['satis tutari', 'toplam tutar', 'faturalanacak tutar', 'total amount', 'grand total']);
+      const order = existing ?? {
+        externalOrderId: key,
+        platformOrderNumber: platformOrderNumber || key,
+        platform: 'TRENDYOL' as const,
+        status: 'CONFIRMED' as const,
+        invoiceStatus: 'WAITING' as const,
+        customerName: this.rowText(row, ['musteri adi', 'alici', 'ad soyad', 'buyer', 'customer']) || 'Trendyol Müşteri',
+        phone: this.rowText(row, ['telefon', 'gsm', 'phone', 'alici telefon']),
+        addressText: this.rowText(row, ['adres', 'teslimat adresi', 'address']),
+        city: this.rowText(row, ['il', 'sehir', 'city']) || undefined,
+        district: this.rowText(row, ['ilce', 'district']) || undefined,
+        totalAmount: totalAmount || 0,
+        paidAmount: totalAmount || 0,
+        paymentStatus: 'PAID' as const,
+        cargoProvider: this.rowText(row, ['kargo firmasi', 'kargo', 'cargo provider']) || undefined,
+        cargoTrackingNumber: this.rowText(row, ['kargo kodu', 'kargo takip', 'cargo code', 'tracking number']) || undefined,
+        orderDate: this.rowDate(row, ['siparis tarihi', 'siparis tarih', 'order date', 'created date']),
+        items: [],
+      };
+
+      const quantity = this.rowNumber(row, ['adet', 'miktar', 'quantity', 'urun adedi']) || 1;
+      const unitPrice = this.rowNumber(row, ['birim fiyat', 'satis fiyati', 'urun tutari', 'price', 'unit price']);
+      order.items.push({
+        externalLineId: this.rowText(row, ['kalem id', 'line id', 'order line id']) || undefined,
+        externalVariantId: this.rowText(row, ['urun id', 'product id', 'listing id']) || barcode || modelCode || undefined,
+        productName: productName || modelCode || barcode || 'Trendyol Ürün',
+        variationText: this.rowText(row, ['renk', 'beden', 'varyasyon', 'variant']) || undefined,
+        sku: modelCode || undefined,
+        barcode: barcode || undefined,
+        modelCode: modelCode || undefined,
+        quantity,
+        unitPrice,
+      });
+      order.totalAmount = order.totalAmount || this.roundMoney(order.items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0));
+      order.paidAmount = order.totalAmount;
+      grouped.set(key, order);
+    }
+    return Array.from(grouped.values()).filter((order) => order.items.length > 0);
+  }
+
+  private rowText(row: Record<string, unknown>, candidates: string[]) {
+    for (const [key, value] of Object.entries(row)) {
+      const normalized = this.normalizeHeader(key);
+      if (candidates.some((candidate) => normalized.includes(this.normalizeHeader(candidate)))) {
+        const text = this.text(value);
+        if (text) return text;
+      }
+    }
+    return '';
+  }
+
+  private rowNumber(row: Record<string, unknown>, candidates: string[]) {
+    const text = this.rowText(row, candidates).replace(/[^\d,.-]/g, '').replace(/\./g, '').replace(',', '.');
+    const value = Number(text);
+    return Number.isFinite(value) ? value : 0;
+  }
+
+  private rowDate(row: Record<string, unknown>, candidates: string[]) {
+    const text = this.rowText(row, candidates);
+    if (!text) return undefined;
+    const parts = text.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{4})(?:\s+(\d{1,2}):(\d{1,2}))?/);
+    if (parts) {
+      const date = new Date(Number(parts[3]), Number(parts[2]) - 1, Number(parts[1]), Number(parts[4] ?? 0), Number(parts[5] ?? 0));
+      return Number.isNaN(date.getTime()) ? undefined : date;
+    }
+    const parsed = new Date(text);
+    return Number.isNaN(parsed.getTime()) ? undefined : parsed;
+  }
+
+  private normalizeHeader(value: string) {
+    return value
+      .toLocaleLowerCase('tr-TR')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[ıİ]/g, 'i')
+      .replace(/[^a-z0-9]+/g, ' ')
+      .trim();
+  }
+
+  async orderSummary(platformValue?: string) {
+    const platformText = this.text(platformValue).toUpperCase();
+    const platform = platformText ? this.platform(platformText) : 'TRENDYOL';
+    if (platform === 'TRENDYOL') {
+      try {
+        const adapter = await this.adapter(platform);
+        if (adapter.fetchOrderSummary) return await adapter.fetchOrderSummary();
+      } catch (error) {
+        await this.log(platform, 'FETCH_ORDER_SUMMARY', 'FAILED', this.errorMessage(error));
+      }
+    }
+    return this.localOrderSummary(platform);
   }
 
   async listOrders(query: Record<string, string> = {}) {
     const platform = this.text(query.platform).toUpperCase();
-    const status = this.text(query.status).toUpperCase();
     const q = this.text(query.q);
-    return this.prisma.$queryRaw<Array<Record<string, unknown>>>`
+    const statuses = this.text(query.status)
+      .split(',')
+      .map((item) => item.trim().toUpperCase())
+      .filter(Boolean);
+    const page = Math.max(1, Number(query.page) || 1);
+    const take = Math.min(500, Math.max(1, Number(query.pageSize ?? query.take) || 200));
+    const offset = (page - 1) * take;
+    const sort = this.text(query.sort);
+    const orderBy =
+      sort === 'oldest'
+        ? Prisma.sql`COALESCE(s.order_date, s.created_at) ASC`
+        : sort === 'due'
+          ? Prisma.sql`COALESCE(s.delivery_due_at, s.order_date, s.created_at) ASC`
+          : Prisma.sql`COALESCE(s.order_date, s.created_at) DESC`;
+    const customerName = this.text(query.customerName);
+    const saleNumber = this.text(query.saleNumber);
+    const platformOrderNumber = this.text(query.platformOrderNumber);
+    const packageNumber = this.text(query.packageNumber);
+    const barcode = this.text(query.barcode);
+    const cargoCode = this.text(query.cargoCode);
+    const productName = this.text(query.productName);
+    const modelCode = this.text(query.modelCode);
+    const phone = this.text(query.phone);
+    const cargoProvider = this.text(query.cargoProvider);
+    const startDate = this.text(query.startDate);
+    const endDate = this.text(query.endDate);
+
+    return this.prisma.$queryRaw<Array<Record<string, unknown>>>(Prisma.sql`
       SELECT s.id, s.sale_number AS "saleNumber", s.platform_order_number AS "platformOrderNumber",
         s.external_order_id AS "externalOrderId", s.channel AS platform, s.status,
         s.integration_sync_status AS "integrationSyncStatus", s.last_synced_at AS "lastSyncedAt",
-        s.order_date AS "orderDate", s.delivery_due_at AS "deliveryDueAt",
+        s.order_date AS "orderDate", s.delivery_due_at AS "deliveryDueAt", s.created_at AS "createdAt",
         s.cargo_provider AS "cargoProvider", s.cargo_tracking_number AS "cargoTrackingNumber",
-        s.grand_total AS "grandTotal", c.display_name AS "customerName", c.phone,
-        COUNT(i.id)::int AS "itemCount"
+        s.grand_total AS "grandTotal", s.subtotal, s.delivery_fee AS "deliveryFee", s.invoice_status AS "invoiceStatus",
+        s.invoice_note AS "invoiceNote", s.cancelled_at AS "cancelledAt", s.internal_note AS "internalNote",
+        c.display_name AS "customerName", c.phone, c.customer_type AS "customerType",
+        a.city, a.district, a.full_address AS "fullAddress",
+        d.status AS "deliveryStatus", d.delivery_note AS "deliveryNote",
+        u.name AS "cancelledByName",
+        COUNT(i.id)::int AS "itemCount",
+        COALESCE(SUM(i.quantity), 0)::float AS quantity,
+        COALESCE(SUM((i.line_total - COALESCE(i.unit_cost_snapshot, 0) * i.quantity)), 0)::float AS "estimatedProfit",
+        COALESCE(
+          jsonb_agg(
+            jsonb_build_object(
+              'id', i.id,
+              'barcode', i.barcode,
+              'modelCode', i.model_code,
+              'productName', i.product_name_snapshot,
+              'variationText', i.variation_text,
+              'quantity', i.quantity,
+              'unitPrice', i.unit_price,
+              'lineTotal', i.line_total,
+              'imagePath', sc.image_path,
+              'color', sc.color
+            )
+            ORDER BY i.id
+          ) FILTER (WHERE i.id IS NOT NULL),
+          '[]'::jsonb
+        ) AS items
       FROM retail_sales s
       JOIN retail_customers c ON c.id = s.customer_id
+      LEFT JOIN retail_customer_addresses a ON a.id = s.address_id
+      LEFT JOIN retail_deliveries d ON d.sale_id = s.id
+      LEFT JOIN users u ON u.id = s.cancelled_by_id
       LEFT JOIN retail_sale_items i ON i.sale_id = s.id
+      LEFT JOIN stock_cards sc ON sc.id = i.stock_card_id
       WHERE s.integration_sync_status <> 'MANUAL'
         AND (${platform} = '' OR s.channel::text = ${platform})
-        AND (${status} = '' OR s.status::text = ${status})
+        AND (${statuses.length} = 0 OR s.status::text IN (${Prisma.join(statuses.length ? statuses : ['__NONE__'])}))
         AND (${q} = '' OR s.sale_number ILIKE ${`%${q}%`} OR s.platform_order_number ILIKE ${`%${q}%`} OR c.display_name ILIKE ${`%${q}%`} OR c.phone ILIKE ${`%${q}%`})
-      GROUP BY s.id, c.display_name, c.phone
-      ORDER BY COALESCE(s.order_date, s.created_at) DESC
-      LIMIT 200
-    `;
+        AND (${customerName} = '' OR c.display_name ILIKE ${`%${customerName}%`})
+        AND (${saleNumber} = '' OR s.sale_number ILIKE ${`%${saleNumber}%`})
+        AND (${platformOrderNumber} = '' OR s.platform_order_number ILIKE ${`%${platformOrderNumber}%`})
+        AND (${packageNumber} = '' OR s.external_order_id ILIKE ${`%${packageNumber}%`} OR s.platform_order_number ILIKE ${`%${packageNumber}%`})
+        AND (${barcode} = '' OR EXISTS (SELECT 1 FROM retail_sale_items x WHERE x.sale_id = s.id AND x.barcode ILIKE ${`%${barcode}%`}))
+        AND (${cargoCode} = '' OR s.cargo_tracking_number ILIKE ${`%${cargoCode}%`})
+        AND (${productName} = '' OR EXISTS (SELECT 1 FROM retail_sale_items x WHERE x.sale_id = s.id AND x.product_name_snapshot ILIKE ${`%${productName}%`}))
+        AND (${modelCode} = '' OR EXISTS (SELECT 1 FROM retail_sale_items x WHERE x.sale_id = s.id AND x.model_code ILIKE ${`%${modelCode}%`}))
+        AND (${phone} = '' OR c.phone ILIKE ${`%${phone}%`})
+        AND (${cargoProvider} = '' OR s.cargo_provider ILIKE ${`%${cargoProvider}%`})
+        AND (${startDate} = '' OR COALESCE(s.order_date, s.created_at)::date >= ${startDate}::date)
+        AND (${endDate} = '' OR COALESCE(s.order_date, s.created_at)::date <= ${endDate}::date)
+      GROUP BY s.id, c.display_name, c.phone, c.customer_type, a.city, a.district, a.full_address, d.status, d.delivery_note, u.name
+      ORDER BY ${orderBy}
+      LIMIT ${take} OFFSET ${offset}
+    `);
   }
 
   async operationsSummary() {
@@ -221,6 +480,39 @@ export class IntegrationsService {
     return { ...summary, byPlatform, taskLoad };
   }
 
+  private async localOrderSummary(platform: IntegrationPlatform): Promise<ExternalOrderSummary> {
+    const [summary] = await this.prisma.$queryRaw<Array<Record<string, unknown>>>`
+      SELECT
+        COUNT(*)::int AS total,
+        COUNT(*) FILTER (WHERE status IN ('CONFIRMED', 'PAYMENT_PENDING'))::int AS new,
+        COUNT(*) FILTER (WHERE status IN ('PREPARING', 'IN_PRODUCTION'))::int AS processing,
+        COUNT(*) FILTER (WHERE status = 'READY')::int AS ready,
+        COUNT(*) FILTER (WHERE status = 'OUT_FOR_DELIVERY')::int AS transit,
+        COUNT(*) FILTER (WHERE status IN ('DELIVERED', 'COMPLETED'))::int AS delivered,
+        0::int AS reshipment,
+        COUNT(*) FILTER (WHERE integration_sync_status = 'MATCHING_REQUIRED')::int AS hold,
+        COUNT(*) FILTER (WHERE status = 'CANCELLED')::int AS cancelled,
+        COUNT(*) FILTER (WHERE invoice_status = 'RETURNED')::int AS returned
+      FROM retail_sales
+      WHERE integration_sync_status <> 'MANUAL'
+        AND channel::text = ${platform}
+    `;
+    return {
+      total: Number(summary?.total ?? 0),
+      new: Number(summary?.new ?? 0),
+      processing: Number(summary?.processing ?? 0),
+      ready: Number(summary?.ready ?? 0),
+      transit: Number(summary?.transit ?? 0),
+      delivered: Number(summary?.delivered ?? 0),
+      reshipment: Number(summary?.reshipment ?? 0),
+      hold: Number(summary?.hold ?? 0),
+      cancelled: Number(summary?.cancelled ?? 0),
+      returned: Number(summary?.returned ?? 0),
+      lastUpdatedAt: new Date().toISOString(),
+      source: 'LOCAL',
+    };
+  }
+
   listLogs(status?: string) {
     const cleanStatus = this.text(status).toUpperCase();
     return this.prisma.$queryRaw<Array<Record<string, unknown>>>`
@@ -240,27 +532,44 @@ export class IntegrationsService {
       const existing = await tx.$queryRaw<Array<{ id: number }>>`
         SELECT id FROM retail_sales WHERE idempotency_key = ${idempotencyKey} LIMIT 1
       `;
-      if (existing[0]) return { created: false, saleId: existing[0].id };
+      if (existing[0]) {
+        const status = order.status ?? null;
+        const invoiceStatus = order.invoiceStatus ?? null;
+        await tx.$executeRaw`
+          UPDATE retail_sales
+          SET status = COALESCE(${status}::"RetailSaleStatus", status),
+              invoice_status = COALESCE(${invoiceStatus}::"RetailInvoiceStatus", invoice_status),
+              order_date = COALESCE(${order.orderDate ?? null}, order_date),
+              delivery_due_at = COALESCE(${order.deliveryDueAt ?? null}, delivery_due_at),
+              cargo_provider = COALESCE(${order.cargoProvider ?? null}, cargo_provider),
+              cargo_tracking_number = COALESCE(${order.cargoTrackingNumber ?? null}, cargo_tracking_number),
+              last_synced_at = NOW(),
+              updated_at = NOW()
+          WHERE id = ${existing[0].id}
+        `;
+        return { created: false, saleId: existing[0].id };
+      }
 
       const customer = await this.ensureCustomer(tx, order, userId);
       const address = await this.ensureAddress(tx, Number(customer.id), order, userId);
       const saleNumber = await this.nextSaleNumber(tx);
       const totals = this.orderTotals(order);
-      const status = totals.remainingTotal > 0 ? 'PAYMENT_PENDING' : 'CONFIRMED';
+      const status = order.status ?? (totals.remainingTotal > 0 ? 'PAYMENT_PENDING' : 'CONFIRMED');
+      const invoiceStatus = order.invoiceStatus ?? 'WAITING';
       const syncStatus = await this.hasUnmatchedItems(order) ? 'MATCHING_REQUIRED' : 'SYNCED';
       const saleRows = await tx.$queryRaw<Array<{ id: number }>>`
         INSERT INTO retail_sales (
           sale_number, customer_id, address_id, channel, sale_type, status, currency, subtotal, discount_total,
           delivery_fee, grand_total, paid_total, remaining_total, customer_note, internal_note, event_key, created_by_id,
           platform_order_number, external_order_id, idempotency_key, integration_sync_status, last_synced_at,
-          cargo_provider, cargo_tracking_number, order_date, delivery_due_at, created_at, updated_at
+          cargo_provider, cargo_tracking_number, order_date, delivery_due_at, invoice_status, created_at, updated_at
         )
         VALUES (
           ${saleNumber}, ${Number(customer.id)}, ${Number(address.id)}, ${order.platform}::"RetailSaleChannel", 'DELIVERY_SALE'::"RetailSaleType",
           ${status}::"RetailSaleStatus", 'TRY', ${totals.subtotal}, 0, 0, ${totals.grandTotal}, ${totals.paidTotal}, ${totals.remainingTotal},
           NULL, ${`Platform siparişi: ${order.platform}`}, ${`INTEGRATION_ORDER:${idempotencyKey}`}, ${userId},
           ${order.platformOrderNumber}, ${order.externalOrderId}, ${idempotencyKey}, ${syncStatus}, NOW(),
-          ${order.cargoProvider ?? null}, ${order.cargoTrackingNumber ?? null}, ${order.orderDate ?? new Date()}, ${order.deliveryDueAt ?? null}, NOW(), NOW()
+          ${order.cargoProvider ?? null}, ${order.cargoTrackingNumber ?? null}, ${order.orderDate ?? null}, ${order.deliveryDueAt ?? null}, ${invoiceStatus}::"RetailInvoiceStatus", NOW(), NOW()
         )
         RETURNING id
       `;
@@ -361,20 +670,22 @@ export class IntegrationsService {
 
   private async ensureCustomer(tx: Prisma.TransactionClient, order: ExternalOrder, userId: number) {
     const normalizedPhone = this.normalizePhone(order.phone);
-    if (!normalizedPhone) throw new BadRequestException('Platform siparişinde geçerli telefon bulunamadı.');
-    const existing = await tx.$queryRaw<Array<Record<string, unknown>>>`
-      SELECT id FROM retail_customers WHERE normalized_phone = ${normalizedPhone} LIMIT 1
-    `;
-    if (existing[0]) return existing[0];
+    if (normalizedPhone) {
+      const existing = await tx.$queryRaw<Array<Record<string, unknown>>>`
+        SELECT id FROM retail_customers WHERE normalized_phone = ${normalizedPhone} LIMIT 1
+      `;
+      if (existing[0]) return existing[0];
+    }
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(19010101)`;
     const next = await tx.$queryRaw<Array<{ nextId: number }>>`SELECT COALESCE(MAX(id), 0) + 1 AS "nextId" FROM retail_customers`;
     const customerCode = `MUS-${String(Number(next[0].nextId)).padStart(6, '0')}`;
+    const phone = this.text(order.phone) || null;
     const rows = await tx.$queryRaw<Array<Record<string, unknown>>>`
       INSERT INTO retail_customers (
         customer_code, customer_type, first_name, display_name, phone, normalized_phone, whatsapp_phone,
         source, order_communication_allowed, created_by_id, created_at, updated_at
       )
-      VALUES (${customerCode}, 'INDIVIDUAL', ${order.customerName}, ${order.customerName}, ${order.phone}, ${normalizedPhone}, ${order.phone},
+      VALUES (${customerCode}, 'INDIVIDUAL', ${order.customerName}, ${order.customerName}, ${phone}, ${normalizedPhone}, ${phone},
         ${order.platform}::"RetailSaleChannel", true, ${userId}, NOW(), NOW())
       RETURNING id
     `;
@@ -546,8 +857,11 @@ export class IntegrationsService {
     }
   }
 
-  private adapter(platform: IntegrationPlatform): IntegrationAdapter {
-    if (platform === 'TRENDYOL') return this.trendyolAdapter;
+  private async adapter(platform: IntegrationPlatform): Promise<IntegrationAdapter> {
+    if (platform === 'TRENDYOL') return new TrendyolAdapter(await this.integrationCenter.runtimeCredentials(platform));
+    if (platform === 'HEPSIBURADA') return new HepsiburadaAdapter(await this.integrationCenter.runtimeCredentials(platform));
+    if (platform === 'N11') return new N11Adapter(await this.integrationCenter.runtimeCredentials(platform));
+    if (platform === 'TICIMAX') return new TicimaxAdapter(await this.integrationCenter.ticimaxRuntimeCredentials());
     return new GenericMarketplaceAdapter(platform);
   }
 
@@ -580,6 +894,10 @@ export class IntegrationsService {
 
   private text(value: unknown) {
     return String(value ?? '').trim();
+  }
+
+  private errorMessage(error: unknown) {
+    return error instanceof Error ? error.message : 'Siparis ice aktarilamadi.';
   }
 
   private roundMoney(value: number) {

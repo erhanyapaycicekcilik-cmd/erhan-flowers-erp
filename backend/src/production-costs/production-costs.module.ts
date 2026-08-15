@@ -7,6 +7,6 @@ import { ProductionCostsService } from './production-costs.service';
   imports: [AuthModule],
   controllers: [ProductionCostsController],
   providers: [ProductionCostsService],
+  exports: [ProductionCostsService],
 })
 export class ProductionCostsModule {}
-

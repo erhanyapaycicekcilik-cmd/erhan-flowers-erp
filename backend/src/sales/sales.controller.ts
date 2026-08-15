@@ -131,18 +131,18 @@ export class SalesController {
   }
 
   @Get(':id/print/address-label')
-  addressLabel(@Param('id') id: string, @Req() request: AuthenticatedRequest) {
-    return this.sales.printData(Number(id), 'ADDRESS_LABEL_10X15', request.user!.id);
+  addressLabel(@Param('id') id: string, @Query('preview') preview: string | undefined, @Req() request: AuthenticatedRequest) {
+    return this.sales.printData(Number(id), 'ADDRESS_LABEL_10X15', request.user!.id, { recordPrint: preview !== '1' });
   }
 
   @Get(':id/print/delivery-form')
-  deliveryForm(@Param('id') id: string, @Req() request: AuthenticatedRequest) {
-    return this.sales.printData(Number(id), 'DELIVERY_FORM_A5', request.user!.id);
+  deliveryForm(@Param('id') id: string, @Query('preview') preview: string | undefined, @Req() request: AuthenticatedRequest) {
+    return this.sales.printData(Number(id), 'DELIVERY_FORM_A5', request.user!.id, { recordPrint: preview !== '1' });
   }
 
   @Get(':id/print/order-form')
-  orderForm(@Param('id') id: string, @Req() request: AuthenticatedRequest) {
-    return this.sales.printData(Number(id), 'ORDER_FORM_A4', request.user!.id);
+  orderForm(@Param('id') id: string, @Query('preview') preview: string | undefined, @Req() request: AuthenticatedRequest) {
+    return this.sales.printData(Number(id), 'ORDER_FORM_A4', request.user!.id, { recordPrint: preview !== '1' });
   }
 
 }

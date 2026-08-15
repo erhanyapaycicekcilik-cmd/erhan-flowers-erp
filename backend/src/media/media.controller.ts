@@ -39,6 +39,11 @@ export class MediaController {
     return this.media.create(file, body);
   }
 
+  @Post('tree-standard-set')
+  createTreeStandardSet(@Body() body: { imagePath?: string; productId?: string; folderName?: string }) {
+    return this.media.createTreeStandardSet(body);
+  }
+
   @Post(':id/photoroom')
   processWithPhotoroom(@Param('id') id: string) {
     return this.media.processWithPhotoroom(Number(id));

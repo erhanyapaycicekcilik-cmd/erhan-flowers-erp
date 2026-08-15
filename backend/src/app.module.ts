@@ -22,6 +22,7 @@ import { SalesModule } from './sales/sales.module';
 import { DeliveriesModule } from './deliveries/deliveries.module';
 import { IntegrationsModule } from './integrations/integrations.module';
 import { StaffTasksModule } from './staff-tasks/staff-tasks.module';
+import { ProductCenterModule } from './product-center/product-center.module';
 
 @Module({
   imports: [
@@ -44,11 +45,12 @@ import { StaffTasksModule } from './staff-tasks/staff-tasks.module';
     FinanceModule,
     StockCountsModule,
     PublishingModule,
-    ...(process.env.ENV_FILE?.endsWith('.env.dev') ? [SalesModule] : []),
+    SalesModule,
     ...(process.env.ENV_FILE?.endsWith('.env.dev') ? [DeliveriesModule] : []),
     ...(process.env.ENV_FILE?.endsWith('.env.dev') ? [KnowledgeBaseModule] : []),
     ...(process.env.ENV_FILE?.endsWith('.env.dev') ? [StaffTasksModule] : []),
-    ...(process.env.ENV_FILE?.endsWith('.env.dev') ? [IntegrationsModule] : []),
+    IntegrationsModule,
+    ProductCenterModule,
   ],
   controllers: [AppController],
 })

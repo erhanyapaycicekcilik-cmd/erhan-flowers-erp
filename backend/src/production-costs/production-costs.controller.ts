@@ -110,6 +110,11 @@ export class ProductionCostsController {
     return this.productionCosts.saveVariantCostDraft(Number(id), body, false, request.user!.role, request.user!.id);
   }
 
+  @Post('variants/:id/start-template')
+  startVariantCostDraftFromTemplate(@Param('id') id: string, @Req() request: AuthenticatedRequest) {
+    return this.productionCosts.startVariantCostDraftFromTemplate(Number(id), request.user!.role, request.user!.id);
+  }
+
   @Post('variants/:id/cost-approve')
   approveVariantCost(@Param('id') id: string, @Body() body: unknown, @Req() request: AuthenticatedRequest) {
     return this.productionCosts.saveVariantCostDraft(Number(id), body, true, request.user!.role, request.user!.id);

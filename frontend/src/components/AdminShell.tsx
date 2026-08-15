@@ -12,6 +12,7 @@ import {
   Home,
   ListChecks,
   LogOut,
+  Menu,
   PackagePlus,
   PlugZap,
   QrCode,
@@ -30,7 +31,9 @@ const nav = [
   { href: '/model-codes', label: 'Model Kodu', icon: PackagePlus, ownerOnly: true },
   { href: '/barcodes', label: 'Barkod', icon: QrCode, ownerOnly: false },
   { href: '/stock-cards', label: 'Stok', icon: Warehouse, ownerOnly: false },
-  { href: '/production-costs', label: 'Maliyet', icon: Factory, ownerOnly: true },
+  { href: '/production-costs', label: 'Trendyol Maliyet', icon: Factory, ownerOnly: true },
+  { href: '/costs', label: 'Stoktan Maliyet', icon: Factory, ownerOnly: true },
+  { href: '/orders', label: 'Siparişler', icon: ShoppingCart, ownerOnly: false },
   { href: '/sales', label: 'Satış', icon: ShoppingCart, ownerOnly: false, enabled: process.env.NEXT_PUBLIC_ENABLE_SALES_CENTER === 'true' },
   { href: '/crm', label: 'CRM', icon: Users, ownerOnly: false },
   { href: '/integrations', label: 'Entegrasyon', icon: PlugZap, ownerOnly: true },
@@ -47,6 +50,7 @@ export function AdminShell({ title, children }: { title: string; children: React
   const router = useRouter();
   const [user, setUser] = useState<CurrentUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   useEffect(() => {
     api<CurrentUser>('/auth/me')
@@ -74,18 +78,27 @@ export function AdminShell({ title, children }: { title: string; children: React
 
   return (
     <div className="min-h-screen bg-[#f7f8f6]">
-      <aside className="fixed inset-y-0 left-0 hidden w-72 border-r border-line bg-white lg:block">
-        <div className="flex h-16 items-center gap-3 border-b border-line px-6">
+      <aside className={`fixed inset-y-0 left-0 hidden border-r border-line bg-white transition-all lg:block ${sidebarCollapsed ? 'w-20' : 'w-72'}`}>
+        <div className={`flex h-16 items-center gap-3 border-b border-line ${sidebarCollapsed ? 'justify-center px-3' : 'px-6'}`}>
           <div className="flex h-10 w-10 items-center justify-center rounded-md bg-brand text-white">
             <BarChart3 size={20} />
           </div>
-          <div>
+          {!sidebarCollapsed && <div>
             <div className="text-sm font-bold">Erhan Flowers</div>
             <div className="text-xs text-slate-500">ERP Admin Panel</div>
-          </div>
+          </div>}
         </div>
 
         <nav className="space-y-1 px-3 py-4">
+          <button
+            type="button"
+            className={`mb-3 flex w-full items-center rounded-md px-3 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50 ${sidebarCollapsed ? 'justify-center' : 'gap-3'}`}
+            onClick={() => setSidebarCollapsed((current) => !current)}
+            title={sidebarCollapsed ? 'Menüyü aç' : 'Menüyü daralt'}
+          >
+            <Menu size={18} />
+            {!sidebarCollapsed && 'Menüyü daralt'}
+          </button>
           {visibleNav.map((item) => {
             const Icon = item.icon;
             const active = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(`${item.href}/`));
@@ -93,19 +106,20 @@ export function AdminShell({ title, children }: { title: string; children: React
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium ${
+                title={item.label}
+                className={`flex items-center rounded-md px-3 py-2.5 text-sm font-medium ${sidebarCollapsed ? 'justify-center' : 'gap-3'} ${
                   active ? 'bg-brand text-white' : 'text-slate-600 hover:bg-slate-50 hover:text-ink'
                 }`}
               >
                 <Icon size={18} />
-                {item.label}
+                {!sidebarCollapsed && item.label}
               </Link>
             );
           })}
         </nav>
       </aside>
 
-      <div className="lg:pl-72">
+      <div className={`transition-all ${sidebarCollapsed ? 'lg:pl-20' : 'lg:pl-72'}`}>
         <header className="sticky top-0 z-10 border-b border-line bg-white/95 backdrop-blur">
           <div className="flex min-h-16 flex-wrap items-center justify-between gap-3 px-4 py-3 lg:px-8">
             <div>

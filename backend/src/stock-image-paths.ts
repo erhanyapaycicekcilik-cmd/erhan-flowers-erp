@@ -9,12 +9,19 @@ export function stockImageRoot() {
   return resolveConfiguredPath(process.env.STOCK_IMAGE_ROOT, 'uploads/stock-cards');
 }
 
-export function stockImageFallbackRoot() {
-  const configuredPath = process.env.STOCK_IMAGE_FALLBACK_ROOT?.trim();
-  if (!configuredPath) return null;
+export function stockImageFallbackRoots() {
+  const configuredPaths = [
+    ...(process.env.STOCK_IMAGE_FALLBACK_ROOTS ?? '')
+      .split(';')
+      .map((value) => value.trim())
+      .filter(Boolean),
+    process.env.STOCK_IMAGE_FALLBACK_ROOT?.trim(),
+    'D:\\stok görseller',
+    'D:\\stok-gorseller-dev',
+    'D:\\stok görseller-dev',
+  ].filter(Boolean) as string[];
 
-  const fallbackRoot = resolveConfiguredPath(configuredPath, configuredPath);
-  return fallbackRoot.toLocaleLowerCase('tr-TR') === stockImageRoot().toLocaleLowerCase('tr-TR')
-    ? null
-    : fallbackRoot;
+  const root = stockImageRoot().toLocaleLowerCase('tr-TR');
+  return Array.from(new Set(configuredPaths.map((path) => resolveConfiguredPath(path, path))))
+    .filter((path) => path.toLocaleLowerCase('tr-TR') !== root);
 }

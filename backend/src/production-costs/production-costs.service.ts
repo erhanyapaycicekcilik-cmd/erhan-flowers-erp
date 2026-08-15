@@ -516,7 +516,7 @@ export class ProductionCostsService {
     const shippingCost = this.optionalNumber(body.shippingCost) ?? 0;
     const desi = this.optionalNumber(body.desi) ?? 0;
     const marketplaceMarkupPercent = this.optionalNumber(body.marketplaceMarkupPercent) ?? 25;
-    const campaignBufferPercent = this.optionalNumber(body.campaignBufferPercent) ?? 10;
+    const campaignBufferPercent = this.optionalNumber(body.campaignBufferPercent) ?? 0;
     const stockCostMap = await this.buildStockCostMap([...items, ...pots]);
     const totalCost = this.round(
       items.reduce((sum: number, item: any) => sum + this.itemTotal(item, stockCostMap), 0) +
@@ -606,6 +606,37 @@ export class ProductionCostsService {
         data: { costStatus: approve ? 'Tamamlandı' : 'Taslak' },
       });
 
+      await tx.trendyolProductVariant.update({
+        where: { id: variantId },
+        data: { trendyolSalePrice: salePrice, commissionPercent },
+      });
+
+      if (approve) {
+        const productId = (variant as any).productId as number | null | undefined;
+        const identityFilters = [
+          { barcode: variant.barcode },
+          { modelCode: variant.currentModelCode ?? variant.proposedModelCode ?? undefined },
+        ].filter((item) => Object.values(item).some(Boolean));
+        const product = productId
+          ? await tx.product.findUnique({ where: { id: productId } })
+          : identityFilters.length
+            ? await tx.product.findFirst({ where: { OR: identityFilters }, orderBy: { id: 'asc' } })
+            : null;
+
+        if (product) {
+          await tx.product.update({
+            where: { id: product.id },
+            data: {
+              costPrice: totalCost,
+              shopPrice: salePrice,
+              marketPrice: salePrice,
+              listPrice: salePrice,
+              stockQuantity: variant.stockQuantity,
+            },
+          });
+        }
+      }
+
       return tx.productCostDraft.findUnique({
         where: { id: saved.id },
         include: {
@@ -616,6 +647,61 @@ export class ProductionCostsService {
     });
 
     return { ok: true, costDraft: this.serializeCostDraft(draft) };
+  }
+
+  async startVariantCostDraftFromTemplate(variantId: number, userRole = 'STAFF', userId = 1) {
+    const variant = await this.prisma.trendyolProductVariant.findUnique({
+      where: { id: variantId },
+      include: {
+        sizeOption: true,
+        potOption: true,
+        template: {
+          include: {
+            components: { include: { stockCard: true }, orderBy: { id: 'asc' } },
+          },
+        },
+      },
+    });
+    if (!variant) throw new NotFoundException('Urun bulunamadi.');
+    if (!variant.template) throw new BadRequestException('Bu urune recete sablonu bagli degil.');
+
+    const sizeLabel = this.normalize(variant.sizeOption?.sizeLabel ?? variant.detectedSize ?? '');
+    const potName = this.normalize(variant.potOption?.potName ?? variant.detectedPot ?? '');
+    const components = variant.template.components.filter((component) => {
+      if (component.scope === 'SIZE_VARIANT' && this.normalize(component.sizeLabel ?? '') !== sizeLabel) return false;
+      if (component.scope === 'POT_VARIANT' && this.normalize(component.potName ?? '') !== potName) return false;
+      return true;
+    });
+
+    const items = components
+      .filter((component) => component.costGroup !== 'POT')
+      .map((component) => ({
+        name: component.componentName,
+        group: this.costGroupToItemGroup(component.costGroup),
+        quantity: Number(component.quantity ?? 0),
+        unit: component.unit,
+        source: component.stockCardId ? 'AUTO' : 'MANUAL',
+        stockCardId: component.stockCardId,
+        manualUnitCost: Number(component.manualAmount ?? 0),
+      }));
+    const pots = components
+      .filter((component) => component.costGroup === 'POT')
+      .map((component) => ({
+        name: component.componentName,
+        potType: component.potName,
+        quantity: Number(component.quantity ?? 1),
+        source: component.stockCardId ? 'AUTO' : 'MANUAL',
+        stockCardId: component.stockCardId,
+        manualUnitCost: Number(component.manualAmount ?? 0),
+      }));
+
+    return this.saveVariantCostDraft(variantId, {
+      salePrice: Number(variant.trendyolSalePrice ?? 0),
+      commissionPercent: Number(variant.template.defaultCommissionPercent ?? variant.commissionPercent ?? 21),
+      vatPercent: Number(variant.template.vatPercent ?? 20),
+      items,
+      pots,
+    }, false, userRole, userId);
   }
 
   async copyVariantCostDraft(targetVariantId: number, payload: unknown, userRole = 'STAFF', userId = 1) {
@@ -691,7 +777,7 @@ export class ProductionCostsService {
       shippingCost: copyShippingAndDesi ? sourceDraft.shippingCost : 0,
       desi: copyShippingAndDesi ? sourceDraft.desi : 0,
       marketplaceMarkupPercent: copyPriceRates ? sourceDraft.marketplaceMarkupPercent : 25,
-      campaignBufferPercent: copyPriceRates ? sourceDraft.campaignBufferPercent : 10,
+      campaignBufferPercent: copyPriceRates ? sourceDraft.campaignBufferPercent : 0,
       items,
       pots,
     }, false, userRole, userId);
@@ -1328,7 +1414,7 @@ export class ProductionCostsService {
       shippingCost: 0,
       desi: 0,
       marketplaceMarkupPercent: 25,
-      campaignBufferPercent: 10,
+      campaignBufferPercent: 0,
       totalCost: 0,
       status: 'DRAFT',
       items: [
@@ -1350,7 +1436,7 @@ export class ProductionCostsService {
       shippingCost: Number(draft?.shippingCost ?? 0),
       desi: Number(draft?.desi ?? 0),
       marketplaceMarkupPercent: Number(draft?.marketplaceMarkupPercent ?? 25),
-      campaignBufferPercent: Number(draft?.campaignBufferPercent ?? 10),
+      campaignBufferPercent: Number(draft?.campaignBufferPercent ?? 0),
       totalCost: this.round(
         (draft?.items ?? []).reduce((sum: number, item: any) => sum + this.serializeCostItem(item).totalCost, 0) +
         (draft?.pots ?? []).reduce((sum: number, item: any) => sum + this.serializePotItem(item).totalCost, 0),
@@ -1603,6 +1689,15 @@ export class ProductionCostsService {
   private costItemGroup(value: unknown) {
     const allowed = ['LEAF_TRUNK', 'POT', 'CONSUMABLE', 'LABOR', 'PACKAGING', 'OTHER'];
     return allowed.includes(String(value)) ? String(value) as any : 'OTHER';
+  }
+
+  private costGroupToItemGroup(value: ProductionCostGroup) {
+    if (value === 'POT') return 'POT';
+    if (value === 'LABOR') return 'LABOR';
+    if (value === 'PACKAGING') return 'PACKAGING';
+    if (value === 'CONSUMABLE' || value === 'ELECTRICITY') return 'CONSUMABLE';
+    if (value === 'OTHER') return 'OTHER';
+    return 'LEAF_TRUNK';
   }
 
   private parseTrendyolRows(buffer: Buffer) {

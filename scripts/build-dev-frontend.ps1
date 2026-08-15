@@ -21,3 +21,6 @@ $env:NODE_ENV = "production"
 
 Set-Location $frontendDir
 npm.cmd exec -- next build
+
+Set-Location (Join-Path $root "backend")
+npm.cmd run verify:development-endpoints

@@ -1,4 +1,4 @@
-﻿import { PrismaClient, RecordStatus, UserRole } from '@prisma/client';
+import { PrismaClient, RecordStatus, UserRole } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
@@ -11,8 +11,8 @@ const defaultFicusPots = [
   'Siyah Vega',
   'Beyaz Lilyum',
   'Siyah Lilyum',
-  'Beyaz KÃ¼re',
-  'Siyah KÃ¼re',
+  'Beyaz Küre',
+  'Siyah Küre',
   'Siyah Luna',
   'Nergiz',
   'Metal',
@@ -20,55 +20,55 @@ const defaultFicusPots = [
 
 const masterFamilies = [
   {
-    categoryName: 'Yapay AÄŸaÃ§lar',
+    categoryName: 'Yapay Ağaçlar',
     families: [
       'Ficus',
       'Benjamin',
       'Areka',
       'Strelitzia',
-      'Muz AÄŸacÄ±',
-      'Zeytin AÄŸacÄ±',
-      'KauÃ§uk AÄŸacÄ±',
+      'Muz Ağacı',
+      'Zeytin Ağacı',
+      'Kauçuk Ağacı',
       'Palmiye',
-      'Monstera / Deve TabanÄ±',
+      'Monstera / Deve Tabanı',
       'Sakura',
-      'Bahar AÄŸacÄ±',
-      'Begonvil AÄŸacÄ±',
-      'Okaliptus AÄŸacÄ±',
-      'ÅimÅŸir AÄŸacÄ±',
-      'DiÄŸer Yapay AÄŸaÃ§',
+      'Bahar Ağacı',
+      'Begonvil Ağacı',
+      'Okaliptus Ağacı',
+      'Şimşir Ağacı',
+      'Diğer Yapay Ağaç',
     ],
   },
   {
     categoryName: 'Bambu',
-    families: ['Bambu Tekli', 'Bambu SaksÄ±lÄ±', 'Bambu SeperatÃ¶r', 'Bambu Paravan', 'DiÄŸer Bambu'],
+    families: ['Bambu Tekli', 'Bambu Saksılı', 'Bambu Seperatör', 'Bambu Paravan', 'Diğer Bambu'],
   },
   {
-    categoryName: 'Ã‡iÃ§ekler',
+    categoryName: 'Çiçekler',
     families: [
-      'Demet Ã‡iÃ§ek',
-      'Dal Ã‡iÃ§ek',
-      'SaksÄ±lÄ± Ã‡iÃ§ek',
+      'Demet Çiçek',
+      'Dal Çiçek',
+      'Saksılı Çiçek',
       'Orkide',
-      'GÃ¼l',
+      'Gül',
       'Lale',
       'Kokina',
-      'Bahar DalÄ±',
-      'Okaliptus DalÄ±',
-      'DiÄŸer Yapay Ã‡iÃ§ek',
+      'Bahar Dalı',
+      'Okaliptus Dalı',
+      'Diğer Yapay Çiçek',
     ],
   },
   {
-    categoryName: 'SarmaÅŸÄ±k ve Dikey BahÃ§e',
-    families: ['SarmaÅŸÄ±k', 'Dikey BahÃ§e', 'Yapay Ã‡it', 'Duvar Kaplama', 'DiÄŸer SarmaÅŸÄ±k / Duvar ÃœrÃ¼nÃ¼'],
+    categoryName: 'Sarmaşık ve Dikey Bahçe',
+    families: ['Sarmaşık', 'Dikey Bahçe', 'Yapay Çit', 'Duvar Kaplama', 'Diğer Sarmaşık / Duvar Ürünü'],
   },
   {
-    categoryName: 'SaksÄ±lar',
-    families: ['Plastik SaksÄ±', 'Metal SaksÄ±', 'Fiber SaksÄ±', 'MDF SaksÄ±', 'Dekoratif SaksÄ±', 'DiÄŸer SaksÄ±'],
+    categoryName: 'Saksılar',
+    families: ['Plastik Saksı', 'Metal Saksı', 'Fiber Saksı', 'MDF Saksı', 'Dekoratif Saksı', 'Diğer Saksı'],
   },
   {
-    categoryName: 'DiÄŸer',
-    families: ['Masa ÃœstÃ¼ Yapay Bitki', 'Dekoratif Bitki', 'Paravan ve SeperatÃ¶r', 'Ã–zel Ãœretim', 'DiÄŸer ÃœrÃ¼n'],
+    categoryName: 'Diğer',
+    families: ['Masa Üstü Yapay Bitki', 'Dekoratif Bitki', 'Paravan ve Seperatör', 'Özel Üretim', 'Diğer Ürün'],
   },
 ];
 
@@ -101,10 +101,11 @@ async function main() {
   });
 
   const categories = [
-    { name: 'AÄŸaÃ§lar', codePrefix: 'ERH', startCode: 1000, currentCode: 999 },
-    { name: 'Bambu SeperatÃ¶r', codePrefix: 'ERH', startCode: 2000, currentCode: 1999 },
-    { name: 'Tek Bambu', codePrefix: 'ERH', startCode: 3000, currentCode: 2999 },
-    { name: 'Ã‡iÃ§ek Buketleri', codePrefix: 'ERH', startCode: 4000, currentCode: 3999 },
+    { name: 'Ağaçlar', codePrefix: 'ERH', startCode: 1000, currentCode: 999, trendyolCategoryId: 2995 },
+    { name: 'Bambu Seperatör', codePrefix: 'ERH', startCode: 2000, currentCode: 1999, trendyolCategoryId: 2995 },
+    { name: 'Tek Bambu', codePrefix: 'ERH', startCode: 3000, currentCode: 2999, trendyolCategoryId: 2995 },
+    { name: 'Çiçek Buketleri', codePrefix: 'ERH', startCode: 4000, currentCode: 3999, trendyolCategoryId: 2995 },
+    { name: 'Saksı', codePrefix: 'ERH', startCode: 5000, currentCode: 4999, trendyolCategoryId: 2615 },
   ];
 
   for (const category of categories) {
@@ -113,6 +114,7 @@ async function main() {
       update: {
         codePrefix: category.codePrefix,
         startCode: category.startCode,
+        trendyolCategoryId: category.trendyolCategoryId,
         status: RecordStatus.ACTIVE,
       },
       create: category,
@@ -133,7 +135,7 @@ async function main() {
         update: {
           familyCode: makeFamilyCode(familyName),
           description: makeMasterDescription(familyName, group.categoryName),
-          defaultKeywords: isFicus ? ['ficus', 'yapay ficus', 'ficus aÄŸacÄ±'] : makeKeywords(familyName),
+          defaultKeywords: isFicus ? ['ficus', 'yapay ficus', 'ficus ağacı'] : makeKeywords(familyName),
           defaultSizeOptions: isFicus ? defaultFicusSizes : [],
           defaultPotOptions: isFicus ? defaultFicusPots : [],
           sortOrder,
@@ -144,7 +146,7 @@ async function main() {
           name: familyName,
           familyCode: makeFamilyCode(familyName),
           description: makeMasterDescription(familyName, group.categoryName),
-          defaultKeywords: isFicus ? ['ficus', 'yapay ficus', 'ficus aÄŸacÄ±'] : makeKeywords(familyName),
+          defaultKeywords: isFicus ? ['ficus', 'yapay ficus', 'ficus ağacı'] : makeKeywords(familyName),
           defaultSizeOptions: isFicus ? defaultFicusSizes : [],
           defaultPotOptions: isFicus ? defaultFicusPots : [],
           sortOrder,
@@ -156,30 +158,30 @@ async function main() {
   }
 
   const ficusMaster = await prisma.productFamilyMaster.findFirst({
-    where: { categoryName: 'Yapay AÄŸaÃ§lar', name: 'Ficus' },
+    where: { categoryName: 'Yapay Ağaçlar', name: 'Ficus' },
   });
 
-  const treeCategory = await prisma.category.findUnique({ where: { name: 'AÄŸaÃ§lar' } });
+  const treeCategory = await prisma.category.findUnique({ where: { name: 'Ağaçlar' } });
   const ficusFamily = await prisma.productionFamily.upsert({
-    where: { familyName: 'Yapay Ficus AÄŸacÄ±' },
+    where: { familyName: 'Yapay Ficus Ağacı' },
     update: {
       masterId: ficusMaster?.id,
       categoryId: treeCategory?.id,
       familyCode: 'FICUS',
       mainModelCode: 'ERH-FICUS',
-      description: 'Trendyol Ficus satÄ±ÅŸ varyasyonlarÄ± iÃ§in pilot Ã¼rÃ¼n ailesi.',
-      keywords: ['ficus', 'yapay ficus', 'ficus aÄŸacÄ±'],
+      description: 'Trendyol Ficus satış varyasyonları için pilot ürün ailesi.',
+      keywords: ['ficus', 'yapay ficus', 'ficus ağacı'],
       autoMatchingEnabled: false,
       status: RecordStatus.ACTIVE,
     },
     create: {
       masterId: ficusMaster?.id,
-      familyName: 'Yapay Ficus AÄŸacÄ±',
+      familyName: 'Yapay Ficus Ağacı',
       categoryId: treeCategory?.id,
       familyCode: 'FICUS',
       mainModelCode: 'ERH-FICUS',
-      description: 'Trendyol Ficus satÄ±ÅŸ varyasyonlarÄ± iÃ§in pilot Ã¼rÃ¼n ailesi.',
-      keywords: ['ficus', 'yapay ficus', 'ficus aÄŸacÄ±'],
+      description: 'Trendyol Ficus satış varyasyonları için pilot ürün ailesi.',
+      keywords: ['ficus', 'yapay ficus', 'ficus ağacı'],
       autoMatchingEnabled: false,
       status: RecordStatus.ACTIVE,
     },
@@ -205,16 +207,16 @@ async function main() {
     where: { id: 1 },
     update: {
       familyId: ficusFamily.id,
-      templateName: 'Ficus Ortak ReÃ§ete Åablonu',
-      description: 'Stok kartÄ± eÅŸleÅŸtirmeleri kullanÄ±cÄ± tarafÄ±ndan yapÄ±lacak pilot ÅŸablon.',
+      templateName: 'Ficus Ortak Reçete Şablonu',
+      description: 'Stok kartı eşleştirmeleri kullanıcı tarafından yapılacak pilot şablon.',
       vatPercent: 20,
       defaultCommissionPercent: 20,
       status: RecordStatus.ACTIVE,
     },
     create: {
       familyId: ficusFamily.id,
-      templateName: 'Ficus Ortak ReÃ§ete Åablonu',
-      description: 'Stok kartÄ± eÅŸleÅŸtirmeleri kullanÄ±cÄ± tarafÄ±ndan yapÄ±lacak pilot ÅŸablon.',
+      templateName: 'Ficus Ortak Reçete Şablonu',
+      description: 'Stok kartı eşleştirmeleri kullanıcı tarafından yapılacak pilot şablon.',
       vatPercent: 20,
       defaultCommissionPercent: 20,
       status: RecordStatus.ACTIVE,
@@ -223,13 +225,13 @@ async function main() {
 
   const componentSeeds = [
     { componentName: 'Yaprak', costGroup: 'LEAF' as const, scope: 'COMMON' as const, unit: 'adet' },
-    { componentName: 'GÃ¶vde', costGroup: 'TRUNK' as const, scope: 'COMMON' as const, unit: 'adet' },
+    { componentName: 'Gövde', costGroup: 'TRUNK' as const, scope: 'COMMON' as const, unit: 'adet' },
     { componentName: 'Silikon', costGroup: 'CONSUMABLE' as const, scope: 'COMMON' as const, unit: 'gr' },
-    { componentName: 'Ä°ÅŸÃ§ilik', costGroup: 'LABOR' as const, scope: 'COMMON' as const, unit: 'iÅŸ' },
+    { componentName: 'İşçilik', costGroup: 'LABOR' as const, scope: 'COMMON' as const, unit: 'iş' },
     { componentName: 'Elektrik', costGroup: 'ELECTRICITY' as const, scope: 'COMMON' as const, unit: 'pay' },
     { componentName: 'Paketleme', costGroup: 'PACKAGING' as const, scope: 'COMMON' as const, unit: 'adet' },
-    { componentName: 'Boy farkÄ± ek gÃ¶vde/yaprak', costGroup: 'TRUNK' as const, scope: 'SIZE_VARIANT' as const, unit: 'adet' },
-    { componentName: 'SaksÄ± varyasyonu', costGroup: 'POT' as const, scope: 'POT_VARIANT' as const, unit: 'adet' },
+    { componentName: 'Boy farkı ek gövde/yaprak', costGroup: 'TRUNK' as const, scope: 'SIZE_VARIANT' as const, unit: 'adet' },
+    { componentName: 'Saksı varyasyonu', costGroup: 'POT' as const, scope: 'POT_VARIANT' as const, unit: 'adet' },
   ];
 
   for (const item of componentSeeds) {
@@ -257,7 +259,7 @@ async function main() {
 }
 
 function makeMasterDescription(name: string, categoryName: string) {
-  return `${categoryName} kategorisi iÃ§in hazÄ±r ${name} Ã¼rÃ¼n ailesi.`;
+  return `${categoryName} kategorisi için hazır ${name} ürün ailesi.`;
 }
 
 function makeKeywords(name: string) {
@@ -277,15 +279,14 @@ function normalizeKeyword(value: string) {
     .toLocaleLowerCase('tr-TR')
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
-    .replace(/Ä±/g, 'i')
-    .replace(/ÄŸ/g, 'g')
-    .replace(/Ã¼/g, 'u')
-    .replace(/ÅŸ/g, 's')
-    .replace(/Ã¶/g, 'o')
-    .replace(/Ã§/g, 'c');
+    .replace(/ı/g, 'i')
+    .replace(/ğ/g, 'g')
+    .replace(/ü/g, 'u')
+    .replace(/ş/g, 's')
+    .replace(/ö/g, 'o')
+    .replace(/ç/g, 'c');
 }
 
 main().finally(async () => {
   await prisma.$disconnect();
 });
-

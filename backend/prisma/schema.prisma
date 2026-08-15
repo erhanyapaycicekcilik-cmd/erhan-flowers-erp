@@ -161,6 +161,61 @@ enum RetailSaleChannel {
   OTHER
 }
 
+enum IntegrationChannelType {
+  MARKETPLACE
+  WEBSITE
+  STORE
+  B2B
+  OTHER
+}
+
+enum ChannelAccountStatus {
+  NOT_CONFIGURED
+  CONFIGURED
+  CONNECTED
+  FAILED
+  DISABLED
+}
+
+enum ChannelCredentialType {
+  API_KEY
+  API_SECRET
+  SUPPLIER_ID
+  TOKEN
+  UYE_KODU
+  USERNAME
+  PASSWORD
+  OTHER
+}
+
+enum ChannelPublicationStatus {
+  DRAFT
+  READY
+  PUBLISHED
+  ERROR
+  PAUSED
+}
+
+enum IntegrationJobType {
+  PRODUCT_PREVIEW
+  PRICE_PREVIEW
+  STOCK_PREVIEW
+  CONNECTION_TEST
+}
+
+enum IntegrationJobMode {
+  DRY_RUN
+  LIVE
+}
+
+enum IntegrationJobStatus {
+  PENDING
+  RUNNING
+  SUCCESS
+  FAILED
+  BLOCKED
+}
+
 enum RetailSaleType {
   STORE_SALE
   DELIVERY_SALE
@@ -252,36 +307,36 @@ enum KnowledgeRuleType {
 }
 
 model User {
-  id                    Int                    @id @default(autoincrement())
+  id                    Int                       @id @default(autoincrement())
   name                  String
-  email                 String                 @unique
-  passwordHash          String                 @map("password_hash")
-  role                  UserRole               @default(OWNER)
-  status                RecordStatus           @default(ACTIVE)
-  rememberToken         String?                @map("remember_token")
-  createdAt             DateTime               @default(now()) @map("created_at")
-  updatedAt             DateTime               @updatedAt @map("updated_at")
-  financeTransactions   FinanceTransaction[]   @relation("FinanceTransactionRecordedBy")
-  financeAuditLogs      FinanceAuditLog[]      @relation("FinanceAuditUser")
-  financeDebts          FinanceDebt[]          @relation("FinanceDebtCreatedBy")
-  financeSalaries       FinanceSalaryRecord[]  @relation("FinanceSalaryRecordedBy")
+  email                 String                    @unique
+  passwordHash          String                    @map("password_hash")
+  role                  UserRole                  @default(OWNER)
+  status                RecordStatus              @default(ACTIVE)
+  rememberToken         String?                   @map("remember_token")
+  createdAt             DateTime                  @default(now()) @map("created_at")
+  updatedAt             DateTime                  @updatedAt @map("updated_at")
+  financeTransactions   FinanceTransaction[]      @relation("FinanceTransactionRecordedBy")
+  financeAuditLogs      FinanceAuditLog[]         @relation("FinanceAuditUser")
+  financeDebts          FinanceDebt[]             @relation("FinanceDebtCreatedBy")
+  financeSalaries       FinanceSalaryRecord[]     @relation("FinanceSalaryRecordedBy")
   stockUsageLogs        StockUsageLog[]
-  stockCountsCreated    StockCountSession[]    @relation("StockCountCreatedBy")
-  stockCountsApproved   StockCountSession[]    @relation("StockCountApprovedBy")
-  publishingLogs        PublishingLog[]        @relation("PublishingLogCreatedBy")
-  knowledgeAnalysisLogs KnowledgeAnalysisLog[] @relation("KnowledgeAnalysisLogCreatedBy")
-  knowledgeFeedbacks   KnowledgeFeedback[]    @relation("KnowledgeFeedbackCreatedBy")
-  retailCustomers       RetailCustomer[]       @relation("RetailCustomerCreatedBy")
-  retailAddresses       RetailCustomerAddress[] @relation("RetailAddressCreatedBy")
-  retailSalesCreated    RetailSale[]           @relation("RetailSaleCreatedBy")
-  retailSalesCompleted  RetailSale[]           @relation("RetailSaleCompletedBy")
-  retailSalesCancelled  RetailSale[]           @relation("RetailSaleCancelledBy")
-  retailPayments        RetailSalePayment[]    @relation("RetailPaymentCreatedBy")
-  retailDeliveries      RetailDelivery[]       @relation("RetailDeliveryAssignedTo")
-  retailDeliveriesDone  RetailDelivery[]       @relation("RetailDeliveryDeliveredBy")
-  retailPrintLogs       RetailPrintLog[]       @relation("RetailPrintLogPrintedBy")
+  stockCountsCreated    StockCountSession[]       @relation("StockCountCreatedBy")
+  stockCountsApproved   StockCountSession[]       @relation("StockCountApprovedBy")
+  publishingLogs        PublishingLog[]           @relation("PublishingLogCreatedBy")
+  knowledgeAnalysisLogs KnowledgeAnalysisLog[]    @relation("KnowledgeAnalysisLogCreatedBy")
+  knowledgeFeedbacks    KnowledgeFeedback[]       @relation("KnowledgeFeedbackCreatedBy")
+  retailCustomers       RetailCustomer[]          @relation("RetailCustomerCreatedBy")
+  retailAddresses       RetailCustomerAddress[]   @relation("RetailAddressCreatedBy")
+  retailSalesCreated    RetailSale[]              @relation("RetailSaleCreatedBy")
+  retailSalesCompleted  RetailSale[]              @relation("RetailSaleCompletedBy")
+  retailSalesCancelled  RetailSale[]              @relation("RetailSaleCancelledBy")
+  retailPayments        RetailSalePayment[]       @relation("RetailPaymentCreatedBy")
+  retailDeliveries      RetailDelivery[]          @relation("RetailDeliveryAssignedTo")
+  retailDeliveriesDone  RetailDelivery[]          @relation("RetailDeliveryDeliveredBy")
+  retailPrintLogs       RetailPrintLog[]          @relation("RetailPrintLogPrintedBy")
   retailStatusChanges   RetailSaleStatusHistory[] @relation("RetailStatusHistoryChangedBy")
-  stockMovementsCreated StockMovement[]        @relation("StockMovementCreatedBy")
+  stockMovementsCreated StockMovement[]           @relation("StockMovementCreatedBy")
 
   @@map("users")
 }
@@ -292,6 +347,7 @@ model Category {
   codePrefix         String             @map("code_prefix")
   startCode          Int                @map("start_code")
   currentCode        Int                @map("current_code")
+  trendyolCategoryId Int?               @map("trendyol_category_id")
   status             RecordStatus       @default(ACTIVE)
   createdAt          DateTime           @default(now()) @map("created_at")
   updatedAt          DateTime           @updatedAt @map("updated_at")
@@ -302,21 +358,38 @@ model Category {
 }
 
 model Product {
-  id                 Int            @id @default(autoincrement())
-  productName        String         @map("product_name")
-  modelCode          String         @unique @map("model_code")
-  categoryId         Int            @map("category_id")
-  barcode            String?        @unique
-  stockQuantity      Int            @default(0) @map("stock_quantity")
-  criticalStockLevel Int            @default(0) @map("critical_stock_level")
-  status             RecordStatus   @default(ACTIVE)
-  description        String?
-  createdAt          DateTime       @default(now()) @map("created_at")
-  updatedAt          DateTime       @updatedAt @map("updated_at")
-  category           Category       @relation(fields: [categoryId], references: [id])
-  mediaFiles         MediaFile[]
-  barcodeLogs        BarcodeLog[]
-  recipe             ProductRecipe?
+  id                   Int                     @id @default(autoincrement())
+  productName          String                  @map("product_name")
+  modelCode            String                  @unique @map("model_code")
+  categoryId           Int                     @map("category_id")
+  barcode              String?                 @unique
+  stockQuantity        Int                     @default(0) @map("stock_quantity")
+  criticalStockLevel   Int                     @default(0) @map("critical_stock_level")
+  costPrice            Float                   @default(0) @map("cost_price")
+  desi                 Float                   @default(1)
+  shippingCost         Float                   @default(5) @map("shipping_cost")
+  shopPrice            Float                   @default(0) @map("shop_price")
+  sitePrice            Float                   @default(0) @map("site_price")
+  marketPrice          Float                   @default(0) @map("market_price")
+  listPrice            Float                   @default(0) @map("list_price")
+  imageUrls            Json                    @default("[]") @map("image_urls")
+  brand                String                  @default("Erhan Flowers")
+  vatRate              Int                     @default(20) @map("vat_rate")
+  origin               String                  @default("Türkiye")
+  colorVariant         String?                 @map("color_variant")
+  material             String?
+  packageDimensions    String?                 @map("package_dimensions")
+  warrantyMonths       Int                     @default(0) @map("warranty_months")
+  warrantyType         String?                 @map("warranty_type")
+  status               RecordStatus            @default(ACTIVE)
+  description          String?
+  createdAt            DateTime                @default(now()) @map("created_at")
+  updatedAt            DateTime                @updatedAt @map("updated_at")
+  category             Category                @relation(fields: [categoryId], references: [id])
+  mediaFiles           MediaFile[]
+  barcodeLogs          BarcodeLog[]
+  recipe               ProductRecipe?
+  productCenterVariant TrendyolProductVariant? @relation("ProductCenterProduct")
 
   @@map("products")
 }
@@ -588,22 +661,22 @@ model KnowledgeRecipeItem {
 }
 
 model KnowledgeRule {
-  id            Int                @id @default(autoincrement())
+  id            Int                 @id @default(autoincrement())
   name          String
-  ruleType      KnowledgeRuleType  @map("rule_type")
-  ruleKind      String             @default("GENERAL") @map("rule_kind")
-  plantTypeId   Int?               @map("plant_type_id")
-  heightCm      Int?               @map("height_cm")
-  stockCardId   Int?               @map("stock_card_id")
-  quantity      Decimal?           @db.Decimal(12, 3)
+  ruleType      KnowledgeRuleType   @map("rule_type")
+  ruleKind      String              @default("GENERAL") @map("rule_kind")
+  plantTypeId   Int?                @map("plant_type_id")
+  heightCm      Int?                @map("height_cm")
+  stockCardId   Int?                @map("stock_card_id")
+  quantity      Decimal?            @db.Decimal(12, 3)
   unit          String?
-  amountTl      Decimal?           @map("amount_tl") @db.Decimal(14, 2)
-  conditionJson Json               @map("condition_json")
-  actionJson    Json               @map("action_json")
-  priority      Int                @default(100)
-  isActive      Boolean            @default(true) @map("is_active")
-  createdAt     DateTime           @default(now()) @map("created_at")
-  updatedAt     DateTime           @updatedAt @map("updated_at")
+  amountTl      Decimal?            @map("amount_tl") @db.Decimal(14, 2)
+  conditionJson Json                @map("condition_json")
+  actionJson    Json                @map("action_json")
+  priority      Int                 @default(100)
+  isActive      Boolean             @default(true) @map("is_active")
+  createdAt     DateTime            @default(now()) @map("created_at")
+  updatedAt     DateTime            @updatedAt @map("updated_at")
   plantType     KnowledgePlantType? @relation(fields: [plantTypeId], references: [id], onDelete: Cascade)
   stockCard     StockCard?          @relation(fields: [stockCardId], references: [id], onDelete: SetNull)
   aliases       KnowledgeAlias[]
@@ -642,18 +715,18 @@ model KnowledgeAnalysisLog {
 }
 
 model KnowledgeFeedback {
-  id             Int                   @id @default(autoincrement())
-  analysisLogId  Int                   @map("analysis_log_id")
-  fieldName      String                @map("field_name")
-  detectedValue  Json?                 @map("detected_value")
-  correctedValue Json                  @map("corrected_value")
+  id             Int                  @id @default(autoincrement())
+  analysisLogId  Int                  @map("analysis_log_id")
+  fieldName      String               @map("field_name")
+  detectedValue  Json?                @map("detected_value")
+  correctedValue Json                 @map("corrected_value")
   note           String?
-  promotedRuleId Int?                  @map("promoted_rule_id")
-  createdById    Int                   @map("created_by_id")
-  createdAt      DateTime              @default(now()) @map("created_at")
-  analysisLog    KnowledgeAnalysisLog  @relation(fields: [analysisLogId], references: [id], onDelete: Cascade)
-  promotedRule   KnowledgeRule?        @relation(fields: [promotedRuleId], references: [id], onDelete: SetNull)
-  createdBy      User                  @relation("KnowledgeFeedbackCreatedBy", fields: [createdById], references: [id])
+  promotedRuleId Int?                 @map("promoted_rule_id")
+  createdById    Int                  @map("created_by_id")
+  createdAt      DateTime             @default(now()) @map("created_at")
+  analysisLog    KnowledgeAnalysisLog @relation(fields: [analysisLogId], references: [id], onDelete: Cascade)
+  promotedRule   KnowledgeRule?       @relation(fields: [promotedRuleId], references: [id], onDelete: SetNull)
+  createdBy      User                 @relation("KnowledgeFeedbackCreatedBy", fields: [createdById], references: [id])
 
   @@index([analysisLogId, createdAt])
   @@index([fieldName, createdAt])
@@ -760,6 +833,7 @@ model TrendyolProductVariant {
   costStatus            String                    @default("Bekliyor") @map("cost_status")
   importSource          String?                   @map("import_source")
   importedAt            DateTime?                 @map("imported_at")
+  productId             Int?                      @unique @map("product_id")
   familyId              Int?                      @map("family_id")
   sizeOptionId          Int?                      @map("size_option_id")
   potOptionId           Int?                      @map("pot_option_id")
@@ -769,6 +843,7 @@ model TrendyolProductVariant {
   status                RecordStatus              @default(ACTIVE)
   createdAt             DateTime                  @default(now()) @map("created_at")
   updatedAt             DateTime                  @updatedAt @map("updated_at")
+  product               Product?                  @relation("ProductCenterProduct", fields: [productId], references: [id], onDelete: SetNull)
   family                ProductionFamily?         @relation(fields: [familyId], references: [id])
   sizeOption            ProductionSizeOption?     @relation(fields: [sizeOptionId], references: [id])
   potOption             ProductionPotOption?      @relation(fields: [potOptionId], references: [id])
@@ -981,51 +1056,51 @@ model BarcodeLog {
 }
 
 model RetailCustomer {
-  id              Int                     @id @default(autoincrement())
-  customerCode    String                  @unique @map("customer_code")
-  customerType    String                  @default("INDIVIDUAL") @map("customer_type")
-  firstName       String                  @map("first_name")
-  lastName        String?                 @map("last_name")
-  displayName     String                  @map("display_name")
-  companyTitle    String?                 @map("company_title")
-  taxOffice       String?                 @map("tax_office")
-  taxNumber       String?                 @map("tax_number")
-  nationalId      String?                 @map("national_id")
-  isEInvoicePayer Boolean                 @default(false) @map("is_e_invoice_payer")
-  currentAccountCode String?              @map("current_account_code")
-  phone           String?
-  normalizedPhone String?                 @unique @map("normalized_phone")
-  secondaryPhone  String?                 @map("secondary_phone")
-  whatsappPhone   String?                 @map("whatsapp_phone")
-  email           String?
-  customerNote    String?                 @map("customer_note")
-  birthDate       DateTime?               @map("birth_date") @db.Date
-  website         String?
-  instagram       String?
-  rating          Int                     @default(0)
-  riskStatus      String                  @default("NORMAL") @map("risk_status")
-  lastContactAt   DateTime?               @map("last_contact_at")
-  source          RetailSaleChannel?
-  orderCommunicationAllowed Boolean       @default(true) @map("order_communication_allowed")
-  whatsappMarketingAllowed Boolean        @default(false) @map("whatsapp_marketing_allowed")
-  smsMarketingAllowed Boolean             @default(false) @map("sms_marketing_allowed")
-  emailMarketingAllowed Boolean           @default(false) @map("email_marketing_allowed")
-  consentAt       DateTime?               @map("consent_at")
-  consentSource   String?                 @map("consent_source")
-  consentWithdrawnAt DateTime?            @map("consent_withdrawn_at")
-  isActive        Boolean                 @default(true) @map("is_active")
-  createdAt       DateTime                @default(now()) @map("created_at")
-  updatedAt       DateTime                @updatedAt @map("updated_at")
-  createdById     Int                     @map("created_by_id")
-  createdBy       User                    @relation("RetailCustomerCreatedBy", fields: [createdById], references: [id])
-  addresses       RetailCustomerAddress[]
-  sales           RetailSale[]
-  tags            RetailCustomerTag[]
-  notes           RetailCustomerNote[]
-  reminders       RetailCustomerReminder[]
-  sourceDefinitionId Int?                  @map("source_definition_id")
-  sourceDefinition RetailCustomerSourceDefinition? @relation(fields: [sourceDefinitionId], references: [id])
-  files           RetailCustomerFile[]
+  id                        Int                             @id @default(autoincrement())
+  customerCode              String                          @unique @map("customer_code")
+  customerType              String                          @default("INDIVIDUAL") @map("customer_type")
+  firstName                 String                          @map("first_name")
+  lastName                  String?                         @map("last_name")
+  displayName               String                          @map("display_name")
+  companyTitle              String?                         @map("company_title")
+  taxOffice                 String?                         @map("tax_office")
+  taxNumber                 String?                         @map("tax_number")
+  nationalId                String?                         @map("national_id")
+  isEInvoicePayer           Boolean                         @default(false) @map("is_e_invoice_payer")
+  currentAccountCode        String?                         @map("current_account_code")
+  phone                     String?
+  normalizedPhone           String?                         @unique @map("normalized_phone")
+  secondaryPhone            String?                         @map("secondary_phone")
+  whatsappPhone             String?                         @map("whatsapp_phone")
+  email                     String?
+  customerNote              String?                         @map("customer_note")
+  birthDate                 DateTime?                       @map("birth_date") @db.Date
+  website                   String?
+  instagram                 String?
+  rating                    Int                             @default(0)
+  riskStatus                String                          @default("NORMAL") @map("risk_status")
+  lastContactAt             DateTime?                       @map("last_contact_at")
+  source                    RetailSaleChannel?
+  orderCommunicationAllowed Boolean                         @default(true) @map("order_communication_allowed")
+  whatsappMarketingAllowed  Boolean                         @default(false) @map("whatsapp_marketing_allowed")
+  smsMarketingAllowed       Boolean                         @default(false) @map("sms_marketing_allowed")
+  emailMarketingAllowed     Boolean                         @default(false) @map("email_marketing_allowed")
+  consentAt                 DateTime?                       @map("consent_at")
+  consentSource             String?                         @map("consent_source")
+  consentWithdrawnAt        DateTime?                       @map("consent_withdrawn_at")
+  isActive                  Boolean                         @default(true) @map("is_active")
+  createdAt                 DateTime                        @default(now()) @map("created_at")
+  updatedAt                 DateTime                        @updatedAt @map("updated_at")
+  createdById               Int                             @map("created_by_id")
+  createdBy                 User                            @relation("RetailCustomerCreatedBy", fields: [createdById], references: [id])
+  addresses                 RetailCustomerAddress[]
+  sales                     RetailSale[]
+  tags                      RetailCustomerTag[]
+  notes                     RetailCustomerNote[]
+  reminders                 RetailCustomerReminder[]
+  sourceDefinitionId        Int?                            @map("source_definition_id")
+  sourceDefinition          RetailCustomerSourceDefinition? @relation(fields: [sourceDefinitionId], references: [id])
+  files                     RetailCustomerFile[]
 
   @@index([displayName])
   @@map("retail_customers")
@@ -1079,25 +1154,25 @@ model RetailCustomerReminder {
 }
 
 model RetailCustomerSourceDefinition {
-  id          Int              @id @default(autoincrement())
-  code        String           @unique
-  name        String           @unique
-  isActive    Boolean          @default(true) @map("is_active")
-  createdAt   DateTime         @default(now()) @map("created_at")
-  updatedAt   DateTime         @updatedAt @map("updated_at")
-  customers   RetailCustomer[]
+  id        Int              @id @default(autoincrement())
+  code      String           @unique
+  name      String           @unique
+  isActive  Boolean          @default(true) @map("is_active")
+  createdAt DateTime         @default(now()) @map("created_at")
+  updatedAt DateTime         @updatedAt @map("updated_at")
+  customers RetailCustomer[]
 
   @@map("retail_customer_source_definitions")
 }
 
 model RetailCustomerTagDefinition {
-  id          Int                 @id @default(autoincrement())
-  name        String              @unique
-  color       String?             @default("#64748b")
-  isActive    Boolean             @default(true) @map("is_active")
-  createdAt   DateTime            @default(now()) @map("created_at")
-  updatedAt   DateTime            @updatedAt @map("updated_at")
-  customers   RetailCustomerTag[]
+  id        Int                 @id @default(autoincrement())
+  name      String              @unique
+  color     String?             @default("#64748b")
+  isActive  Boolean             @default(true) @map("is_active")
+  createdAt DateTime            @default(now()) @map("created_at")
+  updatedAt DateTime            @updatedAt @map("updated_at")
+  customers RetailCustomerTag[]
 
   @@map("retail_customer_tag_definitions")
 }
@@ -1141,51 +1216,51 @@ model RetailCustomerAddress {
 }
 
 model RetailSale {
-  id              Int                 @id @default(autoincrement())
-  saleNumber      String              @unique @map("sale_number")
-  customerId      Int                 @map("customer_id")
-  addressId       Int?                @map("address_id")
-  channel         RetailSaleChannel   @default(STORE)
-  saleType        RetailSaleType      @default(STORE_SALE) @map("sale_type")
-  status          RetailSaleStatus    @default(DRAFT)
-  currency        String              @default("TRY")
-  subtotal        Decimal             @default(0) @db.Decimal(14, 2)
-  discountTotal   Decimal             @default(0) @map("discount_total") @db.Decimal(14, 2)
-  deliveryFee     Decimal             @default(0) @map("delivery_fee") @db.Decimal(14, 2)
-  grandTotal      Decimal             @default(0) @map("grand_total") @db.Decimal(14, 2)
-  paidTotal       Decimal             @default(0) @map("paid_total") @db.Decimal(14, 2)
-  remainingTotal  Decimal             @default(0) @map("remaining_total") @db.Decimal(14, 2)
-  customerNote    String?             @map("customer_note")
-  internalNote    String?             @map("internal_note")
-  eventKey        String              @unique @map("event_key")
-  platformOrderNumber String?         @map("platform_order_number")
-  externalOrderId     String?         @map("external_order_id")
-  idempotencyKey      String?         @unique @map("idempotency_key")
-  integrationSyncStatus String        @default("MANUAL") @map("integration_sync_status")
-  lastSyncedAt        DateTime?       @map("last_synced_at")
-  cargoProvider       String?         @map("cargo_provider")
-  cargoTrackingNumber String?         @map("cargo_tracking_number")
-  orderDate           DateTime?       @map("order_date")
-  deliveryDueAt       DateTime?       @map("delivery_due_at")
-  completedAt     DateTime?           @map("completed_at")
-  cancelledAt     DateTime?           @map("cancelled_at")
-  createdAt       DateTime            @default(now()) @map("created_at")
-  updatedAt       DateTime            @updatedAt @map("updated_at")
-  createdById     Int                 @map("created_by_id")
-  completedById   Int?                @map("completed_by_id")
-  cancelledById   Int?                @map("cancelled_by_id")
-  customer        RetailCustomer      @relation(fields: [customerId], references: [id])
-  address         RetailCustomerAddress? @relation(fields: [addressId], references: [id])
-  createdBy       User                @relation("RetailSaleCreatedBy", fields: [createdById], references: [id])
-  completedBy     User?               @relation("RetailSaleCompletedBy", fields: [completedById], references: [id])
-  cancelledBy     User?               @relation("RetailSaleCancelledBy", fields: [cancelledById], references: [id])
-  items           RetailSaleItem[]
-  payments        RetailSalePayment[]
-  delivery        RetailDelivery?
-  printLogs       RetailPrintLog[]
-  statusHistory   RetailSaleStatusHistory[]
-  invoiceStatus   RetailInvoiceStatus @default(WAITING) @map("invoice_status")
-  invoiceNote     String?             @map("invoice_note")
+  id                    Int                       @id @default(autoincrement())
+  saleNumber            String                    @unique @map("sale_number")
+  customerId            Int                       @map("customer_id")
+  addressId             Int?                      @map("address_id")
+  channel               RetailSaleChannel         @default(STORE)
+  saleType              RetailSaleType            @default(STORE_SALE) @map("sale_type")
+  status                RetailSaleStatus          @default(DRAFT)
+  currency              String                    @default("TRY")
+  subtotal              Decimal                   @default(0) @db.Decimal(14, 2)
+  discountTotal         Decimal                   @default(0) @map("discount_total") @db.Decimal(14, 2)
+  deliveryFee           Decimal                   @default(0) @map("delivery_fee") @db.Decimal(14, 2)
+  grandTotal            Decimal                   @default(0) @map("grand_total") @db.Decimal(14, 2)
+  paidTotal             Decimal                   @default(0) @map("paid_total") @db.Decimal(14, 2)
+  remainingTotal        Decimal                   @default(0) @map("remaining_total") @db.Decimal(14, 2)
+  customerNote          String?                   @map("customer_note")
+  internalNote          String?                   @map("internal_note")
+  eventKey              String                    @unique @map("event_key")
+  platformOrderNumber   String?                   @map("platform_order_number")
+  externalOrderId       String?                   @map("external_order_id")
+  idempotencyKey        String?                   @unique @map("idempotency_key")
+  integrationSyncStatus String                    @default("MANUAL") @map("integration_sync_status")
+  lastSyncedAt          DateTime?                 @map("last_synced_at")
+  cargoProvider         String?                   @map("cargo_provider")
+  cargoTrackingNumber   String?                   @map("cargo_tracking_number")
+  orderDate             DateTime?                 @map("order_date")
+  deliveryDueAt         DateTime?                 @map("delivery_due_at")
+  completedAt           DateTime?                 @map("completed_at")
+  cancelledAt           DateTime?                 @map("cancelled_at")
+  createdAt             DateTime                  @default(now()) @map("created_at")
+  updatedAt             DateTime                  @updatedAt @map("updated_at")
+  createdById           Int                       @map("created_by_id")
+  completedById         Int?                      @map("completed_by_id")
+  cancelledById         Int?                      @map("cancelled_by_id")
+  customer              RetailCustomer            @relation(fields: [customerId], references: [id])
+  address               RetailCustomerAddress?    @relation(fields: [addressId], references: [id])
+  createdBy             User                      @relation("RetailSaleCreatedBy", fields: [createdById], references: [id])
+  completedBy           User?                     @relation("RetailSaleCompletedBy", fields: [completedById], references: [id])
+  cancelledBy           User?                     @relation("RetailSaleCancelledBy", fields: [cancelledById], references: [id])
+  items                 RetailSaleItem[]
+  payments              RetailSalePayment[]
+  delivery              RetailDelivery?
+  printLogs             RetailPrintLog[]
+  statusHistory         RetailSaleStatusHistory[]
+  invoiceStatus         RetailInvoiceStatus       @default(WAITING) @map("invoice_status")
+  invoiceNote           String?                   @map("invoice_note")
 
   @@index([createdAt])
   @@index([customerId])
@@ -1193,41 +1268,41 @@ model RetailSale {
 }
 
 model RetailSaleStatusHistory {
-  id          Int              @id @default(autoincrement())
-  saleId      Int              @map("sale_id")
+  id          Int               @id @default(autoincrement())
+  saleId      Int               @map("sale_id")
   oldStatus   RetailSaleStatus? @map("old_status")
-  newStatus   RetailSaleStatus @map("new_status")
+  newStatus   RetailSaleStatus  @map("new_status")
   note        String?
-  changedById Int              @map("changed_by_id")
-  changedAt   DateTime         @default(now()) @map("changed_at")
-  sale        RetailSale       @relation(fields: [saleId], references: [id], onDelete: Cascade)
-  changedBy   User             @relation("RetailStatusHistoryChangedBy", fields: [changedById], references: [id])
+  changedById Int               @map("changed_by_id")
+  changedAt   DateTime          @default(now()) @map("changed_at")
+  sale        RetailSale        @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  changedBy   User              @relation("RetailStatusHistoryChangedBy", fields: [changedById], references: [id])
 
   @@index([saleId])
   @@map("retail_sale_status_history")
 }
 
 model RetailSaleItem {
-  id                   Int                  @id @default(autoincrement())
-  saleId               Int                  @map("sale_id")
-  variantId            Int?                 @map("variant_id")
-  stockCardId          Int?                 @map("stock_card_id")
+  id                   Int                     @id @default(autoincrement())
+  saleId               Int                     @map("sale_id")
+  variantId            Int?                    @map("variant_id")
+  stockCardId          Int?                    @map("stock_card_id")
   barcode              String?
-  modelCode            String?              @map("model_code")
-  productNameSnapshot  String               @map("product_name_snapshot")
-  externalLineId       String?              @map("external_line_id")
-  externalVariantId    String?              @map("external_variant_id")
-  variationText        String?              @map("variation_text")
-  quantity             Decimal              @db.Decimal(12, 3)
-  unitPrice            Decimal              @map("unit_price") @db.Decimal(14, 2)
-  discountAmount       Decimal              @default(0) @map("discount_amount") @db.Decimal(14, 2)
-  lineTotal            Decimal              @map("line_total") @db.Decimal(14, 2)
-  unitCostSnapshot     Decimal?             @map("unit_cost_snapshot") @db.Decimal(14, 4)
-  stockFulfillmentType StockFulfillmentType @default(READY_STOCK) @map("stock_fulfillment_type")
-  createdAt            DateTime             @default(now()) @map("created_at")
-  sale                 RetailSale           @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  modelCode            String?                 @map("model_code")
+  productNameSnapshot  String                  @map("product_name_snapshot")
+  externalLineId       String?                 @map("external_line_id")
+  externalVariantId    String?                 @map("external_variant_id")
+  variationText        String?                 @map("variation_text")
+  quantity             Decimal                 @db.Decimal(12, 3)
+  unitPrice            Decimal                 @map("unit_price") @db.Decimal(14, 2)
+  discountAmount       Decimal                 @default(0) @map("discount_amount") @db.Decimal(14, 2)
+  lineTotal            Decimal                 @map("line_total") @db.Decimal(14, 2)
+  unitCostSnapshot     Decimal?                @map("unit_cost_snapshot") @db.Decimal(14, 4)
+  stockFulfillmentType StockFulfillmentType    @default(READY_STOCK) @map("stock_fulfillment_type")
+  createdAt            DateTime                @default(now()) @map("created_at")
+  sale                 RetailSale              @relation(fields: [saleId], references: [id], onDelete: Cascade)
   variant              TrendyolProductVariant? @relation(fields: [variantId], references: [id])
-  stockCard            StockCard?           @relation(fields: [stockCardId], references: [id])
+  stockCard            StockCard?              @relation(fields: [stockCardId], references: [id])
 
   @@index([saleId])
   @@index([variantId])
@@ -1257,24 +1332,24 @@ model RetailSalePayment {
 }
 
 model RetailDelivery {
-  id             Int                  @id @default(autoincrement())
-  saleId         Int                  @unique @map("sale_id")
-  addressId      Int?                 @map("address_id")
-  deliveryType   RetailDeliveryType   @default(STORE_PICKUP) @map("delivery_type")
-  status         RetailDeliveryStatus @default(WAITING)
-  plannedDate    DateTime?            @map("planned_date")
-  plannedTime    String?              @map("planned_time")
-  assignedUserId Int?                 @map("assigned_user_id")
-  deliveryNote   String?              @map("delivery_note")
-  deliveredAt    DateTime?            @map("delivered_at")
-  deliveredById  Int?                 @map("delivered_by_id")
-  eventKey       String               @unique @map("event_key")
-  createdAt      DateTime             @default(now()) @map("created_at")
-  updatedAt      DateTime             @updatedAt @map("updated_at")
-  sale           RetailSale           @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  id             Int                    @id @default(autoincrement())
+  saleId         Int                    @unique @map("sale_id")
+  addressId      Int?                   @map("address_id")
+  deliveryType   RetailDeliveryType     @default(STORE_PICKUP) @map("delivery_type")
+  status         RetailDeliveryStatus   @default(WAITING)
+  plannedDate    DateTime?              @map("planned_date")
+  plannedTime    String?                @map("planned_time")
+  assignedUserId Int?                   @map("assigned_user_id")
+  deliveryNote   String?                @map("delivery_note")
+  deliveredAt    DateTime?              @map("delivered_at")
+  deliveredById  Int?                   @map("delivered_by_id")
+  eventKey       String                 @unique @map("event_key")
+  createdAt      DateTime               @default(now()) @map("created_at")
+  updatedAt      DateTime               @updatedAt @map("updated_at")
+  sale           RetailSale             @relation(fields: [saleId], references: [id], onDelete: Cascade)
   address        RetailCustomerAddress? @relation(fields: [addressId], references: [id])
-  assignedUser   User?                @relation("RetailDeliveryAssignedTo", fields: [assignedUserId], references: [id])
-  deliveredBy    User?                @relation("RetailDeliveryDeliveredBy", fields: [deliveredById], references: [id])
+  assignedUser   User?                  @relation("RetailDeliveryAssignedTo", fields: [assignedUserId], references: [id])
+  deliveredBy    User?                  @relation("RetailDeliveryDeliveredBy", fields: [deliveredById], references: [id])
 
   @@map("retail_deliveries")
 }
@@ -1293,17 +1368,17 @@ model RetailPrintLog {
 }
 
 model StockReservation {
-  id          Int      @id @default(autoincrement())
-  stockCardId Int      @map("stock_card_id")
-  saleId      Int      @map("sale_id")
-  saleItemId  Int?     @map("sale_item_id")
-  quantity    Decimal  @db.Decimal(12, 3)
+  id          Int       @id @default(autoincrement())
+  stockCardId Int       @map("stock_card_id")
+  saleId      Int       @map("sale_id")
+  saleItemId  Int?      @map("sale_item_id")
+  quantity    Decimal   @db.Decimal(12, 3)
   unit        String
-  status      String   @default("ACTIVE")
-  eventKey    String   @unique @map("event_key")
-  createdById Int?     @map("created_by_id")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  status      String    @default("ACTIVE")
+  eventKey    String    @unique @map("event_key")
+  createdById Int?      @map("created_by_id")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
   releasedAt  DateTime? @map("released_at")
 
   @@index([stockCardId])
@@ -1311,34 +1386,168 @@ model StockReservation {
   @@map("stock_reservations")
 }
 
+model Company {
+  id              Int                  @id @default(autoincrement())
+  code            String               @unique
+  name            String
+  legalName       String?              @map("legal_name")
+  domain          String?
+  isActive        Boolean              @default(true) @map("is_active")
+  createdAt       DateTime             @default(now()) @map("created_at")
+  updatedAt       DateTime             @updatedAt @map("updated_at")
+  channelAccounts ChannelAccount[]
+  syncJobs        IntegrationSyncJob[]
+
+  @@index([isActive])
+  @@map("companies")
+}
+
+model SalesChannel {
+  id               Int                    @id @default(autoincrement())
+  code             String                 @unique
+  name             String
+  channelType      IntegrationChannelType @map("channel_type")
+  isActive         Boolean                @default(true) @map("is_active")
+  supportsProducts Boolean                @default(false) @map("supports_products")
+  supportsStock    Boolean                @default(false) @map("supports_stock")
+  supportsPrice    Boolean                @default(false) @map("supports_price")
+  supportsOrders   Boolean                @default(false) @map("supports_orders")
+  supportsWebhooks Boolean                @default(false) @map("supports_webhooks")
+  createdAt        DateTime               @default(now()) @map("created_at")
+  updatedAt        DateTime               @updatedAt @map("updated_at")
+  accounts         ChannelAccount[]
+  syncJobs         IntegrationSyncJob[]
+
+  @@index([isActive])
+  @@map("sales_channels")
+}
+
+model ChannelAccount {
+  id                   Int                     @id @default(autoincrement())
+  companyId            Int                     @map("company_id")
+  salesChannelId       Int                     @map("sales_channel_id")
+  name                 String
+  externalAccountId    String?                 @map("external_account_id")
+  status               ChannelAccountStatus    @default(NOT_CONFIGURED)
+  isActive             Boolean                 @default(true) @map("is_active")
+  isTestMode           Boolean                 @default(true) @map("is_test_mode")
+  lastConnectionTestAt DateTime?               @map("last_connection_test_at")
+  lastConnectionStatus String?                 @map("last_connection_status")
+  createdAt            DateTime                @default(now()) @map("created_at")
+  updatedAt            DateTime                @updatedAt @map("updated_at")
+  company              Company                 @relation(fields: [companyId], references: [id])
+  salesChannel         SalesChannel            @relation(fields: [salesChannelId], references: [id])
+  credentials          ChannelCredential[]
+  productMappings      ChannelProductMapping[]
+  syncJobs             IntegrationSyncJob[]
+
+  @@index([companyId])
+  @@index([salesChannelId])
+  @@index([isActive])
+  @@map("channel_accounts")
+}
+
+model ChannelCredential {
+  id               Int                   @id @default(autoincrement())
+  channelAccountId Int                   @map("channel_account_id")
+  credentialType   ChannelCredentialType @map("credential_type")
+  encryptedValue   String                @map("encrypted_value")
+  maskedValue      String                @map("masked_value")
+  isActive         Boolean               @default(true) @map("is_active")
+  createdAt        DateTime              @default(now()) @map("created_at")
+  updatedAt        DateTime              @updatedAt @map("updated_at")
+  rotatedAt        DateTime?             @map("rotated_at")
+  channelAccount   ChannelAccount        @relation(fields: [channelAccountId], references: [id], onDelete: Cascade)
+
+  @@unique([channelAccountId, credentialType])
+  @@index([isActive])
+  @@map("channel_credentials")
+}
+
+model ChannelProductMapping {
+  id                       Int                      @id @default(autoincrement())
+  companyId                Int                      @map("company_id")
+  salesChannelId           Int                      @map("sales_channel_id")
+  channelAccountId         Int                      @map("channel_account_id")
+  productId                Int?                     @map("product_id")
+  trendyolProductVariantId Int?                     @map("trendyol_product_variant_id")
+  stockCardId              Int?                     @map("stock_card_id")
+  externalProductId        String?                  @map("external_product_id")
+  externalVariantId        String?                  @map("external_variant_id")
+  externalSku              String?                  @map("external_sku")
+  externalBarcode          String?                  @map("external_barcode")
+  publicationStatus        ChannelPublicationStatus @default(DRAFT) @map("publication_status")
+  isActive                 Boolean                  @default(true) @map("is_active")
+  lastSyncedAt             DateTime?                @map("last_synced_at")
+  createdAt                DateTime                 @default(now()) @map("created_at")
+  updatedAt                DateTime                 @updatedAt @map("updated_at")
+  channelAccount           ChannelAccount           @relation(fields: [channelAccountId], references: [id], onDelete: Cascade)
+
+  @@unique([channelAccountId, externalVariantId])
+  @@index([companyId])
+  @@index([salesChannelId])
+  @@index([productId])
+  @@index([trendyolProductVariantId])
+  @@index([stockCardId])
+  @@index([isActive])
+  @@map("channel_product_mappings")
+}
+
+model IntegrationSyncJob {
+  id                Int                  @id @default(autoincrement())
+  companyId         Int                  @map("company_id")
+  salesChannelId    Int                  @map("sales_channel_id")
+  channelAccountId  Int                  @map("channel_account_id")
+  jobType           IntegrationJobType   @map("job_type")
+  mode              IntegrationJobMode   @default(DRY_RUN)
+  status            IntegrationJobStatus @default(PENDING)
+  requestedByUserId Int?                 @map("requested_by_user_id")
+  startedAt         DateTime?            @map("started_at")
+  completedAt       DateTime?            @map("completed_at")
+  totalItems        Int                  @default(0) @map("total_items")
+  successfulItems   Int                  @default(0) @map("successful_items")
+  failedItems       Int                  @default(0) @map("failed_items")
+  createdAt         DateTime             @default(now()) @map("created_at")
+  updatedAt         DateTime             @updatedAt @map("updated_at")
+  company           Company              @relation(fields: [companyId], references: [id])
+  salesChannel      SalesChannel         @relation(fields: [salesChannelId], references: [id])
+  channelAccount    ChannelAccount       @relation(fields: [channelAccountId], references: [id])
+
+  @@index([companyId])
+  @@index([salesChannelId])
+  @@index([channelAccountId])
+  @@index([mode, status])
+  @@map("integration_sync_jobs")
+}
+
 model IntegrationConnection {
-  id                 Int      @id @default(autoincrement())
-  platform           String   @unique
-  displayName        String   @map("display_name")
-  status             String   @default("NOT_CONFIGURED")
-  usesEnvCredentials Boolean  @default(true) @map("uses_env_credentials")
+  id                 Int       @id @default(autoincrement())
+  platform           String    @unique
+  displayName        String    @map("display_name")
+  status             String    @default("NOT_CONFIGURED")
+  usesEnvCredentials Boolean   @default(true) @map("uses_env_credentials")
   lastTestAt         DateTime? @map("last_test_at")
   lastSyncAt         DateTime? @map("last_sync_at")
-  lastError          String?  @map("last_error")
-  createdAt          DateTime @default(now()) @map("created_at")
-  updatedAt          DateTime @updatedAt @map("updated_at")
+  lastError          String?   @map("last_error")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
 
   @@map("integration_connections")
 }
 
 model IntegrationTenantSetting {
-  id              Int      @id @default(autoincrement())
+  id              Int       @id @default(autoincrement())
   tenant          String
   platform        String
-  siteUrl         String?  @map("site_url")
-  serviceEndpoint String?  @map("service_endpoint")
-  wsdlUrl         String?  @map("wsdl_url")
-  secretValue     String?  @map("secret_value")
-  status          String   @default("NOT_CONFIGURED")
+  siteUrl         String?   @map("site_url")
+  serviceEndpoint String?   @map("service_endpoint")
+  wsdlUrl         String?   @map("wsdl_url")
+  secretValue     String?   @map("secret_value")
+  status          String    @default("NOT_CONFIGURED")
   lastTestAt      DateTime? @map("last_test_at")
-  lastError       String?  @map("last_error")
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
+  lastError       String?   @map("last_error")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
 
   @@unique([tenant, platform])
   @@index([platform])
@@ -1346,38 +1555,44 @@ model IntegrationTenantSetting {
 }
 
 model IntegrationSyncLog {
-  id              Int      @id @default(autoincrement())
+  id              Int       @id @default(autoincrement())
+  syncJobId       Int?      @map("sync_job_id")
   platform        String
   action          String
   status          String
   message         String?
-  externalOrderId String?  @map("external_order_id")
-  saleId          Int?     @map("sale_id")
-  startedAt       DateTime @default(now()) @map("started_at")
+  externalOrderId String?   @map("external_order_id")
+  saleId          Int?      @map("sale_id")
+  entityType      String?   @map("entity_type")
+  entityId        String?   @map("entity_id")
+  operation       String?
+  startedAt       DateTime  @default(now()) @map("started_at")
   completedAt     DateTime? @map("completed_at")
-  payloadSummary  Json?    @map("payload_summary")
+  payloadSummary  Json?     @map("payload_summary")
+  createdAt       DateTime  @default(now()) @map("created_at")
 
+  @@index([syncJobId])
   @@index([platform, startedAt])
   @@index([status])
   @@map("integration_sync_logs")
 }
 
 model ProductionStaffTask {
-  id              Int      @id @default(autoincrement())
-  saleId          Int      @map("sale_id")
-  saleItemId      Int?     @map("sale_item_id")
-  taskType        String   @map("task_type")
-  status          String   @default("NEW")
-  assignmentGroup String?  @map("assignment_group")
-  assignedUserId  Int?     @map("assigned_user_id")
-  priority        String   @default("NORMAL")
+  id              Int       @id @default(autoincrement())
+  saleId          Int       @map("sale_id")
+  saleItemId      Int?      @map("sale_item_id")
+  taskType        String    @map("task_type")
+  status          String    @default("NEW")
+  assignmentGroup String?   @map("assignment_group")
+  assignedUserId  Int?      @map("assigned_user_id")
+  priority        String    @default("NORMAL")
   dueAt           DateTime? @map("due_at")
   seenAt          DateTime? @map("seen_at")
   startedAt       DateTime? @map("started_at")
   completedAt     DateTime? @map("completed_at")
-  blockedReason   String?  @map("blocked_reason")
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
+  blockedReason   String?   @map("blocked_reason")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
 
   @@index([saleId])
   @@index([assignedUserId])
