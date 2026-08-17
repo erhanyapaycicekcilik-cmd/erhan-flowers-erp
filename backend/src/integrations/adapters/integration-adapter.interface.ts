@@ -71,4 +71,5 @@ export interface IntegrationAdapter {
   pushProduct(payload: unknown): Promise<AdapterConnectionResult>;
   updateOrderStatus(payload: unknown): Promise<AdapterConnectionResult>;
   checkBatchStatus?(batchRequestId: string): Promise<AdapterConnectionResult & { batchStatus?: string; failedItemCount?: number }>;
+  getSellerPanelUrl?(barcode: string): Promise<AdapterConnectionResult & { panelUrl?: string }>;
 }

@@ -22,8 +22,16 @@ export type ScrapedCompetitorProduct = {
   raw: Record<string, unknown>;
 };
 
+export type OwnProductStats = {
+  ratingAverage: number | null;
+  ratingCount: number;
+  commentCount: number;
+  favoriteCount: number;
+};
+
 const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
-const PROPS_KEY = '__single-search-result__PROPS';
+const SEARCH_PROPS_KEY = '__single-search-result__PROPS';
+const DETAIL_PROPS_MARKER = 'window["__envoy__SHARED_PROPS"]=';
 
 // Trendyol'un arama sonucu sayfası, sonuçları sunucu tarafında
 // `window["__single-search-result__PROPS"] = {...}` içine gömerek üretiyor.
@@ -33,37 +41,51 @@ export class TrendyolScraperService {
   private readonly logger = new Logger(TrendyolScraperService.name);
 
   async searchTopProducts(keyword: string, limit = 10): Promise<ScrapedCompetitorProduct[]> {
-    const html = await this.fetchHtml(keyword);
+    const html = await this.fetchHtml(`https://www.trendyol.com/sr?q=${encodeURIComponent(keyword)}`);
     if (!html) return [];
-    const props = this.extractProps(html);
-    const products = Array.isArray(props?.data?.products) ? (props.data.products as Record<string, unknown>[]) : [];
+    const props = this.extractJsonAfterMarker(html, `window["${SEARCH_PROPS_KEY}"]=`);
+    const products = Array.isArray((props as any)?.data?.products) ? ((props as any).data.products as Record<string, unknown>[]) : [];
     return products.slice(0, limit).map((product, index) => this.mapProduct(product, index + 1));
+  }
+
+  // Kendi ürünümüzün toplam puan/yorum/favori sayısını, arama sırasına bağlı
+  // olmadan doğrudan ürünün kendi sayfasından okur (her ürün için çalışır).
+  async fetchOwnProductStats(productUrl: string): Promise<OwnProductStats | null> {
+    const html = await this.fetchHtml(productUrl);
+    if (!html) return null;
+    const props = this.extractJsonAfterMarker(html, DETAIL_PROPS_MARKER);
+    const product = (props as any)?.product;
+    if (!product) return null;
+    const rating = product.ratingScore ?? {};
+    return {
+      ratingAverage: rating.averageRating != null ? Number(rating.averageRating) : null,
+      ratingCount: this.number(rating.totalCount),
+      commentCount: this.number(rating.commentCount),
+      favoriteCount: this.number(product.favoriteCount),
+    };
   }
 
   // Node'un yerleşik fetch()'i (undici), Cloudflare'in Trendyol önünde çalışan
   // bot korumasına takılıyor (TLS parmak izi farkı); sistem curl.exe ile aynı
   // istek gerçek tarayıcı gibi geçiyor. Bu yüzden fetch yerine curl kullanılıyor.
-  private async fetchHtml(keyword: string): Promise<string | null> {
-    const url = `https://www.trendyol.com/sr?q=${encodeURIComponent(keyword)}`;
+  private async fetchHtml(url: string): Promise<string | null> {
     try {
       const { stdout } = await execFileAsync(
         'curl',
-        ['-s', '-A', USER_AGENT, '-H', 'Accept-Language: tr-TR,tr;q=0.9', url],
+        ['-s', '-L', '-A', USER_AGENT, '-H', 'Accept-Language: tr-TR,tr;q=0.9', url],
         { maxBuffer: 1024 * 1024 * 20, timeout: 20000 },
       );
       return stdout;
     } catch (error) {
-      this.logger.warn(`Trendyol arama sayfası alınamadı. keyword=${keyword} error=${(error as Error).message}`);
+      this.logger.warn(`Trendyol sayfası alınamadı. url=${url} error=${(error as Error).message}`);
       return null;
     }
   }
 
-  private extractProps(html: string): { data?: { products?: unknown[] } } | null {
-    const marker = `window["${PROPS_KEY}"]=`;
+  private extractJsonAfterMarker(html: string, marker: string): unknown {
     const start = html.indexOf(marker);
     if (start === -1) return null;
-    const jsonStart = start + marker.length;
-    const jsonText = this.extractBalancedJson(html, jsonStart);
+    const jsonText = this.extractBalancedJson(html, start + marker.length);
     if (!jsonText) return null;
     try {
       return JSON.parse(jsonText);

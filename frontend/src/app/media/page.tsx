@@ -14,6 +14,8 @@ export default function MediaPage() {
   const [file, setFile] = useState<File | null>(null);
   const [processingId, setProcessingId] = useState<number | null>(null);
   const [message, setMessage] = useState('');
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [bulkProcessing, setBulkProcessing] = useState(false);
 
   async function load() {
     const [productData, mediaData] = await Promise.all([
@@ -37,10 +39,34 @@ export default function MediaPage() {
     formData.append('folderName', folderName);
     if (productId) formData.append('productId', productId);
 
-    await api('/media/upload', { method: 'POST', body: formData });
+    const result = await api<{ cleanBackground?: unknown }>('/media/upload', { method: 'POST', body: formData });
     setFile(null);
-    setMessage('Görsel yüklendi.');
+    setMessage(result.cleanBackground ? 'Görsel yüklendi, arka plan otomatik temizlendi.' : 'Görsel yüklendi. Arka plan otomatik temizlenemedi, manuel deneyebilirsiniz.');
     await load();
+  }
+
+  function toggleSelected(id: number) {
+    setSelectedIds((current) => (current.includes(id) ? current.filter((value) => value !== id) : [...current, id]));
+  }
+
+  async function bulkProcessSelected() {
+    if (selectedIds.length === 0) return;
+    setBulkProcessing(true);
+    setMessage('');
+    try {
+      const results = await api<Array<{ id: number; success: boolean; error?: string }>>('/media/bulk-photoroom', {
+        method: 'POST',
+        json: { ids: selectedIds },
+      });
+      const successCount = results.filter((row) => row.success).length;
+      setMessage(`${successCount}/${results.length} görselin arka planı temizlendi.`);
+      setSelectedIds([]);
+      await load();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Toplu işlem tamamlanamadı.');
+    } finally {
+      setBulkProcessing(false);
+    }
   }
 
   async function processWithPhotoroom(id: number) {
@@ -100,14 +126,28 @@ export default function MediaPage() {
         </form>
 
         <section className="panel overflow-hidden">
-          <div className="border-b border-line px-5 py-4">
-            <h2 className="font-bold">Yüklenen Görseller</h2>
-            <p className="mt-1 text-sm text-slate-500">Photoroom işlemi sadece butona basıldığında çalışır.</p>
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-4">
+            <div>
+              <h2 className="font-bold">Yüklenen Görseller</h2>
+              <p className="mt-1 text-sm text-slate-500">Yeni yüklemelerde arka plan otomatik temizlenir. Eski görseller için seçip toplu işlem yapabilirsiniz.</p>
+            </div>
+            <button
+              className="btn btn-secondary min-h-9 px-3"
+              onClick={bulkProcessSelected}
+              disabled={selectedIds.length === 0 || bulkProcessing}
+            >
+              <Wand2 size={15} />
+              {bulkProcessing ? 'İşleniyor...' : `Seçilenlerin arka planını temizle (${selectedIds.length})`}
+            </button>
           </div>
 
           <div className="grid gap-4 p-5 sm:grid-cols-2 xl:grid-cols-3">
             {media.map((item) => (
               <article key={item.id} className="rounded-lg border border-line bg-white p-3">
+                <label className="mb-2 flex items-center gap-2 text-xs text-slate-500">
+                  <input type="checkbox" checked={selectedIds.includes(item.id)} onChange={() => toggleSelected(item.id)} />
+                  Seç
+                </label>
                 <img src={`${uploadUrl}${item.filePath}`} alt={item.fileName} className="h-40 w-full rounded-md object-cover" />
                 <div className="mt-3 text-sm font-semibold">{item.fileName}</div>
                 <div className="text-xs text-slate-500">{item.folderName}</div>

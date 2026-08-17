@@ -21,29 +21,71 @@ import {
   ShoppingCart,
   Users,
   Warehouse,
+  type LucideIcon,
 } from 'lucide-react';
 import { api, clearAuthToken } from '@/lib/api';
 import type { CurrentUser, UserRole } from '@/types';
 
-const nav = [
-  { href: '/dashboard', label: 'Dashboard', icon: Home, ownerOnly: false },
-  { href: '/products', label: 'Ürün Merkezi', icon: Boxes, ownerOnly: false },
-  { href: '/media', label: 'Medya Merkezi', icon: FileImage, ownerOnly: false },
-  { href: '/model-codes', label: 'Model Kodu', icon: PackagePlus, ownerOnly: true },
-  { href: '/barcodes', label: 'Barkod', icon: QrCode, ownerOnly: false },
-  { href: '/stock-cards', label: 'Stok', icon: Warehouse, ownerOnly: false },
-  { href: '/production-costs', label: 'Trendyol Maliyet', icon: Factory, ownerOnly: true },
-  { href: '/costs', label: 'Stoktan Maliyet', icon: Factory, ownerOnly: true },
-  { href: '/orders', label: 'Siparişler', icon: ShoppingCart, ownerOnly: false },
-  { href: '/sales', label: 'Satış', icon: ShoppingCart, ownerOnly: false, enabled: process.env.NEXT_PUBLIC_ENABLE_SALES_CENTER === 'true' },
-  { href: '/crm', label: 'CRM', icon: Users, ownerOnly: false },
-  { href: '/integrations', label: 'Entegrasyon', icon: PlugZap, ownerOnly: true },
-  { href: '/market-analizi', label: 'Pazar Analizi', icon: Megaphone, ownerOnly: true },
-  { href: '/staff/tasks', label: 'Personel Görev', icon: ListChecks, ownerOnly: false, enabled: process.env.NEXT_PUBLIC_ENABLE_SALES_CENTER === 'true' },
-  { href: '/finance', label: 'Finans', icon: CircleDollarSign, ownerOnly: true },
-  { href: '/reports', label: 'Raporlar', icon: BarChart3, ownerOnly: true },
-  { href: '/settings', label: 'Ayarlar', icon: Settings, ownerOnly: true },
+type NavItem = {
+  href: string;
+  label: string;
+  icon: LucideIcon;
+  ownerOnly: boolean;
+  enabled?: boolean;
+};
+
+const navGroups: { section: string | null; items: NavItem[] }[] = [
+  {
+    section: null,
+    items: [{ href: '/dashboard', label: 'Dashboard', icon: Home, ownerOnly: false }],
+  },
+  {
+    section: 'Ürün & Stok',
+    items: [
+      { href: '/products', label: 'Ürün Merkezi', icon: Boxes, ownerOnly: false },
+      { href: '/media', label: 'Medya Merkezi', icon: FileImage, ownerOnly: false },
+      { href: '/model-codes', label: 'Model Kodu', icon: PackagePlus, ownerOnly: true },
+      { href: '/barcodes', label: 'Barkod', icon: QrCode, ownerOnly: false },
+      { href: '/stock-cards', label: 'Stok', icon: Warehouse, ownerOnly: false },
+    ],
+  },
+  {
+    section: 'Maliyet',
+    items: [
+      { href: '/production-costs', label: 'Trendyol Maliyet', icon: Factory, ownerOnly: true },
+      { href: '/costs', label: 'Stoktan Maliyet', icon: Factory, ownerOnly: true },
+    ],
+  },
+  {
+    section: 'Satış',
+    items: [
+      { href: '/orders', label: 'Siparişler', icon: ShoppingCart, ownerOnly: false },
+      { href: '/sales', label: 'Satış', icon: ShoppingCart, ownerOnly: false, enabled: process.env.NEXT_PUBLIC_ENABLE_SALES_CENTER === 'true' },
+      { href: '/crm', label: 'CRM', icon: Users, ownerOnly: false },
+    ],
+  },
+  {
+    section: 'Pazaryeri',
+    items: [
+      { href: '/integrations', label: 'Entegrasyon', icon: PlugZap, ownerOnly: true },
+      { href: '/market-analizi', label: 'Pazar Analizi', icon: Megaphone, ownerOnly: true },
+    ],
+  },
+  {
+    section: 'Ekip',
+    items: [{ href: '/staff/tasks', label: 'Personel Görev', icon: ListChecks, ownerOnly: false, enabled: process.env.NEXT_PUBLIC_ENABLE_SALES_CENTER === 'true' }],
+  },
+  {
+    section: 'Yönetim',
+    items: [
+      { href: '/finance', label: 'Finans', icon: CircleDollarSign, ownerOnly: true },
+      { href: '/reports', label: 'Raporlar', icon: BarChart3, ownerOnly: true },
+      { href: '/settings', label: 'Ayarlar', icon: Settings, ownerOnly: true },
+    ],
+  },
 ];
+
+const nav = navGroups.flatMap((group) => group.items);
 
 const ownerOnlyPaths = ['/stock-counts', '/costs', '/production-costs', '/finance', '/reports', '/seo-products', '/publishing', '/model-codes', '/knowledge-center', '/settings', '/integrations', '/market-analizi'];
 
@@ -101,21 +143,33 @@ export function AdminShell({ title, children }: { title: string; children: React
             <Menu size={18} />
             {!sidebarCollapsed && 'Menüyü daralt'}
           </button>
-          {visibleNav.map((item) => {
-            const Icon = item.icon;
-            const active = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(`${item.href}/`));
+          {navGroups.map((group) => {
+            const groupItems = group.items.filter((item) => (item.enabled ?? true) && canSeeNav(item.ownerOnly, user?.role));
+            if (!groupItems.length) return null;
             return (
-              <Link
-                key={item.href}
-                href={item.href}
-                title={item.label}
-                className={`flex items-center rounded-md px-3 py-2.5 text-sm font-medium ${sidebarCollapsed ? 'justify-center' : 'gap-3'} ${
-                  active ? 'bg-brand text-white' : 'text-slate-600 hover:bg-slate-50 hover:text-ink'
-                }`}
-              >
-                <Icon size={18} />
-                {!sidebarCollapsed && item.label}
-              </Link>
+              <div key={group.section ?? 'root'} className="mb-1">
+                {group.section && !sidebarCollapsed && (
+                  <div className="mb-1 mt-3 px-3 text-[11px] font-bold uppercase tracking-wide text-slate-400">{group.section}</div>
+                )}
+                {group.section && sidebarCollapsed && <div className="my-2 border-t border-line" />}
+                {groupItems.map((item) => {
+                  const Icon = item.icon;
+                  const active = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(`${item.href}/`));
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      title={item.label}
+                      className={`flex items-center rounded-md px-3 py-2.5 text-sm font-medium ${sidebarCollapsed ? 'justify-center' : 'gap-3'} ${
+                        active ? 'bg-brand text-white' : 'text-slate-600 hover:bg-slate-50 hover:text-ink'
+                      }`}
+                    >
+                      <Icon size={18} />
+                      {!sidebarCollapsed && item.label}
+                    </Link>
+                  );
+                })}
+              </div>
             );
           })}
         </nav>

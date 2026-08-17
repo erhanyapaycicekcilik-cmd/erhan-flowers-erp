@@ -42,7 +42,7 @@ export class MediaService {
 
     const filePath = `/uploads/products/${folderName}/images/${uniqueFileName}`;
 
-    return cleanMojibakeDeep(await this.prisma.mediaFile.create({
+    const created = await this.prisma.mediaFile.create({
       data: {
         productId: productId && Number.isFinite(productId) ? productId : null,
         fileName: file.originalname,
@@ -51,7 +51,17 @@ export class MediaService {
         fileType: file.mimetype,
       },
       include: { product: true },
-    }));
+    });
+
+    let cleanBackground: Awaited<ReturnType<typeof this.runPhotoroom>> | null = null;
+    try {
+      cleanBackground = await this.runPhotoroom(created);
+    } catch {
+      // Otomatik arka plan temizleme başarısız olsa bile yükleme başarılı sayılır;
+      // kullanıcı isterse manuel "Arka Planı Temizle" ile tekrar deneyebilir.
+    }
+
+    return cleanMojibakeDeep({ ...created, cleanBackground });
   }
 
   async processWithPhotoroom(id: number) {
@@ -67,10 +77,38 @@ export class MediaService {
       throw new BadRequestException('Sadece görsel dosyaları işlenebilir.');
     }
 
+    return cleanMojibakeDeep(await this.runPhotoroom(media));
+  }
+
+  async bulkProcessWithPhotoroom(ids: number[]) {
+    const results: Array<{ id: number; success: boolean; error?: string; mediaFile?: unknown }> = [];
+    for (const id of ids) {
+      try {
+        const media = await this.prisma.mediaFile.findUnique({ where: { id }, include: { product: true } });
+        if (!media) {
+          results.push({ id, success: false, error: 'Görsel bulunamadı.' });
+          continue;
+        }
+        const mediaFile = await this.runPhotoroom(media);
+        results.push({ id, success: true, mediaFile: cleanMojibakeDeep(mediaFile) });
+      } catch (error) {
+        results.push({ id, success: false, error: error instanceof Error ? error.message : 'Bilinmeyen hata' });
+      }
+    }
+    return results;
+  }
+
+  private async runPhotoroom(media: { id: number; productId: number | null; fileName: string; filePath: string; folderName: string; fileType: string }) {
+    if (!media.fileType.startsWith('image/')) {
+      throw new BadRequestException('Sadece görsel dosyaları işlenebilir.');
+    }
+
     const sourcePath = this.resolveUploadPath(media.filePath);
     const editedBuffer = await this.photoroom.editImage({
       sourcePath,
       fileType: media.fileType,
+      backgroundColor: 'FFFFFF',
+      padding: '0.12',
     });
 
     const outputFileName = `${Date.now()}-photoroom-${path.parse(media.fileName).name}.png`;
@@ -79,7 +117,7 @@ export class MediaService {
     const outputPath = path.join(outputDir, outputFileName);
     await fsPromises.writeFile(outputPath, editedBuffer);
 
-    return cleanMojibakeDeep(await this.prisma.mediaFile.create({
+    return this.prisma.mediaFile.create({
       data: {
         productId: media.productId,
         fileName: outputFileName,
@@ -88,7 +126,7 @@ export class MediaService {
         fileType: 'image/png',
       },
       include: { product: true },
-    }));
+    });
   }
 
   async createTreeStandardSet(body: { imagePath?: string; productId?: string; folderName?: string }) {

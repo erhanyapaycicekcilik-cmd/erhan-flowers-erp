@@ -250,6 +250,17 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
     return adapter.checkBatchStatus(batchRequestId);
   }
 
+  // Trendyol'da görsel silme API'den desteklenmediği için satıcı panelindeki
+  // ürün düzenleme sayfasının linkini döner (elle silmek için).
+  async getSellerPanelLink(platformValue: string, barcode: string) {
+    const platform = this.platform(platformValue);
+    const adapter = await this.adapter(platform);
+    if (!adapter.getSellerPanelUrl) {
+      return { ok: false, status: 'NOT_IMPLEMENTED' as const, message: `${platform} icin panel linki desteklenmiyor.` };
+    }
+    return adapter.getSellerPanelUrl(barcode);
+  }
+
   // Maliyet ekranından tek bir ürünün fiyat/stoğunu pazaryerine gönderir
   // (ürünü yeniden oluşturmadan, sadece fiyat günceller).
   async pushPrice(platformValue: string, payload: { barcode?: string; salePrice?: number; listPrice?: number; stockQuantity?: number }) {

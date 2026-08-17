@@ -48,4 +48,10 @@ export class MediaController {
   processWithPhotoroom(@Param('id') id: string) {
     return this.media.processWithPhotoroom(Number(id));
   }
+
+  @Post('bulk-photoroom')
+  bulkProcessWithPhotoroom(@Body() body: { ids?: number[] }) {
+    const ids = Array.isArray(body.ids) ? body.ids.map(Number).filter((id) => Number.isFinite(id)) : [];
+    return this.media.bulkProcessWithPhotoroom(ids);
+  }
 }

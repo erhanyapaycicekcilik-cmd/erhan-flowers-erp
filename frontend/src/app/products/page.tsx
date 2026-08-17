@@ -1,7 +1,7 @@
 'use client';
 
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from 'react';
-import { Boxes, Calculator, CheckCircle2, Copy, Edit3, ExternalLink, Eye, FileText, ImageIcon, PackagePlus, Plus, Printer, RefreshCw, Save, Search, Send, Trash2, X } from 'lucide-react';
+import { Boxes, Calculator, CheckCircle2, Copy, Edit3, ExternalLink, Eye, FileText, ImageIcon, PackagePlus, Plus, Printer, RefreshCw, Save, Search, Send, Trash2, Upload, X } from 'lucide-react';
 import { AdminShell } from '@/components/AdminShell';
 import { api, apiBaseUrl, apiFileUrl } from '@/lib/api';
 import type { Category, CurrentUser, MediaFile } from '@/types';
@@ -247,6 +247,8 @@ const treeVisualSourceReadyText = '1 ana görsel seçildi. Ağaç standart seti 
 
 export default function ProductsPage() {
   const [entries, setEntries] = useState<Entry[]>([]);
+  const [importingExcel, setImportingExcel] = useState(false);
+  const [openingTrendyolPanel, setOpeningTrendyolPanel] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
   const [families, setFamilies] = useState<Family[]>([]);
   const [mediaFiles, setMediaFiles] = useState<MediaFile[]>([]);
@@ -305,6 +307,43 @@ export default function ProductsPage() {
       name: cleanText(expense.name),
       defaultAmount: Number(expense.defaultAmount || 0),
     })));
+  }
+
+  async function downloadUnlinkedExcel() {
+    try {
+      const result = await api<{ fileName: string; mimeType: string; contentBase64: string; total: number }>('/product-center/export/excel');
+      const binary = atob(result.contentBase64);
+      const bytes = new Uint8Array(binary.length);
+      for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+      const url = window.URL.createObjectURL(new Blob([bytes], { type: result.mimeType }));
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = result.fileName;
+      link.click();
+      window.URL.revokeObjectURL(url);
+      setMessage(`${result.total} bağlanmamış ürün Excel'e aktarıldı.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Excel dışa aktarılamadı.');
+    }
+  }
+
+  async function importExcelFile(file: File) {
+    setImportingExcel(true);
+    try {
+      const data = new FormData();
+      data.append('file', file);
+      const result = await api<{ ok: boolean; total: number; created: number; updated: number; errors: Array<{ row: number; message: string }> }>('/product-center/import/excel', {
+        method: 'POST',
+        body: data,
+      });
+      const summary = `${result.total} satır işlendi: ${result.created} yeni bağlandı, ${result.updated} güncellendi.`;
+      setMessage(result.errors.length ? `${summary} ${result.errors.length} satırda hata: ${result.errors.slice(0, 5).map((error) => `Satır ${error.row}: ${error.message}`).join(' | ')}` : summary);
+      await load();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Excel yüklenemedi.');
+    } finally {
+      setImportingExcel(false);
+    }
   }
 
   async function refreshStockCards() {
@@ -1050,6 +1089,26 @@ export default function ProductsPage() {
     }
   }
 
+  async function openTrendyolPanel() {
+    if (!form.barcode) {
+      setSendMessage('Panel linki için önce barkod gerekli.');
+      return;
+    }
+    setOpeningTrendyolPanel(true);
+    try {
+      const result = await api<{ ok: boolean; message: string; panelUrl?: string }>(`/integrations/products/trendyol/panel-link/${form.barcode}`);
+      if (result.ok && result.panelUrl) {
+        window.open(result.panelUrl, '_blank');
+      } else {
+        setSendMessage(`Panel linki alınamadı: ${result.message}`);
+      }
+    } catch (error) {
+      setSendMessage(error instanceof Error ? error.message : 'Panel linki alınamadı.');
+    } finally {
+      setOpeningTrendyolPanel(false);
+    }
+  }
+
   async function downloadChannelExcel(platform: 'TRENDYOL' | 'HEPSIBURADA' | 'N11' | 'TICIMAX') {
     if (!canResearch) {
       setMessage('Excel almadan önce ürün hazırlığı ve kanal zorunlu alanları tamamlanmalı.');
@@ -1098,7 +1157,14 @@ export default function ProductsPage() {
           <h2 className="text-xl font-bold">Birleşik Ürün Merkezi</h2>
           <p className="text-sm text-slate-500">Ürün, reçete, maliyet ve kanal gönderimi tek akış içinde yönetilir.</p>
         </div>
-        <button className="btn btn-secondary" onClick={() => load()}><RefreshCw size={17} /> Yenile</button>
+        <div className="flex flex-wrap gap-2">
+          <button className="btn btn-secondary" onClick={downloadUnlinkedExcel}><FileText size={17} /> Bağlanmamış Ürünler Excel</button>
+          <label className="btn btn-secondary cursor-pointer">
+            <Upload size={17} /> {importingExcel ? 'Yükleniyor...' : 'Excel ile Toplu Yükle'}
+            <input type="file" accept=".xlsx,.xls" className="hidden" disabled={importingExcel} onChange={(event) => { const file = event.target.files?.[0]; if (file) importExcelFile(file); event.target.value = ''; }} />
+          </label>
+          <button className="btn btn-secondary" onClick={() => load()}><RefreshCw size={17} /> Yenile</button>
+        </div>
       </div>
       {message && <div className="mb-4 rounded-md bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800">{message}</div>}
 
@@ -1551,9 +1617,15 @@ export default function ProductsPage() {
                   </div>
                 </div>
                 {ownerMode && <label className="flex items-center gap-2 rounded-md border border-line px-3 py-2 text-sm font-semibold"><input type="checkbox" checked={allowIncomplete} onChange={(event) => setAllowIncomplete(event.target.checked)} /> Owner özel onayıyla eksik kanal uyarısını geç</label>}
-                <button type="button" className="btn btn-primary" onClick={sendToChannels} disabled={sendingChannels}>
-                  {sendingChannels ? <RefreshCw size={16} className="animate-spin" /> : <Send size={16} />} {sendingChannels ? 'Gönderiliyor...' : 'Kanallara Gönder'}
-                </button>
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" className="btn btn-primary" onClick={sendToChannels} disabled={sendingChannels}>
+                    {sendingChannels ? <RefreshCw size={16} className="animate-spin" /> : <Send size={16} />} {sendingChannels ? 'Gönderiliyor...' : 'Kanallara Gönder'}
+                  </button>
+                  <button type="button" className="btn btn-secondary" onClick={openTrendyolPanel} disabled={openingTrendyolPanel}>
+                    <ExternalLink size={16} /> {openingTrendyolPanel ? 'Bağlanıyor...' : "Trendyol'da Aç (Satıcı Paneli)"}
+                  </button>
+                </div>
+                <p className="text-xs text-slate-500">Trendyol&apos;un API&apos;si zaten yayındaki bir görseli silmeyi desteklemiyor (sadece ekleme yapabiliyoruz) — istenmeyen görseli kaldırmak için satıcı panelini kullanman gerekiyor.</p>
                 {sendMessage && <div className="rounded-md bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800">{sendMessage}</div>}
               </div>
             )}

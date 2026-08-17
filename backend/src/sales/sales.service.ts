@@ -787,7 +787,7 @@ export class SalesService {
     `;
     const sale = sales[0];
     if (!sale) throw new NotFoundException('Satış bulunamadı.');
-    const items = await tx.$queryRaw<Array<Record<string, unknown>>>`SELECT * FROM retail_sale_items WHERE sale_id = ${id} ORDER BY id`;
+    const rawItems = await tx.$queryRaw<Array<Record<string, unknown>>>`SELECT * FROM retail_sale_items WHERE sale_id = ${id} ORDER BY id`;
     const payments = await tx.$queryRaw<Array<Record<string, unknown>>>`SELECT * FROM retail_sale_payments WHERE sale_id = ${id} ORDER BY id`;
     const deliveries = await tx.$queryRaw<Array<Record<string, unknown>>>`SELECT * FROM retail_deliveries WHERE sale_id = ${id} LIMIT 1`;
     const statusHistory = await tx.$queryRaw<Array<Record<string, unknown>>>`
@@ -797,7 +797,33 @@ export class SalesService {
       WHERE h.sale_id = ${id}
       ORDER BY h.changed_at ASC, h.id ASC
     `;
-    return { ...(sale as Record<string, unknown>), items, payments, delivery: deliveries[0] ?? null, statusHistory };
+
+    let productCostTotal = 0;
+    const items = rawItems.map((item) => {
+      const quantity = Number(item.quantity ?? 0);
+      const lineTotal = Number(item.line_total ?? 0);
+      const lineCost = Number(item.unit_cost_snapshot ?? 0) * quantity;
+      const lineProfit = lineTotal - lineCost;
+      productCostTotal += lineCost;
+      return { ...item, lineCost, lineProfit };
+    });
+    const otherOrderCosts = Number(sale.delivery_fee ?? 0);
+    const netSalesReturn = Number(sale.subtotal ?? 0) - otherOrderCosts;
+    const profit = netSalesReturn - productCostTotal;
+    const profitMargin = netSalesReturn > 0 ? (profit / netSalesReturn) * 100 : 0;
+
+    return {
+      ...(sale as Record<string, unknown>),
+      items,
+      payments,
+      delivery: deliveries[0] ?? null,
+      statusHistory,
+      productCostTotal,
+      otherOrderCosts,
+      netSalesReturn,
+      profit,
+      profitMargin,
+    };
   }
 
   private async addStatusHistory(tx: Prisma.TransactionClient, saleId: number, oldStatus: string | null, newStatus: string, note: string | null, userId: number) {

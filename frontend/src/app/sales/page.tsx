@@ -732,6 +732,14 @@ function SalesCenterPageContent() {
                 <CustomerMetric label="Telefon" value={String(selectedSale.customer_phone ?? selectedSale.customerPhone ?? '-')} />
                 <CustomerMetric label="Toplam" value={formatMoney(Number(selectedSale.grand_total ?? selectedSale.grandTotal ?? 0))} />
               </div>
+              <div className="mb-4 grid gap-3 sm:grid-cols-3 xl:grid-cols-6">
+                <CustomerMetric label="Satış" value={formatMoney(Number(selectedSale.subtotal ?? 0))} />
+                <CustomerMetric label="Ürün maliyeti" value={formatMoney(Number(selectedSale.productCostTotal ?? 0))} />
+                <CustomerMetric label="Diğer sipariş maliyetleri" value={formatMoney(Number(selectedSale.otherOrderCosts ?? 0))} />
+                <CustomerMetric label="Net satış getirisi" value={formatMoney(Number(selectedSale.netSalesReturn ?? 0))} />
+                <CustomerMetric label="Kâr" value={formatMoney(Number(selectedSale.profit ?? 0))} />
+                <CustomerMetric label="Kâr oranı" value={`%${Number(selectedSale.profitMargin ?? 0).toFixed(1)}`} />
+              </div>
               <PrintActions
                 sale={selectedSale}
                 title="YAZDIR"

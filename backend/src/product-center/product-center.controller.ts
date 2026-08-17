@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Req, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { Request } from 'express';
 import { AuthGuard } from '../auth/auth.guard';
 import { OwnerGuard } from '../auth/owner.guard';
@@ -42,6 +43,19 @@ export class ProductCenterController {
   @Post('entries/quick')
   quickSave(@Body() body: unknown) {
     return this.productCenter.quickSaveEntry(body as any);
+  }
+
+  @Get('export/excel')
+  @UseGuards(OwnerGuard)
+  exportExcel() {
+    return this.productCenter.exportUnlinkedExcel();
+  }
+
+  @Post('import/excel')
+  @UseGuards(OwnerGuard)
+  @UseInterceptors(FileInterceptor('file'))
+  importExcel(@UploadedFile() file: Express.Multer.File) {
+    return this.productCenter.importExcel(file);
   }
 
   @Get('cleanup/auto-stock-cards')

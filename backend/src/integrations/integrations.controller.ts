@@ -69,6 +69,12 @@ export class IntegrationsController {
     return this.integrations.updatePackageStatus(platform, body);
   }
 
+  @Get('products/:platform/panel-link/:barcode')
+  @UseGuards(OwnerGuard)
+  getSellerPanelLink(@Param('platform') platform: string, @Param('barcode') barcode: string) {
+    return this.integrations.getSellerPanelLink(platform, barcode);
+  }
+
   @Get('products/:platform/batch-status/:batchRequestId')
   @UseGuards(OwnerGuard)
   checkBatchStatus(@Param('platform') platform: string, @Param('batchRequestId') batchRequestId: string) {

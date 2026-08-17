@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as XLSX from 'xlsx';
 import PDFDocument = require('pdfkit');
 import * as QRCode from 'qrcode';
 import { cleanMojibakeDeep } from '../common/mojibake';
@@ -326,6 +327,138 @@ export class ProductCenterService {
         sitePrice,
       };
     });
+  }
+
+  // Ürün Merkezi'ne henüz bağlanmamış (productId boş) Trendyol kayıtlarını
+  // düzenlenebilir bir Excel şablonu olarak dışa aktarır. Kullanıcı kategori/
+  // stok bilgilerini doldurup aynı dosyayı tekrar yükleyince importExcel bu
+  // kayıtları gerçek Ürün Merkezi kaydına (ve stok takibine) bağlar.
+  async exportUnlinkedExcel() {
+    const [variants, categories] = await Promise.all([
+      this.prisma.trendyolProductVariant.findMany({
+        where: { productId: null },
+        orderBy: { updatedAt: 'desc' },
+        take: 2000,
+      }),
+      this.prisma.category.findMany({ orderBy: { name: 'asc' } }),
+    ]);
+
+    const header = ['Varyant ID', 'Barkod', 'Ürün Adı', 'Kategori', 'Model Kodu', 'Stok Miktarı', 'Satış Fiyatı', 'Açıklama'];
+    const data = variants.map((variant) => [
+      variant.id,
+      variant.barcode,
+      variant.productName,
+      this.guessCategoryName(variant.productName, variant.trendyolCategoryName, categories),
+      variant.currentModelCode ?? variant.proposedModelCode ?? '',
+      variant.stockQuantity,
+      Number(variant.trendyolSalePrice ?? 0),
+      variant.productDescription ?? '',
+    ]);
+    const sheet = XLSX.utils.aoa_to_sheet([header, ...data]);
+    sheet['!cols'] = [{ wch: 10 }, { wch: 16 }, { wch: 45 }, { wch: 26 }, { wch: 14 }, { wch: 12 }, { wch: 12 }, { wch: 45 }];
+    const categorySheet = XLSX.utils.aoa_to_sheet([['Geçerli Kategori Adları (Kategori sütununa aynen bu şekilde yazılmalı)'], ...categories.map((category) => [category.name])]);
+    categorySheet['!cols'] = [{ wch: 40 }];
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, sheet, 'Bağlanmamış Ürünler');
+    XLSX.utils.book_append_sheet(workbook, categorySheet, 'Kategori Listesi');
+    const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+    const date = new Date().toISOString().slice(0, 10);
+    return {
+      fileName: `Urun-Merkezi-Baglanmamis-${date}.xlsx`,
+      mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      contentBase64: buffer.toString('base64'),
+      total: variants.length,
+    };
+  }
+
+  async importExcel(file: Express.Multer.File | undefined) {
+    if (!file?.buffer?.length) throw new BadRequestException('Excel dosyası seçilmedi.');
+
+    const workbook = XLSX.read(file.buffer, { type: 'buffer' });
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    if (!sheet) throw new BadRequestException('Excel sayfası okunamadı.');
+    const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: '', raw: false });
+
+    const categories = await this.prisma.category.findMany();
+    const categoryByName = new Map(categories.map((category) => [this.normalizeText(category.name), category]));
+
+    let created = 0;
+    let updated = 0;
+    const errors: Array<{ row: number; message: string }> = [];
+
+    for (let index = 0; index < rows.length; index++) {
+      const row = rows[index];
+      const rowNumber = index + 2; // 1. satır başlık
+      try {
+        const variantId = this.optionalInt(row['Varyant ID']);
+        const barcode = this.text(row['Barkod']);
+        if (!variantId && !barcode) {
+          errors.push({ row: rowNumber, message: 'Varyant ID veya Barkod zorunludur.' });
+          continue;
+        }
+
+        const existingVariant = variantId
+          ? await this.prisma.trendyolProductVariant.findUnique({ where: { id: variantId } })
+          : await this.prisma.trendyolProductVariant.findUnique({ where: { barcode } });
+        if (!existingVariant) {
+          errors.push({ row: rowNumber, message: 'Eşleşen ürün bulunamadı (Varyant ID / Barkod hatalı).' });
+          continue;
+        }
+
+        const categoryName = this.text(row['Kategori']);
+        const category = categoryByName.get(this.normalizeText(categoryName));
+        if (!category) {
+          errors.push({ row: rowNumber, message: `Kategori bulunamadı: "${categoryName || '-'}".` });
+          continue;
+        }
+
+        const productName = this.text(row['Ürün Adı']) || existingVariant.productName;
+        const wasUnlinked = !existingVariant.productId;
+
+        await this.upsertEntry({
+          variantId: existingVariant.id,
+          productId: existingVariant.productId ?? undefined,
+          productName,
+          categoryId: category.id,
+          barcode: this.text(row['Barkod']) || existingVariant.barcode,
+          modelCode: this.text(row['Model Kodu']) || existingVariant.currentModelCode || existingVariant.proposedModelCode || undefined,
+          images: Array.isArray(existingVariant.images) ? existingVariant.images : [],
+          salePrice: this.optionalNumber(row['Satış Fiyatı']) ?? Number(existingVariant.trendyolSalePrice ?? 0),
+          stockQuantity: this.optionalInt(row['Stok Miktarı']) ?? existingVariant.stockQuantity,
+          description: this.text(row['Açıklama']) || existingVariant.productDescription || undefined,
+          channelCategoryName: existingVariant.trendyolCategoryName || undefined,
+        });
+
+        if (wasUnlinked) created++;
+        else updated++;
+      } catch (error) {
+        errors.push({ row: rowNumber, message: error instanceof Error ? error.message : 'Bilinmeyen hata.' });
+      }
+    }
+
+    return { ok: errors.length === 0, total: rows.length, created, updated, errors };
+  }
+
+  private normalizeText(value: string) {
+    return value.trim().toLocaleLowerCase('tr-TR');
+  }
+
+  // Ürün adına bakarak en olası kategoriyi tahmin eder. Kesin bir eşleşme değildir;
+  // Excel'e "kontrol edilmesi gereken" bir başlangıç değeri olarak yazılır.
+  private guessCategoryName(productName: string, trendyolCategoryName: string | null, categories: Array<{ id: number; name: string }>) {
+    const text = this.normalizeText(`${productName} ${trendyolCategoryName ?? ''}`);
+    const rules: Array<{ pattern: RegExp; categoryName: string }> = [
+      { pattern: /dikey bah[cç]e/, categoryName: 'Dikey Bahçe' },
+      { pattern: /saks[iı](?!l[iı])/, categoryName: 'Saksılar' },
+      { pattern: /bambu.*(tek|gövde|govde)|tek.*bambu/, categoryName: 'Bambu Tekli' },
+      { pattern: /bambu/, categoryName: 'Bambu Saksılı' },
+      { pattern: /a[gğ]a[cç]|palmiye|ficus|benjamin|areka|zeytin|limon a[gğ]ac/, categoryName: 'Ağaçlar' },
+      { pattern: /[cç]i[cç]ek|demet|buket|orkide|lale|g[uü]l\b/, categoryName: 'Çiçekler' },
+    ];
+    const match = rules.find((rule) => rule.pattern.test(text));
+    if (!match) return '';
+    const found = categories.find((category) => this.normalizeText(category.name) === this.normalizeText(match.categoryName));
+    return found?.name ?? '';
   }
 
   copyRecipe(variantId: number, payload: unknown, userRole: string, userId: number) {

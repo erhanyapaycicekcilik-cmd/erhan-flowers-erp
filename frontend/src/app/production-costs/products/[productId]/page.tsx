@@ -210,6 +210,7 @@ export default function ProductCostDetailPage() {
   const [sendingImagesAndPrice, setSendingImagesAndPrice] = useState(false);
   const [pendingBatchId, setPendingBatchId] = useState<string | null>(null);
   const [checkingBatch, setCheckingBatch] = useState(false);
+  const [openingTrendyolPanel, setOpeningTrendyolPanel] = useState(false);
 
   useEffect(() => {
     const savedSettings = window.localStorage.getItem('ef_cost_price_settings');
@@ -731,6 +732,26 @@ export default function ProductCostDetailPage() {
     }
   }
 
+  async function openTrendyolPanel() {
+    if (!variant?.barcode) {
+      setMessage('Panel linki için barkod bulunamadı.');
+      return;
+    }
+    setOpeningTrendyolPanel(true);
+    try {
+      const result = await api<{ ok: boolean; message: string; panelUrl?: string }>(`/integrations/products/trendyol/panel-link/${variant.barcode}`);
+      if (result.ok && result.panelUrl) {
+        window.open(result.panelUrl, '_blank');
+      } else {
+        setMessage(`Panel linki alınamadı: ${result.message}`);
+      }
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Panel linki alınamadı.');
+    } finally {
+      setOpeningTrendyolPanel(false);
+    }
+  }
+
   async function saveAndNext() {
     await save(true);
     if (detail?.nextIncompleteProductId) router.push(`/production-costs/products/${detail.nextIncompleteProductId}`);
@@ -978,6 +999,16 @@ export default function ProductCostDetailPage() {
                 {checkingBatch ? 'Kontrol ediliyor...' : 'Trendyol\'da Gerçek Sonucu Kontrol Et'}
               </button>
             )}
+            <button
+              className="btn btn-secondary mt-2 w-full justify-center"
+              onClick={openTrendyolPanel}
+              disabled={openingTrendyolPanel}
+            >
+              {openingTrendyolPanel ? 'Bağlanıyor...' : "Trendyol'da Aç (Satıcı Paneli)"}
+            </button>
+            <p className="mt-2 text-xs text-slate-500">
+              Trendyol&apos;un API&apos;si yayındaki bir görseli silmeyi desteklemiyor (sadece ekleme yapılabiliyor) — istenmeyen görseli kaldırmak için satıcı panelini kullan.
+            </p>
           </CompactPanel>
 
           <CompactPanel

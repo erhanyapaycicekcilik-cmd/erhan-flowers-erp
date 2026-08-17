@@ -275,6 +275,34 @@ export class TrendyolAdapter extends BaseIntegrationAdapter {
     return { ok: true, status: 'CONNECTED', message: 'Trendyol işlemi başarıyla tamamladı.', batchStatus, failedItemCount };
   }
 
+  // Trendyol API'si onaylı bir üründen görsel SİLMEYİ desteklemiyor (yalnızca
+  // ekleme/birleştirme yapıyor). Bu yüzden istenmeyen görseli kaldırmanın tek
+  // yolu Trendyol satıcı panelinden elle silmek. Bu metod, barkoda ait ürünün
+  // panel düzenleme linkini (platformListingId ile) canlı olarak sorgular.
+  async getSellerPanelUrl(barcode: string): Promise<AdapterConnectionResult & { panelUrl?: string }> {
+    const missing = this.missingKeys();
+    if (missing.length) return this.missing(missing);
+    if (!barcode) return { ok: false, status: 'FAILED', message: 'Barkod zorunludur.' };
+
+    const supplierId = this.env('SUPPLIER_ID');
+    const apiBaseUrl = this.env('API_URL').replace(/\/+$/, '');
+    const url = `${apiBaseUrl}/product/sellers/${supplierId}/products?barcode=${encodeURIComponent(barcode)}`;
+    const response = await fetch(url, { headers: this.productHeaders(supplierId) });
+    if (!response.ok) {
+      return {
+        ok: false,
+        status: response.status === 401 || response.status === 403 ? 'MISSING_CREDENTIALS' : 'FAILED',
+        message: `Trendyol ürün sorgusu başarısız. HTTP ${response.status}: ${await this.safeErrorText(response)}`,
+      };
+    }
+    const body = (await response.json().catch(() => ({}))) as { content?: Array<Record<string, unknown>> };
+    const listingId = this.text(body.content?.[0]?.platformListingId);
+    if (!listingId) {
+      return { ok: false, status: 'FAILED', message: 'Bu barkod için Trendyol üzerinde ürün bulunamadı.' };
+    }
+    return { ok: true, status: 'CONNECTED', message: 'Panel linki bulundu.', panelUrl: `https://partner.trendyol.com/product-detail/${listingId}?withListingId=true` };
+  }
+
   // Trendyol "paket durumu güncelleme" (siparişi hazırlandı/kargolandı olarak bildirme).
   // payload: { shipmentPackageId, lines: [{ lineId, quantity }], status: 'Picking'|'Invoiced'|'Shipped', trackingNumber?, cargoProviderId? }
   async updateOrderStatus(payload: unknown): Promise<AdapterConnectionResult> {
@@ -445,7 +473,12 @@ export class TrendyolAdapter extends BaseIntegrationAdapter {
           title: this.text(data.productName),
           description: this.text(data.description),
           images: this.array(data.images).map((imageUrl) => ({ url: String(imageUrl) })),
-          attributes: this.buildAttributes(data),
+          // Trendyol, onaylı bir üründe varyant tanımlayan özniteliği ("Renk")
+          // değiştirmeye izin vermiyor ve HTTP 400 ile reddediyor. Bu yüzden
+          // içerik güncellemesinde renk alanlarını hiç göndermiyoruz.
+          attributes: this.buildAttributes(data).filter(
+            (attribute) => attribute.attributeId !== TRENDYOL_COLOR_ATTRIBUTE_ID && attribute.attributeId !== TRENDYOL_WEB_COLOR_ATTRIBUTE_ID,
+          ),
         }],
       }),
     });

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { AdminShell } from '@/components/AdminShell';
 import { api } from '@/lib/api';
-import { CheckCircle2, Instagram, Plus, RefreshCw, ShieldAlert, Sparkles, Trash2, TrendingUp, XCircle } from 'lucide-react';
+import { Award, CheckCircle2, FileSpreadsheet, Heart, Instagram, Plus, RefreshCw, ShieldAlert, ShoppingCart, Sparkles, Trash2, TrendingUp, XCircle } from 'lucide-react';
 
 type KeywordComparison = {
   keyword: string;
@@ -38,16 +38,22 @@ type InstagramStatus = { connected: boolean; accountName?: string; connectedAt?:
 type SocialReport = { id: number; reportDate: string; summary: string; suggestions: string[]; generatedAt: string };
 
 export default function MarketAnalysisPage() {
-  const [tab, setTab] = useState<'trendyol' | 'social'>('trendyol');
+  const [tab, setTab] = useState<'trendyol' | 'social' | 'performance'>('trendyol');
 
   return (
     <AdminShell title="Pazar Analizi">
-      <div className="mb-5 flex gap-2">
+      <div className="mb-5 flex flex-wrap gap-2">
         <button
           className={`rounded-md px-4 py-2 text-sm font-semibold ${tab === 'trendyol' ? 'bg-brand text-white' : 'bg-white text-slate-600 border border-line'}`}
           onClick={() => setTab('trendyol')}
         >
           Trendyol Rakip Analizi
+        </button>
+        <button
+          className={`rounded-md px-4 py-2 text-sm font-semibold ${tab === 'performance' ? 'bg-brand text-white' : 'bg-white text-slate-600 border border-line'}`}
+          onClick={() => setTab('performance')}
+        >
+          En İyi Performans
         </button>
         <button
           className={`rounded-md px-4 py-2 text-sm font-semibold ${tab === 'social' ? 'bg-brand text-white' : 'bg-white text-slate-600 border border-line'}`}
@@ -56,7 +62,7 @@ export default function MarketAnalysisPage() {
           Sosyal Medya
         </button>
       </div>
-      {tab === 'trendyol' ? <TrendyolTab /> : <SocialTab />}
+      {tab === 'trendyol' ? <TrendyolTab /> : tab === 'performance' ? <PerformanceTab /> : <SocialTab />}
     </AdminShell>
   );
 }
@@ -211,6 +217,192 @@ function TrendyolTab() {
             </span>
           ))}
           {!keywords.length && <span className="text-sm text-slate-500">Henüz anahtar kelime eklenmedi.</span>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+type FavoritedVariant = {
+  id: number;
+  barcode: string;
+  productName: string;
+  currentModelCode: string | null;
+  trendyolProductUrl: string | null;
+  trendyolRatingAverage: string | number | null;
+  trendyolRatingCount: number;
+  trendyolCommentCount: number;
+  trendyolFavoriteCount: number;
+  trendyolStatsSyncedAt: string | null;
+};
+
+type SellerRow = { barcode: string; productName: string; totalQuantity: number; orderCount: number };
+
+type DeadZoneAnalysis = {
+  totalActive: number;
+  statsSyncedCount: number;
+  deadZoneCount: number;
+  deadZonePercent: number;
+  insight: { summary: string; recommendation: 'düzenle' | 'sil-degistir' | 'karma'; reasons: string[] };
+};
+
+function PerformanceTab() {
+  const [favorited, setFavorited] = useState<FavoritedVariant[]>([]);
+  const [sellers, setSellers] = useState<SellerRow[]>([]);
+  const [analysis, setAnalysis] = useState<DeadZoneAnalysis | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
+  const [message, setMessage] = useState('');
+
+  function load() {
+    setLoading(true);
+    Promise.all([
+      api<FavoritedVariant[]>('/market-intelligence/own-performance/top-favorited?limit=100').catch(() => []),
+      api<SellerRow[]>('/market-intelligence/own-performance/top-sellers?limit=100').catch(() => []),
+      api<DeadZoneAnalysis>('/market-intelligence/own-performance/dead-zone').catch(() => null),
+    ])
+      .then(([favoritedData, sellerData, analysisData]) => {
+        setFavorited(favoritedData);
+        setSellers(sellerData);
+        setAnalysis(analysisData);
+      })
+      .finally(() => setLoading(false));
+  }
+
+  useEffect(load, []);
+
+  async function startSync() {
+    setSyncing(true);
+    setMessage('');
+    try {
+      const result = await api<{ started: boolean; message: string }>('/market-intelligence/own-performance/sync', { method: 'POST', json: { limit: 300 } });
+      setMessage(result.message);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Senkronizasyon başlatılamadı.');
+    } finally {
+      setSyncing(false);
+    }
+  }
+
+  async function downloadActionPlan() {
+    try {
+      const result = await api<{ fileName: string; mimeType: string; contentBase64: string; total: number }>('/market-intelligence/own-performance/action-plan/excel');
+      const binary = atob(result.contentBase64);
+      const bytes = new Uint8Array(binary.length);
+      for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+      const url = window.URL.createObjectURL(new Blob([bytes], { type: result.mimeType }));
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = result.fileName;
+      link.click();
+      window.URL.revokeObjectURL(url);
+      setMessage(`${result.total} ürünlük aksiyon listesi indirildi (taranmış ürünler).`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Liste indirilemedi.');
+    }
+  }
+
+  if (loading) return <div className="text-sm text-slate-500">Yükleniyor...</div>;
+
+  const recommendationLabel = analysis?.insight.recommendation === 'sil-degistir'
+    ? 'Sil / Komple Değiştir'
+    : analysis?.insight.recommendation === 'düzenle'
+      ? 'Tek Tek Düzenle'
+      : 'Karma Yaklaşım';
+
+  return (
+    <div className="space-y-6">
+      <div className="card flex flex-wrap items-center justify-between gap-3 p-5">
+        <div>
+          <h2 className="text-lg font-bold">Ürün Performans Senkronizasyonu</h2>
+          <p className="text-sm text-slate-500">
+            {analysis ? `${analysis.statsSyncedCount} / ${analysis.totalActive} ürünün puan/favori verisi çekildi.` : 'Henüz veri yok.'} Her ürün sayfası tek tek okunduğu için arka planda kademeli ilerler.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button className="btn btn-secondary" onClick={load}><RefreshCw size={16} /> Listeleri Yenile</button>
+          <button className="btn btn-primary" onClick={startSync} disabled={syncing}>
+            <RefreshCw size={16} className={syncing ? 'animate-spin' : ''} />
+            {syncing ? 'Başlatılıyor...' : 'Senkronizasyonu Başlat (300 ürün)'}
+          </button>
+          <button className="btn btn-secondary" onClick={downloadActionPlan}>
+            <FileSpreadsheet size={16} /> Sil / Güncelle Listesi (Excel)
+          </button>
+        </div>
+      </div>
+      {message && <div className="rounded-md border border-line bg-white p-3 text-sm">{message}</div>}
+
+      {analysis && (
+        <div className="card space-y-3 border border-amber-100 bg-amber-50/40 p-5">
+          <div className="flex items-center gap-2 font-bold">
+            <Award size={18} className="text-amber-600" />
+            Strateji Önerisi: {recommendationLabel}
+          </div>
+          <p className="text-sm text-slate-700">{analysis.insight.summary}</p>
+          <div className="text-sm font-semibold text-slate-600">
+            Ölçümü yapılan {analysis.statsSyncedCount} üründen {analysis.deadZoneCount} tanesi (%{analysis.deadZonePercent}) hiç favori/yorum almamış.
+          </div>
+          {analysis.insight.reasons.length > 0 && (
+            <ul className="space-y-1 text-sm text-slate-700">
+              {analysis.insight.reasons.map((reason, index) => (
+                <li key={index} className="flex gap-2"><span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />{reason}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <div className="card overflow-hidden">
+          <div className="flex items-center gap-2 border-b border-line p-4 font-bold">
+            <ShoppingCart size={18} className="text-emerald-600" />
+            En Çok Satanlarım (sipariş geçmişimize göre, ilk 100)
+          </div>
+          <div className="max-h-[520px] overflow-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 text-left text-xs font-semibold uppercase text-slate-500">
+                <tr><th className="px-3 py-2">#</th><th className="px-3 py-2">Ürün</th><th className="px-3 py-2">Adet</th><th className="px-3 py-2">Sipariş</th></tr>
+              </thead>
+              <tbody>
+                {sellers.map((row, index) => (
+                  <tr key={row.barcode} className="border-t border-line">
+                    <td className="px-3 py-2 text-slate-400">{index + 1}</td>
+                    <td className="px-3 py-2">{row.productName}</td>
+                    <td className="px-3 py-2 font-semibold">{row.totalQuantity}</td>
+                    <td className="px-3 py-2 text-slate-500">{row.orderCount}</td>
+                  </tr>
+                ))}
+                {!sellers.length && <tr><td colSpan={4} className="px-3 py-4 text-slate-500">Henüz Trendyol sipariş verisi yok.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div className="card overflow-hidden">
+          <div className="flex items-center gap-2 border-b border-line p-4 font-bold">
+            <Heart size={18} className="text-pink-600" />
+            En Çok Favori/Yorum Alanlarım (ilk 100)
+          </div>
+          <div className="max-h-[520px] overflow-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 text-left text-xs font-semibold uppercase text-slate-500">
+                <tr><th className="px-3 py-2">#</th><th className="px-3 py-2">Ürün</th><th className="px-3 py-2">Favori</th><th className="px-3 py-2">Puan</th></tr>
+              </thead>
+              <tbody>
+                {favorited.map((variant, index) => (
+                  <tr key={variant.id} className="border-t border-line">
+                    <td className="px-3 py-2 text-slate-400">{index + 1}</td>
+                    <td className="px-3 py-2">
+                      {variant.trendyolProductUrl ? <a className="text-brand hover:underline" href={variant.trendyolProductUrl} target="_blank" rel="noreferrer">{variant.productName}</a> : variant.productName}
+                    </td>
+                    <td className="px-3 py-2 font-semibold">{variant.trendyolFavoriteCount}</td>
+                    <td className="px-3 py-2 text-slate-500">{variant.trendyolRatingCount > 0 ? `${Number(variant.trendyolRatingAverage ?? 0).toFixed(1)} (${variant.trendyolRatingCount})` : '-'}</td>
+                  </tr>
+                ))}
+                {!favorited.length && <tr><td colSpan={4} className="px-3 py-4 text-slate-500">Henüz senkronize edilmiş ürün yok — yukarıdaki butonla başlat.</td></tr>}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>

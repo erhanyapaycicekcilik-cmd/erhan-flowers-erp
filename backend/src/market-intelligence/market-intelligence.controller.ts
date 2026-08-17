@@ -2,6 +2,7 @@ import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Query,
 import { AuthGuard } from '../auth/auth.guard';
 import { MarketIntelligenceService } from './market-intelligence.service';
 import { InstagramService } from './instagram.service';
+import { OwnPerformanceService } from './own-performance.service';
 
 @UseGuards(AuthGuard)
 @Controller('market-intelligence')
@@ -9,7 +10,43 @@ export class MarketIntelligenceController {
   constructor(
     private readonly marketIntelligence: MarketIntelligenceService,
     private readonly instagram: InstagramService,
+    private readonly ownPerformance: OwnPerformanceService,
   ) {}
+
+  @Post('own-performance/sync')
+  syncOwnPerformance(@Body() body: { limit?: number }) {
+    return this.ownPerformance.triggerSync(body?.limit);
+  }
+
+  @Get('own-performance/sync/status')
+  ownPerformanceSyncStatus() {
+    return this.ownPerformance.syncStatus();
+  }
+
+  @Get('own-performance/top-favorited')
+  topFavorited(@Query('limit') limit?: string) {
+    return this.ownPerformance.getTopFavorited(limit ? Number(limit) : 100);
+  }
+
+  @Get('own-performance/top-sellers')
+  topSellers(@Query('limit') limit?: string) {
+    return this.ownPerformance.getTopSellers(limit ? Number(limit) : 100);
+  }
+
+  @Get('own-performance/dead-zone')
+  deadZoneAnalysis() {
+    return this.ownPerformance.getDeadZoneAnalysis();
+  }
+
+  @Get('own-performance/action-plan')
+  actionPlan() {
+    return this.ownPerformance.getActionPlan();
+  }
+
+  @Get('own-performance/action-plan/excel')
+  actionPlanExcel() {
+    return this.ownPerformance.exportActionPlanExcel();
+  }
 
   @Get('keywords')
   listKeywords() {
