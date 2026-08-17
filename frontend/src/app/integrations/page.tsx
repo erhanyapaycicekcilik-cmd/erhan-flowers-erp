@@ -190,9 +190,26 @@ export default function IntegrationsPage() {
     });
   }
 
+  function refreshLiveData() {
+    Promise.all([
+      api<Connection[]>('/integrations/connections'),
+      api<LogRow[]>('/integrations/history'),
+      api<LogRow[]>('/integrations/errors'),
+      api<Record<string, unknown>>('/integrations/operations'),
+    ]).then(([nextConnections, nextHistory, nextErrors, nextSummary]) => {
+      setConnections(nextConnections);
+      setHistory(nextHistory);
+      setErrors(nextErrors);
+      setSummary(nextSummary);
+    }).catch(() => {});
+    api<SyncJob[]>('/integrations/sync-jobs').then(setSyncJobs).catch(() => {});
+  }
+
   useEffect(() => {
     load();
     loadSprint1A();
+    const interval = setInterval(refreshLiveData, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   async function test(platform: string) {

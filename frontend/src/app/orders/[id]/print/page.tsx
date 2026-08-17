@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, Printer } from 'lucide-react';
 import JsBarcode from 'jsbarcode';
-import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
 
 const COMPANY_ADDRESS = 'Sarılar Mahallesi Cumhuriyet Caddesi No: 52, Manavgat / Antalya';
@@ -26,12 +26,22 @@ type SalePrintData = {
 
 export default function OrderPrintPreviewPage() {
   const params = useParams<{ id: string }>();
+  const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
   const printType = cleanPrintType(searchParams.get('type'));
   const endpoint = printEndpoint(printType);
   const title = printTitle(printType);
-  const orderIds = useMemo(() => String(params.id || '').split(',').map((id) => Number(id)).filter(Boolean), [params.id]);
+  // useParams() bazı geçişlerde (özellikle virgül içeren çoklu id segmentlerinde)
+  // güvenilmez davranabiliyor; birincil kaynak olarak doğrudan URL yolunu kullanıyoruz.
+  const rawIdSegment = useMemo(() => {
+    const fromPath = pathname?.match(/^\/orders\/([^/]+)\/print/)?.[1];
+    return fromPath ? decodeURIComponent(fromPath) : String(params.id || '');
+  }, [pathname, params.id]);
+  const orderIds = useMemo(
+    () => rawIdSegment.split(',').map((id) => Number(id.trim())).filter((id) => Number.isFinite(id) && id > 0),
+    [rawIdSegment],
+  );
   const [pages, setPages] = useState<SalePrintData[]>([]);
   const [printedIds, setPrintedIds] = useState<number[]>([]);
   const [error, setError] = useState('');
@@ -40,11 +50,15 @@ export default function OrderPrintPreviewPage() {
 
   useEffect(() => {
     if (!orderIds.length) {
-      setError('Geçersiz sipariş çıktısı bağlantısı.');
+      if (rawIdSegment) setError('Geçersiz sipariş çıktısı bağlantısı.');
       return;
     }
+    setError('');
     Promise.all(orderIds.map((orderId) => api<SalePrintData>(`/sales/${orderId}/print/${endpoint}?preview=1`)))
-      .then(setPages)
+      .then((result) => {
+        setPages(result);
+        setError('');
+      })
       .catch((requestError) => setError(requestError instanceof Error ? requestError.message : 'Yazdırma önizlemesi hazırlanamadı.'));
   }, [endpoint, orderIds]);
 
@@ -74,6 +88,7 @@ export default function OrderPrintPreviewPage() {
         await api<SalePrintData>(`/sales/${id}/print/${endpoint}`);
         if (printType === 'delivery' && canPromoteAfterPrint(text(sale.status))) {
           await api(`/sales/${id}/status`, { method: 'POST', json: { status: 'PREPARING', note: 'A5 sipariş çıktısı yazdırıldı.' } }).catch(() => null);
+          await syncTrendyolPackageStatus(sale).catch(() => null);
         }
         setPrintedIds((current) => [...current, id]);
       }
@@ -634,6 +649,26 @@ function Info({ label, value, wide }: { label: string; value: string; wide?: boo
       <b>{value || '-'}</b>
     </div>
   );
+}
+
+async function syncTrendyolPackageStatus(sale: Record<string, unknown>) {
+  const channel = text(sale.channel).toUpperCase();
+  if (channel !== 'TRENDYOL') return;
+  const shipmentPackageId = text(sale.external_order_id ?? sale.externalOrderId);
+  if (!shipmentPackageId) return;
+  const items = Array.isArray(sale.items) ? sale.items : [];
+  const lines = items
+    .map((item) => ({ lineId: Number(item.external_line_id ?? item.externalLineId), quantity: Number(item.quantity || 0) }))
+    .filter((line) => Number.isFinite(line.lineId) && line.lineId > 0 && line.quantity > 0);
+  if (!lines.length) return;
+  try {
+    await api('/integrations/orders/trendyol/package-status', {
+      method: 'POST',
+      json: { shipmentPackageId, status: 'Picking', lines },
+    });
+  } catch {
+    // Trendyol tarafındaki senkronizasyon hatası, kendi sistemimizdeki yazdırma/durum akışını durdurmamalı.
+  }
 }
 
 function canPromoteAfterPrint(status: string) {

@@ -904,7 +904,7 @@ export default function ProductsPage() {
     const uploaded: string[] = [];
     for (const file of Array.from(files).filter((item) => item.type.startsWith('image/')).slice(0, remainingSlots)) {
       const data = new FormData();
-      data.append('folderName', form.modelCode || form.productName || 'Ürün Merkezi');
+      data.append('folderName', [form.modelCode, form.barcode, form.productName].filter(Boolean).join('_') || 'Ürün Merkezi');
       data.append('file', file);
       if (form.productId) data.append('productId', form.productId);
       const media = await api<MediaFile>('/media/upload', { method: 'POST', body: data });

@@ -63,6 +63,24 @@ export class IntegrationsController {
     return this.integrations.orderSummary(platform);
   }
 
+  @Post('orders/:platform/package-status')
+  @UseGuards(OwnerGuard)
+  updatePackageStatus(@Param('platform') platform: string, @Body() body: { shipmentPackageId?: string; status?: string; lines?: Array<{ lineId: number; quantity: number }>; trackingNumber?: string; cargoProviderId?: number }) {
+    return this.integrations.updatePackageStatus(platform, body);
+  }
+
+  @Get('products/:platform/batch-status/:batchRequestId')
+  @UseGuards(OwnerGuard)
+  checkBatchStatus(@Param('platform') platform: string, @Param('batchRequestId') batchRequestId: string) {
+    return this.integrations.checkBatchStatus(platform, batchRequestId);
+  }
+
+  @Post('products/:platform/price')
+  @UseGuards(OwnerGuard)
+  pushPrice(@Param('platform') platform: string, @Body() body: { barcode?: string; salePrice?: number; listPrice?: number; stockQuantity?: number }) {
+    return this.integrations.pushPrice(platform, body);
+  }
+
   @Get('orders')
   orders(@Query() query: Record<string, string>) {
     return this.integrations.listOrders(query);

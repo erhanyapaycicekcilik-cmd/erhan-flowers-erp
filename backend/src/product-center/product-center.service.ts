@@ -113,13 +113,12 @@ export class ProductCenterService {
       if (!category) throw new BadRequestException('Kategori bulunamadi.');
 
       const effectiveProductId = productId || existingVariant?.productId || undefined;
-      const productType = this.text((payload as any).productType) || this.text(payload.channelCategoryName) || this.text(payload.colorVariant) || productName;
       const sizeVariant = this.text(payload.colorVariant) || productName;
       const modelCode = (this.text(payload.modelCode)?.toUpperCase()
         || existingVariant?.currentModelCode
         || existingVariant?.proposedModelCode
         || existingVariant?.product?.modelCode
-        || await this.nextModelCode(tx, category, productType)).toUpperCase();
+        || await this.nextModelCode(tx, category)).toUpperCase();
       const stockCode = this.text(payload.stockCode)
         || existingVariant?.supplierStockCode
         || await this.nextStockCode(tx, modelCode, sizeVariant);
@@ -184,14 +183,13 @@ export class ProductCenterService {
   async generateEntryIdentity(payload: EntryPayload) {
     const categoryId = this.requiredInt(payload.categoryId, 'Kategori zorunludur.');
     const productName = this.text(payload.productName) || 'Urun';
-    const productType = this.text((payload as any).productType) || this.text(payload.channelCategoryName) || productName;
     const sizeVariant = this.text(payload.colorVariant) || productName;
 
     return this.prisma.$transaction(async (tx) => {
       await tx.$executeRawUnsafe('LOCK TABLE "products", "trendyol_product_variants", "stock_cards", "barcode_logs" IN SHARE ROW EXCLUSIVE MODE');
       const category = await tx.category.findUnique({ where: { id: categoryId } });
       if (!category) throw new BadRequestException('Kategori bulunamadi.');
-      const modelCode = await this.nextModelCode(tx, category, productType);
+      const modelCode = await this.nextModelCode(tx, category);
       const stockCode = await this.nextStockCode(tx, modelCode, sizeVariant);
       const barcode = await this.nextEan13Barcode(tx);
       return { modelCode, stockCode, barcode };
@@ -243,7 +241,7 @@ export class ProductCenterService {
       if (!category) throw new BadRequestException('Ana kategori bulunamadi.');
 
       const existing = await this.findExistingQuickEntry(tx, productId, variantId);
-      const modelCode = existing.modelCode || await this.nextModelCode(tx, category, productType);
+      const modelCode = existing.modelCode || await this.nextModelCode(tx, category);
       const stockCode = existing.stockCode || await this.nextStockCode(tx, modelCode, sizeVariant);
       const barcode = existing.barcode || await this.nextEan13Barcode(tx);
       const images = [mainImageUrl];
@@ -725,22 +723,25 @@ export class ProductCenterService {
     };
   }
 
-  private async nextModelCode(tx: Prisma.TransactionClient, category: { name: string; codePrefix: string }, productType: string) {
-    const categoryCode = this.businessCode(category.codePrefix && category.codePrefix !== 'ERH' ? category.codePrefix : category.name);
-    const typeCode = this.businessCode(productType);
-    const prefix = `${categoryCode}-${typeCode}`;
-    const codes = await Promise.all([
-      tx.product.findMany({ where: { modelCode: { startsWith: `${prefix}-` } }, select: { modelCode: true } }),
-      tx.trendyolProductVariant.findMany({
-        where: { OR: [{ currentModelCode: { startsWith: `${prefix}-` } }, { proposedModelCode: { startsWith: `${prefix}-` } }] },
-        select: { currentModelCode: true, proposedModelCode: true },
-      }),
-      tx.stockCard.findMany({ where: { OR: [{ sku: { startsWith: `${prefix}-` } }, { model: { startsWith: `${prefix}-` } }] }, select: { sku: true, model: true } }),
-    ]);
-    const max = codes.flatMap((items) => items as any[]).reduce((highest, item) => {
-      return Math.max(highest, ...[item.modelCode, item.currentModelCode, item.proposedModelCode, item.sku, item.model].map((code) => this.sequenceFromCode(prefix, code)));
-    }, 0);
-    return `${prefix}-${String(max + 1).padStart(4, '0')}`;
+  // Model kodu prensibi: ERH-XXXX, kategori bazinda ayrilmis numara serisi
+  // (orn. Agaclar 1000'ler, Bambu Saksili 2000'ler). Kategori.startCode/currentCode
+  // serinin sinirini ve son kullanilan numarayi tutar.
+  private async nextModelCode(tx: Prisma.TransactionClient, category: { id: number; codePrefix: string; startCode: number; currentCode: number }) {
+    const prefix = category.codePrefix || 'ERH';
+    let next = Math.max(category.currentCode + 1, category.startCode);
+
+    for (let attempt = 0; attempt < 10000; attempt += 1) {
+      const modelCode = `${prefix}-${next}`;
+      const duplicate = await tx.product.findFirst({ where: { modelCode }, select: { id: true } })
+        || await tx.trendyolProductVariant.findFirst({ where: { OR: [{ currentModelCode: modelCode }, { proposedModelCode: modelCode }] }, select: { id: true } })
+        || await tx.stockCard.findFirst({ where: { OR: [{ sku: modelCode }, { model: modelCode }] }, select: { id: true } });
+      if (!duplicate) {
+        await tx.category.update({ where: { id: category.id }, data: { currentCode: next } });
+        return modelCode;
+      }
+      next += 1;
+    }
+    throw new BadRequestException('Benzersiz model kodu uretilemedi.');
   }
 
   private async nextStockCode(tx: Prisma.TransactionClient, modelCode: string, sizeVariant: string) {
@@ -784,11 +785,6 @@ export class ProductCenterService {
 
   private hasValidEan13Checksum(value: string) {
     return /^\d{13}$/.test(value) && this.ean13(value.slice(0, 12)) === value;
-  }
-
-  private sequenceFromCode(prefix: string, value?: string | null) {
-    const match = String(value ?? '').match(new RegExp(`^${prefix}-(\\d{4,})$`));
-    return match ? Number(match[1]) : 0;
   }
 
   private businessCode(value: string) {

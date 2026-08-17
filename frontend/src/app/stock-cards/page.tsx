@@ -257,6 +257,23 @@ export default function StockCardsPage() {
     setStockCards(await api<StockCard[]>('/stock-cards'));
   }
 
+  async function downloadStockExport(format: 'excel' | 'pdf') {
+    try {
+      const result = await api<{ fileName: string; mimeType: string; contentBase64: string }>(`/stock-cards/export/${format}`);
+      const binary = atob(result.contentBase64);
+      const bytes = new Uint8Array(binary.length);
+      for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+      const url = window.URL.createObjectURL(new Blob([bytes], { type: result.mimeType }));
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = result.fileName;
+      link.click();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Stok listesi indirilemedi.');
+    }
+  }
+
   useEffect(() => {
     Promise.all([
       load(),
@@ -603,6 +620,14 @@ export default function StockCardsPage() {
           <button className="btn btn-secondary" type="button" onClick={() => setShowStockCountPrint(true)}>
             <Printer size={18} />
             A4 Sayım Listesi
+          </button>
+          <button className="btn btn-secondary" type="button" onClick={() => downloadStockExport('excel')}>
+            <FileText size={18} />
+            Excel İndir
+          </button>
+          <button className="btn btn-secondary" type="button" onClick={() => downloadStockExport('pdf')}>
+            <Printer size={18} />
+            A4 Fiyat Listesi
           </button>
           <button className="btn btn-primary" onClick={() => openStockForm('create')}>
             <Plus size={18} />

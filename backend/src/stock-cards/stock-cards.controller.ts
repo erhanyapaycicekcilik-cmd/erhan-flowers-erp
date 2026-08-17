@@ -19,6 +19,16 @@ export class StockCardsController {
     return this.stockCards.list(request.user?.role);
   }
 
+  @Get('export/excel')
+  exportExcel() {
+    return this.stockCards.exportExcel();
+  }
+
+  @Get('export/pdf')
+  exportPdf() {
+    return this.stockCards.exportPdf();
+  }
+
   @Post()
   create(@Body() body: unknown) {
     return this.stockCards.create(body);

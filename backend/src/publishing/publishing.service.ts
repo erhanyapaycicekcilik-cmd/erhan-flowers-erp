@@ -214,11 +214,18 @@ export class PublishingService {
       actionType,
       result.ok ? 'SUCCESS' : 'FAILED',
       platformPayload,
-      { platform, status: result.status, message: result.message, missingKeys: result.missingKeys ?? [], batchRequestId: result.batchRequestId ?? null },
+      { platform, status: result.status, message: result.message, missingKeys: result.missingKeys ?? [], batchRequestId: result.batchRequestId ?? null, listingUploadId: result.listingUploadId ?? null },
       missingFields,
       result.ok ? null : result.message,
     );
-    return { ok: result.ok, missingFields, errorMessage: result.ok ? null : result.message, successMessage: result.ok ? result.message : null, logId: log.id };
+    return {
+      ok: result.ok,
+      missingFields,
+      errorMessage: result.ok ? null : result.message,
+      successMessage: result.ok ? result.message : null,
+      logId: log.id,
+      batchRequestId: result.batchRequestId ?? null,
+    };
   }
 
   private async adapter(platform: IntegrationPlatform): Promise<IntegrationAdapter> {
@@ -266,7 +273,7 @@ export class PublishingService {
   private async getVariant(id: number) {
     const variant = await this.prisma.trendyolProductVariant.findUnique({
       where: { id },
-      include: { family: true, sizeOption: true, potOption: true, product: { include: { category: true } }, productCostDraft: true },
+      include: { family: { include: { category: true } }, sizeOption: true, potOption: true, product: { include: { category: true } }, productCostDraft: true },
     });
     if (!variant) throw new NotFoundException('Ürün bulunamadı.');
     return variant;
@@ -275,7 +282,7 @@ export class PublishingService {
   private async getVariantForExport(id: number) {
     const variant = await this.prisma.trendyolProductVariant.findUnique({
       where: { id },
-      include: { family: true, sizeOption: true, potOption: true, product: { include: { category: true } }, productCostDraft: true },
+      include: { family: { include: { category: true } }, sizeOption: true, potOption: true, product: { include: { category: true } }, productCostDraft: true },
     });
     if (!variant) throw new NotFoundException('Urun bulunamadi.');
     return variant;
@@ -287,12 +294,13 @@ export class PublishingService {
     const color = this.acceptedColor(variant.productColor || this.extractColor(productName) || 'Çok Renkli');
     return {
       barcode: variant.barcode,
+      contentId: this.extractContentId(variant.trendyolProductUrl),
       modelCode: variant.currentModelCode,
       productName,
       description: variant.seoLongDescription ?? variant.productDescription,
       shortDescription: variant.seoShortDescription,
       categoryName: variant.trendyolCategoryName,
-      categoryId: variant.product?.category?.trendyolCategoryId ?? null,
+      categoryId: variant.product?.category?.trendyolCategoryId ?? variant.family?.category?.trendyolCategoryId ?? null,
       brand: variant.brand,
       color,
       flowerType: this.extractFlowerType(productName),
@@ -311,6 +319,13 @@ export class PublishingService {
         imageAltText: variant.seoImageAltText,
       },
     };
+  }
+
+  // Trendyol urun linki "...-p-<contentId>?..." formatindadir. Onayli/canli
+  // urunlerde icerik guncellemesi barkod yerine bu contentId ile yapilir.
+  private extractContentId(productUrl: string | null | undefined): string | null {
+    const match = String(productUrl ?? '').match(/-p-(\d+)/);
+    return match ? match[1] : null;
   }
 
   private excelTemplate(platform: IntegrationPlatform) {
@@ -495,8 +510,10 @@ export class PublishingService {
     if (!payload.modelCode) missing.push('Model kodu');
     if (!payload.productName) missing.push('Ürün adı');
     if (!payload.description) missing.push('Uzun açıklama');
-    if (!payload.categoryName) missing.push('Trendyol kategori adı');
-    if (!payload.categoryId) missing.push('Trendyol kategori eşlemesi (kategori ayarlarından Trendyol ID girilmeli)');
+    if (!payload.contentId) {
+      if (!payload.categoryName) missing.push('Trendyol kategori adı');
+      if (!payload.categoryId) missing.push('Trendyol kategori eşlemesi (kategori ayarlarından Trendyol ID girilmeli)');
+    }
     if (!payload.salePrice || payload.salePrice <= 0) missing.push('Satış fiyatı');
     if (!Array.isArray(payload.images) || payload.images.length === 0) missing.push('Ürün görseli');
     if (variant.seoApprovalStatus !== 'Hazır Onay') missing.push('SEO onayı');

@@ -177,6 +177,21 @@ export class ProductionCostsController {
     return this.productionCosts.uploadVariantImage(Number(id), file);
   }
 
+  @Post('variants/:id/image/delete')
+  deleteVariantImage(@Param('id') id: string, @Body() body: { imagePath?: string }) {
+    return this.productionCosts.deleteVariantImage(Number(id), body.imagePath ?? '');
+  }
+
+  @Post('variants/:id/image/cover')
+  setVariantCoverImage(@Param('id') id: string, @Body() body: { imagePath?: string }) {
+    return this.productionCosts.setVariantCoverImage(Number(id), body.imagePath ?? '');
+  }
+
+  @Post('variants/:id/push-trendyol')
+  pushImagesAndPrice(@Param('id') id: string, @Body() body: { salePrice?: number }, @Req() request: AuthenticatedRequest) {
+    return this.productionCosts.pushImagesAndPriceToTrendyol(Number(id), Number(body.salePrice ?? 0), request.user!.id);
+  }
+
   @Post('families')
   createFamily(@Body() body: unknown) {
     return this.productionCosts.createFamily(body);

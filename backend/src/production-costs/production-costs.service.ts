@@ -2,6 +2,8 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { BambuLeafRoundingMode, Prisma, ProductionCostGroup, StockUsageEventType, TemplateComponentScope } from '../generated/prisma-client';
 import * as XLSX from 'xlsx';
 import { PrismaService } from '../prisma/prisma.service';
+import { PublishingService } from '../publishing/publishing.service';
+import { IntegrationPlatform } from '../integrations/adapters/integration-adapter.interface';
 
 const costGroupLabels: Record<ProductionCostGroup, string> = {
   LEAF: 'Yaprak maliyeti',
@@ -16,7 +18,10 @@ const costGroupLabels: Record<ProductionCostGroup, string> = {
 
 @Injectable()
 export class ProductionCostsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly publishing: PublishingService,
+  ) {}
 
   async listFamilies() {
     const families = await this.prisma.productionFamily.findMany({
@@ -334,6 +339,7 @@ export class ProductionCostsService {
 
   async listVariants() {
     const variants = await this.prisma.trendyolProductVariant.findMany({
+      where: { status: 'ACTIVE' },
       include: {
         family: true,
         sizeOption: true,
@@ -942,6 +948,44 @@ export class ProductionCostsService {
     };
   }
 
+  async deleteVariantImage(variantId: number, imagePath: string) {
+    const variant = await this.prisma.trendyolProductVariant.findUnique({ where: { id: variantId } });
+    if (!variant) throw new NotFoundException('Trendyol varyasyonu bulunamadı.');
+    const currentImages = Array.isArray(variant.images)
+      ? variant.images.filter((image): image is string => typeof image === 'string' && image.trim().length > 0)
+      : [];
+    const images = currentImages.filter((image) => image !== imagePath);
+    const updated = await this.prisma.trendyolProductVariant.update({ where: { id: variant.id }, data: { images } });
+    return { ok: true, variant: updated };
+  }
+
+  async setVariantCoverImage(variantId: number, imagePath: string) {
+    const variant = await this.prisma.trendyolProductVariant.findUnique({ where: { id: variantId } });
+    if (!variant) throw new NotFoundException('Trendyol varyasyonu bulunamadı.');
+    const currentImages = Array.isArray(variant.images)
+      ? variant.images.filter((image): image is string => typeof image === 'string' && image.trim().length > 0)
+      : [];
+    if (!currentImages.includes(imagePath)) throw new BadRequestException('Görsel bu üründe bulunamadı.');
+    const images = [imagePath, ...currentImages.filter((image) => image !== imagePath)];
+    const updated = await this.prisma.trendyolProductVariant.update({ where: { id: variant.id }, data: { images } });
+    return { ok: true, variant: updated };
+  }
+
+  // Fiyat ve güncel görselleri aynı anda Trendyol'a gönderir: önce hesaplanan
+  // pazaryeri fiyatını varyasyona yazar, sonra tam ürün gönderimini (görseller
+  // dahil) tetikler. Trendyol'da görselleri tek başına güncelleyen ayrı bir uç
+  // nokta yok; görsel değişikliği yalnızca tam ürün gönderimiyle yansır.
+  async pushImagesAndPriceToTrendyol(variantId: number, salePrice: number, userId: number) {
+    if (!Number.isFinite(salePrice) || salePrice <= 0) {
+      throw new BadRequestException('Geçerli bir Trendyol satış fiyatı gereklidir.');
+    }
+    await this.prisma.trendyolProductVariant.update({
+      where: { id: variantId },
+      data: { trendyolSalePrice: salePrice },
+    });
+    return this.publishing.send([variantId], userId, { allowIncomplete: true, platforms: ['TRENDYOL'] as IntegrationPlatform[] });
+  }
+
   async listOverheads() {
     const templates = await this.prisma.productionRecipeTemplate.findMany({
       include: {
@@ -1375,6 +1419,7 @@ export class ProductionCostsService {
 
   private async variantNeighbors(id: number) {
     const ids = await this.prisma.trendyolProductVariant.findMany({
+      where: { OR: [{ status: 'ACTIVE' }, { id }] },
       orderBy: { createdAt: 'desc' },
       select: { id: true, productCostDraft: { select: { status: true } } },
     });
@@ -1390,8 +1435,8 @@ export class ProductionCostsService {
 
   private async costProgress() {
     const [total, completed] = await Promise.all([
-      this.prisma.trendyolProductVariant.count(),
-      this.prisma.trendyolProductVariant.count({ where: { productCostDraft: { status: 'APPROVED' } } }),
+      this.prisma.trendyolProductVariant.count({ where: { status: 'ACTIVE' } }),
+      this.prisma.trendyolProductVariant.count({ where: { status: 'ACTIVE', productCostDraft: { status: 'APPROVED' } } }),
     ]);
     return { total, completed };
   }

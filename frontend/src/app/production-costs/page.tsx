@@ -19,6 +19,8 @@ type Variant = {
   costStatus: string;
   lastCalculatedCost?: number;
   productCostStatus?: string;
+  trendyolSalePrice?: number | string | null;
+  trendyolProductUrl?: string | null;
 };
 
 type ImportPreview = {
@@ -164,29 +166,41 @@ export default function ProductCostListPage() {
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
         {filtered.map((variant) => (
-          <Link
-            key={variant.id}
-            href={`/production-costs/products/${variant.id}`}
-            className="panel block overflow-hidden transition hover:border-brand hover:shadow-sm"
-          >
-            <ProductImage images={variant.images} />
-            <div className="space-y-3 p-4">
-              <div>
-                <h3 className="line-clamp-2 min-h-10 font-bold text-ink">{variant.productName}</h3>
-                <p className="mt-1 text-xs text-slate-500">Barkod: {variant.barcode}</p>
+          <div key={variant.id} className="panel overflow-hidden transition hover:border-brand hover:shadow-sm">
+            <Link href={`/production-costs/products/${variant.id}`} className="block">
+              <ProductImage images={variant.images} />
+              <div className="space-y-3 p-4 pb-0">
+                <div>
+                  <h3 className="line-clamp-2 min-h-10 font-bold text-ink">{variant.productName}</h3>
+                  <p className="mt-1 text-xs text-slate-500">Barkod: {variant.barcode}</p>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <Info label="Yeni model" value={variant.proposedModelCode || '-'} />
+                  <Info label="Eski model" value={variant.currentModelCode || variant.supplierStockCode || '-'} />
+                  <Info label="Boy" value={variant.detectedSize || '-'} />
+                  <Info label="Kategori" value={variant.trendyolCategoryName || '-'} />
+                </div>
+                <div className="flex items-center justify-between gap-2 border-t border-line pt-3">
+                  <Info label="Satış fiyatı" value={money(Number(variant.trendyolSalePrice || 0))} />
+                  <span className="text-sm font-bold text-brand">{money(variant.lastCalculatedCost || 0)}</span>
+                </div>
               </div>
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <Info label="Yeni model" value={variant.proposedModelCode || '-'} />
-                <Info label="Eski model" value={variant.currentModelCode || variant.supplierStockCode || '-'} />
-                <Info label="Boy" value={variant.detectedSize || '-'} />
-                <Info label="Kategori" value={variant.trendyolCategoryName || '-'} />
-              </div>
-              <div className="flex items-center justify-between gap-2 border-t border-line pt-3">
-                <span className="rounded bg-slate-100 px-2 py-1 text-xs font-semibold">{variant.productCostStatus || variant.costStatus || 'Maliyet Girilmedi'}</span>
-                <span className="text-sm font-bold text-brand">{money(variant.lastCalculatedCost || 0)}</span>
-              </div>
+            </Link>
+            <div className="flex items-center justify-between gap-2 p-4 pt-3">
+              <span className="rounded bg-slate-100 px-2 py-1 text-xs font-semibold">{variant.productCostStatus || variant.costStatus || 'Maliyet Girilmedi'}</span>
+              {variant.trendyolProductUrl && (
+                <a
+                  href={variant.trendyolProductUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-xs font-semibold text-brand underline"
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  Trendyol'da Gör
+                </a>
+              )}
             </div>
-          </Link>
+          </div>
         ))}
       </div>
     </AdminShell>

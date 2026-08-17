@@ -9,5 +9,6 @@ import { PublishingService } from './publishing.service';
   imports: [PrismaModule, AuthModule, IntegrationsModule],
   controllers: [PublishingController],
   providers: [PublishingService],
+  exports: [PublishingService],
 })
 export class PublishingModule {}

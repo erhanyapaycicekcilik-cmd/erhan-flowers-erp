@@ -23,6 +23,7 @@ import { DeliveriesModule } from './deliveries/deliveries.module';
 import { IntegrationsModule } from './integrations/integrations.module';
 import { StaffTasksModule } from './staff-tasks/staff-tasks.module';
 import { ProductCenterModule } from './product-center/product-center.module';
+import { MarketIntelligenceModule } from './market-intelligence/market-intelligence.module';
 
 @Module({
   imports: [
@@ -51,6 +52,7 @@ import { ProductCenterModule } from './product-center/product-center.module';
     ...(process.env.ENV_FILE?.endsWith('.env.dev') ? [StaffTasksModule] : []),
     IntegrationsModule,
     ProductCenterModule,
+    MarketIntelligenceModule,
   ],
   controllers: [AppController],
 })

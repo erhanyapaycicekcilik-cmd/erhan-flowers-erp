@@ -4,6 +4,7 @@ import { NestExpressApplication } from '@nestjs/platform-express';
 import { join } from 'path';
 import * as fs from 'fs';
 import { stockImageFallbackRoots, stockImageRoot } from './stock-image-paths';
+import { productImageRoot } from './product-image-paths';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
@@ -47,6 +48,17 @@ async function bootstrap() {
   if (fs.existsSync(uploadsRoot)) {
     app.useStaticAssets(uploadsRoot, {
       prefix: '/uploads/',
+    });
+  }
+
+  // Yeni ürün görselleri "Yeni Ürün ERP" köküne yazılır; eski dosyalar proje
+  // içindeki uploads/products altında geriye dönük olarak yukarıdaki genel
+  // /uploads/ eşlemesiyle okunmaya devam eder.
+  const productRoot = productImageRoot();
+  fs.mkdirSync(productRoot, { recursive: true });
+  if (fs.existsSync(productRoot)) {
+    app.useStaticAssets(productRoot, {
+      prefix: '/uploads/products/',
     });
   }
 

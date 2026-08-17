@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, ArrowRight, Brain, Copy, ExternalLink, ImageIcon, Plus, Save, Trash2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Brain, Copy, ExternalLink, ImageIcon, Plus, Save, Star, Trash2, Upload } from 'lucide-react';
 import { AdminShell } from '@/components/AdminShell';
 import { api, apiFileUrl } from '@/lib/api';
 import type { StockCard } from '@/types';
@@ -24,6 +24,7 @@ type Variant = {
   trendyolSalePrice: string;
   commissionPercent: string;
   images: string[] | null;
+  stockQuantity?: number;
 };
 
 type VariantListItem = {
@@ -204,6 +205,11 @@ export default function ProductCostDetailPage() {
     copyPriceRates: true,
   });
   const [message, setMessage] = useState('');
+  const [images, setImages] = useState<string[]>([]);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [sendingImagesAndPrice, setSendingImagesAndPrice] = useState(false);
+  const [pendingBatchId, setPendingBatchId] = useState<string | null>(null);
+  const [checkingBatch, setCheckingBatch] = useState(false);
 
   useEffect(() => {
     const savedSettings = window.localStorage.getItem('ef_cost_price_settings');
@@ -225,6 +231,7 @@ export default function ProductCostDetailPage() {
         setDetail(data);
         setStockCards(stockData);
         setVariants(variantData);
+        setImages(Array.isArray(data.variant.images) ? data.variant.images : []);
         const savedMaterials = data.costDraft.items
           .filter((item: any) => !(item.source === 'MANUAL' && (item.isDefaultExpense || ['LABOR', 'OTHER', 'PACKAGING'].includes(item.group))))
           .map((item) => ({ ...item, key: crypto.randomUUID(), stockCardId: item.stockCardId ? Number(item.stockCardId) : '' as const }));
@@ -608,6 +615,122 @@ export default function ProductCostDetailPage() {
     }
   }
 
+  async function pushPriceToTrendyol() {
+    if (!variant?.barcode) {
+      setMessage('Barkod bulunamadı; fiyat gönderilemedi.');
+      return;
+    }
+    if (!totals.marketplaceSalePrice || totals.marketplaceSalePrice <= 0) {
+      setMessage('Trendyol fiyatı hesaplanmadı; önce maliyet/kâr alanlarını doldurun.');
+      return;
+    }
+    setMessage('Trendyol\'a gönderiliyor...');
+    try {
+      const result = await api<{ ok: boolean; message: string }>('/integrations/products/trendyol/price', {
+        method: 'POST',
+        json: {
+          barcode: variant.barcode,
+          salePrice: totals.marketplaceSalePrice,
+          listPrice: totals.marketplaceSalePrice,
+          stockQuantity: variant.stockQuantity ?? 0,
+        },
+      });
+      setMessage(result.ok ? `Trendyol'a gönderildi: ${result.message}` : `Gönderim başarısız: ${result.message}`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Trendyol\'a fiyat gönderilemedi.');
+    }
+  }
+
+  async function uploadImage(file: File) {
+    setUploadingImage(true);
+    try {
+      const data = new FormData();
+      data.append('file', file);
+      const result = await api<{ ok: boolean; variant: { images: string[] } }>(`/production-costs/variants/${productId}/image`, {
+        method: 'POST',
+        body: data,
+      });
+      setImages(Array.isArray(result.variant.images) ? result.variant.images : []);
+      setMessage('Görsel yüklendi.');
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Görsel yüklenemedi.');
+    } finally {
+      setUploadingImage(false);
+    }
+  }
+
+  async function deleteImage(imagePath: string) {
+    try {
+      const result = await api<{ ok: boolean; variant: { images: string[] } }>(`/production-costs/variants/${productId}/image/delete`, {
+        method: 'POST',
+        json: { imagePath },
+      });
+      setImages(Array.isArray(result.variant.images) ? result.variant.images : []);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Görsel silinemedi.');
+    }
+  }
+
+  async function makeCoverImage(imagePath: string) {
+    try {
+      const result = await api<{ ok: boolean; variant: { images: string[] } }>(`/production-costs/variants/${productId}/image/cover`, {
+        method: 'POST',
+        json: { imagePath },
+      });
+      setImages(Array.isArray(result.variant.images) ? result.variant.images : []);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Kapak görseli ayarlanamadı.');
+    }
+  }
+
+  async function pushImagesAndPriceToTrendyol() {
+    if (!images.length) {
+      setMessage('Önce en az bir görsel yükleyin.');
+      return;
+    }
+    if (!totals.marketplaceSalePrice || totals.marketplaceSalePrice <= 0) {
+      setMessage('Trendyol fiyatı hesaplanmadı; önce maliyet/kâr alanlarını doldurun.');
+      return;
+    }
+    setSendingImagesAndPrice(true);
+    setPendingBatchId(null);
+    setMessage('Görseller ve fiyat Trendyol\'a gönderiliyor...');
+    try {
+      const result = await api<{ success: number; failed: number; results: Array<{ ok: boolean; successMessage?: string | null; errorMessage?: string | null; missingFields?: string[]; batchRequestId?: string | null }> }>(`/production-costs/variants/${productId}/push-trendyol`, {
+        method: 'POST',
+        json: { salePrice: totals.marketplaceSalePrice },
+      });
+      const first = result.results?.[0];
+      const missing = first?.missingFields?.length ? ` Eksik alanlar: ${first.missingFields.join(', ')}.` : '';
+      setMessage(
+        result.failed === 0
+          ? `Trendyol kuyruğa aldı (henüz kesin sonuç değil): ${first?.successMessage ?? ''}`
+          : `Gönderim başarısız: ${first?.errorMessage ?? 'Bilinmeyen hata'}.${missing}`,
+      );
+      if (result.failed === 0 && first?.batchRequestId) {
+        setPendingBatchId(first.batchRequestId);
+      }
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Görseller ve fiyat gönderilemedi.');
+    } finally {
+      setSendingImagesAndPrice(false);
+    }
+  }
+
+  async function checkBatchStatus() {
+    if (!pendingBatchId) return;
+    setCheckingBatch(true);
+    try {
+      const result = await api<{ ok: boolean; message: string; batchStatus?: string }>(`/integrations/products/trendyol/batch-status/${pendingBatchId}`);
+      setMessage(result.ok ? `Trendyol sonucu: ${result.message}` : `Trendyol reddetti: ${result.message}`);
+      if (result.batchStatus === 'COMPLETED') setPendingBatchId(null);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Durum sorgulanamadı.');
+    } finally {
+      setCheckingBatch(false);
+    }
+  }
+
   async function saveAndNext() {
     await save(true);
     if (detail?.nextIncompleteProductId) router.push(`/production-costs/products/${detail.nextIncompleteProductId}`);
@@ -731,7 +854,7 @@ export default function ProductCostDetailPage() {
   }
 
   const variant = detail?.variant;
-  const mainImage = variant?.images?.[0];
+  const mainImage = images[0];
 
   return (
     <AdminShell title="Ürün Maliyet Merkezi">
@@ -783,6 +906,80 @@ export default function ProductCostDetailPage() {
         </section>
 
         <section className="space-y-3">
+          <CompactPanel
+            title="Görseller"
+            action={
+              <label className="btn btn-secondary min-h-8 cursor-pointer px-2 text-xs">
+                <Upload size={14} />
+                {uploadingImage ? 'Yükleniyor...' : 'Görsel Yükle'}
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  disabled={uploadingImage}
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    if (file) uploadImage(file);
+                    event.target.value = '';
+                  }}
+                />
+              </label>
+            }
+          >
+            {images.length === 0 ? (
+              <div className="rounded-md bg-slate-50 px-3 py-4 text-center text-xs font-semibold text-slate-500">
+                Henüz görsel yok. Standart görselleri buradan yükleyip Trendyol&apos;a gönderebilirsin.
+              </div>
+            ) : (
+              <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5">
+                {images.map((image, index) => (
+                  <div key={image} className="group relative aspect-square overflow-hidden rounded-md border border-line">
+                    <img src={normalizeImage(image)} alt="Ürün görseli" className="h-full w-full object-cover" />
+                    {index === 0 && (
+                      <span className="absolute left-1 top-1 rounded bg-emerald-600 px-1.5 py-0.5 text-[10px] font-bold text-white">Kapak</span>
+                    )}
+                    <div className="absolute inset-0 flex items-end justify-end gap-1 bg-slate-900/0 p-1 opacity-0 transition group-hover:bg-slate-900/30 group-hover:opacity-100">
+                      {index !== 0 && (
+                        <button
+                          type="button"
+                          className="rounded bg-white p-1 text-amber-600 shadow"
+                          title="Kapak görseli yap"
+                          onClick={() => makeCoverImage(image)}
+                        >
+                          <Star size={13} />
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className="rounded bg-white p-1 text-red-600 shadow"
+                        title="Görseli sil"
+                        onClick={() => deleteImage(image)}
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            <button
+              className="btn btn-primary mt-3 w-full justify-center"
+              onClick={pushImagesAndPriceToTrendyol}
+              disabled={sendingImagesAndPrice}
+            >
+              {sendingImagesAndPrice ? 'Gönderiliyor...' : 'Görselleri ve Fiyatı Trendyol\'a Gönder'}
+            </button>
+            {pendingBatchId && (
+              <button
+                className="btn btn-secondary mt-2 w-full justify-center"
+                onClick={checkBatchStatus}
+                disabled={checkingBatch}
+              >
+                {checkingBatch ? 'Kontrol ediliyor...' : 'Trendyol\'da Gerçek Sonucu Kontrol Et'}
+              </button>
+            )}
+          </CompactPanel>
+
           <CompactPanel
             title="Ürün Bilgi Motoru"
             action={
@@ -915,6 +1112,7 @@ export default function ProductCostDetailPage() {
               <button className="btn btn-secondary justify-center" onClick={copySummary}><Copy size={16} />Özeti Kopyala</button>
               <button className="btn btn-secondary justify-center" onClick={copyRecipe}><Copy size={16} />Reçete Metni</button>
               <button className="btn btn-secondary justify-center" onClick={exportPriceUpdateFile}>Fiyat Dosyası</button>
+              <button className="btn btn-primary justify-center" onClick={pushPriceToTrendyol}>Trendyol'a Fiyat Gönder</button>
               <button className="btn btn-primary justify-center" onClick={saveAndNext}>Kaydet ve Sonraki Ürüne Geç</button>
             </div>
           </section>

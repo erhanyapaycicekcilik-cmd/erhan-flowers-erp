@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'crypto';
 import * as XLSX from 'xlsx';
 import { Prisma } from '../generated/prisma-client';
@@ -49,14 +49,48 @@ type TicimaxSettingsRow = {
   lastError: string | null;
 };
 
+const AUTO_SYNC_PLATFORMS: IntegrationPlatform[] = ['TRENDYOL', 'HEPSIBURADA', 'N11', 'TICIMAX'];
+const AUTO_SYNC_INTERVAL_MS = 60 * 1000;
+
 @Injectable()
-export class IntegrationsService {
+export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
+  private readonly logger = new Logger(IntegrationsService.name);
+  private autoSyncTimer?: NodeJS.Timeout;
+  private autoSyncRunning = false;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly staffTasks: StaffTasksService,
     private readonly trendyolAdapter: TrendyolAdapter,
     private readonly integrationCenter: IntegrationCenterService,
   ) {}
+
+  onModuleInit() {
+    this.autoSyncTimer = setInterval(() => this.autoSyncAllPlatforms(), AUTO_SYNC_INTERVAL_MS);
+    this.autoSyncAllPlatforms();
+  }
+
+  onModuleDestroy() {
+    if (this.autoSyncTimer) clearInterval(this.autoSyncTimer);
+  }
+
+  private async autoSyncAllPlatforms() {
+    if (this.autoSyncRunning) return;
+    this.autoSyncRunning = true;
+    try {
+      const owner = await this.prisma.user.findFirst({ where: { role: 'OWNER' }, orderBy: { id: 'asc' }, select: { id: true } });
+      if (!owner) return;
+      for (const platform of AUTO_SYNC_PLATFORMS) {
+        try {
+          await this.syncOrders(platform, owner.id);
+        } catch (error) {
+          this.logger.warn(`Otomatik sipariş senkronizasyonu basarisiz (${platform}): ${this.errorMessage(error)}`);
+        }
+      }
+    } finally {
+      this.autoSyncRunning = false;
+    }
+  }
 
   async listConnections() {
     await this.ensureConnectionRows();
@@ -193,6 +227,37 @@ export class IntegrationsService {
     `;
     await this.log(platform, 'FETCH_ORDERS', 'SUCCESS', `${imported} yeni, ${duplicated} mükerrer, ${unknownStatus} bilinmeyen durum işlendi.`, null, null, { imported, duplicated, unknownStatus });
     return { ok: true, imported, duplicated, unknownStatus, failed };
+  }
+
+  // Siparişi pazaryerine "hazırlandı/kargolandı" olarak bildirir (paketleme adımı).
+  async updatePackageStatus(platformValue: string, payload: { shipmentPackageId?: string; status?: string; lines?: Array<{ lineId: number; quantity: number }>; trackingNumber?: string; cargoProviderId?: number }) {
+    const platform = this.platform(platformValue);
+    const adapter = await this.adapter(platform);
+    const result = await adapter.updateOrderStatus(payload);
+    await this.log(platform, 'UPDATE_PACKAGE_STATUS', result.ok ? 'SUCCESS' : 'FAILED', result.message, payload.shipmentPackageId ?? null, null, { status: payload.status });
+    return result;
+  }
+
+  // Bir gönderimin (batchRequestId) pazaryerinde gerçekten işlenip işlenmediğini
+  // sorgular. "Kuyruğa alındı" mesajı gerçek sonuç değildir; bu asenkron sonucu
+  // ayrıca kontrol etmek gerekir.
+  async checkBatchStatus(platformValue: string, batchRequestId: string) {
+    const platform = this.platform(platformValue);
+    const adapter = await this.adapter(platform);
+    if (!adapter.checkBatchStatus) {
+      return { ok: false, status: 'NOT_IMPLEMENTED' as const, message: `${platform} icin batch durumu sorgulama desteklenmiyor.` };
+    }
+    return adapter.checkBatchStatus(batchRequestId);
+  }
+
+  // Maliyet ekranından tek bir ürünün fiyat/stoğunu pazaryerine gönderir
+  // (ürünü yeniden oluşturmadan, sadece fiyat günceller).
+  async pushPrice(platformValue: string, payload: { barcode?: string; salePrice?: number; listPrice?: number; stockQuantity?: number }) {
+    const platform = this.platform(platformValue);
+    const adapter = await this.adapter(platform);
+    const result = await adapter.pushPrice(payload);
+    await this.log(platform, 'PUSH_PRICE', result.ok ? 'SUCCESS' : 'FAILED', result.message, payload.barcode ?? null, null, { salePrice: payload.salePrice, stockQuantity: payload.stockQuantity });
+    return result;
   }
 
   async importOrderExcel(platformValue: string, file: Express.Multer.File | undefined, userId: number) {
@@ -596,7 +661,43 @@ export class IntegrationsService {
           RETURNING id, stock_card_id AS "stockCardId", (SELECT unit FROM stock_cards WHERE id = stock_card_id) AS unit
         `;
         if (itemRows[0]?.stockCardId) {
-          await this.reserveStock(tx, Number(itemRows[0].stockCardId), saleId, Number(itemRows[0].id), item.quantity, String(itemRows[0].unit ?? 'Adet'), userId);
+          await this.deductStockForOrderItem(
+            tx,
+            Number(itemRows[0].stockCardId),
+            saleId,
+            Number(itemRows[0].id),
+            item.quantity,
+            String(itemRows[0].unit ?? 'Adet'),
+            userId,
+            order.platform,
+            order.platformOrderNumber,
+          );
+        } else if (match.productId) {
+          await this.deductStockForOrderProduct(
+            tx,
+            match.productId,
+            saleId,
+            Number(itemRows[0].id),
+            match.variantId,
+            item.quantity,
+            userId,
+            order.platform,
+            order.platformOrderNumber,
+          );
+        } else if (match.variantId) {
+          await this.deductStockForOrderVariant(
+            tx,
+            match.variantId,
+            saleId,
+            Number(itemRows[0].id),
+            item.quantity,
+            userId,
+            order.platform,
+            order.platformOrderNumber,
+          );
+        }
+        if (match.variantId) {
+          await this.deductRecipeStockForOrder(tx, match.variantId, saleId, Number(itemRows[0].id), item.quantity, userId);
         }
       }
 
@@ -614,24 +715,172 @@ export class IntegrationsService {
     });
   }
 
-  private async reserveStock(tx: Prisma.TransactionClient, stockCardId: number, saleId: number, saleItemId: number, quantity: number, unit: string, userId: number) {
-    const eventKey = `STOCK_RESERVATION:${saleId}:${saleItemId}`;
-    const existing = await tx.$queryRaw<Array<{ id: number }>>`SELECT id FROM stock_reservations WHERE event_key = ${eventKey} LIMIT 1`;
+  // Pazaryeri siparişi ERP'ye düştüğü anda stok gerçekten düşer (rezervasyon değil).
+  // Yetersiz stok siparişin içe aktarılmasını engellemez; stok eksiye düşebilir,
+  // hareket kaydında bu görünür kalır ki fark sonradan sayım/tedarik ile kapatılabilsin.
+  private async deductStockForOrderItem(
+    tx: Prisma.TransactionClient,
+    stockCardId: number,
+    saleId: number,
+    saleItemId: number,
+    quantity: number,
+    unit: string,
+    userId: number,
+    platform: IntegrationPlatform,
+    platformOrderNumber: string,
+  ) {
+    const eventKey = `ORDER_STOCK_OUT:${saleId}:${saleItemId}`;
+    const existing = await tx.$queryRaw<Array<{ id: number }>>`SELECT id FROM stock_movements WHERE event_key = ${eventKey} LIMIT 1`;
     if (existing[0]) return;
+
     await tx.$queryRaw`SELECT id FROM stock_cards WHERE id = ${stockCardId} FOR UPDATE`;
+    const cards = await tx.$queryRaw<Array<{ stockQuantity: number }>>`SELECT stock_quantity AS "stockQuantity" FROM stock_cards WHERE id = ${stockCardId}`;
+    const previousStock = Number(cards[0]?.stockQuantity ?? 0);
+    const nextStock = previousStock - quantity;
+
     await tx.$executeRaw`
-      UPDATE stock_cards SET reserved_quantity = reserved_quantity + ${quantity}, updated_at = NOW()
+      UPDATE stock_cards SET stock_quantity = ${nextStock}, last_movement_at = NOW(), updated_at = NOW()
       WHERE id = ${stockCardId}
     `;
     await tx.$executeRaw`
-      INSERT INTO stock_reservations (stock_card_id, sale_id, sale_item_id, quantity, unit, status, event_key, created_by_id, created_at, updated_at)
-      VALUES (${stockCardId}, ${saleId}, ${saleItemId}, ${quantity}, ${unit}, 'ACTIVE', ${eventKey}, ${userId}, NOW(), NOW())
+      INSERT INTO stock_movements (
+        stock_card_id, type, quantity, unit, previous_stock, next_stock, reason, reference_type, reference_id, event_key, created_by_id, created_at
+      )
+      VALUES (
+        ${stockCardId}, 'OUT', ${quantity}, ${unit}, ${previousStock}, ${nextStock},
+        ${`${this.displayName(platform)} siparişi ${platformOrderNumber}`}, 'RETAIL_SALE', ${String(saleId)}, ${eventKey}, ${userId}, NOW()
+      )
+      ON CONFLICT (event_key) DO NOTHING
     `;
+  }
+
+  // Ürün Merkezi ürünleri (henüz stok kartına taşınmamış) için aynı düşüm mantığı.
+  // Bulunursa bağlı trendyol_product_variants.stock_quantity alanı da eşitlenir.
+  private async deductStockForOrderProduct(
+    tx: Prisma.TransactionClient,
+    productId: number,
+    saleId: number,
+    saleItemId: number,
+    variantId: number | null,
+    quantity: number,
+    userId: number,
+    platform: IntegrationPlatform,
+    platformOrderNumber: string,
+  ) {
+    const eventKey = `ORDER_STOCK_OUT:${saleId}:${saleItemId}`;
+    const existing = await tx.$queryRaw<Array<{ id: number }>>`SELECT id FROM stock_movements WHERE event_key = ${eventKey} LIMIT 1`;
+    if (existing[0]) return;
+
+    await tx.$queryRaw`SELECT id FROM products WHERE id = ${productId} FOR UPDATE`;
+    const products = await tx.$queryRaw<Array<{ stockQuantity: number }>>`SELECT stock_quantity AS "stockQuantity" FROM products WHERE id = ${productId}`;
+    const previousStock = Number(products[0]?.stockQuantity ?? 0);
+    const nextStock = previousStock - quantity;
+
+    await tx.$executeRaw`UPDATE products SET stock_quantity = ${nextStock}, updated_at = NOW() WHERE id = ${productId}`;
+    if (variantId) {
+      await tx.$executeRaw`UPDATE trendyol_product_variants SET stock_quantity = ${nextStock}, updated_at = NOW() WHERE id = ${variantId}`;
+    }
+    await tx.$executeRaw`
+      INSERT INTO stock_movements (
+        product_id, type, quantity, unit, previous_stock, next_stock, reason, reference_type, reference_id, event_key, created_by_id, created_at
+      )
+      VALUES (
+        ${productId}, 'OUT', ${quantity}, 'Adet', ${previousStock}, ${nextStock},
+        ${`${this.displayName(platform)} siparişi ${platformOrderNumber}`}, 'RETAIL_SALE', ${String(saleId)}, ${eventKey}, ${userId}, NOW()
+      )
+      ON CONFLICT (event_key) DO NOTHING
+    `;
+  }
+
+  // "Trendyol Maliyet" ekranından içe aktarılmış ama henüz bir ürün/stok kartına
+  // bağlanmamış (aile/maliyet ataması yapılmamış) varyasyonlar için: kendi
+  // stock_quantity alanından düşer, böylece maliyet eşleştirmesi tamamlanmayı beklemez.
+  private async deductStockForOrderVariant(
+    tx: Prisma.TransactionClient,
+    variantId: number,
+    saleId: number,
+    saleItemId: number,
+    quantity: number,
+    userId: number,
+    platform: IntegrationPlatform,
+    platformOrderNumber: string,
+  ) {
+    const eventKey = `ORDER_STOCK_OUT:${saleId}:${saleItemId}`;
+    const existing = await tx.$queryRaw<Array<{ id: number }>>`SELECT id FROM stock_movements WHERE event_key = ${eventKey} LIMIT 1`;
+    if (existing[0]) return;
+
+    await tx.$queryRaw`SELECT id FROM trendyol_product_variants WHERE id = ${variantId} FOR UPDATE`;
+    const rows = await tx.$queryRaw<Array<{ stockQuantity: number }>>`SELECT stock_quantity AS "stockQuantity" FROM trendyol_product_variants WHERE id = ${variantId}`;
+    const previousStock = Number(rows[0]?.stockQuantity ?? 0);
+    const nextStock = previousStock - quantity;
+
+    await tx.$executeRaw`UPDATE trendyol_product_variants SET stock_quantity = ${nextStock}, updated_at = NOW() WHERE id = ${variantId}`;
+    await tx.$executeRaw`
+      INSERT INTO stock_movements (
+        variant_id, type, quantity, unit, previous_stock, next_stock, reason, reference_type, reference_id, event_key, created_by_id, created_at
+      )
+      VALUES (
+        ${variantId}, 'OUT', ${quantity}, 'Adet', ${previousStock}, ${nextStock},
+        ${`${this.displayName(platform)} siparişi ${platformOrderNumber}`}, 'RETAIL_SALE', ${String(saleId)}, ${eventKey}, ${userId}, NOW()
+      )
+      ON CONFLICT (event_key) DO NOTHING
+    `;
+  }
+
+  // Bitmiş ürünün kendi stoğu ayrı; bu, o ürünün ONAYLI reçetesindeki (yaprak,
+  // gövde, saksı vb.) gerçek malzemeleri de ayrı ayrı düşer — dükkan satışlarındaki
+  // deductRecipeStock ile aynı mantık, farkla: burada yetersiz stok siparişi
+  // engellemez (marketplace siparişi zaten kesinleşmiş), stok eksiye düşebilir.
+  private async deductRecipeStockForOrder(tx: Prisma.TransactionClient, variantId: number, saleId: number, saleItemId: number, saleQuantity: number, userId: number) {
+    const draft = await tx.productCostDraft.findUnique({
+      where: { variantId },
+      include: { items: true, pots: true },
+    });
+    if (!draft || draft.status !== 'APPROVED') return;
+
+    const recipeRows = [...draft.items, ...draft.pots]
+      .filter((row) => row.source !== 'MANUAL' && row.stockCardId && Number(row.quantity) > 0)
+      .map((row) => ({
+        stockCardId: Number(row.stockCardId),
+        quantity: Number(row.quantity) * saleQuantity,
+        unit: 'unit' in row ? (row as { unit: string }).unit : 'adet',
+      }));
+
+    for (const row of recipeRows) {
+      const eventKey = `ORDER_RECIPE_STOCK_OUT:${saleId}:${saleItemId}:${row.stockCardId}`;
+      const existing = await tx.stockUsageLog.findUnique({ where: { eventKey } });
+      if (existing) continue;
+
+      await tx.$queryRaw`SELECT id FROM stock_cards WHERE id = ${row.stockCardId} FOR UPDATE`;
+      const stockCard = await tx.stockCard.findUnique({ where: { id: row.stockCardId } });
+      if (!stockCard) continue;
+
+      const previousStock = Number(stockCard.stockQuantity);
+      const nextStock = previousStock - row.quantity;
+      const updated = await tx.stockCard.update({
+        where: { id: row.stockCardId },
+        data: { stockQuantity: nextStock, lastMovementAt: new Date() },
+      });
+
+      await tx.stockUsageLog.create({
+        data: {
+          stockCardId: row.stockCardId,
+          variantId,
+          eventType: 'ORDER_SHIPPED',
+          eventKey,
+          quantity: row.quantity,
+          unit: row.unit,
+          previousStock,
+          nextStock: Number(updated.stockQuantity),
+          userId,
+        },
+      });
+    }
   }
 
   private async matchItem(tx: Prisma.TransactionClient, barcode?: string, modelCode?: string, externalVariantId?: string) {
     const variants = await tx.$queryRaw<Array<Record<string, unknown>>>`
-      SELECT id, barcode, current_model_code AS "currentModelCode", proposed_model_code AS "proposedModelCode"
+      SELECT id, product_id AS "productId", barcode, current_model_code AS "currentModelCode", proposed_model_code AS "proposedModelCode"
       FROM trendyol_product_variants
       WHERE (${barcode ?? ''} <> '' AND barcode = ${barcode ?? ''})
         OR (${modelCode ?? ''} <> '' AND (current_model_code = ${modelCode ?? ''} OR proposed_model_code = ${modelCode ?? ''}))
@@ -648,10 +897,30 @@ export class IntegrationsService {
       LIMIT 1
     `;
     const stockCard = stockCards[0];
+
+    let productId = variant?.productId ? Number(variant.productId) : null;
+    let productCostPrice: number | null = null;
+    if (!stockCard) {
+      const products = await tx.$queryRaw<Array<Record<string, unknown>>>`
+        SELECT id, cost_price AS "costPrice" FROM products
+        WHERE (${productId ?? 0} > 0 AND id = ${productId ?? 0})
+          OR (${barcode ?? ''} <> '' AND barcode = ${barcode ?? ''})
+          OR (${modelCode ?? ''} <> '' AND model_code = ${modelCode ?? ''})
+        LIMIT 1
+      `;
+      if (products[0]) {
+        productId = Number(products[0].id);
+        productCostPrice = Number(products[0].costPrice ?? 0);
+      }
+    }
+
     return {
       variantId: variant ? Number(variant.id) : null,
       stockCardId: stockCard ? Number(stockCard.id) : null,
-      unitCost: stockCard ? Number(stockCard.manualUnitCostEnabled ? stockCard.manualUnitCost : stockCard.automaticUnitCost) : null,
+      productId: stockCard ? null : productId,
+      unitCost: stockCard
+        ? Number(stockCard.manualUnitCostEnabled ? stockCard.manualUnitCost : stockCard.automaticUnitCost)
+        : productCostPrice,
     };
   }
 

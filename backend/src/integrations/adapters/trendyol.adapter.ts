@@ -53,7 +53,7 @@ const TRENDYOL_WEB_COLOR_VALUES: Record<string, number> = {
   Altın: 6996,
 };
 
-const TRENDYOL_ORIGIN_TR_VALUE_ID = 10617244;
+const TRENDYOL_ORIGIN_TR_VALUE_ID = 10617344;
 
 // "Saksı" (2615) kategorisinin zorunlu öznitelikleri (Renk, Web Color ve Menşei
 // yukarıdaki ile aynı attributeId'leri kullanır; Genişlik/Yükseklik bu kategoriye özeldir).
@@ -198,7 +198,8 @@ export class TrendyolAdapter extends BaseIntegrationAdapter {
     const missing = this.missingKeys();
     if (missing.length) return this.missing(missing);
 
-    const productResponse = await this.requestProductUpsert(payload);
+    const contentId = this.text(this.record(payload).contentId);
+    const productResponse = contentId ? await this.requestContentUpdate(payload, contentId) : await this.requestProductUpsert(payload);
     if (!productResponse.ok) {
       return {
         ok: false,
@@ -218,14 +219,125 @@ export class TrendyolAdapter extends BaseIntegrationAdapter {
         batchRequestId,
       };
     }
+    const priceBody = await priceResponse.json().catch(() => ({} as Record<string, unknown>));
+    const listingUploadId = this.text((priceBody as Record<string, unknown>).batchRequestId);
 
     return {
       ok: true,
       status: 'CONNECTED',
       message: batchRequestId
-        ? `Trendyol urun, stok ve fiyat gonderimi kuyruga alindi (batchRequestId: ${batchRequestId}). Trendyol tarafinda asenkron olarak islenir; hemen goruntulenmeyebilir.`
+        ? `Trendyol urun, stok ve fiyat gonderimi kuyruga alindi (batchRequestId: ${batchRequestId}${listingUploadId ? `, listingUploadId: ${listingUploadId}` : ''}). Trendyol tarafinda asenkron olarak islenir; hemen goruntulenmeyebilir.`
         : 'Trendyol urun, stok ve fiyat gonderimi tamamlandi.',
       batchRequestId,
+      listingUploadId,
+    };
+  }
+
+  // Ürün/fiyat gönderimi asenkron işlendiği için "kuyruğa alındı" cevabı gerçek
+  // sonucu göstermez. Bu metod, verilen batchRequestId'nin Trendyol tarafında
+  // gerçekten işlenip işlenmediğini ve varsa hata sebebini sorgular.
+  async checkBatchStatus(batchRequestId: string): Promise<AdapterConnectionResult & { batchStatus?: string; failedItemCount?: number }> {
+    const missing = this.missingKeys();
+    if (missing.length) return this.missing(missing);
+    if (!batchRequestId) return { ok: false, status: 'FAILED', message: 'batchRequestId zorunludur.' };
+
+    const supplierId = this.env('SUPPLIER_ID');
+    const apiBaseUrl = this.env('API_URL').replace(/\/+$/, '');
+    const url = `${apiBaseUrl}/product/sellers/${supplierId}/products/batch-requests/${batchRequestId}`;
+    const response = await fetch(url, { headers: this.productHeaders(supplierId) });
+    if (!response.ok) {
+      return {
+        ok: false,
+        status: response.status === 401 || response.status === 403 ? 'MISSING_CREDENTIALS' : 'FAILED',
+        message: `Trendyol batch durumu sorgulanamadi. HTTP ${response.status}: ${await this.safeErrorText(response)}`,
+      };
+    }
+    const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+    const batchStatus = this.text(body.status);
+    const failedItemCount = Number(body.failedItemCount ?? 0);
+    const items = Array.isArray(body.items) ? (body.items as Array<Record<string, unknown>>) : [];
+    const failureReasons = items
+      .flatMap((item) => (Array.isArray(item.failureReasons) ? (item.failureReasons as string[]) : []))
+      .filter(Boolean);
+
+    if (batchStatus !== 'COMPLETED') {
+      return { ok: true, status: 'CONNECTED', message: 'Trendyol henüz işlemi tamamlamadı, kuyrukta bekliyor.', batchStatus, failedItemCount };
+    }
+    if (failedItemCount > 0) {
+      return {
+        ok: false,
+        status: 'FAILED',
+        message: failureReasons.length ? failureReasons.join(' ') : 'Trendyol işlemi tamamladı ancak reddetti.',
+        batchStatus,
+        failedItemCount,
+      };
+    }
+    return { ok: true, status: 'CONNECTED', message: 'Trendyol işlemi başarıyla tamamladı.', batchStatus, failedItemCount };
+  }
+
+  // Trendyol "paket durumu güncelleme" (siparişi hazırlandı/kargolandı olarak bildirme).
+  // payload: { shipmentPackageId, lines: [{ lineId, quantity }], status: 'Picking'|'Invoiced'|'Shipped', trackingNumber?, cargoProviderId? }
+  async updateOrderStatus(payload: unknown): Promise<AdapterConnectionResult> {
+    const missing = this.missingKeys();
+    if (missing.length) return this.missing(missing);
+
+    const data = this.record(payload);
+    const shipmentPackageId = this.text(data.shipmentPackageId);
+    const status = this.text(data.status);
+    if (!shipmentPackageId || !status) {
+      return { ok: false, status: 'FAILED', message: 'shipmentPackageId ve status alanlari zorunlu.' };
+    }
+
+    const supplierId = this.env('SUPPLIER_ID');
+    const apiBaseUrl = this.env('API_URL').replace(/\/+$/, '');
+    const url = `${apiBaseUrl}/order/sellers/${supplierId}/shipment-packages/${shipmentPackageId}`;
+    const body: Record<string, unknown> = {
+      lines: this.array(data.lines).map((line: any) => ({ lineId: line.lineId, quantity: line.quantity })),
+      params: {},
+      status,
+    };
+    if (data.trackingNumber) body.trackingNumber = this.text(data.trackingNumber);
+    if (data.cargoProviderId) body.cargoProviderId = Number(data.cargoProviderId);
+
+    const response = await fetch(url, {
+      method: 'PUT',
+      headers: this.productHeaders(supplierId),
+      body: JSON.stringify(body),
+    });
+    if (!response.ok) {
+      return {
+        ok: false,
+        status: response.status === 401 || response.status === 403 ? 'MISSING_CREDENTIALS' : 'FAILED',
+        message: `Trendyol paket durumu guncellemesi basarisiz. HTTP ${response.status}: ${await this.safeErrorText(response)}`,
+      };
+    }
+    return { ok: true, status: 'CONNECTED', message: `Trendyol paketi "${status}" durumuna guncellendi.` };
+  }
+
+  // Ürünü yeniden oluşturmadan (kategori/öznitelik göndermeden) sadece fiyat ve
+  // stoğu günceller. Maliyet ekranında "Trendyol'a Fiyat Gönder" için kullanılır.
+  async pushPrice(payload: unknown): Promise<AdapterConnectionResult> {
+    const missing = this.missingKeys();
+    if (missing.length) return this.missing(missing);
+
+    const priceResponse = await this.requestPriceAndInventory(payload);
+    if (!priceResponse.ok) {
+      return {
+        ok: false,
+        status: priceResponse.status === 401 || priceResponse.status === 403 ? 'MISSING_CREDENTIALS' : 'FAILED',
+        message: `Trendyol fiyat/stok guncellemesi basarisiz. HTTP ${priceResponse.status}: ${await this.safeErrorText(priceResponse)}`,
+      };
+    }
+    const priceBody = await priceResponse.json().catch(() => ({} as Record<string, unknown>));
+    const listingUploadId = this.text((priceBody as Record<string, unknown>).batchRequestId);
+
+    return {
+      ok: true,
+      status: 'CONNECTED',
+      message: listingUploadId
+        ? `Trendyol fiyat/stok guncellemesi kuyruga alindi (listingUploadId: ${listingUploadId}).`
+        : 'Trendyol fiyat/stok guncellemesi tamamlandi.',
+      listingUploadId,
     };
   }
 
@@ -312,6 +424,30 @@ export class TrendyolAdapter extends BaseIntegrationAdapter {
       method: 'POST',
       headers: this.productHeaders(supplierId),
       body: JSON.stringify({ items: [this.productPayload(payload)] }),
+    });
+  }
+
+  // Trendyol'da zaten onaylı/canlı bir ürünü (barkod/kategori/marka değişmeden)
+  // başlık, açıklama, görsel ve özniteliklerini günceller. "Yeni ürün oluştur"
+  // uç noktasından farklıdır; onaylı ürünlerde o uç nokta "aynı barkodlu ürün
+  // var" hatasıyla reddediyor.
+  private requestContentUpdate(payload: unknown, contentId: string) {
+    const supplierId = this.env('SUPPLIER_ID');
+    const apiBaseUrl = this.env('API_URL').replace(/\/+$/, '');
+    const url = `${apiBaseUrl}/product/sellers/${supplierId}/products/content-bulk-update`;
+    const data = this.record(payload);
+    return fetch(url, {
+      method: 'POST',
+      headers: this.productHeaders(supplierId),
+      body: JSON.stringify({
+        items: [{
+          contentId: Number(contentId),
+          title: this.text(data.productName),
+          description: this.text(data.description),
+          images: this.array(data.images).map((imageUrl) => ({ url: String(imageUrl) })),
+          attributes: this.buildAttributes(data),
+        }],
+      }),
     });
   }
 

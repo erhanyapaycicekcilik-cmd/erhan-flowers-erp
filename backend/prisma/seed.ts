@@ -102,10 +102,11 @@ async function main() {
 
   const categories = [
     { name: 'Ağaçlar', codePrefix: 'ERH', startCode: 1000, currentCode: 999, trendyolCategoryId: 2995 },
-    { name: 'Bambu Seperatör', codePrefix: 'ERH', startCode: 2000, currentCode: 1999, trendyolCategoryId: 2995 },
-    { name: 'Tek Bambu', codePrefix: 'ERH', startCode: 3000, currentCode: 2999, trendyolCategoryId: 2995 },
-    { name: 'Çiçek Buketleri', codePrefix: 'ERH', startCode: 4000, currentCode: 3999, trendyolCategoryId: 2995 },
-    { name: 'Saksı', codePrefix: 'ERH', startCode: 5000, currentCode: 4999, trendyolCategoryId: 2615 },
+    { name: 'Bambu Saksılı', codePrefix: 'ERH', startCode: 2000, currentCode: 1999, trendyolCategoryId: 2995 },
+    { name: 'Bambu Tekli', codePrefix: 'ERH', startCode: 3000, currentCode: 2999, trendyolCategoryId: 2995 },
+    { name: 'Çiçekler', codePrefix: 'ERH', startCode: 4000, currentCode: 3999, trendyolCategoryId: 2995 },
+    { name: 'Dikey Bahçe', codePrefix: 'ERH', startCode: 5000, currentCode: 4999, trendyolCategoryId: 2995 },
+    { name: 'Saksılar', codePrefix: 'ERH', startCode: 6000, currentCode: 5999, trendyolCategoryId: 2615 },
   ];
 
   for (const category of categories) {

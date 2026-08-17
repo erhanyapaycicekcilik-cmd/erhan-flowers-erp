@@ -2,6 +2,8 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { Prisma } from '../generated/prisma-client';
 import * as fs from 'fs';
 import { extname, join } from 'path';
+import * as XLSX from 'xlsx';
+import PDFDocument = require('pdfkit');
 import { cleanMojibakeDeep } from '../common/mojibake';
 import { PrismaService } from '../prisma/prisma.service';
 import { stockImageFallbackRoots, stockImageRoot } from '../stock-image-paths';
@@ -125,6 +127,125 @@ export class StockCardsService {
     });
 
     return stockCards.map((item) => this.serialize(item, userRole));
+  }
+
+  private async exportRows() {
+    const stockCards = await this.prisma.stockCard.findMany({
+      where: { status: 'ACTIVE' },
+      select: stockCardListSelect,
+      orderBy: { name: 'asc' },
+    });
+    return stockCards.map((item) => ({
+      name: item.name ?? '',
+      barcode: item.barcode ?? '',
+      sku: item.sku ?? '',
+      model: item.model ?? '',
+      category: item.category ?? '',
+      brand: item.brand ?? '',
+      unit: item.unit ?? '',
+      unitCost: Number(item.manualUnitCostEnabled ? item.manualUnitCost ?? 0 : item.automaticUnitCost ?? 0),
+      salePrice: Number(item.salePrice ?? 0),
+      stockQuantity: Number(item.stockQuantity ?? 0),
+      criticalStockLevel: Number(item.criticalStockLevel ?? 0),
+      warehouse: item.warehouse ?? '',
+      shelfLocation: item.shelfLocation ?? '',
+      supplierName: item.supplierName ?? '',
+    }));
+  }
+
+  async exportExcel() {
+    const rows = await this.exportRows();
+    const header = ['Ürün Adı', 'Barkod', 'Stok Kodu', 'Model', 'Kategori', 'Marka', 'Birim', 'Maliyet Fiyatı (TL)', 'Satış Fiyatı (TL)', 'Stok Miktarı', 'Kritik Stok', 'Depo', 'Raf', 'Tedarikçi'];
+    const data = rows.map((r) => [r.name, r.barcode, r.sku, r.model, r.category, r.brand, r.unit, r.unitCost, r.salePrice, r.stockQuantity, r.criticalStockLevel, r.warehouse, r.shelfLocation, r.supplierName]);
+    const sheet = XLSX.utils.aoa_to_sheet([header, ...data]);
+    sheet['!cols'] = [{ wch: 40 }, { wch: 16 }, { wch: 14 }, { wch: 14 }, { wch: 16 }, { wch: 14 }, { wch: 8 }, { wch: 16 }, { wch: 14 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 16 }];
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, sheet, 'Stok Listesi');
+    const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+    const date = new Date().toISOString().slice(0, 10);
+    return {
+      fileName: `Erhan-Flowers-Stok-Listesi-${date}.xlsx`,
+      mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      contentBase64: buffer.toString('base64'),
+      total: rows.length,
+    };
+  }
+
+  async exportPdf(): Promise<{ fileName: string; mimeType: string; contentBase64: string }> {
+    const rows = await this.exportRows();
+    const columns: Array<{ key: keyof Awaited<ReturnType<StockCardsService['exportRows']>>[number]; label: string; width: number; align?: 'left' | 'right' }> = [
+      { key: 'name', label: 'Ürün Adı', width: 155 },
+      { key: 'barcode', label: 'Barkod', width: 75 },
+      { key: 'sku', label: 'Stok Kodu', width: 55 },
+      { key: 'category', label: 'Kategori', width: 60 },
+      { key: 'unit', label: 'Birim', width: 32 },
+      { key: 'unitCost', label: 'Maliyet (TL)', width: 55, align: 'right' },
+      { key: 'salePrice', label: 'Satış (TL)', width: 55, align: 'right' },
+      { key: 'stockQuantity', label: 'Stok', width: 45, align: 'right' },
+    ];
+
+    const buffer = await new Promise<Buffer>((resolve, reject) => {
+      const doc = new PDFDocument({ size: 'A4', margin: 24, layout: 'landscape' });
+      const chunks: Buffer[] = [];
+      doc.on('data', (chunk) => chunks.push(chunk));
+      doc.on('end', () => resolve(Buffer.concat(chunks)));
+      doc.on('error', reject);
+
+      const regularFont = 'C:/Windows/Fonts/arial.ttf';
+      const boldFont = 'C:/Windows/Fonts/arialbd.ttf';
+      if (fs.existsSync(regularFont)) doc.registerFont('Regular', regularFont);
+      if (fs.existsSync(boldFont)) doc.registerFont('Bold', boldFont);
+      const regular = fs.existsSync(regularFont) ? 'Regular' : 'Helvetica';
+      const bold = fs.existsSync(boldFont) ? 'Bold' : 'Helvetica-Bold';
+
+      const margin = 24;
+      const pageWidth = doc.page.width;
+      const pageHeight = doc.page.height;
+      const tableLeft = margin;
+      const tableWidth = pageWidth - margin * 2;
+      const rowHeight = 20;
+
+      const drawHeader = () => {
+        doc.fontSize(14).font(bold).fillColor('#111827').text('Erhan Flowers - Stok Listesi', margin, margin);
+        doc.fontSize(8).font(regular).fillColor('#64748B').text(new Date().toLocaleDateString('tr-TR'), margin, margin + 18);
+        let y = margin + 36;
+        let x = tableLeft;
+        doc.rect(tableLeft, y, tableWidth, rowHeight).fill('#111827');
+        for (const col of columns) {
+          doc.fontSize(8.5).font(bold).fillColor('#FFFFFF').text(col.label, x + 4, y + 6, { width: col.width - 8, align: col.align ?? 'left' });
+          x += col.width;
+        }
+        return y + rowHeight;
+      };
+
+      let y = drawHeader();
+      rows.forEach((row, index) => {
+        if (y + rowHeight > pageHeight - margin) {
+          doc.addPage();
+          y = drawHeader();
+        }
+        if (index % 2 === 1) doc.rect(tableLeft, y, tableWidth, rowHeight).fill('#F8FAFC');
+        let x = tableLeft;
+        for (const col of columns) {
+          const raw = row[col.key];
+          const value = col.key === 'salePrice' || col.key === 'unitCost'
+            ? Number(raw).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+            : String(raw ?? '');
+          doc.fontSize(8).font(regular).fillColor('#111827').text(value, x + 4, y + 6, { width: col.width - 8, align: col.align ?? 'left', ellipsis: true });
+          x += col.width;
+        }
+        y += rowHeight;
+      });
+
+      doc.end();
+    });
+
+    const date = new Date().toISOString().slice(0, 10);
+    return {
+      fileName: `Erhan-Flowers-Stok-Listesi-${date}.pdf`,
+      mimeType: 'application/pdf',
+      contentBase64: buffer.toString('base64'),
+    };
   }
 
   async create(payload: unknown) {

@@ -12,6 +12,7 @@ import {
   Home,
   ListChecks,
   LogOut,
+  Megaphone,
   Menu,
   PackagePlus,
   PlugZap,
@@ -37,13 +38,14 @@ const nav = [
   { href: '/sales', label: 'Satış', icon: ShoppingCart, ownerOnly: false, enabled: process.env.NEXT_PUBLIC_ENABLE_SALES_CENTER === 'true' },
   { href: '/crm', label: 'CRM', icon: Users, ownerOnly: false },
   { href: '/integrations', label: 'Entegrasyon', icon: PlugZap, ownerOnly: true },
+  { href: '/market-analizi', label: 'Pazar Analizi', icon: Megaphone, ownerOnly: true },
   { href: '/staff/tasks', label: 'Personel Görev', icon: ListChecks, ownerOnly: false, enabled: process.env.NEXT_PUBLIC_ENABLE_SALES_CENTER === 'true' },
   { href: '/finance', label: 'Finans', icon: CircleDollarSign, ownerOnly: true },
   { href: '/reports', label: 'Raporlar', icon: BarChart3, ownerOnly: true },
   { href: '/settings', label: 'Ayarlar', icon: Settings, ownerOnly: true },
 ];
 
-const ownerOnlyPaths = ['/stock-counts', '/costs', '/production-costs', '/finance', '/reports', '/seo-products', '/publishing', '/model-codes', '/knowledge-center', '/settings', '/integrations'];
+const ownerOnlyPaths = ['/stock-counts', '/costs', '/production-costs', '/finance', '/reports', '/seo-products', '/publishing', '/model-codes', '/knowledge-center', '/settings', '/integrations', '/market-analizi'];
 
 export function AdminShell({ title, children }: { title: string; children: React.ReactNode }) {
   const pathname = usePathname();

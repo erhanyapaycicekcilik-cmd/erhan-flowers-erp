@@ -6,6 +6,7 @@ export type AdapterConnectionResult = {
   message: string;
   missingKeys?: string[];
   batchRequestId?: string;
+  listingUploadId?: string;
 };
 
 export type ExternalOrderItem = {
@@ -69,4 +70,5 @@ export interface IntegrationAdapter {
   pushPrice(payload: unknown): Promise<AdapterConnectionResult>;
   pushProduct(payload: unknown): Promise<AdapterConnectionResult>;
   updateOrderStatus(payload: unknown): Promise<AdapterConnectionResult>;
+  checkBatchStatus?(batchRequestId: string): Promise<AdapterConnectionResult & { batchStatus?: string; failedItemCount?: number }>;
 }

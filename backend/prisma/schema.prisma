@@ -353,6 +353,7 @@ model Category {
   updatedAt          DateTime           @updatedAt @map("updated_at")
   products           Product[]
   productionFamilies ProductionFamily[]
+  competitorKeywords CompetitorKeyword[]
 
   @@map("categories")
 }
@@ -390,6 +391,7 @@ model Product {
   barcodeLogs          BarcodeLog[]
   recipe               ProductRecipe?
   productCenterVariant TrendyolProductVariant? @relation("ProductCenterProduct")
+  stockMovements       StockMovement[]
 
   @@map("products")
 }
@@ -476,25 +478,29 @@ model StockCardImage {
 }
 
 model StockMovement {
-  id            Int       @id @default(autoincrement())
-  stockCardId   Int       @map("stock_card_id")
+  id            Int        @id @default(autoincrement())
+  stockCardId   Int?       @map("stock_card_id")
+  productId     Int?       @map("product_id")
+  variantId     Int?       @map("variant_id")
   type          String
-  quantity      Decimal   @db.Decimal(12, 3)
+  quantity      Decimal    @db.Decimal(12, 3)
   unit          String
-  previousStock Decimal   @map("previous_stock") @db.Decimal(12, 3)
-  nextStock     Decimal   @map("next_stock") @db.Decimal(12, 3)
+  previousStock Decimal    @map("previous_stock") @db.Decimal(12, 3)
+  nextStock     Decimal    @map("next_stock") @db.Decimal(12, 3)
   reason        String?
-  supplierName  String?   @map("supplier_name")
-  documentNo    String?   @map("document_no")
-  paymentStatus String?   @map("payment_status")
+  supplierName  String?    @map("supplier_name")
+  documentNo    String?    @map("document_no")
+  paymentStatus String?    @map("payment_status")
   note          String?
-  referenceType String?   @map("reference_type")
-  referenceId   String?   @map("reference_id")
-  eventKey      String?   @unique @map("event_key")
-  createdById   Int?      @map("created_by_id")
-  createdAt     DateTime  @default(now()) @map("created_at")
-  stockCard     StockCard @relation(fields: [stockCardId], references: [id])
-  createdBy     User?     @relation("StockMovementCreatedBy", fields: [createdById], references: [id])
+  referenceType String?    @map("reference_type")
+  referenceId   String?    @map("reference_id")
+  eventKey      String?    @unique @map("event_key")
+  createdById   Int?       @map("created_by_id")
+  createdAt     DateTime   @default(now()) @map("created_at")
+  stockCard     StockCard?              @relation(fields: [stockCardId], references: [id])
+  product       Product?                @relation(fields: [productId], references: [id])
+  variant       TrendyolProductVariant? @relation(fields: [variantId], references: [id])
+  createdBy     User?                   @relation("StockMovementCreatedBy", fields: [createdById], references: [id])
 
   @@index([referenceType, referenceId])
   @@map("stock_movements")
@@ -853,6 +859,7 @@ model TrendyolProductVariant {
   publishingLogs        PublishingLog[]
   productCostDraft      ProductCostDraft?
   retailSaleItems       RetailSaleItem[]
+  stockMovements        StockMovement[]
 
   @@map("trendyol_product_variants")
 }
@@ -1891,4 +1898,96 @@ model StockCountItem {
 
   @@unique([sessionId, stockCardId])
   @@map("stock_count_items")
+}
+
+model CompetitorKeyword {
+  id         Int                 @id @default(autoincrement())
+  keyword    String              @unique
+  categoryId Int?                @map("category_id")
+  isActive   Boolean             @default(true) @map("is_active")
+  createdAt  DateTime            @default(now()) @map("created_at")
+  updatedAt  DateTime            @updatedAt @map("updated_at")
+  category   Category?           @relation(fields: [categoryId], references: [id])
+  snapshots  CompetitorSnapshot[]
+
+  @@map("competitor_keywords")
+}
+
+model CompetitorSnapshot {
+  id              Int               @id @default(autoincrement())
+  keywordId       Int               @map("keyword_id")
+  capturedAt      DateTime          @default(now()) @map("captured_at")
+  rank            Int
+  trendyolProductId String          @map("trendyol_product_id")
+  sellerName      String?           @map("seller_name")
+  productName     String            @map("product_name")
+  brand           String?
+  priceCurrent    Decimal           @default(0) @map("price_current") @db.Decimal(12, 2)
+  priceOriginal   Decimal           @default(0) @map("price_original") @db.Decimal(12, 2)
+  ratingAverage   Decimal?          @map("rating_average") @db.Decimal(4, 2)
+  ratingCount     Int               @default(0) @map("rating_count")
+  favoriteCount   Int               @default(0) @map("favorite_count")
+  imageCount      Int               @default(0) @map("image_count")
+  freeCargo       Boolean           @default(false) @map("free_cargo")
+  promotions      String[]          @default([])
+  productUrl      String?           @map("product_url")
+  raw             Json?
+  keyword         CompetitorKeyword @relation(fields: [keywordId], references: [id], onDelete: Cascade)
+
+  @@index([keywordId, capturedAt])
+  @@map("competitor_snapshots")
+}
+
+model MarketInsightReport {
+  id             Int      @id @default(autoincrement())
+  reportDate     DateTime @unique @map("report_date") @db.Date
+  summary        String
+  strengths      Json      @default("[]")
+  weaknesses     Json      @default("[]")
+  suggestions    Json      @default("[]")
+  comparison     Json      @default("[]")
+  generatedAt    DateTime @default(now()) @map("generated_at")
+
+  @@map("market_insight_reports")
+}
+
+model SocialAccountConnection {
+  id                Int       @id @default(autoincrement())
+  platform          String    @unique
+  externalAccountId String    @map("external_account_id")
+  accountName       String?   @map("account_name")
+  accessTokenEncrypted String @map("access_token_encrypted")
+  connectedAt       DateTime  @default(now()) @map("connected_at")
+  expiresAt         DateTime? @map("expires_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  @@map("social_account_connections")
+}
+
+model SocialInsightSnapshot {
+  id              Int      @id @default(autoincrement())
+  platform        String
+  capturedAt      DateTime @default(now()) @map("captured_at")
+  followersCount  Int      @default(0) @map("followers_count")
+  followsCount    Int      @default(0) @map("follows_count")
+  mediaCount      Int      @default(0) @map("media_count")
+  impressions     Int      @default(0)
+  reach           Int      @default(0)
+  profileViews    Int      @default(0) @map("profile_views")
+  raw             Json?
+
+  @@index([platform, capturedAt])
+  @@map("social_insight_snapshots")
+}
+
+model SocialInsightReport {
+  id          Int      @id @default(autoincrement())
+  platform    String
+  reportDate  DateTime @map("report_date") @db.Date
+  summary     String
+  suggestions Json     @default("[]")
+  generatedAt DateTime @default(now()) @map("generated_at")
+
+  @@unique([platform, reportDate])
+  @@map("social_insight_reports")
 }

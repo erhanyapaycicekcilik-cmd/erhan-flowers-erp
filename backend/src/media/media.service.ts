@@ -5,6 +5,7 @@ import * as path from 'path';
 import { cleanMojibakeDeep } from '../common/mojibake';
 import { PhotoroomService } from '../image-processing/photoroom.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { productImageRoot } from '../product-image-paths';
 
 @Injectable()
 export class MediaService {
@@ -12,6 +13,7 @@ export class MediaService {
     private readonly prisma: PrismaService,
     private readonly photoroom: PhotoroomService,
   ) {
+    fs.mkdirSync(productImageRoot(), { recursive: true });
     fs.mkdirSync(path.join(process.cwd(), 'uploads', 'products'), { recursive: true });
     fs.mkdirSync(path.join(process.cwd(), 'uploads', 'photoroom'), { recursive: true });
   }
@@ -30,7 +32,7 @@ export class MediaService {
 
     const productId = body.productId ? Number(body.productId) : null;
     const folderName = this.safeFolderName(body.folderName?.trim() || 'Genel');
-    const targetDir = path.join(process.cwd(), 'uploads', 'products', folderName, 'images');
+    const targetDir = path.join(productImageRoot(), folderName, 'images');
     fs.mkdirSync(targetDir, { recursive: true });
 
     const safeFileName = this.safeFileName(file.originalname || file.filename);
