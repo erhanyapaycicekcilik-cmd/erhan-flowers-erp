@@ -49,42 +49,32 @@ Start-Process -FilePath "powershell.exe" `
   -RedirectStandardOutput (Join-Path $root "frontend\server-dev.log") `
   -RedirectStandardError (Join-Path $root "frontend\server-dev.err.log")
 
-# 4) Gorsel tuneli (cloudflared -> 8101)
-Write-Step "Gorsel tuneli aciliyor (Trendyol/N11/Ticimax gorselleri icin)"
+# 4) Gorsel tuneli (kalici Cloudflare Tunnel -> 8101)
+# Sabit adres: https://gorseller.florayapaycicek.com (florayapaycicek.com Cloudflare'e
+# tasindi, erhanflowers.com'daki canli Ticimax sitesine/e-postasina dokunulmadi).
+# Eskiden kullanilan gecici "trycloudflare.com" tuneli her yeniden baslatmada adres
+# degistirdigi icin Trendyol'a gonderilen gorseller zamanla kirilirdi; artik sabit.
+Write-Step "Gorsel tuneli aciliyor (kalici adres: gorseller.florayapaycicek.com)"
 $cloudflared = (Get-Command cloudflared -ErrorAction SilentlyContinue).Source
 if (-not $cloudflared) {
   $cloudflared = Get-ChildItem -Path "$env:LOCALAPPDATA\Microsoft\WinGet\Packages" -Filter "cloudflared.exe" -Recurse -ErrorAction SilentlyContinue |
     Select-Object -First 1 -ExpandProperty FullName
 }
 
-$tunnelLog = Join-Path $workDir "cloudflared-8101.log"
+$tunnelLog = Join-Path $workDir "cloudflared-named.log"
 $urlFile = Join-Path $workDir "public-file-base-url.txt"
-if (Test-Path $tunnelLog) { Remove-Item $tunnelLog -Force }
+$stableUrl = "https://gorseller.florayapaycicek.com"
 
 if (-not $cloudflared) {
   Write-Host "cloudflared bulunamadi, gorsel tuneli atlaniyor. Pazaryeri gorselleri calismayabilir." -ForegroundColor Yellow
 } else {
   Start-Process -FilePath $cloudflared `
-    -ArgumentList "tunnel --url http://127.0.0.1:8101 --no-autoupdate" `
+    -ArgumentList "tunnel run erhan-flowers-images" `
     -WindowStyle Hidden `
     -RedirectStandardOutput $tunnelLog -RedirectStandardError $tunnelLog
 
-  $tunnelUrl = $null
-  for ($i = 0; $i -lt 20; $i++) {
-    Start-Sleep -Seconds 1
-    if (Test-Path $tunnelLog) {
-      $content = Get-Content -Path $tunnelLog -Raw
-      $match = [regex]::Match($content, 'https://[a-zA-Z0-9-]+\.trycloudflare\.com')
-      if ($match.Success) { $tunnelUrl = $match.Value; break }
-    }
-  }
-
-  if ($tunnelUrl) {
-    $tunnelUrl | Set-Content -Path $urlFile -Encoding ascii -NoNewline
-    Write-Host "Gorsel tuneli hazir: $tunnelUrl" -ForegroundColor Green
-  } else {
-    Write-Host "Gorsel tuneli linki bulunamadi, work\cloudflared-8101.log dosyasina bak." -ForegroundColor Yellow
-  }
+  $stableUrl | Set-Content -Path $urlFile -Encoding ascii -NoNewline
+  Write-Host "Gorsel tuneli hazir (sabit adres): $stableUrl" -ForegroundColor Green
 }
 
 # 5) Tarayiciyi ac
