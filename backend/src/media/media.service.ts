@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as fsPromises from 'fs/promises';
 import * as path from 'path';
 import { cleanMojibakeDeep } from '../common/mojibake';
+import { OpenAiImageService } from '../image-processing/openai-image.service';
 import { PhotoroomService } from '../image-processing/photoroom.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { productImageRoot } from '../product-image-paths';
@@ -12,6 +13,7 @@ export class MediaService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly photoroom: PhotoroomService,
+    private readonly openAiImage: OpenAiImageService,
   ) {
     fs.mkdirSync(productImageRoot(), { recursive: true });
     fs.mkdirSync(path.join(process.cwd(), 'uploads', 'products'), { recursive: true });
@@ -137,16 +139,16 @@ export class MediaService {
     const folderName = this.safeFolderName(body.folderName?.trim() || 'Agac Standart Gorsel');
     const sourcePath = this.resolveUploadPath(imagePath);
     const sourceType = this.fileTypeFromPath(imagePath);
+    this.openAiImage.ensureConfigured();
     const outputDir = path.join(process.cwd(), 'uploads', 'tree-standard', folderName);
     fs.mkdirSync(outputDir, { recursive: true });
 
     const slots = [
-      { key: '01-beyaz-ana-gorsel', title: '01 Beyaz ana görsel', mode: 'photoroom' },
-      { key: '02-otel-lobisi-dukkan', title: '02 Otel lobisi / dükkan', mode: 'copy' },
-      { key: '03-modern-salon', title: '03 Modern salon', mode: 'copy' },
-      { key: '04-ofis-kurumsal-alan', title: '04 Ofis / kurumsal alan', mode: 'copy' },
-      { key: '05-yakin-detay', title: '05 Yakın detay', mode: 'copy' },
-      { key: '06-giris-olcu-algisi', title: '06 Giriş / ölçü algısı', mode: 'copy' },
+      { key: '01-beyaz-ana-gorsel', title: '01 Beyaz ana görsel', mode: 'photoroom', prompt: '' },
+      { key: '02-otel-lobisi-dukkan', title: '02 Otel lobisi / dükkan', mode: 'openai', prompt: this.treeScenePrompt('ürünü lüks bir otel lobisi, showroom veya çiçek dükkanı girişinde doğal ışıkla konumlandır') },
+      { key: '03-modern-salon-ofis', title: '03 Modern salon / ofis', mode: 'openai', prompt: this.treeScenePrompt('ürünü modern salon veya kurumsal ofis köşesinde, gerçek kullanım ortamında konumlandır') },
+      { key: '04-yakin-detay', title: '04 Yakın detay', mode: 'openai', prompt: this.treeScenePrompt('ürünün yaprak, gövde, saksı, taş ve malzeme kalitesini gösteren yakın detay fotoğrafı hazırla') },
+      { key: '05-giris-olcu-algisi', title: '05 Giriş / ölçü algısı', mode: 'openai', prompt: this.treeScenePrompt('ürünü kapı, konsol veya koridor yanında boy algısı verecek şekilde konumlandır') },
     ];
 
     const created = [];
@@ -166,7 +168,12 @@ export class MediaService {
           await fsPromises.copyFile(sourcePath, outputPath);
         }
       } else {
-        await fsPromises.copyFile(sourcePath, outputPath);
+        const editedBuffer = await this.openAiImage.editImage({
+          sourcePath,
+          fileType: sourceType,
+          prompt: slot.prompt,
+        });
+        await fsPromises.writeFile(outputPath, editedBuffer);
       }
 
       const publicPath = `/uploads/tree-standard/${folderName}/${outputFileName}`;
@@ -185,8 +192,18 @@ export class MediaService {
     return cleanMojibakeDeep({
       images: created.map((item) => item.filePath),
       mediaFiles: created,
-      note: 'Ağaç standart seti hazırlandı. Dekor sahneleri için görsel üretim servisi bağlanınca 02-06 otomatik sahne görseli olarak üretilecek.',
+      note: 'ChatGPT ile ağaç standart 5 görsel seti hazırlandı.',
     });
+  }
+
+  private treeScenePrompt(instruction: string) {
+    return [
+      'Referans ürün fotoğrafındaki yapay ağaç/bitki ürününü koru; ürün tipi, renkleri, saksısı, oranı ve malzeme hissi değişmesin.',
+      instruction,
+      'Kare 1:1 e-ticaret görseli üret. Ürün net, temiz, doğal ve premium görünsün.',
+      'Ürünün üzerine yazı, logo, filigran, fiyat, kampanya etiketi veya ek aksesuar ekleme.',
+      'Türkiye pazaryerleri için gerçekçi, parlak ama abartısız ürün fotoğrafı stili kullan.',
+    ].join(' ');
   }
 
   private resolveUploadPath(filePath: string) {

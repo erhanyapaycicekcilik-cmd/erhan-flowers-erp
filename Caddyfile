@@ -1,0 +1,12 @@
+# Sunucu ve domain hazir oldugunda asagidaki placeholder'lari gercek
+# domain adlariyla degistirin (erhanflowers.com, florayapaycicek.com,
+# api.erhanflowers.com gibi). Caddy, DNS bu sunucuya yonlendirildikten
+# sonra SSL sertifikasini otomatik alir - elle islem gerekmez.
+
+erhanflowers.com, www.erhanflowers.com, florayapaycicek.com, www.florayapaycicek.com {
+    reverse_proxy frontend:3000
+}
+
+api.erhanflowers.com {
+    reverse_proxy backend:8000
+}

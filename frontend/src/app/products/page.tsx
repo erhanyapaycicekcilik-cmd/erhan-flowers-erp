@@ -1,7 +1,7 @@
 'use client';
 
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from 'react';
-import { Boxes, Calculator, CheckCircle2, Copy, Edit3, ExternalLink, Eye, FileText, ImageIcon, PackagePlus, Plus, Printer, RefreshCw, Save, Search, Send, Trash2, Upload, X } from 'lucide-react';
+import { Boxes, Calculator, CheckCircle2, Copy, Edit3, ExternalLink, Eye, FileText, ImageIcon, PackagePlus, Plus, Printer, RefreshCw, Save, Search, Send, Sparkles, Trash2, Upload, X } from 'lucide-react';
 import { AdminShell } from '@/components/AdminShell';
 import { api, apiBaseUrl, apiFileUrl } from '@/lib/api';
 import type { Category, CurrentUser, MediaFile } from '@/types';
@@ -69,6 +69,7 @@ type StockCard = {
   category?: string | null;
   model?: string | null;
   barcode?: string | null;
+  potColor?: string | null;
   productFamily?: string | null;
   productType?: string | null;
   unit: string;
@@ -191,6 +192,11 @@ type AutoStockCardCandidate = {
   warning: string | null;
 };
 
+type CompositeBuilder = {
+  productStockCardId: string;
+  potStockCardId: string;
+};
+
 const emptyForm = {
   variantId: '',
   productId: '',
@@ -231,6 +237,11 @@ const emptyPriceResearch: PriceResearch = {
   note: '',
 };
 
+const emptyCompositeBuilder: CompositeBuilder = {
+  productStockCardId: '',
+  potStockCardId: '',
+};
+
 const steps = ['Ürün Bilgileri', 'Reçete/Malzeme', 'Maliyet/Fiyat', 'Görsel/SEO', 'Kanallara Gönder'];
 const visibleStepIndexes = [0, 1, 2, 3, 4] as const;
 const channels = ['SHOP', 'SITE', 'TRENDYOL', 'HEPSIBURADA', 'N11', 'TICIMAX'] as const;
@@ -238,12 +249,12 @@ const publishableChannels = ['TRENDYOL', 'HEPSIBURADA', 'N11', 'TICIMAX'] as con
 const treeVisualSlots = [
   { title: '01 Beyaz ana görsel', detail: 'Pazaryeri ana fotoğrafı: beyaz fon, ürün ortada, tam boy.' },
   { title: '02 Otel lobisi / dükkan', detail: 'Ağaç gerçek showroom, mağaza veya otel lobisinde duruyormuş gibi.' },
-  { title: '03 Modern salon', detail: 'Ev kullanımı için salon köşesi; koltuk, perde veya sade duvar yanında.' },
-  { title: '04 Ofis / kurumsal alan', detail: 'Ofis, bekleme alanı veya danışma yanında profesyonel kullanım.' },
-  { title: '05 Yakın detay', detail: 'Yaprak, gövde, saksı, taş ve malzeme kalitesini gösteren yakın çekim.' },
-  { title: '06 Giriş / ölçü algısı', detail: 'Kapı, konsol veya koridor yanında ürün boyunu anlatan kullanım görseli.' },
+  { title: '03 Modern salon / ofis', detail: 'Ev veya kurumsal kullanım için salon/ofis köşesinde doğal görünüm.' },
+  { title: '04 Yakın detay', detail: 'Yaprak, gövde, saksı, taş ve malzeme kalitesini gösteren yakın çekim.' },
+  { title: '05 Giriş / ölçü algısı', detail: 'Kapı, konsol veya koridor yanında ürün boyunu anlatan kullanım görseli.' },
 ];
-const treeVisualSourceReadyText = '1 ana görsel seçildi. Ağaç standart seti bu görselden hazırlanacak; 6 ayrı görsel seçmene gerek yok.';
+const treeVisualImageLimit = treeVisualSlots.length;
+const treeVisualSourceReadyText = '1 ana görsel seçildi. ChatGPT bu görselden standart 5 görsel hazırlayacak; ayrı ayrı görsel seçmene gerek yok.';
 
 export default function ProductsPage() {
   const [entries, setEntries] = useState<Entry[]>([]);
@@ -272,6 +283,7 @@ export default function ProductsPage() {
   const [quickKeepCategory, setQuickKeepCategory] = useState(true);
   const [quickKeepProductType, setQuickKeepProductType] = useState(true);
   const [quickKeepPrices, setQuickKeepPrices] = useState(true);
+  const [compositeBuilder, setCompositeBuilder] = useState(emptyCompositeBuilder);
   const [cleanupItems, setCleanupItems] = useState<AutoStockCardCandidate[]>([]);
   const [cleanupLoading, setCleanupLoading] = useState(false);
   const [showPassiveEntries, setShowPassiveEntries] = useState(false);
@@ -417,6 +429,14 @@ export default function ProductsPage() {
     .slice(0, 8), [stockCards, form.productName]);
   const productStockSuggestions = useMemo(() => productStockMatches.map((item) => item.stockCard), [productStockMatches]);
   const bestAutoStockMatch = productStockMatches[0]?.score >= 18 ? productStockMatches[0].stockCard : null;
+  const activeStockCardOptions = useMemo(() => stockCards
+    .filter((stockCard) => stockCard.status !== 'PASSIVE')
+    .sort((a, b) => a.name.localeCompare(b.name, 'tr')), [stockCards]);
+  const compositeProductOptions = useMemo(() => activeStockCardOptions.filter((stockCard) => inferComponentRole(stockCard) !== 'POT'), [activeStockCardOptions]);
+  const compositePotOptions = useMemo(() => activeStockCardOptions.filter((stockCard) => inferComponentRole(stockCard) === 'POT'), [activeStockCardOptions]);
+  const selectedCompositeProduct = useMemo(() => stockCards.find((stockCard) => stockCard.id === Number(compositeBuilder.productStockCardId)) ?? null, [compositeBuilder.productStockCardId, stockCards]);
+  const selectedCompositePot = useMemo(() => stockCards.find((stockCard) => stockCard.id === Number(compositeBuilder.potStockCardId)) ?? null, [compositeBuilder.potStockCardId, stockCards]);
+  const compositeReady = Boolean(selectedCompositeProduct && selectedCompositePot);
   const seoProductNameSuggestion = useMemo(() => buildSeoProductName(form.productName, bestAutoStockMatch, categories, activeDraft), [form.productName, bestAutoStockMatch, categories, activeDraft]);
   const suggestedMediaFiles = useMemo(() => {
     const productText = normalizeSearchText([form.productName, form.modelCode, form.stockCode, form.barcode].filter(Boolean).join(' '));
@@ -526,6 +546,10 @@ export default function ProductsPage() {
 
   function updateQuick(name: keyof QuickForm, value: unknown) {
     setQuickForm((current) => ({ ...current, [name]: value }));
+  }
+
+  function updateCompositeBuilder(name: keyof CompositeBuilder, value: string) {
+    setCompositeBuilder((current) => ({ ...current, [name]: value }));
   }
 
   async function uploadQuickImage(files: FileList | null) {
@@ -685,6 +709,70 @@ export default function ProductsPage() {
 
   function matchSalesStock(stockCard: StockCard) {
     applySalesStockMatch(stockCard, false);
+  }
+
+  function buildCompositeProductFromStock() {
+    const productStock = stockCards.find((stockCard) => stockCard.id === Number(compositeBuilder.productStockCardId));
+    const potStock = stockCards.find((stockCard) => stockCard.id === Number(compositeBuilder.potStockCardId));
+    if (!productStock || !potStock) {
+      setMessage('Önce ürün/bitki ve saksı stok kartını seçin.');
+      return;
+    }
+
+    const productCost = Number(productStock.automaticUnitCost || productStock.manualUnitCost || 0);
+    const potCost = Number(potStock.automaticUnitCost || potStock.manualUnitCost || 0);
+    const totalCost = roundMoney(productCost + potCost);
+    const matchedCategoryId = findCategoryIdForStock(productStock, categories, productStock.name);
+    const matchedCategory = categories.find((category) => category.id === matchedCategoryId);
+    const productName = titleCaseTr(dedupeSeoWords(`${productStock.name} ${potStock.name}`));
+    const stockQuantity = Math.max(0, Math.min(Number(productStock.stockQuantity || 0), Number(potStock.stockQuantity || 0)));
+    const suggestedSalePrice = totalCost > 0 ? roundMoney(totalCost * 2.4) : 0;
+
+    setForm((current) => ({
+      ...current,
+      productName,
+      categoryId: matchedCategoryId ? String(matchedCategoryId) : current.categoryId,
+      channelCategoryName: matchedCategory?.name ?? current.channelCategoryName,
+      colorVariant: [extractSizeText(productStock.name), potStock.productType || potStock.category || potStock.name].filter(Boolean).join(' / '),
+      stockQuantity: Math.trunc(stockQuantity),
+      salePrice: Number(current.salePrice || 0) > 0 ? current.salePrice : suggestedSalePrice,
+    }));
+
+    setCostDetail({
+      hasSavedCostDraft: costDetail?.hasSavedCostDraft,
+      costDraft: normalizeDraftTotals({
+        ...defaultCostDraft(Number(form.salePrice || suggestedSalePrice), Number(form.commissionPercent)),
+        items: [{
+          name: productStock.name,
+          group: componentRoleGroup(inferComponentRole(productStock), productStock),
+          quantity: 1,
+          unit: productStock.unit,
+          source: 'AUTO',
+          stockCardId: productStock.id,
+          manualUnitCost: 0,
+          automaticUnitCost: productCost,
+          totalCost: productCost,
+          isActive: true,
+          isDefaultExpense: false,
+          defaultExpenseKey: null,
+          defaultAmount: 0,
+        }],
+        pots: [{
+          name: potStock.name,
+          potType: potStock.productType ?? potStock.category ?? 'Saksı',
+          color: potStock.potColor ?? null,
+          quantity: 1,
+          unit: potStock.unit,
+          source: 'AUTO',
+          stockCardId: potStock.id,
+          manualUnitCost: 0,
+          automaticUnitCost: potCost,
+          totalCost: potCost,
+        }],
+      }),
+    });
+
+    setMessage(`${productName} satış ürünü hazırlandı. Fiyatı ve görseli kontrol edip Kaydet'e basabilirsiniz.`);
   }
 
   function matchComponentStock(role: ComponentRole, stockCard: StockCard) {
@@ -938,8 +1026,8 @@ export default function ProductsPage() {
 
   async function uploadImages(files: FileList | null) {
     if (!files?.length) return;
-    const remainingSlots = Math.max(0, 6 - form.images.length);
-    if (remainingSlots === 0) return setMessage('En fazla 6 ürün görseli seçilebilir.');
+    const remainingSlots = Math.max(0, treeVisualImageLimit - form.images.length);
+    if (remainingSlots === 0) return setMessage(`En fazla ${treeVisualImageLimit} ürün görseli seçilebilir.`);
     const uploaded: string[] = [];
     for (const file of Array.from(files).filter((item) => item.type.startsWith('image/')).slice(0, remainingSlots)) {
       const data = new FormData();
@@ -949,7 +1037,7 @@ export default function ProductsPage() {
       const media = await api<MediaFile>('/media/upload', { method: 'POST', body: data });
       uploaded.push(media.filePath);
     }
-    const nextImages = Array.from(new Set([...form.images, ...uploaded])).slice(0, 6);
+    const nextImages = Array.from(new Set([...form.images, ...uploaded])).slice(0, treeVisualImageLimit);
     update('images', nextImages);
     await load();
     setMessage('Görseller eklendi.');
@@ -957,16 +1045,16 @@ export default function ProductsPage() {
 
   function selectMediaImage(filePath: string) {
     if (form.images.includes(filePath)) return;
-    if (form.images.length >= 6) return setMessage('En fazla 6 ürün görseli seçilebilir.');
-    const nextImages = [...form.images, filePath].slice(0, 6);
+    if (form.images.length >= treeVisualImageLimit) return setMessage(`En fazla ${treeVisualImageLimit} ürün görseli seçilebilir.`);
+    const nextImages = [...form.images, filePath].slice(0, treeVisualImageLimit);
     update('images', nextImages);
-    setMessage(nextImages.length < 6 ? `${6 - nextImages.length} görsel daha seçilmeli.` : '6 görsel seçildi.');
+    setMessage(nextImages.length < treeVisualImageLimit ? `${treeVisualImageLimit - nextImages.length} görsel daha seçilmeli.` : `${treeVisualImageLimit} görsel seçildi.`);
   }
 
   function removeProductImage(filePath: string) {
     const nextImages = form.images.filter((image) => image !== filePath);
     update('images', nextImages);
-    setMessage(nextImages.length < 6 ? `${6 - nextImages.length} görsel daha seçilmeli.` : '6 görsel seçildi.');
+    setMessage(nextImages.length < treeVisualImageLimit ? `${treeVisualImageLimit - nextImages.length} görsel daha seçilmeli.` : `${treeVisualImageLimit} görsel seçildi.`);
   }
 
   function applyTreeVisualStandard() {
@@ -991,9 +1079,9 @@ export default function ProductsPage() {
           folderName: form.modelCode || form.productName || 'Ağaç Standart Görsel',
         },
       });
-      update('images', result.images.slice(0, 6));
+      update('images', result.images.slice(0, treeVisualImageLimit));
       await load();
-      setMessage(result.note || 'Ağaç standart 6 görsel oluşturuldu.');
+      setMessage(result.note || `Ağaç standart ${treeVisualImageLimit} görsel oluşturuldu.`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Ağaç standart görsel seti oluşturulamadı.');
     } finally {
@@ -1415,6 +1503,54 @@ export default function ProductsPage() {
                   </div>
                 </div>
                 <div className="md:col-span-2 xl:col-span-4">
+                  <div className="rounded-md border border-emerald-200 bg-emerald-50 p-4">
+                    <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <div className="flex items-center gap-2 font-black text-emerald-900"><Sparkles size={18} /> ChatGPT ürün hazırlayıcı</div>
+                        <div className="mt-1 text-xs font-semibold text-emerald-800">Ürünü ve saksıyı seç; sistem satış ürün adını, reçeteyi, saksı satırını ve satılabilir adedi hazırlasın.</div>
+                      </div>
+                      <button type="button" className="btn btn-secondary min-h-9 px-3 text-xs" onClick={refreshStockCards} disabled={stockCardsLoading}>
+                        <RefreshCw size={14} className={stockCardsLoading ? 'animate-spin' : ''} /> Stokları yenile
+                      </button>
+                    </div>
+                    <div className="grid gap-3 lg:grid-cols-[1fr_1fr_auto]">
+                      <Field label="1. Ürün / bitki">
+                        <select className="field bg-white" value={compositeBuilder.productStockCardId} onChange={(event) => updateCompositeBuilder('productStockCardId', event.target.value)}>
+                          <option value="">Ürün stok kartı seçin</option>
+                          {compositeProductOptions.map((stockCard) => (
+                            <option key={stockCard.id} value={stockCard.id}>{stockCardOptionLabel(stockCard)}</option>
+                          ))}
+                        </select>
+                      </Field>
+                      <Field label="2. Saksı">
+                        <select className="field bg-white" value={compositeBuilder.potStockCardId} onChange={(event) => updateCompositeBuilder('potStockCardId', event.target.value)}>
+                          <option value="">Saksı stok kartı seçin</option>
+                          {compositePotOptions.map((stockCard) => (
+                            <option key={stockCard.id} value={stockCard.id}>{stockCardOptionLabel(stockCard)}</option>
+                          ))}
+                        </select>
+                      </Field>
+                      <div className="flex items-end">
+                        <button type="button" className="btn btn-primary w-full justify-center" onClick={buildCompositeProductFromStock} disabled={!compositeReady}>
+                          <Sparkles size={16} /> Ürünü hazırla
+                        </button>
+                      </div>
+                    </div>
+                    <div className="mt-3 grid gap-2 text-xs font-semibold md:grid-cols-3">
+                      <div className="rounded-md border border-emerald-200 bg-white px-3 py-2 text-emerald-900">{selectedCompositeProduct ? stockCardShortSummary(selectedCompositeProduct) : 'Ürün bekliyor'}</div>
+                      <div className="rounded-md border border-emerald-200 bg-white px-3 py-2 text-emerald-900">{selectedCompositePot ? stockCardShortSummary(selectedCompositePot) : 'Saksı bekliyor'}</div>
+                      <div className="rounded-md border border-emerald-200 bg-white px-3 py-2 text-emerald-900">{compositeReady ? `Satılabilir adet: ${number(Math.min(Number(selectedCompositeProduct?.stockQuantity || 0), Number(selectedCompositePot?.stockQuantity || 0)))}` : 'İki seçim tamamlanınca hazır'}</div>
+                    </div>
+                    {form.productName && activeDraft.pots.length > 0 && (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <button type="button" className="btn btn-secondary min-h-9 px-3 text-xs" onClick={generateSeoDescription}><FileText size={14} /> SEO metni hazırla</button>
+                        <button type="button" className="btn btn-secondary min-h-9 px-3 text-xs" onClick={() => setImagePickerOpen(true)}><ImageIcon size={14} /> Görsel seç</button>
+                        <button type="button" className="btn btn-secondary min-h-9 px-3 text-xs" onClick={() => { applyTreeVisualStandard(); setTreeVisualOpen(true); }}><ImageIcon size={14} /> 5 görsel seti</button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div className="md:col-span-2 xl:col-span-4">
                   <Field label="Google SEO uyumlu satış ürün adı">
                     <input className="field" value={form.productName} onChange={(event) => update('productName', event.target.value)} placeholder="Yaprak, gövde ve saksıyı seçtikten sonra final ürün adını yazın" />
                     {seoProductNameSuggestion && seoProductNameSuggestion !== form.productName.trim() && (
@@ -1537,11 +1673,11 @@ export default function ProductsPage() {
 
             {(
               <div className="space-y-4">
-                <button type="button" className="btn btn-secondary w-full justify-center" onClick={() => setImagePickerOpen(true)}><ImageIcon size={16} /> Görsel Seç / Yükle ({form.images.length}/6)</button>
+                <button type="button" className="btn btn-secondary w-full justify-center" onClick={() => setImagePickerOpen(true)}><ImageIcon size={16} /> Görsel Seç / Yükle ({form.images.length}/{treeVisualImageLimit})</button>
                 <button type="button" className="btn btn-primary w-full justify-center" onClick={createShopCard}><FileText size={16} /> Dükkan PDF Kartı Oluştur</button>
-                <button type="button" className="btn btn-primary w-full justify-center" onClick={() => { applyTreeVisualStandard(); setTreeVisualOpen(true); }}><ImageIcon size={16} /> Ağaç Standart 6 Görsel</button>
+                <button type="button" className="btn btn-primary w-full justify-center" onClick={() => { applyTreeVisualStandard(); setTreeVisualOpen(true); }}><ImageIcon size={16} /> ChatGPT Standart 5 Görsel</button>
                 <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm font-semibold text-emerald-800">
-                  Ağaç ürünlerinde görsel sırası: beyaz ana görsel, otel lobisi/dükkan, salon, ofis, yakın detay, giriş/ölçü alanı.
+                  Ağaç ürünlerinde görsel sırası: beyaz ana görsel, otel lobisi/dükkan, salon/ofis, yakın detay, giriş/ölçü alanı.
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                   {form.images.map((image) => (
@@ -1650,7 +1786,7 @@ export default function ProductsPage() {
         canResearch={canResearch}
       />
       {imagePickerOpen && (
-        <PickerModal title={`Ürün Görselleri (${form.images.length}/6)`} onClose={() => setImagePickerOpen(false)}>
+        <PickerModal title={`Ürün Görselleri (${form.images.length}/${treeVisualImageLimit})`} onClose={() => setImagePickerOpen(false)}>
           <div className="space-y-4">
             <label className="btn btn-secondary w-full justify-center">
               <ImageIcon size={16} /> Bilgisayardan görsel yükle
@@ -1685,7 +1821,7 @@ export default function ProductsPage() {
         </PickerModal>
       )}
       {treeVisualOpen && (
-        <PickerModal title="Ağaç Standart 6 Görsel" onClose={() => setTreeVisualOpen(false)}>
+        <PickerModal title="ChatGPT Standart 5 Görsel" onClose={() => setTreeVisualOpen(false)}>
           <div className="space-y-4">
             <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm font-semibold text-emerald-800">
               Ağaç ürünleri için 2. görsel artık otel lobisi / dükkan / showroom ortamı olacak. Görseller bu sırayla kaydedilirse Trendyol, Hepsiburada, N11 ve Ticimax aynı düzende kullanır.
@@ -1706,7 +1842,7 @@ export default function ProductsPage() {
                       </button>
                     ) : index > 0 && form.images[0] ? (
                       <div className="flex aspect-square w-full items-center justify-center rounded-md border border-dashed border-emerald-200 bg-emerald-50 p-4 text-center text-sm font-semibold text-emerald-800">
-                        Tek görselden 6 set oluştur butonuyla hazırlanacak
+                        Tek görselden 5 set oluştur butonuyla hazırlanacak
                       </div>
                     ) : (
                       <button type="button" className="flex aspect-square w-full items-center justify-center rounded-md border border-dashed border-line bg-slate-50 text-center text-sm font-semibold text-slate-500" onClick={() => { setTreeVisualOpen(false); setImagePickerOpen(true); }}>
@@ -1720,7 +1856,7 @@ export default function ProductsPage() {
             <div className="flex flex-wrap justify-end gap-2">
               <button type="button" className="btn btn-secondary" onClick={() => { setTreeVisualOpen(false); setImagePickerOpen(true); }}><ImageIcon size={16} /> Görsel seç / yükle</button>
               <button type="button" className="btn btn-primary" onClick={generateTreeVisualSet} disabled={treeVisualGenerating}>
-                {treeVisualGenerating ? 'Hazırlanıyor...' : 'Tek görselden 6 set oluştur'}
+                {treeVisualGenerating ? 'Hazırlanıyor...' : 'Tek görselden 5 set oluştur'}
               </button>
             </div>
           </div>
@@ -2881,6 +3017,15 @@ function inferCostGroupFromStockCard(stockCard: StockCard) {
 
 function sourceLabel(value: string) {
   return value === 'AUTO' ? 'Stok kartı maliyeti' : 'Manuel fiyat';
+}
+
+function stockCardOptionLabel(stockCard: StockCard) {
+  return [
+    stockCard.name,
+    stockCard.sku || stockCard.model || stockCard.barcode || '',
+    `${number(stockCard.stockQuantity)} ${stockCard.unit}`,
+    money(stockCard.automaticUnitCost || stockCard.manualUnitCost),
+  ].filter(Boolean).join(' · ');
 }
 
 function channelLabel(value: string) {

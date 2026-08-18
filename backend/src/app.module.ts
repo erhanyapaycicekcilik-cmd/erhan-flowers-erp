@@ -24,6 +24,7 @@ import { IntegrationsModule } from './integrations/integrations.module';
 import { StaffTasksModule } from './staff-tasks/staff-tasks.module';
 import { ProductCenterModule } from './product-center/product-center.module';
 import { MarketIntelligenceModule } from './market-intelligence/market-intelligence.module';
+import { PublicCatalogModule } from './public-catalog/public-catalog.module';
 
 @Module({
   imports: [
@@ -53,6 +54,7 @@ import { MarketIntelligenceModule } from './market-intelligence/market-intellige
     IntegrationsModule,
     ProductCenterModule,
     MarketIntelligenceModule,
+    PublicCatalogModule,
   ],
   controllers: [AppController],
 })
