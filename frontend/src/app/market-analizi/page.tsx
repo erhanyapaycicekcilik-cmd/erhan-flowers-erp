@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { AdminShell } from '@/components/AdminShell';
 import { api } from '@/lib/api';
 import { Award, CheckCircle2, FileSpreadsheet, Heart, Instagram, Plus, RefreshCw, ShieldAlert, ShoppingCart, Sparkles, Trash2, TrendingUp, XCircle } from 'lucide-react';
+import { ClaudeChatWidget } from './claude-chat-widget';
 
 type KeywordComparison = {
   keyword: string;
@@ -63,6 +64,7 @@ export default function MarketAnalysisPage() {
         </button>
       </div>
       {tab === 'trendyol' ? <TrendyolTab /> : tab === 'performance' ? <PerformanceTab /> : <SocialTab />}
+      <ClaudeChatWidget />
     </AdminShell>
   );
 }

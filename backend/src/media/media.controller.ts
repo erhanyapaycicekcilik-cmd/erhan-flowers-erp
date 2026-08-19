@@ -16,6 +16,11 @@ export class MediaController {
     return this.media.list();
   }
 
+  @Get('image-generation-status')
+  imageGenerationStatus() {
+    return this.media.imageGenerationStatus();
+  }
+
   @Post('upload')
   @UseInterceptors(
     FileInterceptor('file', {
@@ -42,6 +47,11 @@ export class MediaController {
   @Post('tree-standard-set')
   createTreeStandardSet(@Body() body: { imagePath?: string; productId?: string; folderName?: string }) {
     return this.media.createTreeStandardSet(body);
+  }
+
+  @Post('composite-product-image')
+  createCompositeProductImage(@Body() body: { productStockCardId?: string; potStockCardId?: string; productId?: string; folderName?: string; productName?: string; referenceImageUrl?: string }) {
+    return this.media.createCompositeProductImage(body);
   }
 
   @Post(':id/photoroom')

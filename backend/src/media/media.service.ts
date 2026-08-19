@@ -3,10 +3,12 @@ import * as fs from 'fs';
 import * as fsPromises from 'fs/promises';
 import * as path from 'path';
 import { cleanMojibakeDeep } from '../common/mojibake';
+import { GeminiImageService } from '../image-processing/gemini-image.service';
 import { OpenAiImageService } from '../image-processing/openai-image.service';
 import { PhotoroomService } from '../image-processing/photoroom.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { productImageRoot } from '../product-image-paths';
+import { stockImageFallbackRoots, stockImageRoot } from '../stock-image-paths';
 
 @Injectable()
 export class MediaService {
@@ -14,6 +16,7 @@ export class MediaService {
     private readonly prisma: PrismaService,
     private readonly photoroom: PhotoroomService,
     private readonly openAiImage: OpenAiImageService,
+    private readonly geminiImage: GeminiImageService,
   ) {
     fs.mkdirSync(productImageRoot(), { recursive: true });
     fs.mkdirSync(path.join(process.cwd(), 'uploads', 'products'), { recursive: true });
@@ -25,6 +28,22 @@ export class MediaService {
       include: { product: true },
       orderBy: { createdAt: 'desc' },
     }));
+  }
+
+  imageGenerationStatus() {
+    const openAiReady = this.openAiImage.isConfigured();
+    const geminiReady = this.geminiImage.isConfigured();
+    return {
+      openAiReady,
+      geminiReady,
+      ready: openAiReady || geminiReady,
+      provider: openAiReady ? 'OpenAI' : geminiReady ? 'Gemini' : null,
+      message: openAiReady
+        ? 'OpenAI görsel üretimi hazır.'
+        : geminiReady
+          ? 'Gemini görsel üretimi hazır.'
+          : 'Görsel üretim bağlantısı yok. OPENAI_API_KEY veya GEMINI_API_KEY ayarı gerekli.',
+    };
   }
 
   async create(file: Express.Multer.File | undefined, body: { productId?: string; folderName?: string }) {
@@ -139,7 +158,7 @@ export class MediaService {
     const folderName = this.safeFolderName(body.folderName?.trim() || 'Agac Standart Gorsel');
     const sourcePath = this.resolveUploadPath(imagePath);
     const sourceType = this.fileTypeFromPath(imagePath);
-    this.openAiImage.ensureConfigured();
+    this.ensureCompositeImageProvider();
     const outputDir = path.join(process.cwd(), 'uploads', 'tree-standard', folderName);
     fs.mkdirSync(outputDir, { recursive: true });
 
@@ -196,6 +215,81 @@ export class MediaService {
     });
   }
 
+  async createCompositeProductImage(body: { productStockCardId?: string; potStockCardId?: string; productId?: string; folderName?: string; productName?: string; referenceImageUrl?: string }) {
+    const productStockCardId = Number(body.productStockCardId);
+    const potStockCardId = Number(body.potStockCardId);
+    if (!Number.isFinite(productStockCardId) || !Number.isFinite(potStockCardId)) {
+      throw new BadRequestException('Ürün ve saksı stok kartı seçilmelidir.');
+    }
+    this.openAiImage.ensureConfigured();
+
+    const [productStock, potStock] = await Promise.all([
+      this.prisma.stockCard.findUnique({ where: { id: productStockCardId }, include: { images: { orderBy: [{ isMain: 'desc' }, { createdAt: 'asc' }] } } }),
+      this.prisma.stockCard.findUnique({ where: { id: potStockCardId }, include: { images: { orderBy: [{ isMain: 'desc' }, { createdAt: 'asc' }] } } }),
+    ]);
+    if (!productStock) throw new BadRequestException('Ürün stok kartı bulunamadı.');
+    if (!potStock) throw new BadRequestException('Saksı stok kartı bulunamadı.');
+
+    const productImagePath = this.primaryStockImagePath(productStock);
+    const potImagePath = this.primaryStockImagePath(potStock);
+    if (!productImagePath) throw new BadRequestException('Seçilen ürün stok kartında görsel yok.');
+    if (!potImagePath) throw new BadRequestException('Seçilen saksı stok kartında görsel yok.');
+
+    const productId = body.productId ? Number(body.productId) : null;
+    const folderName = this.safeFolderName(body.folderName?.trim() || body.productName?.trim() || `${productStock.name} ${potStock.name}`);
+    const outputDir = path.join(process.cwd(), 'uploads', 'composite-products', folderName);
+    fs.mkdirSync(outputDir, { recursive: true });
+
+    const referenceFile = body.referenceImageUrl ? await this.downloadReferenceImage(body.referenceImageUrl, outputDir) : null;
+    const created = [];
+    try {
+      const sourceFiles = [
+        { path: this.resolvePublicImagePath(productImagePath), fileType: this.fileTypeFromPath(productImagePath) },
+        { path: this.resolvePublicImagePath(potImagePath), fileType: this.fileTypeFromPath(potImagePath) },
+        ...(referenceFile ? [{ path: referenceFile.path, fileType: referenceFile.fileType }] : []),
+      ];
+      const slots = [
+        { key: '01-beyaz-ana-gorsel', title: '01 Beyaz ana görsel', instruction: 'beyaz veya çok açık gri temiz fonda ana pazaryeri ürün görseli hazırla; ürün tam boy ve ortada olsun' },
+        { key: '02-magaza-lobi', title: '02 Mağaza / lobi', instruction: 'ürünü modern çiçek mağazası, showroom veya otel lobisi ortamında gerçekçi kullanım görseli olarak konumlandır' },
+        { key: '03-salon-ofis', title: '03 Salon / ofis', instruction: 'ürünü modern salon veya kurumsal ofis köşesinde doğal, sade ve premium dekorasyon görseli olarak göster' },
+        { key: '04-yakin-detay', title: '04 Yakın detay', instruction: 'ürünün yaprak, gövde, saksı, taş ve malzeme kalitesini gösteren yakın detay fotoğrafı üret' },
+        { key: '05-olcu-algisi', title: '05 Ölçü algısı', instruction: 'ürünü kapı, konsol veya koridor yanında boy ve hacim algısı verecek şekilde göster' },
+      ];
+
+      for (const slot of slots) {
+        const outputFileName = `${Date.now()}-${slot.key}.png`;
+        const outputPath = path.join(outputDir, outputFileName);
+        const editedBuffer = await this.editCompositeProductImage({
+          sourceFiles,
+          fileType: 'image/png',
+          prompt: this.compositeProductPrompt(productStock.name, potStock.name, body.productName, Boolean(referenceFile), slot.instruction),
+        });
+        await fsPromises.writeFile(outputPath, editedBuffer);
+
+        const publicPath = `/uploads/composite-products/${folderName}/${outputFileName}`;
+        created.push(await this.prisma.mediaFile.create({
+          data: {
+            productId: productId && Number.isFinite(productId) ? productId : null,
+            fileName: `${slot.key}.png`,
+            filePath: publicPath,
+            folderName: `${folderName} / ChatGPT 5 Görsel`,
+            fileType: 'image/png',
+          },
+          include: { product: true },
+        }));
+      }
+    } finally {
+      if (referenceFile) await fsPromises.unlink(referenceFile.path).catch(() => undefined);
+    }
+
+    return cleanMojibakeDeep({
+      image: created[0]?.filePath,
+      images: created.map((item) => item.filePath),
+      mediaFiles: created,
+      note: 'Ağaç, saksı ve referans görsel ile standart 5 satış görseli hazırlandı.',
+    });
+  }
+
   private treeScenePrompt(instruction: string) {
     return [
       'Referans ürün fotoğrafındaki yapay ağaç/bitki ürününü koru; ürün tipi, renkleri, saksısı, oranı ve malzeme hissi değişmesin.',
@@ -204,6 +298,83 @@ export class MediaService {
       'Ürünün üzerine yazı, logo, filigran, fiyat, kampanya etiketi veya ek aksesuar ekleme.',
       'Türkiye pazaryerleri için gerçekçi, parlak ama abartısız ürün fotoğrafı stili kullan.',
     ].join(' ');
+  }
+
+  private compositeProductPrompt(productName: string, potName: string, productTitle?: string, hasExternalReference = false, slotInstruction = 'satışa hazır ana ürün görseli oluştur') {
+    return [
+      `Birinci referans görseldeki ürünü/bitkiyi ve ikinci referans görseldeki saksıyı kullanarak satışa hazır tek ürün kompozisyonu oluştur.`,
+      `Ürün/bitki: ${productName}. Saksı: ${potName}. Final ürün adı: ${productTitle || `${productName} ${potName}`}.`,
+      hasExternalReference ? 'Üçüncü referans görsel yalnızca kompozisyon, açı, kadraj ve genel satış görseli tarzı için kullanılsın; ürün ve saksı kimliği birinci ve ikinci referanstan gelsin.' : '',
+      'Bitki saksının içine doğal ve orantılı şekilde yerleşsin; gövde, yaprak, saksı rengi ve malzeme hissi referanslara sadık kalsın.',
+      slotInstruction,
+      'Kare 1:1 e-ticaret görseli üret; ürün net, gerçekçi, temiz ışıklı ve pazaryeri kalitesinde olsun.',
+      'Yazı, logo, filigran, fiyat etiketi, kampanya bandı, insan, ekstra obje veya dekor ekleme.',
+    ].filter(Boolean).join(' ');
+  }
+
+  private ensureCompositeImageProvider() {
+    if (this.openAiImage.isConfigured() || this.geminiImage.isConfigured()) return;
+    throw new BadRequestException('Görsel üretim bağlantısı kurulmamış. OPENAI_API_KEY veya GEMINI_API_KEY ayarı eklenmelidir.');
+  }
+
+  private async editCompositeProductImage(options: { sourceFiles: Array<{ path: string; fileType: string }>; fileType: string; prompt: string }) {
+    if (this.openAiImage.isConfigured()) {
+      return this.openAiImage.editImage(options);
+    }
+    return this.geminiImage.editImage({
+      sourceFiles: options.sourceFiles,
+      prompt: options.prompt,
+    });
+  }
+
+  private primaryStockImagePath(stockCard: { imagePath?: string | null; images?: Array<{ filePath: string | null; isMain?: boolean | null }> }) {
+    return stockCard.images?.find((image) => image.isMain && image.filePath)?.filePath
+      ?? stockCard.images?.find((image) => image.filePath)?.filePath
+      ?? stockCard.imagePath
+      ?? null;
+  }
+
+  private resolvePublicImagePath(filePath: string) {
+    if (filePath.startsWith('/uploads/')) return this.resolveUploadPath(filePath);
+    if (filePath.startsWith('/stock-images/')) {
+      const relativePath = filePath.replace(/^\/stock-images\//, '');
+      const roots = [stockImageRoot(), path.join(process.cwd(), 'uploads'), path.join(process.cwd(), 'uploads', 'stock-cards'), ...stockImageFallbackRoots()];
+      for (const root of roots) {
+        const absolutePath = path.normalize(path.join(root, relativePath));
+        const normalizedRoot = path.normalize(root);
+        if (absolutePath.startsWith(normalizedRoot) && fs.existsSync(absolutePath)) return absolutePath;
+      }
+    }
+    throw new BadRequestException('Görsel dosyası bulunamadı.');
+  }
+
+  private async downloadReferenceImage(referenceImageUrl: string, outputDir: string) {
+    const url = this.safeReferenceUrl(referenceImageUrl);
+    const response = await fetch(url);
+    if (!response.ok) throw new BadRequestException('Referans görsel indirilemedi.');
+    const fileType = response.headers.get('content-type')?.split(';')[0]?.trim() || 'image/jpeg';
+    if (!fileType.startsWith('image/')) throw new BadRequestException('Referans URL görsel dosyası değil.');
+    const buffer = Buffer.from(await response.arrayBuffer());
+    if (buffer.length > 10 * 1024 * 1024) throw new BadRequestException('Referans görsel 10 MB üzerinde olamaz.');
+    const extension = fileType.includes('png') ? '.png' : fileType.includes('webp') ? '.webp' : '.jpg';
+    const referencePath = path.join(outputDir, `${Date.now()}-internet-referans${extension}`);
+    await fsPromises.writeFile(referencePath, buffer);
+    return { path: referencePath, fileType };
+  }
+
+  private safeReferenceUrl(value: string) {
+    let url: URL;
+    try {
+      url = new URL(value);
+    } catch {
+      throw new BadRequestException('Referans görsel URL geçerli değil.');
+    }
+    if (!['http:', 'https:'].includes(url.protocol)) throw new BadRequestException('Referans görsel URL http veya https olmalıdır.');
+    const host = url.hostname.toLocaleLowerCase('tr-TR');
+    if (host === 'localhost' || host === '127.0.0.1' || host.startsWith('10.') || host.startsWith('192.168.') || /^172\.(1[6-9]|2\d|3[0-1])\./.test(host)) {
+      throw new BadRequestException('Yerel ağ adresleri referans görsel olarak kullanılamaz.');
+    }
+    return url.toString();
   }
 
   private resolveUploadPath(filePath: string) {

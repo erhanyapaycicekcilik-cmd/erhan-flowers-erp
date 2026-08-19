@@ -3,7 +3,9 @@ import { ConfigService } from '@nestjs/config';
 import * as fs from 'fs/promises';
 
 type OpenAiImageEditOptions = {
-  sourcePath: string;
+  sourcePath?: string;
+  sourcePaths?: string[];
+  sourceFiles?: Array<{ path: string; fileType: string }>;
   fileType: string;
   prompt: string;
 };
@@ -12,8 +14,12 @@ type OpenAiImageEditOptions = {
 export class OpenAiImageService {
   constructor(private readonly config: ConfigService) {}
 
+  isConfigured() {
+    return Boolean(this.config.get<string>('OPENAI_API_KEY')?.trim());
+  }
+
   ensureConfigured() {
-    if (!this.config.get<string>('OPENAI_API_KEY')) {
+    if (!this.isConfigured()) {
       throw new BadRequestException('ChatGPT görsel bağlantısı kurulmamış. OPENAI_API_KEY ayarı eklenmelidir.');
     }
   }
@@ -24,10 +30,20 @@ export class OpenAiImageService {
     const apiUrl = this.config.get<string>('OPENAI_IMAGE_API_URL') ?? 'https://api.openai.com/v1/images/edits';
     const apiKey = this.config.get<string>('OPENAI_API_KEY')!;
     const model = this.config.get<string>('OPENAI_IMAGE_MODEL') ?? 'gpt-image-1';
-    const imageBuffer = await fs.readFile(options.sourcePath);
+    const sourceFiles = options.sourceFiles?.length
+      ? options.sourceFiles
+      : (options.sourcePaths?.length ? options.sourcePaths : options.sourcePath ? [options.sourcePath] : [])
+        .map((sourcePath) => ({ path: sourcePath, fileType: options.fileType }));
+    if (sourceFiles.length === 0) {
+      throw new BadRequestException('ChatGPT görsel üretimi için en az bir kaynak görsel gerekir.');
+    }
+
     const formData = new FormData();
     formData.append('model', model);
-    formData.append('image', new Blob([new Uint8Array(imageBuffer)], { type: options.fileType }), 'source-image');
+    for (const [index, sourceFile] of sourceFiles.entries()) {
+      const imageBuffer = await fs.readFile(sourceFile.path);
+      formData.append('image', new Blob([new Uint8Array(imageBuffer)], { type: sourceFile.fileType }), `source-image-${index + 1}`);
+    }
     formData.append('prompt', options.prompt);
     formData.append('size', '1024x1024');
     formData.append('quality', 'medium');

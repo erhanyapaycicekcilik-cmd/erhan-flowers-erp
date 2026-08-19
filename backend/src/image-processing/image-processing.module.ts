@@ -1,9 +1,10 @@
 import { Module } from '@nestjs/common';
+import { GeminiImageService } from './gemini-image.service';
 import { OpenAiImageService } from './openai-image.service';
 import { PhotoroomService } from './photoroom.service';
 
 @Module({
-  providers: [OpenAiImageService, PhotoroomService],
-  exports: [OpenAiImageService, PhotoroomService],
+  providers: [GeminiImageService, OpenAiImageService, PhotoroomService],
+  exports: [GeminiImageService, OpenAiImageService, PhotoroomService],
 })
 export class ImageProcessingModule {}

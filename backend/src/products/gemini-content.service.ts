@@ -15,6 +15,13 @@ type GeminiContentResult = {
   description: string;
 };
 
+type GeminiReferenceSearchPayload = {
+  productName?: string;
+  productStockName?: string;
+  potStockName?: string;
+  productKind?: string;
+};
+
 const careInstructions =
   'Yapay çiçek ve ağaç ürünlerinde temizlik için nemli ve yumuşak bir bez kullanınız. Kimyasal temizleyici, çamaşır suyu ve aşındırıcı malzemeler kullanmayınız. Ürünü doğrudan yoğun güneş ışığına, aşırı neme ve yüksek ısıya uzun süre maruz bırakmayınız. Formunu korumak için dalları ve yaprakları nazikçe şekillendiriniz.';
 
@@ -54,6 +61,30 @@ export class GeminiContentService {
     }
   }
 
+  async generateReferenceSearch(payload: unknown) {
+    const data = this.normalizeReferenceSearch(payload);
+    const fallbackQuery = this.referenceFallbackQuery(data);
+    const apiKey = this.config.get<string>('GEMINI_API_KEY')?.trim();
+    if (!apiKey) {
+      return this.referenceSearchResult(fallbackQuery, 'Gemini API anahtarı tanımlı değil; sistem kendi arama kelimesini hazırladı.');
+    }
+
+    const model = this.config.get<string>('GEMINI_MODEL')?.trim() || 'gemini-3.6-flash';
+    try {
+      const ai = new GoogleGenAI({ apiKey });
+      const response = await ai.models.generateContent({
+        model,
+        contents: this.referenceSearchPrompt(data),
+        config: { responseMimeType: 'application/json' },
+      });
+      const parsed = this.parseReferenceSearchResponse(response.text ?? '', fallbackQuery);
+      return this.referenceSearchResult(parsed.query, parsed.note);
+    } catch (error) {
+      this.logger.error(`Gemini referans görsel araması başarısız. model=${model} apiKeyLength=${apiKey.length}`, this.errorDetails(error));
+      return this.referenceSearchResult(fallbackQuery, 'Gemini cevap vermedi; sistem kendi arama kelimesini hazırladı.');
+    }
+  }
+
   private normalize(payload: unknown): GeminiContentPayload {
     const body = (payload ?? {}) as Record<string, unknown>;
     return {
@@ -62,6 +93,16 @@ export class GeminiContentService {
       potType: this.text(body.potType),
       potSize: this.text(body.potSize),
       fillerMaterial: this.text(body.fillerMaterial),
+    };
+  }
+
+  private normalizeReferenceSearch(payload: unknown): GeminiReferenceSearchPayload {
+    const body = (payload ?? {}) as Record<string, unknown>;
+    return {
+      productName: this.text(body.productName),
+      productStockName: this.text(body.productStockName),
+      potStockName: this.text(body.potStockName),
+      productKind: this.text(body.productKind),
     };
   }
 
@@ -81,6 +122,53 @@ export class GeminiContentService {
       `Saksı ölçüsü: ${data.potSize ?? '-'}`,
       `Saksı içi dolgu malzemesi: ${data.fillerMaterial ?? '-'}`,
     ].join('\n');
+  }
+
+  private referenceSearchPrompt(data: GeminiReferenceSearchPayload) {
+    return [
+      'Erhan Flowers ERP için benzer ürün görseli bulmaya uygun kısa arama kelimesi üret.',
+      'Yalnızca geçerli JSON döndür. Markdown veya açıklama kullanma.',
+      'JSON şeması: {"query":"...","note":"..."}',
+      'Arama kelimesi Türkçe olabilir, gerekirse İngilizce ürün terimi de ekle.',
+      'Amaç: yapay ağaç/bitki ile saksının birleşmiş satılık ürün görseline benzer referans bulmak.',
+      'Marka adı, fiyat, kampanya, site adı yazma.',
+      '',
+      `Satış ürün adı: ${data.productName ?? '-'}`,
+      `Ürün tipi: ${data.productKind ?? '-'}`,
+      `Ürün/bitki stok adı: ${data.productStockName ?? '-'}`,
+      `Saksı stok adı: ${data.potStockName ?? '-'}`,
+    ].join('\n');
+  }
+
+  private parseReferenceSearchResponse(text: string, fallbackQuery: string) {
+    const cleaned = text.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```$/i, '').trim();
+    try {
+      const parsed = JSON.parse(cleaned) as { query?: unknown; note?: unknown };
+      return {
+        query: this.text(parsed.query) ?? fallbackQuery,
+        note: this.text(parsed.note),
+      };
+    } catch {
+      return { query: this.text(cleaned) ?? fallbackQuery, note: undefined };
+    }
+  }
+
+  private referenceFallbackQuery(data: GeminiReferenceSearchPayload) {
+    return [
+      data.productName,
+      data.productStockName,
+      data.potStockName,
+      'yapay dekoratif bitki saksılı ürün görseli',
+    ].filter(Boolean).join(' ');
+  }
+
+  private referenceSearchResult(query: string, note?: string) {
+    const cleanQuery = query.replace(/\s+/g, ' ').trim();
+    return {
+      query: cleanQuery,
+      googleImagesUrl: `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(cleanQuery)}`,
+      note,
+    };
   }
 
   private parseResponse(text: string, fallbackName: string): GeminiContentResult {

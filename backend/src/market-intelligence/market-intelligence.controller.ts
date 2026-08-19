@@ -3,6 +3,7 @@ import { AuthGuard } from '../auth/auth.guard';
 import { MarketIntelligenceService } from './market-intelligence.service';
 import { InstagramService } from './instagram.service';
 import { OwnPerformanceService } from './own-performance.service';
+import { ChatMessage, ClaudeChatService } from './claude-chat.service';
 
 @UseGuards(AuthGuard)
 @Controller('market-intelligence')
@@ -11,7 +12,13 @@ export class MarketIntelligenceController {
     private readonly marketIntelligence: MarketIntelligenceService,
     private readonly instagram: InstagramService,
     private readonly ownPerformance: OwnPerformanceService,
+    private readonly claudeChat: ClaudeChatService,
   ) {}
+
+  @Post('chat')
+  chat(@Body() body: { message?: string; history?: ChatMessage[] }) {
+    return this.claudeChat.chat(body.message ?? '', Array.isArray(body.history) ? body.history : []);
+  }
 
   @Post('own-performance/sync')
   syncOwnPerformance(@Body() body: { limit?: number }) {

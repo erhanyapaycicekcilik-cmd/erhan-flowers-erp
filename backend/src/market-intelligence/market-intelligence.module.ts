@@ -7,10 +7,11 @@ import { MarketIntelligenceService } from './market-intelligence.service';
 import { TrendyolScraperService } from './trendyol-scraper.service';
 import { InstagramService } from './instagram.service';
 import { OwnPerformanceService } from './own-performance.service';
+import { ClaudeChatService } from './claude-chat.service';
 
 @Module({
   imports: [PrismaModule, AuthModule],
   controllers: [MarketIntelligenceController],
-  providers: [MarketIntelligenceService, TrendyolScraperService, InstagramService, CredentialVaultService, OwnPerformanceService],
+  providers: [MarketIntelligenceService, TrendyolScraperService, InstagramService, CredentialVaultService, OwnPerformanceService, ClaudeChatService],
 })
 export class MarketIntelligenceModule {}

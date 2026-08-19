@@ -72,6 +72,8 @@ type StockCard = {
   potColor?: string | null;
   productFamily?: string | null;
   productType?: string | null;
+  imagePath?: string | null;
+  images?: Array<{ id?: number; filePath: string; isMain?: boolean }>;
   unit: string;
   automaticUnitCost: number;
   manualUnitCost: number;
@@ -136,6 +138,20 @@ type GeminiSeoResult = {
   description: string;
 };
 
+type GeminiReferenceSearchResult = {
+  query: string;
+  googleImagesUrl: string;
+  note?: string;
+};
+
+type ImageGenerationStatus = {
+  openAiReady: boolean;
+  geminiReady: boolean;
+  ready: boolean;
+  provider: string | null;
+  message: string;
+};
+
 type ExcelExportResult = {
   fileName: string;
   mimeType: string;
@@ -193,9 +209,14 @@ type AutoStockCardCandidate = {
 };
 
 type CompositeBuilder = {
+  productKind: CompositeProductKind;
   productStockCardId: string;
+  productSearch: string;
   potStockCardId: string;
+  potSearch: string;
 };
+
+type CompositeProductKind = 'TREE' | 'PLANT' | 'BAMBOO';
 
 const emptyForm = {
   variantId: '',
@@ -238,9 +259,18 @@ const emptyPriceResearch: PriceResearch = {
 };
 
 const emptyCompositeBuilder: CompositeBuilder = {
+  productKind: 'TREE',
   productStockCardId: '',
+  productSearch: '',
   potStockCardId: '',
+  potSearch: '',
 };
+
+const compositeProductKinds: Array<{ key: CompositeProductKind; label: string }> = [
+  { key: 'TREE', label: 'Ağaç' },
+  { key: 'PLANT', label: 'Bitki / Çiçek' },
+  { key: 'BAMBOO', label: 'Bambu' },
+];
 
 const steps = ['Ürün Bilgileri', 'Reçete/Malzeme', 'Maliyet/Fiyat', 'Görsel/SEO', 'Kanallara Gönder'];
 const visibleStepIndexes = [0, 1, 2, 3, 4] as const;
@@ -255,6 +285,7 @@ const treeVisualSlots = [
 ];
 const treeVisualImageLimit = treeVisualSlots.length;
 const treeVisualSourceReadyText = '1 ana görsel seçildi. ChatGPT bu görselden standart 5 görsel hazırlayacak; ayrı ayrı görsel seçmene gerek yok.';
+const compositeGeneratedImagePrefix = '/uploads/composite-products/';
 
 export default function ProductsPage() {
   const [entries, setEntries] = useState<Entry[]>([]);
@@ -292,6 +323,12 @@ export default function ProductsPage() {
   const [imagePickerOpen, setImagePickerOpen] = useState(false);
   const [treeVisualOpen, setTreeVisualOpen] = useState(false);
   const [treeVisualGenerating, setTreeVisualGenerating] = useState(false);
+  const [compositeImageGenerating, setCompositeImageGenerating] = useState(false);
+  const [compositeImageError, setCompositeImageError] = useState('');
+  const [imageGenerationStatus, setImageGenerationStatus] = useState<ImageGenerationStatus | null>(null);
+  const [referenceSearchLoading, setReferenceSearchLoading] = useState(false);
+  const [referenceImageUrl, setReferenceImageUrl] = useState('');
+  const [referenceSearchResult, setReferenceSearchResult] = useState<GeminiReferenceSearchResult | null>(null);
   const [componentPickerOpen, setComponentPickerOpen] = useState(false);
   const [stockCardsLoading, setStockCardsLoading] = useState(false);
   const [priceResearch, setPriceResearch] = useState(emptyPriceResearch);
@@ -299,7 +336,7 @@ export default function ProductsPage() {
   const [missingPanelOpen, setMissingPanelOpen] = useState(false);
 
   async function load() {
-    const [entryData, categoryData, familyData, mediaData, stockCardData, defaultExpenseData, userData] = await Promise.all([
+    const [entryData, categoryData, familyData, mediaData, stockCardData, defaultExpenseData, userData, imageStatusData] = await Promise.all([
       api<Entry[]>('/product-center/entries').catch(() => []),
       api<Category[]>('/categories').catch(() => []),
       api<Family[]>('/production-costs/families').catch(() => []),
@@ -307,6 +344,7 @@ export default function ProductsPage() {
       api<StockCard[]>('/stock-cards').catch(() => []),
       api<DefaultExpense[]>('/production-costs/default-expenses').catch(() => []),
       api<CurrentUser>('/auth/me').catch(() => null),
+      api<ImageGenerationStatus>('/media/image-generation-status').catch(() => null),
     ]);
     setEntries(entryData.map(normalizeEntry));
     setCategories(categoryData.map((category) => ({ ...category, name: cleanText(category.name) })));
@@ -314,6 +352,7 @@ export default function ProductsPage() {
     setMediaFiles(mediaData);
     setStockCards(normalizeStockCards(stockCardData));
     setCurrentUser(userData);
+    setImageGenerationStatus(imageStatusData);
     setDefaultExpenses(defaultExpenseData.map((expense) => ({
       ...expense,
       name: cleanText(expense.name),
@@ -368,6 +407,15 @@ export default function ProductsPage() {
     } finally {
       setStockCardsLoading(false);
     }
+  }
+
+  async function refreshImageGenerationStatus() {
+    const status = await api<ImageGenerationStatus>('/media/image-generation-status');
+    setImageGenerationStatus(status);
+    if (status.ready) {
+      setCompositeImageError((current) => current.includes('OPENAI_API_KEY') ? '' : current);
+    }
+    return status;
   }
 
   async function openComponentPicker() {
@@ -432,11 +480,24 @@ export default function ProductsPage() {
   const activeStockCardOptions = useMemo(() => stockCards
     .filter((stockCard) => stockCard.status !== 'PASSIVE')
     .sort((a, b) => a.name.localeCompare(b.name, 'tr')), [stockCards]);
-  const compositeProductOptions = useMemo(() => activeStockCardOptions.filter((stockCard) => inferComponentRole(stockCard) !== 'POT'), [activeStockCardOptions]);
+  const compositeProductOptions = useMemo(() => activeStockCardOptions
+    .filter((stockCard) => inferComponentRole(stockCard) !== 'POT')
+    .filter((stockCard) => compositeProductKind(stockCard) === compositeBuilder.productKind), [activeStockCardOptions, compositeBuilder.productKind]);
   const compositePotOptions = useMemo(() => activeStockCardOptions.filter((stockCard) => inferComponentRole(stockCard) === 'POT'), [activeStockCardOptions]);
+  const filteredCompositeProductOptions = useMemo(() => filterStockCardOptions(compositeProductOptions, compositeBuilder.productSearch, form.productName).slice(0, 8), [compositeBuilder.productSearch, compositeProductOptions, form.productName]);
+  const filteredCompositePotOptions = useMemo(() => filterStockCardOptions(compositePotOptions, compositeBuilder.potSearch, form.productName).slice(0, 8), [compositeBuilder.potSearch, compositePotOptions, form.productName]);
   const selectedCompositeProduct = useMemo(() => stockCards.find((stockCard) => stockCard.id === Number(compositeBuilder.productStockCardId)) ?? null, [compositeBuilder.productStockCardId, stockCards]);
   const selectedCompositePot = useMemo(() => stockCards.find((stockCard) => stockCard.id === Number(compositeBuilder.potStockCardId)) ?? null, [compositeBuilder.potStockCardId, stockCards]);
+  const selectedCompositeProductImage = useMemo(() => stockCardPrimaryImage(selectedCompositeProduct), [selectedCompositeProduct]);
+  const selectedCompositePotImage = useMemo(() => stockCardPrimaryImage(selectedCompositePot), [selectedCompositePot]);
+  const compositeGeneratedImages = useMemo(() => form.images.filter((image) => image.startsWith(compositeGeneratedImagePrefix)).slice(0, treeVisualImageLimit), [form.images]);
+  const visibleCompositeImageError = useMemo(() => {
+    if (!compositeImageError) return '';
+    if (imageGenerationStatus?.ready && compositeImageError.includes('OPENAI_API_KEY')) return '';
+    return compositeImageError;
+  }, [compositeImageError, imageGenerationStatus]);
   const compositeReady = Boolean(selectedCompositeProduct && selectedCompositePot);
+  const compositeImageReady = Boolean(compositeReady && selectedCompositeProductImage && selectedCompositePotImage);
   const seoProductNameSuggestion = useMemo(() => buildSeoProductName(form.productName, bestAutoStockMatch, categories, activeDraft), [form.productName, bestAutoStockMatch, categories, activeDraft]);
   const suggestedMediaFiles = useMemo(() => {
     const productText = normalizeSearchText([form.productName, form.modelCode, form.stockCode, form.barcode].filter(Boolean).join(' '));
@@ -550,6 +611,19 @@ export default function ProductsPage() {
 
   function updateCompositeBuilder(name: keyof CompositeBuilder, value: string) {
     setCompositeBuilder((current) => ({ ...current, [name]: value }));
+  }
+
+  function selectCompositeStock(type: 'product' | 'pot', stockCard: StockCard) {
+    const stockImage = stockCardPrimaryImage(stockCard);
+    setCompositeImageError('');
+    setForm((current) => ({
+      ...current,
+      images: current.images.filter((image) => image !== stockImage && !image.startsWith(compositeGeneratedImagePrefix)),
+    }));
+    setCompositeBuilder((current) => type === 'product'
+      ? { ...current, productStockCardId: String(stockCard.id), productSearch: stockCard.name }
+      : { ...current, potStockCardId: String(stockCard.id), potSearch: stockCard.name });
+    setMessage(stockImage ? `${stockCard.name} kaynak olarak seçildi. Üret deyince saksı ve ağaç birleşmiş 5 satış görseli hazırlanacak.` : `${stockCard.name} seçildi; stok kartında görsel yok.`);
   }
 
   async function uploadQuickImage(files: FileList | null) {
@@ -773,6 +847,75 @@ export default function ProductsPage() {
     });
 
     setMessage(`${productName} satış ürünü hazırlandı. Fiyatı ve görseli kontrol edip Kaydet'e basabilirsiniz.`);
+  }
+
+  async function generateCompositeProductImage() {
+    if (!selectedCompositeProduct || !selectedCompositePot) {
+      setMessage('Önce ürün/bitki ve saksı seçin.');
+      return;
+    }
+    if (!selectedCompositeProductImage || !selectedCompositePotImage) {
+      setMessage('Satış görseli üretmek için seçilen ürün ve saksı stok kartlarında görsel olmalı.');
+      return;
+    }
+
+    setCompositeImageGenerating(true);
+    setCompositeImageError('');
+    try {
+      const status = await refreshImageGenerationStatus();
+      if (!status.ready) {
+        setCompositeImageError(status.message);
+        setMessage(status.message);
+        return;
+      }
+      const result = await api<{ image?: string; images?: string[]; note?: string }>('/media/composite-product-image', {
+        method: 'POST',
+        json: {
+          productStockCardId: selectedCompositeProduct.id,
+          potStockCardId: selectedCompositePot.id,
+          productId: form.productId || undefined,
+          productName: form.productName || `${selectedCompositeProduct.name} ${selectedCompositePot.name}`,
+          folderName: form.modelCode || form.productName || `${selectedCompositeProduct.name} ${selectedCompositePot.name}`,
+          referenceImageUrl: referenceImageUrl.trim() || undefined,
+        },
+      });
+      const generatedImages = result.images?.length ? result.images : result.image ? [result.image] : [];
+      update('images', generatedImages.slice(0, treeVisualImageLimit));
+      await load();
+      setMessage(result.note || 'Standart 5 satış görseli oluşturuldu.');
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Satış görseli oluşturulamadı.';
+      setCompositeImageError(errorMessage);
+      setMessage(errorMessage);
+    } finally {
+      setCompositeImageGenerating(false);
+    }
+  }
+
+  async function openGeminiReferenceSearch() {
+    if (!selectedCompositeProduct || !selectedCompositePot) {
+      setMessage('Benzer görsel aramak için önce ürün/bitki ve saksı seçin.');
+      return;
+    }
+    setReferenceSearchLoading(true);
+    try {
+      const result = await api<GeminiReferenceSearchResult>('/products/gemini-reference-search', {
+        method: 'POST',
+        json: {
+          productName: form.productName || `${selectedCompositeProduct.name} ${selectedCompositePot.name}`,
+          productStockName: selectedCompositeProduct.name,
+          potStockName: selectedCompositePot.name,
+          productKind: compositeProductKindLabel(compositeBuilder.productKind),
+        },
+      });
+      setReferenceSearchResult(result);
+      window.open(result.googleImagesUrl, '_blank', 'noopener,noreferrer');
+      setMessage(result.note || `Gemini arama kelimesi hazırladı: ${result.query}`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Gemini referans araması hazırlanamadı.');
+    } finally {
+      setReferenceSearchLoading(false);
+    }
   }
 
   function matchComponentStock(role: ComponentRole, stockCard: StockCard) {
@@ -1507,7 +1650,7 @@ export default function ProductsPage() {
                     <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
                       <div>
                         <div className="flex items-center gap-2 font-black text-emerald-900"><Sparkles size={18} /> ChatGPT ürün hazırlayıcı</div>
-                        <div className="mt-1 text-xs font-semibold text-emerald-800">Ürünü ve saksıyı seç; sistem satış ürün adını, reçeteyi, saksı satırını ve satılabilir adedi hazırlasın.</div>
+                        <div className="mt-1 text-xs font-semibold text-emerald-800">Stoktan ağaç ve saksıyı kaynak olarak seç; çıktı olarak sadece birleşmiş 5 satış görseli oluşur.</div>
                       </div>
                       <button type="button" className="btn btn-secondary min-h-9 px-3 text-xs" onClick={refreshStockCards} disabled={stockCardsLoading}>
                         <RefreshCw size={14} className={stockCardsLoading ? 'animate-spin' : ''} /> Stokları yenile
@@ -1515,37 +1658,76 @@ export default function ProductsPage() {
                     </div>
                     <div className="grid gap-3 lg:grid-cols-[1fr_1fr_auto]">
                       <Field label="1. Ürün / bitki">
-                        <select className="field bg-white" value={compositeBuilder.productStockCardId} onChange={(event) => updateCompositeBuilder('productStockCardId', event.target.value)}>
-                          <option value="">Ürün stok kartı seçin</option>
-                          {compositeProductOptions.map((stockCard) => (
-                            <option key={stockCard.id} value={stockCard.id}>{stockCardOptionLabel(stockCard)}</option>
+                        <div className="mb-2 flex flex-wrap gap-2">
+                          {compositeProductKinds.map((kind) => (
+                            <button
+                              key={kind.key}
+                              type="button"
+                              className={`rounded-md border px-3 py-2 text-xs font-bold ${compositeBuilder.productKind === kind.key ? 'border-emerald-700 bg-emerald-700 text-white' : 'border-emerald-200 bg-white text-emerald-900'}`}
+                              onClick={() => setCompositeBuilder((current) => ({ ...current, productKind: kind.key, productStockCardId: '', productSearch: '' }))}
+                            >
+                              {kind.label}
+                            </button>
                           ))}
-                        </select>
+                        </div>
+                        <input className="field bg-white" value={compositeBuilder.productSearch} onChange={(event) => setCompositeBuilder((current) => ({ ...current, productSearch: event.target.value, productStockCardId: '' }))} placeholder="Ürün adı, stok kodu, model veya barkod yazın" />
+                        <StockSearchResults
+                          options={filteredCompositeProductOptions}
+                          selectedId={selectedCompositeProduct?.id ?? null}
+                          emptyText={`${compositeProductKindLabel(compositeBuilder.productKind)} için uygun stok kartı bulunamadı.`}
+                          onSelect={(stockCard) => selectCompositeStock('product', stockCard)}
+                        />
                       </Field>
-                      <Field label="2. Saksı">
-                        <select className="field bg-white" value={compositeBuilder.potStockCardId} onChange={(event) => updateCompositeBuilder('potStockCardId', event.target.value)}>
-                          <option value="">Saksı stok kartı seçin</option>
-                          {compositePotOptions.map((stockCard) => (
-                            <option key={stockCard.id} value={stockCard.id}>{stockCardOptionLabel(stockCard)}</option>
-                          ))}
-                        </select>
+                      <Field label="2. Saksılar">
+                        <div className="mb-2 rounded-md border border-emerald-200 bg-white px-3 py-2 text-xs font-bold text-emerald-900">Sadece saksı stok kartları</div>
+                        <input className="field bg-white" value={compositeBuilder.potSearch} onChange={(event) => setCompositeBuilder((current) => ({ ...current, potSearch: event.target.value, potStockCardId: '' }))} placeholder="Saksı adı, stok kodu, model veya barkod yazın" />
+                        <StockSearchResults
+                          options={filteredCompositePotOptions}
+                          selectedId={selectedCompositePot?.id ?? null}
+                          emptyText="Saksı stok kartı bulunamadı."
+                          onSelect={(stockCard) => selectCompositeStock('pot', stockCard)}
+                        />
                       </Field>
-                      <div className="flex items-end">
+                      <div className="flex flex-col justify-end gap-2">
                         <button type="button" className="btn btn-primary w-full justify-center" onClick={buildCompositeProductFromStock} disabled={!compositeReady}>
                           <Sparkles size={16} /> Ürünü hazırla
                         </button>
+                        <button type="button" className="btn btn-secondary w-full justify-center" onClick={generateCompositeProductImage} disabled={!compositeImageReady || compositeImageGenerating}>
+                          <ImageIcon size={16} /> {compositeImageGenerating ? '5 görsel hazırlanıyor...' : '5 görsel üret'}
+                        </button>
+                        <button type="button" className="btn btn-secondary w-full justify-center" onClick={openGeminiReferenceSearch} disabled={!compositeReady || referenceSearchLoading}>
+                          <ExternalLink size={16} /> {referenceSearchLoading ? 'Aranıyor...' : 'Gemini referans ara'}
+                        </button>
                       </div>
                     </div>
+                    <div className="mt-3 rounded-md border border-emerald-200 bg-white p-3">
+                      <Field label="İnternetten bulunan referans görsel URL">
+                        <input className="field" value={referenceImageUrl} onChange={(event) => setReferenceImageUrl(event.target.value)} placeholder="Benzer ürün referans görsel adresini buraya yapıştırın" />
+                      </Field>
+                      {referenceSearchResult && (
+                        <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs font-semibold text-slate-500">
+                          <span>Arama: {referenceSearchResult.query}</span>
+                          <button type="button" className="btn btn-secondary min-h-8 px-2 text-xs" onClick={() => window.open(referenceSearchResult.googleImagesUrl, '_blank', 'noopener,noreferrer')}>
+                            <ExternalLink size={13} /> Tekrar aç
+                          </button>
+                        </div>
+                      )}
+                    </div>
                     <div className="mt-3 grid gap-2 text-xs font-semibold md:grid-cols-3">
-                      <div className="rounded-md border border-emerald-200 bg-white px-3 py-2 text-emerald-900">{selectedCompositeProduct ? stockCardShortSummary(selectedCompositeProduct) : 'Ürün bekliyor'}</div>
-                      <div className="rounded-md border border-emerald-200 bg-white px-3 py-2 text-emerald-900">{selectedCompositePot ? stockCardShortSummary(selectedCompositePot) : 'Saksı bekliyor'}</div>
+                      <StockReferencePreview title="Ürün görseli" stockCard={selectedCompositeProduct} imagePath={selectedCompositeProductImage} />
+                      <StockReferencePreview title="Saksı görseli" stockCard={selectedCompositePot} imagePath={selectedCompositePotImage} />
                       <div className="rounded-md border border-emerald-200 bg-white px-3 py-2 text-emerald-900">{compositeReady ? `Satılabilir adet: ${number(Math.min(Number(selectedCompositeProduct?.stockQuantity || 0), Number(selectedCompositePot?.stockQuantity || 0)))}` : 'İki seçim tamamlanınca hazır'}</div>
                     </div>
+                    {compositeReady && !compositeImageReady && (
+                      <div className="mt-2 rounded-md bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+                        Satış görseli üretmek için seçilen ürün ve saksı stok kartlarında görsel olmalı.
+                      </div>
+                    )}
                     {form.productName && activeDraft.pots.length > 0 && (
                       <div className="mt-3 flex flex-wrap gap-2">
                         <button type="button" className="btn btn-secondary min-h-9 px-3 text-xs" onClick={generateSeoDescription}><FileText size={14} /> SEO metni hazırla</button>
                         <button type="button" className="btn btn-secondary min-h-9 px-3 text-xs" onClick={() => setImagePickerOpen(true)}><ImageIcon size={14} /> Görsel seç</button>
-                        <button type="button" className="btn btn-secondary min-h-9 px-3 text-xs" onClick={() => { applyTreeVisualStandard(); setTreeVisualOpen(true); }}><ImageIcon size={14} /> 5 görsel seti</button>
+                        <button type="button" className="btn btn-secondary min-h-9 px-3 text-xs" onClick={() => setTreeVisualOpen(true)}><ImageIcon size={14} /> 5 birleşik görsel seti</button>
                       </div>
                     )}
                   </div>
@@ -1675,7 +1857,7 @@ export default function ProductsPage() {
               <div className="space-y-4">
                 <button type="button" className="btn btn-secondary w-full justify-center" onClick={() => setImagePickerOpen(true)}><ImageIcon size={16} /> Görsel Seç / Yükle ({form.images.length}/{treeVisualImageLimit})</button>
                 <button type="button" className="btn btn-primary w-full justify-center" onClick={createShopCard}><FileText size={16} /> Dükkan PDF Kartı Oluştur</button>
-                <button type="button" className="btn btn-primary w-full justify-center" onClick={() => { applyTreeVisualStandard(); setTreeVisualOpen(true); }}><ImageIcon size={16} /> ChatGPT Standart 5 Görsel</button>
+                <button type="button" className="btn btn-primary w-full justify-center" onClick={() => { if (!compositeReady) applyTreeVisualStandard(); setTreeVisualOpen(true); }}><ImageIcon size={16} /> {compositeReady ? 'Saksı + Ağaç Birleşik 5 Görsel' : 'ChatGPT Standart 5 Görsel'}</button>
                 <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm font-semibold text-emerald-800">
                   Ağaç ürünlerinde görsel sırası: beyaz ana görsel, otel lobisi/dükkan, salon/ofis, yakın detay, giriş/ölçü alanı.
                 </div>
@@ -1821,14 +2003,40 @@ export default function ProductsPage() {
         </PickerModal>
       )}
       {treeVisualOpen && (
-        <PickerModal title="ChatGPT Standart 5 Görsel" onClose={() => setTreeVisualOpen(false)}>
+        <PickerModal title={compositeReady ? 'Saksı + Ağaç Birleşik 5 Görsel' : 'ChatGPT Standart 5 Görsel'} onClose={() => setTreeVisualOpen(false)}>
           <div className="space-y-4">
             <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm font-semibold text-emerald-800">
-              Ağaç ürünleri için 2. görsel artık otel lobisi / dükkan / showroom ortamı olacak. Görseller bu sırayla kaydedilirse Trendyol, Hepsiburada, N11 ve Ticimax aynı düzende kullanır.
+              {compositeReady
+                ? 'Seçtiğin ağaç ve saksı kaynak olarak kullanılır; bu alanda yalnızca birleşmiş, satışa hazır 5 çıktı görseli görünür.'
+                : 'Ağaç ürünleri için 2. görsel artık otel lobisi / dükkan / showroom ortamı olacak. Görseller bu sırayla kaydedilirse Trendyol, Hepsiburada, N11 ve Ticimax aynı düzende kullanır.'}
             </div>
+            {compositeReady && (
+              <button type="button" className="btn btn-primary w-full justify-center" onClick={generateCompositeProductImage} disabled={!compositeImageReady || compositeImageGenerating}>
+                <ImageIcon size={16} /> {compositeImageGenerating ? 'Saksı ve ağaç birleştiriliyor...' : 'Seçili saksı + ağaçtan 5 birleşik görsel üret'}
+              </button>
+            )}
+            {compositeReady && imageGenerationStatus && (
+              <div className={`rounded-md border p-3 text-sm font-semibold ${imageGenerationStatus.ready ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-amber-200 bg-amber-50 text-amber-800'}`}>
+                Görsel motoru: {imageGenerationStatus.message}
+              </div>
+            )}
+            {visibleCompositeImageError && (
+              <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">
+                {visibleCompositeImageError}
+              </div>
+            )}
+            {compositeReady && (
+              <div className="grid gap-2 text-xs font-semibold md:grid-cols-3">
+                <StockReferencePreview title="Kaynak ağaç" stockCard={selectedCompositeProduct} imagePath={selectedCompositeProductImage} />
+                <StockReferencePreview title="Kaynak saksı" stockCard={selectedCompositePot} imagePath={selectedCompositePotImage} />
+                <div className="rounded-md border border-emerald-200 bg-white px-3 py-2 text-emerald-900">
+                  {referenceImageUrl.trim() ? 'Referans görsel stili kullanılacak' : 'Referans URL eklenirse kadraj/stil ondan alınır'}
+                </div>
+              </div>
+            )}
             <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
               {treeVisualSlots.map((slot, index) => {
-                const image = form.images[index];
+                const image = compositeReady ? compositeGeneratedImages[index] : form.images[index];
                 return (
                   <div key={slot.title} className="rounded-md border border-line bg-white p-3">
                     <div className="mb-2">
@@ -1840,6 +2048,10 @@ export default function ProductsPage() {
                         <img className="aspect-square w-full object-cover" src={normalizeImage(image)} alt={slot.title} />
                         <span className="absolute inset-x-0 bottom-0 bg-red-600 px-2 py-1 text-xs font-bold text-white opacity-0 transition group-hover:opacity-100">Bu görseli kaldır</span>
                       </button>
+                    ) : compositeReady ? (
+                      <div className="flex aspect-square w-full items-center justify-center rounded-md border border-dashed border-emerald-200 bg-emerald-50 p-4 text-center text-sm font-semibold text-emerald-800">
+                        Üret deyince burada birleşmiş ürün görseli görünecek
+                      </div>
                     ) : index > 0 && form.images[0] ? (
                       <div className="flex aspect-square w-full items-center justify-center rounded-md border border-dashed border-emerald-200 bg-emerald-50 p-4 text-center text-sm font-semibold text-emerald-800">
                         Tek görselden 5 set oluştur butonuyla hazırlanacak
@@ -1854,9 +2066,13 @@ export default function ProductsPage() {
               })}
             </div>
             <div className="flex flex-wrap justify-end gap-2">
-              <button type="button" className="btn btn-secondary" onClick={() => { setTreeVisualOpen(false); setImagePickerOpen(true); }}><ImageIcon size={16} /> Görsel seç / yükle</button>
-              <button type="button" className="btn btn-primary" onClick={generateTreeVisualSet} disabled={treeVisualGenerating}>
-                {treeVisualGenerating ? 'Hazırlanıyor...' : 'Tek görselden 5 set oluştur'}
+              {!compositeReady && (
+                <button type="button" className="btn btn-secondary" onClick={() => { setTreeVisualOpen(false); setImagePickerOpen(true); }}><ImageIcon size={16} /> Görsel seç / yükle</button>
+              )}
+              <button type="button" className="btn btn-primary" onClick={compositeReady ? generateCompositeProductImage : generateTreeVisualSet} disabled={compositeReady ? (!compositeImageReady || compositeImageGenerating) : treeVisualGenerating}>
+                {compositeReady
+                  ? (compositeImageGenerating ? 'Birleştiriliyor...' : 'Saksı + ağaçtan 5 görsel üret')
+                  : (treeVisualGenerating ? 'Hazırlanıyor...' : 'Tek görselden 5 set oluştur')}
               </button>
             </div>
           </div>
@@ -2651,6 +2867,59 @@ function StockMatchSuggestions({
   );
 }
 
+function StockSearchResults({
+  options,
+  selectedId,
+  emptyText,
+  onSelect,
+}: {
+  options: StockCard[];
+  selectedId: number | null;
+  emptyText: string;
+  onSelect: (stockCard: StockCard) => void;
+}) {
+  return (
+    <div className="mt-2 max-h-56 overflow-auto rounded-md border border-emerald-200 bg-white">
+      {options.length > 0 ? options.map((stockCard) => {
+        const selected = selectedId === stockCard.id;
+        return (
+          <button
+            type="button"
+            key={stockCard.id}
+            className={`block w-full border-b border-emerald-100 px-3 py-2 text-left text-xs font-semibold transition hover:bg-emerald-50 ${selected ? 'bg-emerald-100 text-emerald-900' : 'text-slate-700'}`}
+            onClick={() => onSelect(stockCard)}
+          >
+            <div className="font-bold">{stockCard.name}</div>
+            <div className="mt-1 text-slate-500">{stockCard.sku || stockCard.model || stockCard.barcode || 'Kod yok'} · Stok {number(stockCard.stockQuantity)} {stockCard.unit} · {money(stockCard.automaticUnitCost || stockCard.manualUnitCost)}</div>
+          </button>
+        );
+      }) : (
+        <div className="px-3 py-3 text-xs font-semibold text-slate-500">{emptyText}</div>
+      )}
+    </div>
+  );
+}
+
+function StockReferencePreview({ title, stockCard, imagePath }: { title: string; stockCard: StockCard | null; imagePath: string }) {
+  return (
+    <div className="rounded-md border border-emerald-200 bg-white p-2 text-emerald-900">
+      <div className="mb-2 font-bold">{title}</div>
+      {imagePath ? (
+        <div className="grid grid-cols-[56px_1fr] gap-2">
+          <img className="h-14 w-14 rounded-md border border-emerald-100 object-cover" src={normalizeImage(imagePath)} alt={stockCard?.name || title} />
+          <div className="min-w-0">
+            <div className="truncate font-bold">{stockCard?.name}</div>
+            <div className="mt-1 text-slate-500">{stockCard ? stockCardShortSummary(stockCard) : ''}</div>
+            <div className="mt-1 text-emerald-700">Kaynak olarak kullanılacak</div>
+          </div>
+        </div>
+      ) : (
+        <div className="rounded-md bg-slate-50 px-3 py-2 text-slate-500">{stockCard ? 'Bu stok kartında görsel yok' : 'Seçim bekliyor'}</div>
+      )}
+    </div>
+  );
+}
+
 function CostTable({ detail, stockCards, productName, onChange }: { detail: CostDetail | null; stockCards: StockCard[]; productName: string; onChange: (draft: CostDetail['costDraft']) => void }) {
   const [stockPicker, setStockPicker] = useState<{ rowType: 'items' | 'pots'; index: number } | null>(null);
   const [stockSearch, setStockSearch] = useState('');
@@ -3026,6 +3295,64 @@ function stockCardOptionLabel(stockCard: StockCard) {
     `${number(stockCard.stockQuantity)} ${stockCard.unit}`,
     money(stockCard.automaticUnitCost || stockCard.manualUnitCost),
   ].filter(Boolean).join(' · ');
+}
+
+function stockCardShortSummary(stockCard: StockCard) {
+  return `${stockCard.name} · Stok ${number(stockCard.stockQuantity)} ${stockCard.unit} · ${money(stockCard.automaticUnitCost || stockCard.manualUnitCost)}`;
+}
+
+function stockCardPrimaryImage(stockCard: StockCard | null) {
+  if (!stockCard) return '';
+  return stockCard.images?.find((image) => image.isMain && image.filePath)?.filePath
+    ?? stockCard.images?.find((image) => image.filePath)?.filePath
+    ?? stockCard.imagePath
+    ?? '';
+}
+
+function compositeProductKind(stockCard: StockCard): CompositeProductKind {
+  const text = normalizeSearchText([
+    stockCard.name,
+    stockCard.sku,
+    stockCard.model,
+    stockCard.category,
+    stockCard.productFamily,
+    stockCard.productType,
+  ].filter(Boolean).join(' '));
+  if (/(^|[^a-z0-9])(bambu|bamboo)([^a-z0-9]|$)/.test(text)) return 'BAMBOO';
+  if (/(^|[^a-z0-9])(agac|ağaç|tree|ficus|palmiye|areka|zeytin|limon)([^a-z0-9]|$)/.test(text)) return 'TREE';
+  return 'PLANT';
+}
+
+function compositeProductKindLabel(kind: CompositeProductKind) {
+  const labels: Record<CompositeProductKind, string> = {
+    TREE: 'Ağaç',
+    PLANT: 'Bitki / Çiçek',
+    BAMBOO: 'Bambu',
+  };
+  return labels[kind];
+}
+
+function filterStockCardOptions(stockCards: StockCard[], search: string, productName: string) {
+  const needle = normalizeSearchText(search);
+  return stockCards
+    .map((stockCard) => {
+      const text = normalizeSearchText([
+        stockCard.name,
+        stockCard.sku,
+        stockCard.model,
+        stockCard.barcode,
+        stockCard.category,
+        stockCard.productFamily,
+        stockCard.productType,
+      ].filter(Boolean).join(' '));
+      const directScore = needle && text.includes(needle) ? 100 : 0;
+      const tokenScore = searchTokens(needle).filter((token) => text.includes(token)).length * 20;
+      const suggestionScore = stockSuggestionScore(stockCard, search || productName, productName, stockCard.category ?? '');
+      return { stockCard, score: directScore + tokenScore + suggestionScore };
+    })
+    .filter((item) => !needle || item.score > 0)
+    .sort((a, b) => b.score - a.score || a.stockCard.name.localeCompare(b.stockCard.name, 'tr'))
+    .map((item) => item.stockCard);
 }
 
 function channelLabel(value: string) {

@@ -26,6 +26,11 @@ export class ProductsController {
     return this.geminiContent.generate(body);
   }
 
+  @Post('gemini-reference-search')
+  generateReferenceSearch(@Body() body: unknown) {
+    return this.geminiContent.generateReferenceSearch(body);
+  }
+
   @Post('barcode')
   generateBarcode(@Body() body: unknown) {
     return this.products.generateBarcode(body);

@@ -5,6 +5,7 @@ const { spawn } = require('child_process');
 const backendRoot = path.resolve(__dirname, '..');
 const envFileName = '.env.dev';
 const envFilePath = path.join(backendRoot, envFileName);
+const fallbackEnvFilePath = path.join(backendRoot, '.env');
 
 function parseEnvFile(content) {
   const values = {};
@@ -42,7 +43,13 @@ if (!fs.existsSync(envFilePath)) {
   process.exit(1);
 }
 
-const envValues = parseEnvFile(fs.readFileSync(envFilePath, 'utf8'));
+const fallbackEnvValues = fs.existsSync(fallbackEnvFilePath)
+  ? parseEnvFile(fs.readFileSync(fallbackEnvFilePath, 'utf8'))
+  : {};
+const envValues = {
+  ...fallbackEnvValues,
+  ...parseEnvFile(fs.readFileSync(envFilePath, 'utf8')),
+};
 
 process.env.NODE_ENV = 'development';
 process.env.ENV_FILE = envFileName;
