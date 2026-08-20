@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import {
   BarChart3,
   Boxes,
+  Calculator,
   CircleDollarSign,
   Factory,
   FileImage,
@@ -72,6 +73,10 @@ const navGroups: { section: string | null; items: NavItem[] }[] = [
     ],
   },
   {
+    section: 'Araçlar',
+    items: [{ href: '/hesap-makinesi', label: 'Hesap Makinesi', icon: Calculator, ownerOnly: true }],
+  },
+  {
     section: 'Ekip',
     items: [{ href: '/staff/tasks', label: 'Personel Görev', icon: ListChecks, ownerOnly: false, enabled: process.env.NEXT_PUBLIC_ENABLE_SALES_CENTER === 'true' }],
   },
@@ -87,7 +92,7 @@ const navGroups: { section: string | null; items: NavItem[] }[] = [
 
 const nav = navGroups.flatMap((group) => group.items);
 
-const ownerOnlyPaths = ['/stock-counts', '/costs', '/production-costs', '/finance', '/reports', '/seo-products', '/publishing', '/model-codes', '/knowledge-center', '/settings', '/integrations', '/market-analizi'];
+const ownerOnlyPaths = ['/stock-counts', '/costs', '/production-costs', '/finance', '/reports', '/seo-products', '/publishing', '/model-codes', '/knowledge-center', '/settings', '/integrations', '/market-analizi', '/hesap-makinesi'];
 
 export function AdminShell({ title, children }: { title: string; children: React.ReactNode }) {
   const pathname = usePathname();

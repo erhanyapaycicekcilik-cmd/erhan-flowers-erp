@@ -1,9 +1,27 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { BambuLeafRoundingMode, Prisma, ProductionCostGroup, StockUsageEventType, TemplateComponentScope } from '../generated/prisma-client';
 import * as XLSX from 'xlsx';
 import { PrismaService } from '../prisma/prisma.service';
 import { PublishingService } from '../publishing/publishing.service';
 import { IntegrationPlatform } from '../integrations/adapters/integration-adapter.interface';
+
+type TrendyolCatalogProduct = {
+  barcode: string;
+  title: string;
+  brand: string | null;
+  categoryName: string | null;
+  description: string | null;
+  quantity: number;
+  salePrice: number;
+  images: Array<{ url?: string } | string>;
+  // Trendyol "sil" akışı ürünü veritabanından tamamen kaldırmıyor, arşivliyor
+  // (archived=true, onSale=false) - bu yuzden aktif/pasif ayrımı barkodun listede
+  // olup olmamasına değil, bu iki alana bakılarak yapılmalı.
+  archived: boolean;
+  onSale: boolean;
+};
 
 const costGroupLabels: Record<ProductionCostGroup, string> = {
   LEAF: 'Yaprak maliyeti',
@@ -18,10 +36,113 @@ const costGroupLabels: Record<ProductionCostGroup, string> = {
 
 @Injectable()
 export class ProductionCostsService {
+  private readonly logger = new Logger(ProductionCostsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly publishing: PublishingService,
+    private readonly config: ConfigService,
   ) {}
+
+  // Gunde bir kez Trendyol katalogunu ceker; satici panelinden silinen/pasife
+  // alinan urunler burada otomatik PASSIVE olur, canli kalanlarin gorsel/fiyat/
+  // stok bilgisi tazelenir - elle script calistirmaya gerek kalmaz.
+  @Cron(CronExpression.EVERY_DAY_AT_4AM)
+  async scheduledTrendyolSync() {
+    try {
+      const result = await this.syncWithTrendyol();
+      this.logger.log(`Zamanlanmis Trendyol senkronu tamamlandi: ${JSON.stringify(result)}`);
+    } catch (error) {
+      this.logger.error('Zamanlanmis Trendyol senkronu basarisiz.', error instanceof Error ? error.stack : error);
+    }
+  }
+
+  async syncWithTrendyol() {
+    const apiUrl = this.config.get<string>('TRENDYOL_API_URL')?.trim().replace(/\/+$/, '');
+    const supplierId = this.config.get<string>('TRENDYOL_SUPPLIER_ID')?.trim();
+    const apiKey = this.config.get<string>('TRENDYOL_API_KEY')?.trim();
+    const apiSecret = this.config.get<string>('TRENDYOL_API_SECRET')?.trim();
+    if (!apiUrl || !supplierId || !apiKey || !apiSecret) {
+      throw new BadRequestException('Trendyol API bilgileri (.env) eksik, senkronizasyon yapılamıyor.');
+    }
+
+    const catalog = await this.fetchTrendyolCatalog(apiUrl, supplierId, apiKey, apiSecret);
+    const byBarcode = new Map(catalog.map((item) => [item.barcode, item]));
+    // Trendyol arşivlenmiş/satışa kapalı ürünü de listede tutuyor - gerçek
+    // "hâlâ satılıyor" kümesi bu ikisini dışlayarak bulunur.
+    const liveBarcodes = new Set(catalog.filter((item) => !item.archived && item.onSale).map((item) => item.barcode));
+
+    let updated = 0;
+    let passivatedFromArchive = 0;
+    for (const item of catalog) {
+      const imageUrls = (item.images ?? [])
+        .map((image) => (typeof image === 'string' ? image : image?.url))
+        .filter((url): url is string => Boolean(url));
+      const isLive = !item.archived && item.onSale;
+      const result = await this.prisma.trendyolProductVariant.updateMany({
+        where: { barcode: item.barcode },
+        data: {
+          productName: item.title || undefined,
+          brand: item.brand ?? undefined,
+          trendyolCategoryName: item.categoryName ?? undefined,
+          productDescription: item.description ?? undefined,
+          stockQuantity: item.quantity ?? undefined,
+          trendyolSalePrice: item.salePrice ?? undefined,
+          images: imageUrls.length ? imageUrls : undefined,
+          status: isLive ? 'ACTIVE' : 'PASSIVE',
+        },
+      });
+      updated += result.count;
+      if (!isLive) passivatedFromArchive += result.count;
+    }
+
+    const passivatedMissing = await this.prisma.trendyolProductVariant.updateMany({
+      where: { status: 'ACTIVE', barcode: { notIn: [...byBarcode.keys()] } },
+      data: { status: 'PASSIVE' },
+    });
+
+    return {
+      total: catalog.length,
+      updated,
+      passivated: passivatedFromArchive + passivatedMissing.count,
+      liveCount: liveBarcodes.size,
+    };
+  }
+
+  private async fetchTrendyolCatalog(apiUrl: string, supplierId: string, apiKey: string, apiSecret: string): Promise<TrendyolCatalogProduct[]> {
+    const auth = Buffer.from(`${apiKey}:${apiSecret}`).toString('base64');
+    const headers = { Authorization: `Basic ${auth}`, 'User-Agent': this.config.get<string>('TRENDYOL_INTEGRATION_REFERENCE_CODE')?.trim() || 'erp' };
+
+    const size = 200;
+    let page = 0;
+    let totalPages = 1;
+    const items: TrendyolCatalogProduct[] = [];
+    while (page < totalPages) {
+      const response = await fetch(`${apiUrl}/product/sellers/${supplierId}/products?page=${page}&size=${size}`, { headers });
+      if (!response.ok) {
+        this.logger.warn(`Trendyol katalog senkronu: HTTP ${response.status} (sayfa ${page})`);
+        break;
+      }
+      const body = await response.json();
+      totalPages = body.totalPages ?? 1;
+      for (const item of body.content ?? []) {
+        items.push({
+          barcode: item.barcode,
+          title: item.title,
+          brand: item.brand ?? null,
+          categoryName: item.categoryName ?? null,
+          description: item.description ?? null,
+          quantity: Number(item.quantity ?? 0),
+          salePrice: Number(item.salePrice ?? 0),
+          images: item.images ?? [],
+          archived: Boolean(item.archived),
+          onSale: item.onSale !== false,
+        });
+      }
+      page++;
+    }
+    return items;
+  }
 
   async listFamilies() {
     const families = await this.prisma.productionFamily.findMany({
@@ -1861,6 +1982,62 @@ export class ProductionCostsService {
 
   private hasMissingStockCost(stockCard: { purchasePrice: Prisma.Decimal; packageContent: Prisma.Decimal }) {
     return Number(stockCard.purchasePrice) <= 0 || Number(stockCard.packageContent) <= 0;
+  }
+
+  // ---- Tekli Bambu Fiyat Tablosu ----
+  // 50-250 cm arası 5'er cm'lik standart boylar otomatik (doğrusal) hesaplanır,
+  // ama her satır elle eklenip/düzenlenip bu otomatik değeri geçersiz kılabilir.
+  async listBambuStemPrices() {
+    await this.ensureBambuStemPriceSeed();
+    return this.prisma.bambuStemPrice.findMany({ orderBy: { sizeCm: 'asc' } });
+  }
+
+  async upsertBambuStemPrice(sizeCm: number, pricePerStem: number) {
+    if (!Number.isFinite(sizeCm) || sizeCm <= 0) throw new BadRequestException('Geçerli bir boy (cm) girilmelidir.');
+    if (!Number.isFinite(pricePerStem) || pricePerStem < 0) throw new BadRequestException('Geçerli bir fiyat girilmelidir.');
+    return this.prisma.bambuStemPrice.upsert({
+      where: { sizeCm: Math.round(sizeCm) },
+      update: { pricePerStem, isManual: true },
+      create: { sizeCm: Math.round(sizeCm), pricePerStem, isManual: true },
+    });
+  }
+
+  async deleteBambuStemPrice(id: number) {
+    await this.prisma.bambuStemPrice.delete({ where: { id } });
+    return { ok: true };
+  }
+
+  // Tam boy eşleşmesi yoksa (örn. özel ölçü) en yakın iki satır arasında
+  // doğrusal ara değer hesaplar; tablo tamamen boşsa 0 döner.
+  async calculateBambuStemPrice(sizeCm: number, quantity: number) {
+    const rows = await this.listBambuStemPrices();
+    if (!rows.length) return { unitPrice: 0, totalPrice: 0, interpolated: false };
+    const exact = rows.find((row) => row.sizeCm === Math.round(sizeCm));
+    if (exact) {
+      const unitPrice = Number(exact.pricePerStem);
+      return { unitPrice, totalPrice: unitPrice * quantity, interpolated: false };
+    }
+    const below = [...rows].filter((row) => row.sizeCm < sizeCm).pop();
+    const above = rows.find((row) => row.sizeCm > sizeCm);
+    let unitPrice: number;
+    if (below && above) {
+      const ratio = (sizeCm - below.sizeCm) / (above.sizeCm - below.sizeCm);
+      unitPrice = Number(below.pricePerStem) + ratio * (Number(above.pricePerStem) - Number(below.pricePerStem));
+    } else {
+      unitPrice = Number((below ?? above)!.pricePerStem);
+    }
+    return { unitPrice: Math.round(unitPrice * 100) / 100, totalPrice: Math.round(unitPrice * quantity * 100) / 100, interpolated: true };
+  }
+
+  private async ensureBambuStemPriceSeed() {
+    const count = await this.prisma.bambuStemPrice.count();
+    if (count > 0) return;
+    const rows: Array<{ sizeCm: number; pricePerStem: number }> = [];
+    for (let sizeCm = 50; sizeCm <= 250; sizeCm += 5) {
+      const pricePerStem = 30 + 0.8 * (sizeCm - 50);
+      rows.push({ sizeCm, pricePerStem: Math.round(pricePerStem * 100) / 100 });
+    }
+    await this.prisma.bambuStemPrice.createMany({ data: rows, skipDuplicates: true });
   }
 
   private async ensureBambuFamily() {

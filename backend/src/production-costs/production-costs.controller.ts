@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Req, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, Req, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
 import { Request } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
 import * as fs from 'fs';
@@ -85,6 +85,26 @@ export class ProductionCostsController {
     return this.productionCosts.updateBambuException(body);
   }
 
+  @Get('bambu/stem-prices')
+  bambuStemPrices() {
+    return this.productionCosts.listBambuStemPrices();
+  }
+
+  @Post('bambu/stem-prices')
+  upsertBambuStemPrice(@Body() body: { sizeCm?: number; pricePerStem?: number }) {
+    return this.productionCosts.upsertBambuStemPrice(Number(body.sizeCm), Number(body.pricePerStem));
+  }
+
+  @Post('bambu/stem-prices/:id/delete')
+  deleteBambuStemPrice(@Param('id') id: string) {
+    return this.productionCosts.deleteBambuStemPrice(Number(id));
+  }
+
+  @Get('bambu/stem-prices/calculate')
+  calculateBambuStemPrice(@Query('sizeCm') sizeCm: string, @Query('quantity') quantity: string) {
+    return this.productionCosts.calculateBambuStemPrice(Number(sizeCm), Number(quantity ?? 1));
+  }
+
   @Post('bambu/deduct-stock')
   deductBambuStock(@Body() body: unknown, @Req() request: AuthenticatedRequest) {
     return this.productionCosts.deductBambuStock(body, request.user!.id);
@@ -98,6 +118,11 @@ export class ProductionCostsController {
   @Get('progress')
   progress() {
     return this.productionCosts.getCostProgress();
+  }
+
+  @Post('sync-trendyol')
+  syncTrendyol() {
+    return this.productionCosts.syncWithTrendyol();
   }
 
   @Get('variants/:id/detail')

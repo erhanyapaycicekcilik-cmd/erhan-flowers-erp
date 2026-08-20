@@ -307,6 +307,62 @@ enum KnowledgeRuleType {
   RECIPE
 }
 
+enum ProductMediaAuditChannel {
+  GLOBAL
+  TRENDYOL
+  ERHANFLOWERS_COM
+  FLORAYAPAYCICEK_COM
+}
+
+enum ProductMediaAuditStatus {
+  QUEUED
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum ProductMediaRecommendation {
+  KEEP
+  IMPROVE
+  REBUILD
+}
+
+enum ProductMediaIssueSeverity {
+  INFO
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum ProductMediaRequirementType {
+  MAIN_PRODUCT
+  HOME_LIFESTYLE
+  OFFICE_LIFESTYLE
+  CAFE_LIFESTYLE
+  CLOSE_UP
+  TOP_VIEW
+  MEASUREMENT
+  VIDEO
+}
+
+enum ProductMediaRequirementStatus {
+  PRESENT
+  MISSING
+  NEEDS_IMPROVEMENT
+}
+
+enum ProductMediaPublishState {
+  DRAFT
+  MEDIA_PREPARATION
+  READY_FOR_REVIEW
+  APPROVED
+  READY_TO_PUBLISH
+  PUBLISHING
+  PUBLISHED
+  FAILED
+}
+
 model User {
   id                    Int                       @id @default(autoincrement())
   name                  String
@@ -1853,6 +1909,20 @@ model BambuCostException {
   @@map("bambu_cost_exceptions")
 }
 
+// Tekli yapay bambu gövdesi için boy bazlı satış fiyat tablosu. Standart
+// boylar otomatik hesaplanır (doğrusal aralık doldurma), ama her satır elle
+// eklenip/düzenlenip tabloyu geçersiz kılabilir (manuel giriş talebi).
+model BambuStemPrice {
+  id          Int      @id @default(autoincrement())
+  sizeCm      Int      @unique @map("size_cm")
+  pricePerStem Decimal @map("price_per_stem") @db.Decimal(10, 2)
+  isManual    Boolean  @default(false) @map("is_manual")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("bambu_stem_prices")
+}
+
 model StockUsageLog {
   id            Int                     @id @default(autoincrement())
   stockCardId   Int                     @map("stock_card_id")
@@ -1955,6 +2025,87 @@ model MarketInsightReport {
   generatedAt    DateTime @default(now()) @map("generated_at")
 
   @@map("market_insight_reports")
+}
+
+model ProductMediaAudit {
+  id                  Int                       @id @default(autoincrement())
+  companyId           Int                       @map("company_id")
+  productId           Int?                      @map("product_id")
+  channel             ProductMediaAuditChannel
+  status              ProductMediaAuditStatus   @default(QUEUED)
+  overallVisualScore  Decimal                   @default(0) @map("overall_visual_score") @db.Decimal(4, 1)
+  mainImageScore      Decimal                   @default(0) @map("main_image_score") @db.Decimal(4, 1)
+  realismScore        Decimal                   @default(0) @map("realism_score") @db.Decimal(4, 1)
+  lifestyleScore      Decimal                   @default(0) @map("lifestyle_score") @db.Decimal(4, 1)
+  detailScore         Decimal                   @default(0) @map("detail_score") @db.Decimal(4, 1)
+  measurementScore    Decimal                   @default(0) @map("measurement_score") @db.Decimal(4, 1)
+  consistencyScore    Decimal                   @default(0) @map("consistency_score") @db.Decimal(4, 1)
+  commercialScore     Decimal                   @default(0) @map("commercial_score") @db.Decimal(4, 1)
+  changePriorityScore Int                       @default(0) @map("change_priority_score")
+  recommendation      ProductMediaRecommendation
+  publishState        ProductMediaPublishState  @default(DRAFT) @map("publish_state")
+  aiSummary           String?                   @map("ai_summary")
+  aiIssues            Json                      @default("[]") @map("ai_issues")
+  aiRecommendation    String?                   @map("ai_recommendation")
+  recommendedSet      Json                      @default("[]") @map("recommended_set")
+  salesSignals        Json                      @default("{}") @map("sales_signals")
+  beforeAfterPlan     Json                      @default("{}") @map("before_after_plan")
+  mediaTaskId         Int?                      @map("media_task_id")
+  analyzedAt          DateTime?                 @map("analyzed_at")
+  createdAt           DateTime                  @default(now()) @map("created_at")
+  updatedAt           DateTime                  @updatedAt @map("updated_at")
+  issues              ProductMediaIssue[]
+  requirements        ProductMediaRequirement[]
+  images              ProductMediaAuditImage[]
+
+  @@index([companyId, channel])
+  @@index([companyId, productId, channel])
+  @@index([companyId, status])
+  @@map("product_media_audits")
+}
+
+model ProductMediaIssue {
+  id          Int                       @id @default(autoincrement())
+  auditId     Int                       @map("audit_id")
+  issueType   String                    @map("issue_type")
+  severity    ProductMediaIssueSeverity
+  title       String
+  description String
+  imageUrl    String?                   @map("image_url")
+  createdAt   DateTime                  @default(now()) @map("created_at")
+  audit       ProductMediaAudit         @relation(fields: [auditId], references: [id], onDelete: Cascade)
+
+  @@index([auditId])
+  @@index([severity])
+  @@map("product_media_issues")
+}
+
+model ProductMediaRequirement {
+  id        Int                           @id @default(autoincrement())
+  auditId   Int                           @map("audit_id")
+  mediaType ProductMediaRequirementType   @map("media_type")
+  status    ProductMediaRequirementStatus
+  audit     ProductMediaAudit             @relation(fields: [auditId], references: [id], onDelete: Cascade)
+
+  @@unique([auditId, mediaType])
+  @@index([auditId, status])
+  @@map("product_media_requirements")
+}
+
+model ProductMediaAuditImage {
+  id             Int                         @id @default(autoincrement())
+  auditId        Int                         @map("audit_id")
+  productImageId Int?                        @map("product_image_id")
+  imageUrl       String                      @map("image_url")
+  sortOrder      Int                         @default(0) @map("sort_order")
+  imageType      ProductMediaRequirementType @map("image_type")
+  score          Decimal                     @default(0) @db.Decimal(4, 1)
+  analysisData   Json                        @default("{}") @map("analysis_data")
+  createdAt      DateTime                    @default(now()) @map("created_at")
+  audit          ProductMediaAudit           @relation(fields: [auditId], references: [id], onDelete: Cascade)
+
+  @@index([auditId, sortOrder])
+  @@map("product_media_audit_images")
 }
 
 model SocialAccountConnection {

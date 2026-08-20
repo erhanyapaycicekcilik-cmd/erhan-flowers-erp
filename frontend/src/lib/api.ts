@@ -2,6 +2,13 @@ function resolveApiBaseUrl() {
   const configuredUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
 
   if (typeof window === 'undefined') return configuredUrl;
+  if ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && window.location.port === '3101') {
+    // "localhost" bazı Windows/Chrome kurulumlarinda IPv6 (::1) uzerinden
+    // cozulebiliyor; bu da 8101 portunu dinleyen baska bir surece (orn. Docker
+    // WSL relay) carpip yanlis/eksik cevap almamiza yol aciyor. IPv4'u
+    // acikca zorlayarak bunu onluyoruz.
+    return `${window.location.protocol}//127.0.0.1:8101`;
+  }
   if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') return configuredUrl;
 
   const configuredPort = new URL(configuredUrl).port || '8000';
