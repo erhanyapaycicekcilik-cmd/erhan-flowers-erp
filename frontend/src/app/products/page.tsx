@@ -613,6 +613,19 @@ export default function ProductsPage() {
     setMessage(`${query} için SEO araması açıldı.`);
   }
 
+  function openErpContextLink(target: 'STOCK' | 'COST' | 'MARKET' | 'COMPETITOR' | 'MEDIA') {
+    const productQuery = encodeURIComponent((form.productName || priceResearch.productName || seoProductNameSuggestion || '').trim());
+    const urls = {
+      STOCK: `/stock-cards${form.stockCode ? `?q=${encodeURIComponent(form.stockCode)}` : productQuery ? `?q=${productQuery}` : ''}`,
+      COST: form.variantId ? `/production-costs/products/${form.variantId}` : '/production-costs',
+      MARKET: productQuery ? `/market-analizi?query=${productQuery}` : '/market-analizi',
+      COMPETITOR: productQuery ? `/market-analizi?tab=deep&query=${productQuery}` : '/market-analizi?tab=deep',
+      MEDIA: form.variantId ? `/media?variantId=${form.variantId}` : '/media',
+    };
+    const opened = window.open(urls[target], '_blank', 'noopener,noreferrer');
+    if (!opened) window.location.href = urls[target];
+  }
+
   function applyPriceResearch() {
     const name = priceResearch.productName.trim();
     const suggestedPrice = priceResearchSummary.suggestedPrice;
@@ -1452,6 +1465,14 @@ export default function ProductsPage() {
       </div>
       {message && <div className="mb-4 rounded-md bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800">{message}</div>}
 
+      <div className="mb-4 flex flex-wrap gap-2 rounded-md border border-line bg-white p-3">
+        <button type="button" className="btn btn-secondary min-h-9 px-3 text-xs" onClick={() => openErpContextLink('STOCK')}><ExternalLink size={14} /> Stokta Aç</button>
+        <button type="button" className="btn btn-secondary min-h-9 px-3 text-xs" onClick={() => openErpContextLink('COST')}><ExternalLink size={14} /> Maliyeti Aç</button>
+        <button type="button" className="btn btn-secondary min-h-9 px-3 text-xs" onClick={() => openErpContextLink('MARKET')}><ExternalLink size={14} /> Pazar Analizi</button>
+        <button type="button" className="btn btn-secondary min-h-9 px-3 text-xs" onClick={() => openErpContextLink('COMPETITOR')}><ExternalLink size={14} /> Rakip Araştır</button>
+        <button type="button" className="btn btn-secondary min-h-9 px-3 text-xs" onClick={() => openErpContextLink('MEDIA')}><ExternalLink size={14} /> Medyayı Aç</button>
+      </div>
+
       <section className="hidden">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -1651,7 +1672,7 @@ export default function ProductsPage() {
 
           <form onSubmit={saveEntry} className="space-y-6">
             {(
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              <div className="grid gap-4 md:grid-cols-2">
                 <div className="hidden">
                   <input className="hidden" value={form.productName} onChange={(event) => update('productName', event.target.value)} readOnly />
                   {seoProductNameSuggestion && seoProductNameSuggestion !== form.productName.trim() && (
@@ -1662,10 +1683,6 @@ export default function ProductsPage() {
                 </div>
                 <Field label="Kategori"><select className="field" value={form.categoryId} onChange={(event) => update('categoryId', event.target.value)}><option value="">Seçin</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></Field>
                 <Field label="Renk / çeşit"><input className="field" value={form.colorVariant} onChange={(event) => update('colorVariant', event.target.value)} /></Field>
-                <Field label="Tüm sitelere stok adedi">
-                  <input className="field" type="number" min="0" step="1" value={Number(form.stockQuantity || 0)} onChange={(event) => update('stockQuantity', decimalValue(event.target.value))} placeholder="Örn: 10" />
-                  <div className="mt-1 text-xs font-semibold text-slate-500">Bileşen stoğu değildir; Trendyol, Hepsiburada, N11 ve Ticimax'a aynı adet gider.</div>
-                </Field>
                 <div className="md:col-span-2 xl:col-span-4">
                   <div className="rounded-md border border-line bg-slate-50 p-4">
                     <div className="flex flex-wrap items-center justify-between gap-3">
@@ -1972,8 +1989,17 @@ export default function ProductsPage() {
                   ))}
                 </div>
                 <ChannelComparisonTable channels={channelPricing.filter((item) => selectedChannels.includes(item.key))} compact />
-                <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800">
-                  Tüm pazaryerlerine gönderilecek stok adedi: {number(form.stockQuantity)}. Stok bileşenleri sadece reçete, maliyet ve stoktan düşme için kullanılır.
+                <div className="flex flex-wrap items-center gap-3 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800">
+                  <span>Tüm pazaryerlerine gönderilecek stok adedi:</span>
+                  <input
+                    className="w-20 rounded-md border border-emerald-300 bg-white px-2 py-1 text-sm font-bold text-emerald-900"
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={Number(form.stockQuantity || 0)}
+                    onChange={(event) => update('stockQuantity', decimalValue(event.target.value))}
+                  />
+                  <span className="text-xs font-normal text-emerald-700">Bileşen stoğu değildir, sadece reçete/maliyet için kullanılır; buradaki adet Trendyol, Hepsiburada, N11 ve Ticimax&apos;a aynı şekilde gider.</span>
                 </div>
                 <div className="rounded-md border border-line bg-slate-50 p-4">
                   <div className="mb-3">
