@@ -1,5 +1,8 @@
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
 import { PrismaModule } from './prisma/prisma.module';
@@ -25,10 +28,13 @@ import { StaffTasksModule } from './staff-tasks/staff-tasks.module';
 import { ProductCenterModule } from './product-center/product-center.module';
 import { MarketIntelligenceModule } from './market-intelligence/market-intelligence.module';
 import { PublicCatalogModule } from './public-catalog/public-catalog.module';
+import { SuppliersModule } from './suppliers/suppliers.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, envFilePath: process.env.ENV_FILE || '.env' }),
+    ThrottlerModule.forRoot([{ ttl: 60000, limit: 10 }]),
+    ScheduleModule.forRoot(),
     ServeStaticModule.forRoot({
       rootPath: join(process.cwd(), 'uploads'),
       serveRoot: '/uploads',
@@ -55,7 +61,9 @@ import { PublicCatalogModule } from './public-catalog/public-catalog.module';
     ProductCenterModule,
     MarketIntelligenceModule,
     PublicCatalogModule,
+    SuppliersModule,
   ],
   controllers: [AppController],
+  providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })
 export class AppModule {}

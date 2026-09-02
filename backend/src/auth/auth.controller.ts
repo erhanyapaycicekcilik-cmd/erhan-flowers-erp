@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Post, Req, Res, UseGuards } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { Request, Response } from 'express';
 import { AuthGuard } from './auth.guard';
 import { AuthService } from './auth.service';
@@ -7,16 +8,18 @@ import { AuthService } from './auth.service';
 export class AuthController {
   constructor(private readonly auth: AuthService) {}
 
+  @Throttle({ default: { ttl: 60000, limit: 5 } })
   @Post('login')
   async login(
     @Body() body: { email: string; password: string; rememberMe?: boolean },
     @Res({ passthrough: true }) response: Response,
   ) {
     const result = await this.auth.login(body.email, body.password, Boolean(body.rememberMe));
+    const isProduction = process.env.NODE_ENV === 'production';
     response.cookie(this.cookieName(), result.token, {
       httpOnly: true,
-      sameSite: 'lax',
-      secure: false,
+      sameSite: isProduction ? 'strict' : 'lax',
+      secure: isProduction,
       maxAge: body.rememberMe ? 1000 * 60 * 60 * 24 * 30 : 1000 * 60 * 60 * 8,
     });
     return { token: result.token, user: result.user };

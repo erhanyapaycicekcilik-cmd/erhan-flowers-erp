@@ -1,12 +1,62 @@
-# Sunucu ve domain hazir oldugunda asagidaki placeholder'lari gercek
-# domain adlariyla degistirin (erhanflowers.com, florayapaycicek.com,
-# api.erhanflowers.com gibi). Caddy, DNS bu sunucuya yonlendirildikten
-# sonra SSL sertifikasini otomatik alir - elle islem gerekmez.
-
-erhanflowers.com, www.erhanflowers.com, florayapaycicek.com, www.florayapaycicek.com {
-    reverse_proxy frontend:3000
+# Güvenlik: HTTP → HTTPS yönlendirme
+http://florayapaycicek.com, http://www.florayapaycicek.com,
+http://erp.florayapaycicek.com, http://api.florayapaycicek.com {
+    redir https://{host}{uri} permanent
 }
 
-api.erhanflowers.com {
-    reverse_proxy backend:8000
+# ERP Yönetim Paneli — Güvenli HTTPS
+erp.florayapaycicek.com {
+    reverse_proxy frontend:3000
+
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        X-Frame-Options "DENY"
+        X-Content-Type-Options "nosniff"
+        X-XSS-Protection "1; mode=block"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        Permissions-Policy "geolocation=(), microphone=(), camera=()"
+    }
+
+    log {
+        output file /var/log/caddy/erp-access.log
+        format json
+    }
+}
+
+# Backend API — Güvenli HTTPS
+api.florayapaycicek.com {
+    reverse_proxy backend:8001
+
+    request_body {
+        max_size 50MB
+    }
+
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+    }
+
+    log {
+        output file /var/log/caddy/api-access.log
+        format json
+    }
+}
+
+# B2C Satış Sitesi — Güvenli HTTPS
+florayapaycicek.com, www.florayapaycicek.com {
+    reverse_proxy frontend:3000
+
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        X-Frame-Options "SAMEORIGIN"
+        X-Content-Type-Options "nosniff"
+        X-XSS-Protection "1; mode=block"
+        Referrer-Policy "strict-origin-when-cross-origin"
+    }
+
+    log {
+        output file /var/log/caddy/site-access.log
+        format json
+    }
 }
