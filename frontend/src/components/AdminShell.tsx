@@ -84,6 +84,7 @@ const navGroups: { section: string | null; items: NavItem[] }[] = [
     section: 'Yönetim',
     items: [
       { href: '/finance', label: 'Finans', icon: CircleDollarSign, ownerOnly: true },
+      { href: '/borclar', label: 'Tedarikçi Borçları', icon: Warehouse, ownerOnly: true },
       { href: '/reports', label: 'Raporlar', icon: BarChart3, ownerOnly: true },
       { href: '/settings', label: 'Ayarlar', icon: Settings, ownerOnly: true },
     ],
@@ -92,7 +93,7 @@ const navGroups: { section: string | null; items: NavItem[] }[] = [
 
 const nav = navGroups.flatMap((group) => group.items);
 
-const ownerOnlyPaths = ['/stock-counts', '/costs', '/production-costs', '/finance', '/reports', '/seo-products', '/publishing', '/model-codes', '/knowledge-center', '/settings', '/integrations', '/market-analizi', '/hesap-makinesi'];
+const ownerOnlyPaths = ['/stock-counts', '/costs', '/production-costs', '/finance', '/borclar', '/reports', '/seo-products', '/publishing', '/model-codes', '/knowledge-center', '/settings', '/integrations', '/market-analizi', '/hesap-makinesi'];
 
 export function AdminShell({ title, children }: { title: string; children: React.ReactNode }) {
   const pathname = usePathname();

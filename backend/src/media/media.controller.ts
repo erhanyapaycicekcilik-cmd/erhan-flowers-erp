@@ -44,6 +44,11 @@ export class MediaController {
     return this.media.create(file, body);
   }
 
+  @Post('flower-standard-set')
+  createFlowerStandardSet(@Body() body: { imagePath?: string; productId?: string; folderName?: string }) {
+    return this.media.createFlowerStandardSet(body);
+  }
+
   @Post('tree-standard-set')
   createTreeStandardSet(@Body() body: { imagePath?: string; productId?: string; folderName?: string }) {
     return this.media.createTreeStandardSet(body);

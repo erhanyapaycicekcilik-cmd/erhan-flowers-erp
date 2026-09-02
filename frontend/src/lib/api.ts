@@ -2,14 +2,20 @@ function resolveApiBaseUrl() {
   const configuredUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
 
   if (typeof window === 'undefined') return configuredUrl;
-  if ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && window.location.port === '3101') {
+  if ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && /^310\d$/.test(window.location.port)) {
     // "localhost" bazı Windows/Chrome kurulumlarinda IPv6 (::1) uzerinden
     // cozulebiliyor; bu da 8101 portunu dinleyen baska bir surece (orn. Docker
     // WSL relay) carpip yanlis/eksik cevap almamiza yol aciyor. IPv4'u
     // acikca zorlayarak bunu onluyoruz.
-    return `${window.location.protocol}//127.0.0.1:8101`;
+    const configuredPort = new URL(configuredUrl).port || '8101';
+    return `${window.location.protocol}//127.0.0.1:${configuredPort}`;
   }
   if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') return configuredUrl;
+
+  // Production'da subdomain tabanlı routing var (api.florayapaycicek.com)
+  // configuredUrl'i doğrudan kullan, hostname'i değiştirme
+  const configuredHost = new URL(configuredUrl).hostname;
+  if (configuredHost !== window.location.hostname) return configuredUrl;
 
   const configuredPort = new URL(configuredUrl).port || '8000';
   return `${window.location.protocol}//${window.location.hostname}:${configuredPort}`;

@@ -18,21 +18,130 @@ import {
 import { fetchPublicProducts, fetchPublicCategories, productImageUrl, formatSitePrice } from './site-data';
 
 export const metadata: Metadata = {
-  title: 'Erhan Flowers Store | Yapay Çiçek ve Dekoratif Aranjman',
+  title: 'Erhan Flowers | Antalya Yapay Çiçek, Yapay Ağaç ve Dekoratif Aranjman',
   description:
-    'Erhan Flowers Store; yapay çiçek, kuru çiçek, dekoratif aranjman ve kurumsal mekan uygulamaları için sade, kaliteli ve ürün odaklı vitrin.',
+    'Antalya\'nın en büyük yapay çiçek ve yapay ağaç mağazası. Yapay ficus, bambu, yapay çiçek demeti, saksı aranjmanı, duvar dekoru. Kurumsal ve bireysel siparişlerde ücretsiz danışmanlık. Antalya, Kemer, Alanya, Belek teslimat.',
+  keywords: [
+    'yapay ağaç Antalya',
+    'yapay çiçek Antalya',
+    'yapay ficus Antalya',
+    'yapay bambu Antalya',
+    'dekoratif çiçek Antalya',
+    'yapay bitki Antalya',
+    'çiçek dekorasyon Antalya',
+    'otel dekorasyon yapay çiçek',
+    'ofis yapay ağaç',
+    'yapay çiçek mağazası Antalya',
+    'Antalya çiçekçi',
+    'yapay ağaç fiyatları',
+    'yapay ficus fiyatları',
+    'duvar dekoru yapay çiçek',
+    'yapay çiçek toptan Antalya',
+  ],
+  openGraph: {
+    title: 'Erhan Flowers | Antalya Yapay Çiçek ve Yapay Ağaç',
+    description: 'Antalya\'nın en büyük yapay çiçek ve yapay ağaç mağazası. Otel, ofis, ev ve etkinlik dekorasyonu için profesyonel çözümler.',
+    url: 'https://florayapaycicek.com/site',
+    siteName: 'Erhan Flowers',
+    locale: 'tr_TR',
+    type: 'website',
+    images: [
+      {
+        url: 'https://florayapaycicek.com/site-products/ficus-white.png',
+        width: 1200,
+        height: 630,
+        alt: 'Antalya Yapay Ağaç ve Çiçek - Erhan Flowers',
+      },
+    ],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Erhan Flowers | Antalya Yapay Çiçek ve Yapay Ağaç',
+    description: 'Antalya\'nın en büyük yapay çiçek ve yapay ağaç mağazası.',
+  },
+  alternates: {
+    canonical: 'https://florayapaycicek.com/site',
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      'max-image-preview': 'large',
+      'max-snippet': -1,
+    },
+  },
 };
 
 const whatsappHref = 'https://wa.me/905446546220';
 const instagramHref = 'https://www.instagram.com/erhanflowers';
 
 const categoryRail = [
-  { label: 'Yapay Ağaç', image: '/site-products/ficus-white.png' },
-  { label: 'Salon', image: '/site-products/ficus-living.png' },
-  { label: 'Ofis & Lobi', image: '/site-products/ficus-lobby.png' },
-  { label: 'Saksı', image: '/site-products/ficus-studio.png' },
-  { label: 'Detay', image: '/site-products/ficus-detail.png' },
-  { label: 'Özel Ölçü', image: '/site-products/ficus-scale.png' },
+  { label: 'Demet Çiçekler', image: '/site-products/ficus-detail.png', href: '#banner-demet-cicekler' },
+  { label: 'Saksı Aranjmanları', image: '/site-products/ficus-studio.png', href: '#banner-saksi-aranjmanlari' },
+  { label: 'Yapay Ağaçlar', image: '/site-products/ficus-white.png', href: '#banner-yapay-agaclar' },
+  { label: 'Bambular', image: '/site-products/ficus-scale.png', href: '#banner-bambular' },
+  { label: 'Duvar Dekorları', image: '/site-products/ficus-living.png', href: '#banner-duvar-dekorlari' },
+  { label: 'Saksılar', image: '/site-products/ficus-lobby.png', href: '#banner-saksilar' },
+];
+
+const storefrontBanners = [
+  {
+    id: 'demet-cicekler',
+    title: 'Demet Çiçekler',
+    description: 'Hazır vitrin, hediye ve masa üstü sunumları için canlı görünümlü demet seçenekleri.',
+    image: '/site-products/ficus-detail.png',
+    badge: 'Yeni sezon',
+    layout: 'wide',
+    tone: 'rose',
+  },
+  {
+    id: 'saksi-aranjmanlari',
+    title: 'Saksı Aranjmanları',
+    description: 'Ev, ofis ve karşılama alanları için saksılı, dengeli ve hazır kompozisyonlar.',
+    image: '/site-products/ficus-studio.png',
+    badge: 'Hazır aranjman',
+    layout: 'standard',
+    tone: 'clay',
+  },
+  {
+    id: 'yapay-agaclar',
+    title: 'Yapay Ağaçlar',
+    description: 'Yeşil ağaçlar, renkli ağaçlar, hazır gövde ağaçlar ve saksısız ağaç grupları.',
+    image: '/site-products/ficus-white.png',
+    badge: 'En geniş grup',
+    layout: 'tall',
+    tone: 'forest',
+    chips: ['Yeşil ağaçlar', 'Renkli ağaçlar', 'Hazır gövde', 'Saksısız'],
+  },
+  {
+    id: 'bambular',
+    title: 'Bambular',
+    description: 'Separatör, salon köşesi ve yüksek vazo kullanımı için dolgun bambu alternatifleri.',
+    image: '/site-products/ficus-scale.png',
+    badge: 'Boy seçenekli',
+    layout: 'standard',
+    tone: 'mint',
+  },
+  {
+    id: 'duvar-dekorlari',
+    title: 'Duvar Dekorları',
+    description: 'Dikey bahçe, yapay çiçek panel ve mekan fonu için pratik dekoratif çözümler.',
+    image: '/site-products/ficus-living.png',
+    badge: 'Mekan etkisi',
+    layout: 'standard',
+    tone: 'leaf',
+  },
+  {
+    id: 'saksilar',
+    title: 'Saksılar',
+    description: 'Metal, plastik ve dekoratif saksı seçenekleriyle ürün görünümünü tamamlayın.',
+    image: '/site-products/ficus-lobby.png',
+    badge: 'Tamamlayıcı',
+    layout: 'wide',
+    tone: 'stone',
+  },
 ];
 
 const featuredCards = [
@@ -68,24 +177,24 @@ const featuredCards = [
 
 const collections = [
   {
-    title: 'Yapay Çiçek',
-    text: 'Bakım istemeyen, yıl boyunca formunu koruyan dekoratif ağaç ve bitkiler.',
+    title: 'Demet Çiçekler',
+    text: 'Renk, boy ve kullanım alanına göre hazır çiçek demetleri.',
     icon: Flower2,
   },
   {
-    title: 'Kuru Çiçek',
-    text: 'Doğal tonlu, sıcak ve uzun ömürlü masa, vazo ve köşe aranjmanları.',
+    title: 'Saksı Aranjmanları',
+    text: 'Bakım istemeyen, yıl boyunca formunu koruyan saksılı ürünler.',
     icon: Leaf,
   },
   {
-    title: 'Dekoratif Aranjman',
-    text: 'Hediye, mağaza vitrini ve özel alanlar için hazır kompozisyonlar.',
-    icon: Sparkles,
+    title: 'Yapay Ağaçlar',
+    text: 'Yeşil, renkli, hazır gövdeli ve saksısız ağaç seçenekleri.',
+    icon: Trees,
   },
   {
-    title: 'Kurumsal Mekan',
-    text: 'Otel, restoran, ofis ve lobi alanları için ölçülü uygulamalar.',
-    icon: Building2,
+    title: 'Duvar Dekorları',
+    text: 'Dikey bahçe ve panel uygulamaları için dekoratif çözümler.',
+    icon: Sparkles,
   },
 ];
 
@@ -96,11 +205,83 @@ const advantages = [
   'Kurumsal ve bireysel hazırlık',
 ];
 
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'LocalBusiness',
+      '@id': 'https://florayapaycicek.com/#business',
+      name: 'Erhan Flowers',
+      alternateName: 'Erhan Flowers Yapay Çiçek ve Ağaç',
+      description: 'Antalya\'da yapay çiçek, yapay ağaç, bambu, dekoratif aranjman ve kurumsal mekan dekorasyonu.',
+      url: 'https://florayapaycicek.com/site',
+      telephone: '+905446546220',
+      priceRange: '₺₺',
+      image: 'https://florayapaycicek.com/site-products/ficus-white.png',
+      logo: 'https://florayapaycicek.com/logo-erhan-flowers.png',
+      address: {
+        '@type': 'PostalAddress',
+        addressLocality: 'Antalya',
+        addressRegion: 'Antalya',
+        addressCountry: 'TR',
+      },
+      geo: {
+        '@type': 'GeoCoordinates',
+        latitude: 36.8969,
+        longitude: 30.7133,
+      },
+      areaServed: [
+        { '@type': 'City', name: 'Antalya' },
+        { '@type': 'City', name: 'Kemer' },
+        { '@type': 'City', name: 'Alanya' },
+        { '@type': 'City', name: 'Belek' },
+        { '@type': 'City', name: 'Side' },
+        { '@type': 'City', name: 'Manavgat' },
+      ],
+      hasOfferCatalog: {
+        '@type': 'OfferCatalog',
+        name: 'Yapay Çiçek ve Ağaç Kataloğu',
+        itemListElement: [
+          { '@type': 'Offer', itemOffered: { '@type': 'Product', name: 'Yapay Ağaç', description: 'Ficus, zeytin, bambu ve daha fazlası' } },
+          { '@type': 'Offer', itemOffered: { '@type': 'Product', name: 'Yapay Çiçek Demeti', description: 'Dekoratif yapay çiçek demetleri' } },
+          { '@type': 'Offer', itemOffered: { '@type': 'Product', name: 'Saksı Aranjmanı', description: 'Hazır saksılı yapay bitki aranjmanları' } },
+          { '@type': 'Offer', itemOffered: { '@type': 'Product', name: 'Bambu', description: 'Separatör ve dekoratif bambu seçenekleri' } },
+          { '@type': 'Offer', itemOffered: { '@type': 'Product', name: 'Duvar Dekoru', description: 'Dikey bahçe ve yapay çiçek paneller' } },
+        ],
+      },
+      sameAs: [
+        'https://www.instagram.com/erhanflowers',
+        'https://wa.me/905446546220',
+      ],
+      contactPoint: {
+        '@type': 'ContactPoint',
+        telephone: '+905446546220',
+        contactType: 'sales',
+        availableLanguage: 'Turkish',
+        contactOption: 'TollFree',
+      },
+    },
+    {
+      '@type': 'WebSite',
+      '@id': 'https://florayapaycicek.com/#website',
+      url: 'https://florayapaycicek.com',
+      name: 'Erhan Flowers',
+      description: 'Antalya yapay çiçek ve yapay ağaç mağazası',
+      inLanguage: 'tr-TR',
+    },
+  ],
+};
+
 export default async function SitePage() {
   const [products, categories] = await Promise.all([fetchPublicProducts(), fetchPublicCategories()]);
   const featured = products.slice(0, 4);
 
   return (
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
     <main className="min-h-screen bg-[#f5f5f2] text-[#1d1d1f]">
       <header className="sticky top-0 z-30 border-b border-black/5 bg-[#f7f7f4]/90 backdrop-blur">
         <div className="mx-auto flex h-12 max-w-7xl items-center justify-between px-5 lg:px-8">
@@ -136,10 +317,10 @@ export default async function SitePage() {
               Manavgat / Antalya
             </p>
             <h1 className="text-6xl font-bold leading-none tracking-normal text-[#1d1d1f] sm:text-7xl lg:text-8xl">
-              Store.
+              Erhan Flowers.
             </h1>
             <p className="mt-4 max-w-3xl text-3xl font-bold leading-tight text-[#6e6e73] sm:text-4xl">
-              Ürün odaklı, sade ve kalıcı çiçek dekorasyonu.
+              Trendyol vitrininden ilham alan bannerlı mağaza ekranı.
             </p>
           </div>
           <aside className="space-y-5 pt-2">
@@ -162,7 +343,7 @@ export default async function SitePage() {
           <div className="flex min-w-max gap-8">
             {(categories.length > 0
               ? categories.map((cat) => ({ label: cat.name, image: productImageUrl(products.find((p) => p.categorySlug === cat.slug)?.images[0]), href: `#urunler-${cat.slug}` }))
-              : categoryRail.map((item) => ({ label: item.label, image: item.image, href: '#urunler' }))
+              : categoryRail
             ).map((item) => (
               <a key={item.label} href={item.href} className="group w-32 text-center">
                 <div className="mx-auto flex h-24 w-28 items-end justify-center">
@@ -170,6 +351,77 @@ export default async function SitePage() {
                   <img src={item.image} alt={item.label} className="max-h-24 w-auto object-contain transition group-hover:scale-[1.03]" />
                 </div>
                 <div className="mt-3 text-sm font-semibold">{item.label}</div>
+              </a>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="px-5 pb-10 lg:px-8" aria-label="Mağaza kategori bannerları">
+        <div className="mx-auto max-w-7xl">
+          <div className="mb-6 flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
+            <h2 className="text-3xl font-bold">
+              Ana ekran bannerları. <span className="text-[#6e6e73]">Kategoriler net, ürünler önde.</span>
+            </h2>
+            <a href={whatsappHref} target="_blank" rel="noreferrer" className="inline-flex text-sm font-semibold text-[#0066cc]">
+              Ürün grubu için teklif al <ArrowUpRight className="ml-1" size={14} />
+            </a>
+          </div>
+
+          <div className="grid auto-rows-[360px] gap-5 lg:grid-cols-4">
+            {storefrontBanners.map((banner) => (
+              <a
+                key={banner.id}
+                id={`banner-${banner.id}`}
+                href={whatsappHref}
+                target="_blank"
+                rel="noreferrer"
+                className={`group relative overflow-hidden rounded-lg p-6 text-white shadow-[0_14px_34px_rgba(0,0,0,0.12)] ${
+                  banner.layout === 'wide' ? 'lg:col-span-2' : ''
+                } ${banner.layout === 'tall' ? 'lg:row-span-2' : ''} ${
+                  banner.tone === 'rose'
+                    ? 'bg-[#8b3347]'
+                    : banner.tone === 'clay'
+                      ? 'bg-[#845b42]'
+                      : banner.tone === 'forest'
+                        ? 'bg-[#173f2e]'
+                        : banner.tone === 'mint'
+                          ? 'bg-[#2f6f5b]'
+                          : banner.tone === 'leaf'
+                            ? 'bg-[#315f35]'
+                            : 'bg-[#474640]'
+                }`}
+              >
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_72%_26%,rgba(255,255,255,0.28),transparent_30%),linear-gradient(135deg,rgba(0,0,0,0.42),rgba(0,0,0,0.05))]" />
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={banner.image}
+                  alt={banner.title}
+                  className={`absolute bottom-0 right-0 max-h-[78%] max-w-[68%] object-contain transition duration-300 group-hover:scale-[1.03] ${
+                    banner.layout === 'tall' ? 'max-h-[66%] max-w-[86%]' : ''
+                  }`}
+                />
+                <div className="relative z-10 flex h-full max-w-[62%] flex-col justify-between">
+                  <div>
+                    <span className="inline-flex rounded-md bg-white/18 px-3 py-1 text-xs font-bold uppercase text-white backdrop-blur">
+                      {banner.badge}
+                    </span>
+                    <h3 className="mt-4 text-3xl font-bold leading-tight">{banner.title}</h3>
+                    <p className="mt-3 text-sm leading-6 text-white/86">{banner.description}</p>
+                    {banner.chips && (
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        {banner.chips.map((chip) => (
+                          <span key={chip} className="rounded-md border border-white/18 bg-white/10 px-2.5 py-1 text-xs font-semibold">
+                            {chip}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <span className="inline-flex w-fit items-center gap-1 text-sm font-bold">
+                    İncele <ArrowUpRight size={15} />
+                  </span>
+                </div>
               </a>
             ))}
           </div>
@@ -352,5 +604,6 @@ export default async function SitePage() {
         </div>
       </section>
     </main>
+    </>
   );
 }

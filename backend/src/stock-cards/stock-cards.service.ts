@@ -389,7 +389,7 @@ export class StockCardsService {
         ...(this.hasField(body, 'manualUnitCost', 'manual_unit_cost') ? { manualUnitCost: data.manualUnitCost } : {}),
         ...(automaticUnitCost !== undefined ? { automaticUnitCost } : {}),
         ...(this.hasField(body, 'stockQuantity', 'stock_quantity') ? { stockQuantity: data.stockQuantity } : {}),
-        ...(this.hasField(body, 'status') ? { status: data.status } : {}),
+        ...(this.hasField(body, 'status') ? { status: this.isProtectedCompositeStockCard(existing) && data.status === 'PASSIVE' ? 'ACTIVE' : data.status } : {}),
       };
       const stockCard = await this.prisma.stockCard.update({
         where: { id },
@@ -579,6 +579,9 @@ export class StockCardsService {
 
   async remove(id: number, hardDelete = false) {
     const stockCard = await this.ensureStockCard(id);
+    if (this.isProtectedCompositeStockCard(stockCard)) {
+      throw new BadRequestException('Ağaç gövde kritik üretim stok kartıdır; pasife alınamaz veya silinemez.');
+    }
     if (hardDelete) {
       if (!this.isTestStockCard(stockCard)) {
         throw new BadRequestException('Kalıcı silme sadece deneme/test stok kartları için yapılabilir. Gerçek stok kartları pasife alınır.');
@@ -989,6 +992,11 @@ export class StockCardsService {
   private isTestStockCard(stockCard: { name: string; sku?: string | null; category?: string | null; description?: string | null }) {
     const text = normalize(`${stockCard.name} ${stockCard.sku ?? ''} ${stockCard.category ?? ''} ${stockCard.description ?? ''}`);
     return text.includes('test') || text.includes('deneme');
+  }
+
+  private isProtectedCompositeStockCard(stockCard: { id: number; name: string; category?: string | null }) {
+    const text = normalize(`${stockCard.name} ${stockCard.category ?? ''}`);
+    return stockCard.id === 234 || (text.includes('agac govde') && text.includes('agac govdeleri'));
   }
 
   private handleUniqueError(error: unknown): never {

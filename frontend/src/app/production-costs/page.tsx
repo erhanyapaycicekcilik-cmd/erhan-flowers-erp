@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { ChangeEvent, useEffect, useMemo, useState } from 'react';
-import { FileSpreadsheet, ImageIcon, Search, Upload } from 'lucide-react';
+import { FileSpreadsheet, ImageIcon, RefreshCw, Search, Upload } from 'lucide-react';
 import { AdminShell } from '@/components/AdminShell';
 import { api, apiFileUrl } from '@/lib/api';
 
@@ -41,6 +41,7 @@ export default function ProductCostListPage() {
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [message, setMessage] = useState('');
   const [loadingImport, setLoadingImport] = useState(false);
+  const [syncing, setSyncing] = useState(false);
 
   useEffect(() => {
     loadProducts();
@@ -100,6 +101,20 @@ export default function ProductCostListPage() {
     }
   }
 
+  async function syncTrendyol() {
+    setSyncing(true);
+    setMessage('');
+    try {
+      const result = await api<{ total: number; updated: number; passivated: number }>('/production-costs/sync-trendyol', { method: 'POST' });
+      setMessage(`Senkronizasyon tamamlandı. Trendyol'da ${result.total} ürün bulundu, ${result.updated} güncellendi, ${result.passivated} ürün artık pasif (Trendyol'da bulunamadı).`);
+      loadProducts();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Trendyol senkronizasyonu başarısız oldu.');
+    } finally {
+      setSyncing(false);
+    }
+  }
+
   return (
     <AdminShell title="Ürün Maliyet Merkezi">
       <div className="mb-5 grid gap-4 xl:grid-cols-[1fr_420px]">
@@ -130,6 +145,20 @@ export default function ProductCostListPage() {
 
         <section className="panel p-5">
           <div className="flex items-start gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-md bg-emerald-50 text-brand">
+              <RefreshCw size={20} />
+            </div>
+            <div>
+              <h2 className="font-bold">Trendyol ile Senkronize Et</h2>
+              <p className="mt-1 text-sm text-slate-500">Trendyol'daki güncel katalogla eşitler: görsel/fiyat/stok tazelenir, Trendyol'da olmayan (silinen) ürünler pasife alınır. Her gün 04:00'te otomatik de çalışır.</p>
+            </div>
+          </div>
+          <button className="btn btn-primary mt-4 w-full justify-center" onClick={syncTrendyol} disabled={syncing}>
+            <RefreshCw size={16} className={syncing ? 'animate-spin' : ''} />
+            {syncing ? 'Senkronize ediliyor...' : 'Şimdi Senkronize Et'}
+          </button>
+
+          <div className="mt-5 flex items-start gap-3 border-t border-line pt-4">
             <div className="flex h-10 w-10 items-center justify-center rounded-md bg-emerald-50 text-brand">
               <FileSpreadsheet size={20} />
             </div>

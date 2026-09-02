@@ -59,7 +59,7 @@ export class MediaService {
     const safeFileName = this.safeFileName(file.originalname || file.filename);
     const uniqueFileName = `${Date.now()}-${Math.round(Math.random() * 1e9)}-${safeFileName}`;
     const targetPath = path.join(targetDir, uniqueFileName);
-    await fsPromises.rename(file.path, targetPath);
+    await this.moveUploadedFile(file.path, targetPath);
 
     const filePath = `/uploads/products/${folderName}/images/${uniqueFileName}`;
 
@@ -148,6 +148,79 @@ export class MediaService {
       },
       include: { product: true },
     });
+  }
+
+  async createFlowerStandardSet(body: { imagePath?: string; productId?: string; folderName?: string }) {
+    const imagePath = String(body.imagePath || '').trim();
+    if (!imagePath) throw new BadRequestException('7 görsel seti için ana görsel seçilmelidir.');
+
+    const productId = body.productId ? Number(body.productId) : null;
+    const folderName = this.safeFolderName(body.folderName?.trim() || 'Cicek Gorsel Seti');
+    const sourcePath = this.resolvePublicImagePath(imagePath);
+    const sourceType = this.fileTypeFromPath(imagePath);
+    this.ensureCompositeImageProvider();
+    const outputDir = path.join(process.cwd(), 'uploads', 'flower-standard', folderName);
+    fs.mkdirSync(outputDir, { recursive: true });
+
+    const slots = [
+      { key: '01-beyaz-ana-gorsel', mode: 'photoroom', prompt: '' },
+      { key: '02-ev-koltuk-cam', mode: 'ai', prompt: this.flowerScenePrompt('ürünü sıcak ve davetkar bir ev salonunda, koltuk yanında veya geniş cam kenarında doğal günışığıyla göster; ev yaşamına yakışan lifestyle fotoğrafı') },
+      { key: '03-ofis-masa', mode: 'ai', prompt: this.flowerScenePrompt('ürünü modern ve temiz bir ofis masasında, yanında laptop veya kahve fincanıyla göster; kurumsal hediye veya ofis dekorasyonu atmosferi') },
+      { key: '04-kafe-restoran', mode: 'ai', prompt: this.flowerScenePrompt('ürünü şık bir kafe veya restoran masasında, sıcak ambiyans ışığında ve cappuccino fincanı yanında göster; mekan dekorasyonu atmosferi') },
+      { key: '05-yakin-yaprak', mode: 'ai', prompt: this.flowerScenePrompt('çiçeğin yaprak ve taç yapraklarının yakın çekimi; renk tonu, doku ve malzeme kalitesini ön plana çıkaran makro detay fotoğrafı') },
+      { key: '06-yakin-saksi', mode: 'ai', prompt: this.flowerScenePrompt('çiçeğin saksı, vazo veya ambalajının yakın çekimi; sunum ve paketleme kalitesini gösteren detay fotoğrafı') },
+      { key: '07-ecommerce-hero', mode: 'ai', prompt: this.flowerScenePrompt('e-ticaret satışına en uygun hero görsel; açık pastel arka plan, ürün tam ortada ve belirgin, Trendyol veya N11 ana görseli kalitesinde; müşteriyi sepete eklemeye yönlendiren kompozisyon') },
+    ];
+
+    const created = [];
+    for (const slot of slots) {
+      const outputFileName = `${Date.now()}-${slot.key}.png`;
+      const outputPath = path.join(outputDir, outputFileName);
+
+      if (slot.mode === 'photoroom') {
+        try {
+          const editedBuffer = await this.photoroom.editImage({ sourcePath, fileType: sourceType, backgroundColor: 'FFFFFF', padding: '0.12' });
+          await fsPromises.writeFile(outputPath, editedBuffer);
+        } catch {
+          await fsPromises.copyFile(sourcePath, outputPath);
+        }
+      } else {
+        const editedBuffer = await this.editCompositeProductImage({
+          sourceFiles: [{ path: sourcePath, fileType: sourceType }],
+          fileType: 'image/png',
+          prompt: slot.prompt,
+        });
+        await fsPromises.writeFile(outputPath, editedBuffer);
+      }
+
+      const publicPath = `/uploads/flower-standard/${folderName}/${outputFileName}`;
+      created.push(await this.prisma.mediaFile.create({
+        data: {
+          productId: productId && Number.isFinite(productId) ? productId : null,
+          fileName: `${slot.key}.png`,
+          filePath: publicPath,
+          folderName: `${folderName} / 7 Gorsel Seti`,
+          fileType: 'image/png',
+        },
+        include: { product: true },
+      }));
+    }
+
+    return cleanMojibakeDeep({
+      images: created.map((item) => item.filePath),
+      mediaFiles: created,
+      note: '7 görsel seti hazırlandı: Beyaz arka plan, ev, ofis, kafe, yaprak detay, saksı detay, e-ticaret hero.',
+    });
+  }
+
+  private flowerScenePrompt(instruction: string) {
+    return [
+      'Referans fotoğraftaki çiçek/buket ürününü koru; çiçek türü, rengi, boyu, ambalajı ve genel görünümü hiç değişmesin.',
+      instruction,
+      'Kare 1:1 e-ticaret fotoğrafı üret. Ürün net, gerçekçi, temiz ışıklı ve premium görünsün.',
+      'Ürünün üzerine yazı, logo, fiyat etiketi, kampanya bandı veya ekstra obje ekleme.',
+      'Türkiye pazaryerleri (Trendyol, N11, Hepsiburada) için gerçekçi ve çekici ürün fotoğrafı stili kullan.',
+    ].join(' ');
   }
 
   async createTreeStandardSet(body: { imagePath?: string; productId?: string; folderName?: string }) {
@@ -335,6 +408,12 @@ export class MediaService {
   }
 
   private resolvePublicImagePath(filePath: string) {
+    if (filePath.startsWith('/uploads/products/')) {
+      const relativePath = filePath.replace(/^\/uploads\/products\//, '');
+      const inProductRoot = path.normalize(path.join(productImageRoot(), relativePath));
+      if (fs.existsSync(inProductRoot)) return inProductRoot;
+      return this.resolveUploadPath(filePath);
+    }
     if (filePath.startsWith('/uploads/')) return this.resolveUploadPath(filePath);
     if (filePath.startsWith('/stock-images/')) {
       const relativePath = filePath.replace(/^\/stock-images\//, '');
@@ -412,5 +491,14 @@ export class MediaService {
     if (ext === '.png') return 'image/png';
     if (ext === '.webp') return 'image/webp';
     return 'image/jpeg';
+  }
+
+  private async moveUploadedFile(sourcePath: string, targetPath: string) {
+    try {
+      await fsPromises.rename(sourcePath, targetPath);
+    } catch {
+      await fsPromises.copyFile(sourcePath, targetPath);
+      await fsPromises.unlink(sourcePath).catch(() => undefined);
+    }
   }
 }

@@ -1,7 +1,7 @@
 'use client';
 
 import { FormEvent, Suspense, useEffect, useMemo, useRef, useState } from 'react';
-import { CreditCard, Eye, FileText, MapPin, Phone, Plus, Printer, Search, ShoppingCart, Trash2, Truck, UserRound } from 'lucide-react';
+import { Calculator, CreditCard, Eye, FileText, MapPin, Phone, Plus, Printer, Search, ShoppingCart, Trash2, Truck, UserRound } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 import { AdminShell } from '@/components/AdminShell';
 import { api, apiFileUrl } from '@/lib/api';
@@ -32,6 +32,7 @@ type SaleItem = SaleProduct & {
   quantity: number;
   unitPrice: number;
   discount: number;
+  stockFulfillmentType?: 'READY_STOCK' | 'CUSTOM_PRODUCTION' | 'NON_STOCK_SERVICE';
 };
 
 type CustomerSummary = {
@@ -122,6 +123,15 @@ const emptyDelivery = {
   note: '',
 };
 
+const emptyManualProduct = {
+  productName: '',
+  barcode: '',
+  modelCode: '',
+  quantity: 1,
+  unitPrice: 0,
+  discount: 0,
+};
+
 export default function SalesCenterPage() {
   return (
     <Suspense fallback={<div className="p-6 text-sm text-slate-500">Yukleniyor...</div>}>
@@ -142,6 +152,7 @@ function SalesCenterPageContent() {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SaleProduct[]>([]);
   const [items, setItems] = useState<SaleItem[]>([]);
+  const [manualProduct, setManualProduct] = useState(emptyManualProduct);
   const [savedSale, setSavedSale] = useState<Record<string, any> | null>(null);
   const [message, setMessage] = useState('');
   const [customerSummary, setCustomerSummary] = useState<CustomerSummary | null>(null);
@@ -222,6 +233,18 @@ function SalesCenterPageContent() {
     return { gross, discount, total, remaining };
   }, [items, payments]);
 
+  const manualPreview = useMemo(() => {
+    const quantity = Math.max(1, Number(manualProduct.quantity || 1));
+    const unitPrice = Math.max(0, Number(manualProduct.unitPrice || 0));
+    const discount = Math.max(0, Number(manualProduct.discount || 0));
+    return {
+      quantity,
+      unitPrice,
+      discount,
+      total: Math.max(0, quantity * unitPrice - discount),
+    };
+  }, [manualProduct]);
+
   async function searchProducts(event: FormEvent) {
     event.preventDefault();
     setMessage('');
@@ -249,6 +272,46 @@ function SalesCenterPageContent() {
 
   function removeItem(id: number) {
     setItems((current) => current.filter((item) => item.id !== id));
+  }
+
+  function addManualItem(event: FormEvent) {
+    event.preventDefault();
+    const productName = manualProduct.productName.trim();
+    if (!productName) {
+      setMessage('Manuel ürün için ürün adı zorunludur.');
+      return;
+    }
+    const quantity = Math.max(1, Number(manualProduct.quantity || 1));
+    const unitPrice = Math.max(0, Number(manualProduct.unitPrice || 0));
+    const discount = Math.max(0, Number(manualProduct.discount || 0));
+    const manualItem: SaleItem = {
+      id: -Date.now(),
+      variantId: null,
+      barcode: manualProduct.barcode.trim(),
+      productName,
+      originalProductName: productName,
+      currentModelCode: manualProduct.modelCode.trim() || null,
+      proposedModelCode: manualProduct.modelCode.trim() || null,
+      supplierStockCode: null,
+      categoryName: 'Manuel',
+      familyName: null,
+      size: null,
+      pot: null,
+      stockQuantity: 0,
+      stockUnit: 'Adet',
+      stockCardId: null,
+      salePrice: unitPrice,
+      trendyolSalePrice: unitPrice,
+      trendyolProductUrl: null,
+      imageUrl: null,
+      quantity,
+      unitPrice,
+      discount,
+      stockFulfillmentType: 'NON_STOCK_SERVICE',
+    };
+    setItems((current) => [...current, manualItem]);
+    setManualProduct(emptyManualProduct);
+    setMessage('Manuel ürün satış kalemlerine eklendi. Bu satır stoktan düşmez.');
   }
 
   async function findCustomerByPhone() {
@@ -421,7 +484,7 @@ function SalesCenterPageContent() {
         quantity: item.quantity,
         unitPrice: item.unitPrice,
         discountAmount: item.discount,
-        stockFulfillmentType: 'READY_STOCK',
+        stockFulfillmentType: item.stockFulfillmentType ?? 'READY_STOCK',
       })),
       payments: effectivePayments.map((payment) => ({
           method: payment.method,
@@ -632,6 +695,64 @@ function SalesCenterPageContent() {
               ))}
               {query.trim().length > 1 && results.length === 0 && <div className="text-sm text-slate-500">Sonuç yok veya henüz arama yapılmadı.</div>}
             </div>
+
+            <div className="mt-5 border-t border-line pt-5">
+              <div className="mb-3 flex items-center gap-2">
+                <Calculator size={18} className="text-brand" />
+                <div>
+                  <h4 className="font-semibold">Manuel Ürün Hesap Makinesi</h4>
+                  <p className="text-sm text-slate-500">Yazdığınız satır hesaplanır ve Ekle ile aşağıdaki satış listesine aktarılır.</p>
+                </div>
+              </div>
+              <form onSubmit={addManualItem} className="grid gap-2 lg:grid-cols-[1.4fr_1fr_90px_120px_120px_auto]">
+                <input
+                  className="field"
+                  placeholder="Ürün adı"
+                  value={manualProduct.productName}
+                  onChange={(e) => setManualProduct({ ...manualProduct, productName: e.target.value })}
+                />
+                <input
+                  className="field"
+                  placeholder="Barkod / model kodu"
+                  value={manualProduct.modelCode}
+                  onChange={(e) => setManualProduct({ ...manualProduct, modelCode: e.target.value, barcode: e.target.value })}
+                />
+                <input
+                  className="field"
+                  type="number"
+                  min="1"
+                  placeholder="Adet"
+                  value={manualProduct.quantity}
+                  onChange={(e) => setManualProduct({ ...manualProduct, quantity: Number(e.target.value) })}
+                />
+                <input
+                  className="field"
+                  type="number"
+                  min="0"
+                  placeholder="Birim fiyat"
+                  value={manualProduct.unitPrice}
+                  onChange={(e) => setManualProduct({ ...manualProduct, unitPrice: Number(e.target.value) })}
+                />
+                <input
+                  className="field"
+                  type="number"
+                  min="0"
+                  placeholder="İndirim"
+                  value={manualProduct.discount}
+                  onChange={(e) => setManualProduct({ ...manualProduct, discount: Number(e.target.value) })}
+                />
+                <button className="btn btn-secondary justify-center" type="submit">
+                  <Plus size={17} />
+                  Ekle
+                </button>
+              </form>
+              <div className="mt-3 grid gap-3 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm sm:grid-cols-4">
+                <CustomerMetric label="Adet" value={manualPreview.quantity.toLocaleString('tr-TR')} />
+                <CustomerMetric label="Birim fiyat" value={formatMoney(manualPreview.unitPrice)} />
+                <CustomerMetric label="İndirim" value={formatMoney(manualPreview.discount)} />
+                <CustomerMetric label="Listeye eklenecek toplam" value={formatMoney(manualPreview.total)} />
+              </div>
+            </div>
           </section>
 
           <section className="panel p-5">
@@ -641,7 +762,10 @@ function SalesCenterPageContent() {
                 <div key={item.id} className="grid gap-3 rounded-md border border-line p-3 lg:grid-cols-[1fr_90px_130px_120px_44px]">
                   <div>
                     <div className="font-semibold">{item.productName}</div>
-                    <div className="text-xs text-slate-500">{item.barcode} | {item.proposedModelCode || item.currentModelCode || '-'}</div>
+                    <div className="text-xs text-slate-500">
+                      {item.barcode || '-'} | {item.proposedModelCode || item.currentModelCode || '-'}
+                      {item.stockFulfillmentType === 'NON_STOCK_SERVICE' ? ' | Manuel / stoktan düşmez' : ''}
+                    </div>
                   </div>
                   <input className="field" type="number" min="1" value={item.quantity} onChange={(e) => updateItem(item.id, { quantity: Number(e.target.value) })} />
                   <input className="field" type="number" min="0" value={item.unitPrice} onChange={(e) => updateItem(item.id, { unitPrice: Number(e.target.value) })} />

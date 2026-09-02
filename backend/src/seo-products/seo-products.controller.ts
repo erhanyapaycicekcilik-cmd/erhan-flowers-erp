@@ -81,6 +81,11 @@ export class SeoProductsController {
     return this.seoProducts.assignPot(body.variantIds ?? [], body.potName);
   }
 
+  @Post('bulk-generate-all')
+  bulkGenerateAll(@Body() body: { onlyMissing?: boolean }) {
+    return this.seoProducts.bulkGenerateAll(body.onlyMissing !== false);
+  }
+
   @Post('rebuild-names')
   rebuildNames(@Body() body: { variantIds?: number[] }) {
     return this.seoProducts.rebuildNames(body.variantIds ?? []);

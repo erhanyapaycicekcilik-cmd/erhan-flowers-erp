@@ -12,5 +12,55 @@ services:
     volumes:
       - postgres_dev_data:/var/lib/postgresql/data
 
+  backend-dev:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    container_name: erhan-flowers-backend-dev
+    restart: unless-stopped
+    depends_on:
+      - postgres-dev
+    # .env.dev, uygulamanin kendi ic dotenv yuklemesine guvenmek yerine
+    # docker-compose'un env_file mekanizmasiyla dogrudan container'a enjekte
+    # edilir - bu, node process baslamadan once garanti calisir. Altindaki
+    # `environment:` bloğu ayni degiskenler icin ustun gelir (compose kurali),
+    # host'a ozel degerleri (DB baglantisi, D: surucusu yollari) gecersiz kilmak
+    # icin kullanilir.
+    env_file:
+      - ./backend/.env.dev
+    environment:
+      DATABASE_URL: "postgresql://erhanflowers_dev:ErhanFlowersDevDb123!@postgres-dev:5432/erhan_flowers_panel_dev?schema=public"
+      STOCK_IMAGE_ROOT: "/data/stok-gorseller"
+      STOCK_IMAGE_FALLBACK_ROOT: "uploads/stock-cards-dev"
+      PRODUCT_IMAGE_ROOT: "/data/urun-gorseller"
+      CHOKIDAR_USEPOLLING: "true"
+    ports:
+      - "8101:8101"
+    volumes:
+      - ./backend:/app
+      - backend_dev_node_modules:/app/node_modules
+      - D:/stok görseller:/data/stok-gorseller
+      - D:/Yeni-Urun-ERP-dev:/data/urun-gorseller
+
+  frontend-dev:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    container_name: erhan-flowers-frontend-dev
+    restart: unless-stopped
+    depends_on:
+      - backend-dev
+    environment:
+      WATCHPACK_POLLING: "true"
+    env_file:
+      - ./frontend/.env.dev
+    ports:
+      - "3101:3101"
+    volumes:
+      - ./frontend:/app
+      - frontend_dev_node_modules:/app/node_modules
+
 volumes:
   postgres_dev_data:
+  backend_dev_node_modules:
+  frontend_dev_node_modules:

@@ -273,7 +273,7 @@ export class PublishingService {
   private async getVariant(id: number) {
     const variant = await this.prisma.trendyolProductVariant.findUnique({
       where: { id },
-      include: { family: { include: { category: true } }, sizeOption: true, potOption: true, product: { include: { category: true } }, productCostDraft: true },
+      include: { family: { include: { category: true } }, sizeOption: true, potOption: true, product: { include: { category: true, mediaFiles: true } }, productCostDraft: true },
     });
     if (!variant) throw new NotFoundException('Ürün bulunamadı.');
     return variant;
@@ -282,14 +282,14 @@ export class PublishingService {
   private async getVariantForExport(id: number) {
     const variant = await this.prisma.trendyolProductVariant.findUnique({
       where: { id },
-      include: { family: { include: { category: true } }, sizeOption: true, potOption: true, product: { include: { category: true } }, productCostDraft: true },
+      include: { family: { include: { category: true } }, sizeOption: true, potOption: true, product: { include: { category: true, mediaFiles: true } }, productCostDraft: true },
     });
     if (!variant) throw new NotFoundException('Urun bulunamadi.');
     return variant;
   }
 
   private buildPayload(variant: any) {
-    const images = this.marketplaceImageUrls(variant.images);
+    const images = this.marketplaceImageUrls(this.collectVariantImages(variant));
     const productName = variant.seoManualProductName ?? variant.seoProductName ?? variant.productName;
     const color = this.acceptedColor(variant.productColor || this.extractColor(productName) || 'Çok Renkli');
     return {
@@ -531,6 +531,28 @@ export class PublishingService {
       .map((image) => image.trim())
       .map((image) => this.toPublicImageUrl(image))
       .filter((image) => /^https?:\/\//i.test(image));
+  }
+
+  private collectVariantImages(variant: any) {
+    const imageSources = [
+      variant.images,
+      variant.product?.imageUrls,
+      variant.product?.mediaFiles?.map((file: any) => file.filePath),
+    ];
+    const images = imageSources.flatMap((source) => this.rawImageValues(source));
+    return Array.from(new Set(images));
+  }
+
+  private rawImageValues(images: unknown) {
+    if (!Array.isArray(images)) return [];
+    return images
+      .map((image) => {
+        if (typeof image === 'string') return image;
+        if (image && typeof image === 'object') return String((image as any).url ?? (image as any).filePath ?? '');
+        return '';
+      })
+      .map((image) => image.trim())
+      .filter(Boolean);
   }
 
   private marketplaceImageUrls(images: unknown) {

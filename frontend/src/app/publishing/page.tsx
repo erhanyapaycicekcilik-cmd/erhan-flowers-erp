@@ -129,6 +129,17 @@ export default function PublishingPage() {
     await load();
   }
 
+  async function bulkGenerateSeo() {
+    setMessage('Tüm ürünlere SEO içerik üretiliyor, lütfen bekleyin...');
+    try {
+      const result = await api<{ updatedCount: number; approvedCount: number }>('/seo-products/bulk-generate-all', { method: 'POST', json: { onlyMissing: true } });
+      setMessage(`✅ SEO üretimi tamamlandı. ${result.approvedCount} ürün "Hazır Onay" durumuna geçirildi.`);
+      await load();
+    } catch (err: any) {
+      setMessage(`❌ SEO üretimi hatası: ${err.message}`);
+    }
+  }
+
   async function exportExcel(ids: number[], label: string) {
     const variantIds = Array.from(new Set(ids.filter(Boolean)));
     if (!variantIds.length) {
@@ -152,10 +163,18 @@ export default function PublishingPage() {
           <h2 className="text-lg font-bold">Yayınlama Merkezi</h2>
           <p className="text-sm text-slate-500">ERP’de hazırlanan ürünleri kontrol et, ön izle, test et ve yönetici onayıyla Trendyol’a gönder.</p>
         </div>
-        <button className="btn btn-secondary" onClick={load}>
-          <RefreshCw size={17} />
-          Yenile
-        </button>
+        <div className="flex gap-2">
+          <button
+            className="flex items-center gap-1.5 rounded-lg bg-violet-600 hover:bg-violet-700 text-white px-4 py-2 text-sm font-semibold"
+            onClick={bulkGenerateSeo}
+          >
+            <Send size={15} /> Tüm Ürünlere SEO Üret
+          </button>
+          <button className="btn btn-secondary" onClick={load}>
+            <RefreshCw size={17} />
+            Yenile
+          </button>
+        </div>
       </div>
 
       {message && <div className="mb-4 rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{message}</div>}

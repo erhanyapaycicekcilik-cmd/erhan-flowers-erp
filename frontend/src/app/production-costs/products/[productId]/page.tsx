@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, ArrowRight, Brain, Copy, ExternalLink, ImageIcon, Plus, Save, Star, Trash2, Upload } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Brain, Copy, ExternalLink, ImageIcon, Plus, Save, Search, Star, Trash2, Upload } from 'lucide-react';
 import { AdminShell } from '@/components/AdminShell';
 import { api, apiFileUrl } from '@/lib/api';
 import type { StockCard } from '@/types';
@@ -170,6 +170,7 @@ export default function ProductCostDetailPage() {
   const [variants, setVariants] = useState<VariantListItem[]>([]);
   const [productQuery, setProductQuery] = useState('');
   const [stockCards, setStockCards] = useState<StockCard[]>([]);
+  const [stockSearchQuery, setStockSearchQuery] = useState('');
   const [materials, setMaterials] = useState<MaterialItem[]>([]);
   const [pots, setPots] = useState<PotItem[]>([]);
   const [expenses, setExpenses] = useState<ExpenseItem[]>([]);
@@ -388,6 +389,38 @@ export default function ProductCostDetailPage() {
     setExpenses((current) => [...current, { key: crypto.randomUUID(), name, amount: 0, description: '', isActive: true }]);
   }
 
+  function addStockAsMaterial(stock: StockCard) {
+    setMaterials((current) => [...current, {
+      key: crypto.randomUUID(),
+      name: stock.name,
+      group: stockGroupFromCard(stock),
+      quantity: 1,
+      unit: stock.unit || stock.purchaseUnit || 'adet',
+      source: 'AUTO',
+      stockCardId: stock.id,
+      manualUnitCost: 0,
+      automaticUnitCost: stockUnitCost(stock),
+    }]);
+    setStockSearchQuery('');
+    setMessage(`${stock.name} stoktan malzeme olarak maliyet listesine eklendi.`);
+  }
+
+  function addStockAsPot(stock: StockCard) {
+    setPots((current) => [...current, {
+      key: crypto.randomUUID(),
+      name: stock.name,
+      color: stock.color ?? stock.potColor ?? '',
+      sizeText: stock.size ?? stock.potSize ?? '',
+      quantity: 1,
+      source: 'AUTO',
+      stockCardId: stock.id,
+      manualUnitCost: 0,
+      automaticUnitCost: stockUnitCost(stock),
+    }]);
+    setStockSearchQuery('');
+    setMessage(`${stock.name} stoktan saksı olarak maliyet listesine eklendi.`);
+  }
+
   function updateMaterial(key: string, patch: Partial<MaterialItem>) {
     setMaterials((current) => current.map((item) => item.key === key ? { ...item, ...patch } : item));
   }
@@ -489,11 +522,12 @@ export default function ProductCostDetailPage() {
     const recipeItems = result.recipeProfile?.items ?? [];
     const nextMaterials = recipeItems
       .filter((item) => item.componentType !== 'POT')
-      .map((item) => knowledgeItemToMaterial(item));
+      .map((item) => knowledgeItemToMaterial(item))
+      .sort(materialSortOrder);
 
     const fallbackMaterials = [
-      result.defaultLeafStockCard ? stockToMaterial(result.defaultLeafStockCard, 'LEAF') : null,
       result.defaultTrunkStockCard ? stockToMaterial(result.defaultTrunkStockCard, 'TRUNK', 1) : null,
+      result.defaultLeafStockCard ? stockToMaterial(result.defaultLeafStockCard, 'LEAF') : null,
     ].filter((item): item is MaterialItem => Boolean(item));
 
     setMaterials(nextMaterials.length > 0 ? nextMaterials : (fallbackMaterials.length > 0 ? fallbackMaterials : starterMaterials()));
@@ -755,6 +789,45 @@ export default function ProductCostDetailPage() {
   async function saveAndNext() {
     await save(true);
     if (detail?.nextIncompleteProductId) router.push(`/production-costs/products/${detail.nextIncompleteProductId}`);
+  }
+
+  function seoSearchName() {
+    const parts = [
+      variant?.productName,
+      variant?.detectedSize ? `${variant.detectedSize} cm` : '',
+      variant?.trendyolCategoryName,
+      'Erhan Flowers',
+    ].filter(Boolean).join(' ');
+    return titleCaseTr(dedupeWords(parts.replace(/\s+/g, ' ').trim()));
+  }
+
+  function openSeoSearch(target: 'GOOGLE' | 'SHOPPING' | 'TRENDYOL') {
+    const query = seoSearchName();
+    if (!query) {
+      setMessage('SEO araması için ürün adı bulunamadı.');
+      return;
+    }
+    const encoded = encodeURIComponent(query);
+    const urls = {
+      GOOGLE: `https://www.google.com/search?q=${encoded}`,
+      SHOPPING: `https://www.google.com/search?tbm=shop&q=${encoded}`,
+      TRENDYOL: `https://www.trendyol.com/sr?q=${encoded}`,
+    };
+    const opened = window.open(urls[target], '_blank');
+    if (!opened) {
+      window.location.href = urls[target];
+    }
+    setMessage(`${query} için SEO araması açıldı.`);
+  }
+
+  async function copySeoSearchName() {
+    const query = seoSearchName();
+    if (!query) {
+      setMessage('Kopyalanacak SEO ürün adı bulunamadı.');
+      return;
+    }
+    await navigator.clipboard.writeText(query).catch(() => null);
+    setMessage('SEO ürün adı kopyalandı.');
   }
 
   async function copySummary() {
@@ -1048,6 +1121,13 @@ export default function ProductCostDetailPage() {
               </div>
             }
           >
+            <StockSearchPanel
+              query={stockSearchQuery}
+              stockCards={stockCards}
+              onQueryChange={setStockSearchQuery}
+              onAddMaterial={addStockAsMaterial}
+              onAddPot={addStockAsPot}
+            />
             {unverifiedStockCards.length > 0 && !stockWarningAccepted && (
               <div className="mb-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs font-semibold text-amber-800">
                 <div>Bu stok kartının fiziksel sayımı henüz doğrulanmamıştır.</div>
@@ -1131,6 +1211,16 @@ export default function ProductCostDetailPage() {
               <Summary label="Site Satış Fiyatı" value={totals.siteSalePrice} strong />
               <NumberField label="Pazaryeri Farkı" value={marketplaceMarkupPercent} onChange={setMarketplaceMarkupPercent} suffix="%" />
               <NumberField label="Kampanya Tamponu" value={campaignBufferPercent} onChange={setCampaignBufferPercent} suffix="%" />
+              <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3">
+                <div className="text-xs font-bold uppercase text-emerald-800">SEO arama motoru</div>
+                <div className="mt-1 text-sm font-black text-emerald-950">{seoSearchName() || 'Ürün adı bekleniyor'}</div>
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <button type="button" className="btn btn-secondary min-h-8 justify-center px-2 text-xs" onClick={() => openSeoSearch('GOOGLE')}><Search size={13} /> Google</button>
+                  <button type="button" className="btn btn-secondary min-h-8 justify-center px-2 text-xs" onClick={() => openSeoSearch('SHOPPING')}><ExternalLink size={13} /> Shopping</button>
+                  <button type="button" className="btn btn-secondary min-h-8 justify-center px-2 text-xs" onClick={() => openSeoSearch('TRENDYOL')}><ExternalLink size={13} /> Trendyol</button>
+                  <button type="button" className="btn btn-secondary min-h-8 justify-center px-2 text-xs" onClick={copySeoSearchName}><Copy size={13} /> Kopyala</button>
+                </div>
+              </div>
               <PriceLine label="Trendyol Fiyatı" value={totals.marketplaceSalePrice} />
               <PriceLine label="Hepsiburada Fiyatı" value={totals.marketplaceSalePrice} />
               <PriceLine label="N11 Fiyatı" value={totals.marketplaceSalePrice} />
@@ -1242,8 +1332,8 @@ export default function ProductCostDetailPage() {
 
 function starterMaterials(): MaterialItem[] {
   return [
-    materialSeed('Yaprak', 'LEAF_TRUNK', 'adet'),
     materialSeed('G\u00f6vde', 'LEAF_TRUNK', 'adet', 1),
+    materialSeed('Yaprak', 'LEAF_TRUNK', 'adet'),
   ];
 }
 
@@ -1263,8 +1353,192 @@ function materialSeed(name: string, group: CostGroup, unit: string, quantity = 0
   return { key: crypto.randomUUID(), name, group, unit, quantity, source: 'AUTO', stockCardId: '', manualUnitCost: 0, automaticUnitCost: 0 };
 }
 
+function materialSortOrder(a: MaterialItem, b: MaterialItem) {
+  return materialPriority(a) - materialPriority(b);
+}
+
+function materialPriority(item: Pick<MaterialItem, 'name'>) {
+  const text = normalizeSearchText(item.name);
+  if (text.includes('govde') || text.includes('bambu')) return 0;
+  if (text.includes('agac')) return 1;
+  if (text.includes('yaprak') || text.includes('cicek')) return 2;
+  return 3;
+}
+
 function CompactPanel({ title, action, children }: { title: string; action?: React.ReactNode; children: React.ReactNode }) {
   return <section className="panel p-3"><div className="mb-2 flex items-center justify-between gap-2"><h2 className="font-bold">{title}</h2>{action}</div>{children}</section>;
+}
+
+function StockSearchPanel({
+  query,
+  stockCards,
+  onQueryChange,
+  onAddMaterial,
+  onAddPot,
+}: {
+  query: string;
+  stockCards: StockCard[];
+  onQueryChange: (value: string) => void;
+  onAddMaterial: (stock: StockCard) => void;
+  onAddPot: (stock: StockCard) => void;
+}) {
+  const normalizedQuery = normalizeSearchText(query);
+  const hasQuery = normalizedQuery.length >= 2;
+  const windows = stockPickerWindows(stockCards, query);
+
+  return (
+    <div className="mb-3 rounded-md border border-emerald-100 bg-emerald-50 p-3">
+      <div className="mb-2 flex items-center gap-2 text-sm font-bold text-emerald-900">
+        <Search size={16} />
+        Ürün Merkezi - Stoktan Ara ve Listeye Ekle
+      </div>
+      <input
+        className="w-full rounded-md border border-emerald-200 bg-white px-3 py-2 text-sm outline-none focus:border-brand"
+        value={query}
+        onChange={(event) => onQueryChange(event.target.value)}
+        placeholder="Ağaç gövde, bambu gövde, bitki yaprak, saksı, stok kodu veya barkod ara"
+      />
+      {query.trim().length > 0 && query.trim().length < 2 && (
+        <div className="mt-2 text-xs font-semibold text-emerald-800">Aramak için en az 2 karakter yazın.</div>
+      )}
+
+      <div className="mt-3 grid gap-3 xl:grid-cols-4">
+        {windows.map((window) => (
+          <div key={window.key} className="flex min-h-[260px] flex-col rounded-md border border-line bg-white p-2">
+            <div className="rounded-md bg-slate-50 px-2 py-2">
+              <div className="text-sm font-black text-ink">{window.title}</div>
+              <div className="mt-1 text-[11px] font-semibold leading-4 text-slate-500">{window.description}</div>
+            </div>
+            <div className="mt-2 grid flex-1 content-start gap-2">
+              {window.items.map((stock) => (
+                <StockPickerCard
+                  key={stock.id}
+                  stock={stock}
+                  primaryAction={window.primaryAction}
+                  onAddMaterial={onAddMaterial}
+                  onAddPot={onAddPot}
+                />
+              ))}
+              {window.items.length === 0 && (
+                <div className="rounded-md bg-slate-50 px-3 py-3 text-xs font-semibold text-slate-500">
+                  {hasQuery ? 'Bu pencerede sonuç yok.' : 'Bu grupta stok bulunamadı.'}
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {hasQuery && windows.every((window) => window.items.length === 0) && (
+        <div className="mt-2 rounded-md bg-white px-3 py-2 text-xs font-semibold text-slate-500">Stok kartı bulunamadı.</div>
+      )}
+    </div>
+  );
+}
+
+function StockPickerCard({
+  stock,
+  primaryAction,
+  onAddMaterial,
+  onAddPot,
+}: {
+  stock: StockCard;
+  primaryAction: 'material' | 'pot';
+  onAddMaterial: (stock: StockCard) => void;
+  onAddPot: (stock: StockCard) => void;
+}) {
+  return (
+    <div className="rounded-md border border-line bg-white p-2 text-xs">
+      <div className="font-bold leading-snug text-ink">{stock.name}</div>
+      <div className="mt-1 leading-4 text-slate-500">
+        {stock.sku || '-'} · {stock.barcode || stock.model || stock.oldModelCode || '-'} · {stock.category || '-'}
+      </div>
+      <div className="mt-1 text-slate-500">
+        Stok: {Number(stock.stockQuantity ?? 0).toLocaleString('tr-TR')} {stock.unit || 'adet'} · Birim: {money4(stockUnitCost(stock))}
+      </div>
+      <div className="mt-2 flex flex-wrap gap-2">
+        {primaryAction === 'pot' ? (
+          <>
+            <button className="rounded-md bg-brand px-2 py-1.5 font-semibold text-white" type="button" onClick={() => onAddPot(stock)}>
+              Saksı olarak ekle
+            </button>
+            <button className="rounded-md border border-line px-2 py-1.5 font-semibold text-slate-700" type="button" onClick={() => onAddMaterial(stock)}>
+              Malzeme
+            </button>
+          </>
+        ) : (
+          <>
+            <button className="rounded-md bg-brand px-2 py-1.5 font-semibold text-white" type="button" onClick={() => onAddMaterial(stock)}>
+              Malzeme olarak ekle
+            </button>
+            <button className="rounded-md border border-line px-2 py-1.5 font-semibold text-slate-700" type="button" onClick={() => onAddPot(stock)}>
+              Saksı
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function stockPickerWindows(stockCards: StockCard[], query: string) {
+  const normalizedQuery = normalizeSearchText(query);
+  const hasQuery = normalizedQuery.length >= 2;
+  const matched = (filter: (stock: StockCard) => boolean, fallbackQuery: string) => {
+    const pool = stockCards.filter(filter);
+    return rankedStockCards(pool, hasQuery ? query : fallbackQuery).slice(0, 6);
+  };
+  const otherFilter = (stock: StockCard) => !isTreeBodyStock(stock) && !isLeafStock(stock) && !isPotStock(stock);
+
+  return [
+    {
+      key: 'tree-body',
+      title: '1. Ağaç / Bambu Gövdeler',
+      description: 'Ürün ağacı veya bambu gövdesi önce buradan seçilir.',
+      items: matched(isTreeBodyStock, 'agac bambu govde'),
+      primaryAction: 'material' as const,
+    },
+    {
+      key: 'leaf',
+      title: '2. Bitki / Yaprak',
+      description: 'Yaprak, dal, çiçek ve bitki parçaları.',
+      items: matched(isLeafStock, 'bitki yaprak cicek'),
+      primaryAction: 'material' as const,
+    },
+    {
+      key: 'pot',
+      title: '3. Saksı',
+      description: 'Saksı, vazo ve saksı profilleri.',
+      items: matched(isPotStock, 'saksi'),
+      primaryAction: 'pot' as const,
+    },
+    {
+      key: 'other',
+      title: '4. Diğer / Tüm Stok',
+      description: 'Taş, sarf, paketleme veya elle seçilecek diğer stoklar.',
+      items: rankedStockCards(stockCards.filter(otherFilter), hasQuery ? query : '').slice(0, 6),
+      primaryAction: 'material' as const,
+    },
+  ];
+}
+
+function isTreeBodyStock(stock: StockCard) {
+  const text = stockNormalizedText(stock);
+  return text.includes('govde') || text.includes('bambu') || text.includes('agac');
+}
+
+function isLeafStock(stock: StockCard) {
+  const text = stockNormalizedText(stock);
+  return text.includes('yaprak') || text.includes('bitki') || text.includes('cicek') || text.includes('dal');
+}
+
+function isPotStock(stock: StockCard) {
+  const text = stockNormalizedText(stock);
+  return text.includes('saksi') || text.includes('vazo') || text.includes('pot');
+}
+
+function stockNormalizedText(stock: StockCard) {
+  return normalizeSearchText(stockSearchFields(stock).join(' '));
 }
 
 function CopyOption({ label, checked, onChange }: { label: string; checked: boolean; onChange: (value: boolean) => void }) {
@@ -1360,10 +1634,7 @@ function ExpenseRow({ item, onChange, onDelete }: { item: ExpenseItem; onChange:
 function StockSelect({ value, onChange, stockCards }: { value: number | ''; onChange: (value: string) => void; stockCards: StockCard[] }) {
   const [query, setQuery] = useState('');
   const selected = stockCards.find((stock) => stock.id === Number(value));
-  const needle = query.trim().toLocaleLowerCase('tr-TR');
-  const filtered = (needle
-    ? stockCards.filter((stock) => [stock.name, stock.sku, stock.category, stock.color, stock.model, stock.size].filter(Boolean).some((field) => String(field).toLocaleLowerCase('tr-TR').includes(needle)))
-    : stockCards).slice(0, 60);
+  const filtered = rankedStockCards(stockCards, query).slice(0, 120);
   return (
     <div>
       <input className="mb-1 w-full rounded-md border border-line px-2 py-1.5 outline-none focus:border-brand" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={selected?.name ?? 'Stok ara'} />
@@ -1375,6 +1646,92 @@ function StockSelect({ value, onChange, stockCards }: { value: number | ''; onCh
       {selected && <Link className="mt-1 inline-flex items-center gap-1 font-semibold text-brand" href={`/stock-cards?stockCardId=${selected.id}`} target="_blank"><ExternalLink size={12} />Aç</Link>}
     </div>
   );
+}
+
+function rankedStockCards(stockCards: StockCard[], query: string) {
+  const normalizedQuery = normalizeSearchText(query);
+  if (!normalizedQuery) {
+    return [...stockCards].sort((a, b) => stockBasePriority(b) - stockBasePriority(a) || stockDisplayName(a).localeCompare(stockDisplayName(b), 'tr'));
+  }
+
+  return stockCards
+    .map((stock) => ({ stock, score: stockSearchScore(stock, normalizedQuery) }))
+    .filter((item) => item.score > 0)
+    .sort((a, b) => b.score - a.score || stockDisplayName(a.stock).localeCompare(stockDisplayName(b.stock), 'tr'))
+    .map((item) => item.stock);
+}
+
+function stockSearchScore(stock: StockCard, normalizedQuery: string) {
+  const fields = stockSearchFields(stock);
+  const haystack = normalizeSearchText(fields.join(' '));
+  const name = normalizeSearchText(stock.name);
+  const sku = normalizeSearchText(stock.sku ?? '');
+  const barcode = normalizeSearchText(stock.barcode ?? '');
+  const tokens = normalizedQuery.split(' ').filter((token) => token.length >= 2);
+  const matchedTokens = tokens.filter((token) => haystack.includes(token));
+
+  if (tokens.length > 0 && matchedTokens.length === 0 && !haystack.includes(normalizedQuery)) return 0;
+
+  let score = stockBasePriority(stock);
+  if (barcode && barcode === normalizedQuery) score += 900;
+  if (sku && sku === normalizedQuery) score += 850;
+  if (name === normalizedQuery) score += 800;
+  if (name.startsWith(normalizedQuery)) score += 600;
+  if (haystack.includes(normalizedQuery)) score += 350;
+  if (tokens.length > 0 && matchedTokens.length === tokens.length) score += 220;
+  score += matchedTokens.length * 45;
+  score += tokens.filter((token) => name.includes(token)).length * 35;
+
+  const queryWantsTreeBody = ['agac', 'bambu', 'govde', 'gövde'].some((token) => normalizedQuery.includes(normalizeSearchText(token)));
+  if (queryWantsTreeBody) {
+    const stockText = normalizeSearchText([stock.name, stock.category, stock.productFamily, stock.productType, stock.trunkType].filter(Boolean).join(' '));
+    if (stockText.includes('govde')) score += 420;
+    if (stockText.includes('bambu')) score += 240;
+    if (stockText.includes('agac')) score += 180;
+    if (stockText.includes('yaprak') || stockText.includes('cicek')) score -= 80;
+  }
+
+  return score;
+}
+
+function stockSearchFields(stock: StockCard) {
+  return [
+    stock.name,
+    stock.sku,
+    stock.barcode,
+    stock.model,
+    stock.oldModelCode,
+    stock.category,
+    stock.productFamily,
+    stock.productType,
+    stock.color,
+    stock.size,
+    stock.height,
+    stock.width,
+    stock.potType,
+    stock.potColor,
+    stock.potSize,
+    stock.trunkType,
+    stock.leafFlowerType,
+    stock.brand,
+    stock.supplierName,
+    stock.shortDescription,
+    stock.description,
+    stock.technicalSpecs,
+  ];
+}
+
+function stockBasePriority(stock: StockCard) {
+  const text = normalizeSearchText([stock.name, stock.category, stock.productFamily, stock.productType, stock.trunkType].filter(Boolean).join(' '));
+  if (text.includes('govde') && (text.includes('agac') || text.includes('bambu'))) return 80;
+  if (text.includes('govde')) return 65;
+  if (text.includes('bambu')) return 45;
+  if (text.includes('agac')) return 35;
+  return 0;
+}
+
+function stockDisplayName(stock: StockCard) {
+  return stock.name || stock.sku || String(stock.id);
 }
 
 function TextInput({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
@@ -1429,6 +1786,17 @@ function materialTotal(item: MaterialItem) {
 
 function potTotal(item: PotItem) {
   return item.quantity * (item.source === 'MANUAL' ? item.manualUnitCost : item.automaticUnitCost);
+}
+
+function stockGroupFromCard(stock: StockCard): CostGroup {
+  const text = [stock.category, stock.productFamily, stock.productType, stock.name]
+    .filter(Boolean)
+    .join(' ')
+    .toLocaleLowerCase('tr-TR');
+  if (text.includes('paket') || text.includes('kutu') || text.includes('ambalaj')) return 'PACKAGING';
+  if (text.includes('saksı') || text.includes('saksi') || text.includes('taş') || text.includes('tas') || text.includes('silikon')) return 'CONSUMABLE';
+  if (text.includes('yaprak') || text.includes('gövde') || text.includes('govde') || text.includes('çiçek') || text.includes('cicek') || text.includes('bambu')) return 'LEAF_TRUNK';
+  return 'CONSUMABLE';
 }
 
 function knowledgeComponentLabel(value: KnowledgeRecipeItem['componentType']) {
@@ -1486,12 +1854,47 @@ function parseMoney(value: string | number | null | undefined) {
   return Number(raw) || 0;
 }
 
+function normalizeSearchText(value: string | number | null | undefined) {
+  return String(value ?? '')
+    .toLocaleLowerCase('tr-TR')
+    .replaceAll('ı', 'i')
+    .replaceAll('ğ', 'g')
+    .replaceAll('ü', 'u')
+    .replaceAll('ş', 's')
+    .replaceAll('ö', 'o')
+    .replaceAll('ç', 'c')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+    .replace(/\s+/g, ' ');
+}
+
 function money(value: number) {
   return `${Number(value || 0).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} TL`;
 }
 
 function money4(value: number) {
   return `${Number(value || 0).toLocaleString('tr-TR', { minimumFractionDigits: 4, maximumFractionDigits: 4 })} TL`;
+}
+
+function dedupeWords(value: string) {
+  const words = value.split(/\s+/).filter(Boolean);
+  const seen = new Set<string>();
+  return words.filter((word) => {
+    const normalized = word.toLocaleLowerCase('tr-TR').replace(/[^a-z0-9çğıöşü]/gi, '');
+    if (!normalized || seen.has(normalized)) return false;
+    seen.add(normalized);
+    return true;
+  }).join(' ');
+}
+
+function titleCaseTr(value: string) {
+  return value
+    .toLocaleLowerCase('tr-TR')
+    .split(' ')
+    .map((word) => word.length <= 2 ? word.toLocaleUpperCase('tr-TR') : word.charAt(0).toLocaleUpperCase('tr-TR') + word.slice(1))
+    .join(' ');
 }
 
 function stockUnitCost(stock?: Pick<StockCard, 'purchasePrice' | 'packageContent' | 'automaticUnitCost' | 'manualUnitCostEnabled' | 'manualUnitCost'> | KnowledgeStockCard) {

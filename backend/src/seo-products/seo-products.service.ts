@@ -333,6 +333,19 @@ export class SeoProductsService {
     return { updatedCount: variants.length };
   }
 
+  async bulkGenerateAll(onlyMissing = true) {
+    const where = onlyMissing ? { seoApprovalStatus: { not: 'Hazır Onay' } } : {};
+    const variants = await this.prisma.trendyolProductVariant.findMany({
+      where,
+      select: { id: true },
+    });
+    const ids = variants.map((v) => v.id);
+    if (ids.length === 0) return { updatedCount: 0, approvedCount: 0 };
+    await this.rebuildNames(ids);
+    const result = await this.approve(ids);
+    return { updatedCount: ids.length, approvedCount: result.approvedCount };
+  }
+
   async approve(variantIds: number[]) {
     const ids = this.cleanIds(variantIds);
     await this.rebuildNames(ids);
