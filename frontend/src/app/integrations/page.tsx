@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { AlertTriangle, Camera, CheckCircle2, ClipboardPaste, Download, PlayCircle, RefreshCw, Save, TestTube2, Upload } from 'lucide-react';
+import { AlertTriangle, Camera, CheckCircle2, ClipboardPaste, Download, Link2, PlayCircle, RefreshCw, Save, TestTube2, Upload } from 'lucide-react';
+import Link from 'next/link';
 import { AdminShell } from '@/components/AdminShell';
 import { api } from '@/lib/api';
 
@@ -523,6 +524,14 @@ export default function IntegrationsPage() {
               );
             })}
           </div>
+        </section>
+
+        <section className="panel p-4 flex items-center justify-between">
+          <div>
+            <div className="font-bold flex items-center gap-2"><Link2 size={16} className="text-brand" /> SKU Eşleştirme</div>
+            <div className="text-sm text-slate-500 mt-0.5">Pazaryeri ürünlerini ERP stok kartlarıyla eşleştir, geçmiş siparişleri düzelt</div>
+          </div>
+          <Link href="/integrations/sku-mapping" className="btn btn-primary text-sm">Eşleştirmeye Git →</Link>
         </section>
 
         <section className="panel p-5">

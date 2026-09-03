@@ -6,6 +6,7 @@ import { AuthGuard } from '../auth/auth.guard';
 import { OwnerGuard } from '../auth/owner.guard';
 import { IntegrationCenterService } from './services/integration-center.service';
 import { IntegrationsService } from './integrations.service';
+import { OrderSyncService } from './services/order-sync.service';
 
 type AuthenticatedRequest = Request & { user?: { id: number; role: string } };
 
@@ -15,6 +16,7 @@ export class IntegrationsController {
   constructor(
     private readonly integrations: IntegrationsService,
     private readonly integrationCenter: IntegrationCenterService,
+    private readonly orderSync: OrderSyncService,
   ) {}
 
   @Get('connections')
@@ -184,5 +186,33 @@ export class IntegrationsController {
   @Get('sync-jobs/:id')
   syncJob(@Param('id') id: string) {
     return this.integrationCenter.getSyncJob(Number(id));
+  }
+
+  @Post('orders/sync')
+  @UseGuards(OwnerGuard)
+  triggerOrderSync() {
+    return this.orderSync.runSync();
+  }
+
+  @Get('sku-mappings/unmatched')
+  unmatchedSkus(@Query('platform') platform?: string) {
+    return this.orderSync.getUnmatchedSkus(platform ?? 'TRENDYOL');
+  }
+
+  @Get('sku-mappings')
+  listSkuMappings(@Query('platform') platform?: string) {
+    return this.orderSync.listSkuMappings(platform ?? 'TRENDYOL');
+  }
+
+  @Post('sku-mappings')
+  @UseGuards(OwnerGuard)
+  saveSkuMapping(@Body() body: { platform: string; externalSku: string; externalBarcode?: string; stockCardId: number }) {
+    return this.orderSync.saveSkuMapping(body);
+  }
+
+  @Post('sku-mappings/apply-retroactive')
+  @UseGuards(OwnerGuard)
+  applyRetroactiveMappings() {
+    return this.orderSync.applyRetroactiveMappings();
   }
 }
