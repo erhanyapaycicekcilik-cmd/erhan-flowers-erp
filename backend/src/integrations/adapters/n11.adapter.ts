@@ -25,10 +25,14 @@ export class N11Adapter extends HttpMarketplaceOrderAdapter {
     url.searchParams.set('page', '0');
     url.searchParams.set('size', '1');
 
+    const basicToken = Buffer.from(`${appKey}:${appSecret}`).toString('base64');
+
+    // N11 yeni REST API: Authorization: Basic <base64(appKey:appSecret)>
     const response = await fetch(url, {
       method: 'GET',
       headers: {
         Accept: 'application/json',
+        Authorization: `Basic ${basicToken}`,
         appkey: appKey,
         appsecret: appSecret,
         'User-Agent': 'ErhanFlowersERP-N11',
@@ -38,10 +42,11 @@ export class N11Adapter extends HttpMarketplaceOrderAdapter {
     if (response.ok || response.status === 200) {
       return { ok: true, status: 'CONNECTED', message: 'N11 API baglantisi dogrulandi.' };
     }
+    const body = await response.text().then((t) => t.slice(0, 300)).catch(() => response.statusText);
     return {
       ok: false,
       status: response.status === 401 || response.status === 403 ? 'MISSING_CREDENTIALS' : 'FAILED',
-      message: `N11 API testi basarisiz. HTTP ${response.status}: ${await response.text().then(t => t.slice(0, 200)).catch(() => response.statusText)}`,
+      message: `N11 API testi basarisiz. HTTP ${response.status}: ${body}`,
     };
   }
 }

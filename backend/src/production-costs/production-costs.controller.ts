@@ -212,6 +212,11 @@ export class ProductionCostsController {
     return this.productionCosts.setVariantCoverImage(Number(id), body.imagePath ?? '');
   }
 
+  @Post('variants/:id/seo')
+  saveVariantSeo(@Param('id') id: string, @Body() body: { seoProductName?: string; seoLongDescription?: string; seoKeywords?: string }) {
+    return this.productionCosts.saveVariantSeo(Number(id), body);
+  }
+
   @Post('variants/:id/push-trendyol')
   pushImagesAndPrice(@Param('id') id: string, @Body() body: { salePrice?: number }, @Req() request: AuthenticatedRequest) {
     return this.productionCosts.pushImagesAndPriceToTrendyol(Number(id), Number(body.salePrice ?? 0), request.user!.id);

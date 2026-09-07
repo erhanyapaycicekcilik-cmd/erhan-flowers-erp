@@ -31,69 +31,96 @@ type NavItem = {
   href: string;
   label: string;
   icon: LucideIcon;
-  ownerOnly: boolean;
+  // hangi roller görebilir
+  roles: UserRole[];
   enabled?: boolean;
 };
+
+// Rol hiyerarşisi: OWNER > MANAGER > STAFF
+const ALL: UserRole[] = ['OWNER', 'MANAGER', 'STAFF'];
+const OWNER_MANAGER: UserRole[] = ['OWNER', 'MANAGER'];
+const OWNER_ONLY: UserRole[] = ['OWNER'];
+const STAFF_ONLY: UserRole[] = ['STAFF'];
 
 const navGroups: { section: string; icon: LucideIcon; items: NavItem[] }[] = [
   {
     section: 'Ana Sayfa',
     icon: Home,
-    items: [{ href: '/dashboard', label: 'Dashboard', icon: Home, ownerOnly: true }],
+    items: [{ href: '/dashboard', label: 'Dashboard', icon: Home, roles: OWNER_MANAGER }],
   },
   {
     section: 'Ürün & Stok',
     icon: Boxes,
     items: [
-      { href: '/products', label: 'Ürün Merkezi', icon: Boxes, ownerOnly: true },
-      { href: '/media', label: 'Medya Merkezi', icon: FileImage, ownerOnly: true },
-      { href: '/model-codes', label: 'Model Kodu', icon: PackagePlus, ownerOnly: true },
-      { href: '/barcodes', label: 'Barkod', icon: QrCode, ownerOnly: true },
-      { href: '/stock-cards', label: 'Stok Kartları', icon: Warehouse, ownerOnly: true },
+      { href: '/products', label: 'Ürün Merkezi', icon: Boxes, roles: ALL },
+      { href: '/media', label: 'Medya Merkezi', icon: FileImage, roles: OWNER_MANAGER },
+      { href: '/model-codes', label: 'Model Kodu', icon: PackagePlus, roles: OWNER_MANAGER },
+      { href: '/barcodes', label: 'Barkod', icon: QrCode, roles: OWNER_MANAGER },
+      { href: '/stock-cards', label: 'Stok Kartları', icon: Warehouse, roles: OWNER_MANAGER },
     ],
   },
   {
     section: 'Maliyet',
     icon: Factory,
     items: [
-      { href: '/production-costs', label: 'Trendyol Maliyet', icon: Factory, ownerOnly: true },
-      { href: '/costs', label: 'Stoktan Maliyet', icon: Factory, ownerOnly: true },
-      { href: '/hesap-makinesi', label: 'Hesap Makinesi', icon: Calculator, ownerOnly: true },
+      { href: '/production-costs', label: 'Trendyol Maliyet', icon: Factory, roles: OWNER_ONLY },
+      { href: '/costs', label: 'Stoktan Maliyet', icon: Factory, roles: OWNER_ONLY },
+      { href: '/hesap-makinesi', label: 'Hesap Makinesi', icon: Calculator, roles: OWNER_MANAGER },
     ],
   },
   {
     section: 'Satış',
     icon: ShoppingCart,
     items: [
-      { href: '/orders', label: 'Siparişler', icon: ShoppingCart, ownerOnly: false },
-      { href: '/sales', label: 'Satış Merkezi', icon: ShoppingCart, ownerOnly: true, enabled: process.env.NEXT_PUBLIC_ENABLE_SALES_CENTER === 'true' },
-      { href: '/crm', label: 'CRM', icon: Users, ownerOnly: true },
+      { href: '/orders', label: 'Siparişler', icon: ShoppingCart, roles: OWNER_MANAGER },
+      { href: '/staff/orders', label: 'Personel Sipariş', icon: ShoppingCart, roles: ALL },
+      { href: '/sales', label: 'Satış Merkezi', icon: ShoppingCart, roles: OWNER_MANAGER, enabled: process.env.NEXT_PUBLIC_ENABLE_SALES_CENTER === 'true' },
+      { href: '/crm', label: 'CRM', icon: Users, roles: OWNER_MANAGER },
     ],
   },
   {
     section: 'Pazaryeri',
     icon: PlugZap,
     items: [
-      { href: '/integrations', label: 'Entegrasyon', icon: PlugZap, ownerOnly: true },
-      { href: '/market-analizi', label: 'Pazar Analizi', icon: Megaphone, ownerOnly: true },
+      { href: '/integrations', label: 'Entegrasyon', icon: PlugZap, roles: OWNER_MANAGER },
+      { href: '/market-analizi', label: 'Pazar Analizi', icon: Megaphone, roles: OWNER_MANAGER },
     ],
   },
   {
     section: 'Yönetim',
     icon: CircleDollarSign,
     items: [
-      { href: '/finance', label: 'Finans', icon: CircleDollarSign, ownerOnly: true },
-      { href: '/borclar', label: 'Tedarikçi Borçları', icon: Warehouse, ownerOnly: true },
-      { href: '/reports', label: 'Raporlar', icon: BarChart3, ownerOnly: true },
-      { href: '/staff/tasks', label: 'Personel Görev', icon: ListChecks, ownerOnly: true, enabled: process.env.NEXT_PUBLIC_ENABLE_SALES_CENTER === 'true' },
-      { href: '/settings', label: 'Ayarlar', icon: Settings, ownerOnly: true },
+      { href: '/finance', label: 'Finans', icon: CircleDollarSign, roles: OWNER_ONLY },
+      { href: '/borclar', label: 'Tedarikçi Borçları', icon: Warehouse, roles: OWNER_ONLY },
+      { href: '/reports', label: 'Raporlar', icon: BarChart3, roles: OWNER_MANAGER },
+      { href: '/staff/tasks', label: 'Personel Görev', icon: ListChecks, roles: OWNER_MANAGER, enabled: process.env.NEXT_PUBLIC_ENABLE_SALES_CENTER === 'true' },
+      { href: '/settings', label: 'Ayarlar', icon: Settings, roles: OWNER_ONLY },
     ],
   },
 ];
 
-// STAFF yalnızca /orders görebilir; diğer her path owner-only
-const staffAllowedPaths = ['/orders'];
-const ownerOnlyPaths = ['/dashboard', '/products', '/media', '/model-codes', '/barcodes', '/stock-cards', '/stock-counts', '/costs', '/production-costs', '/finance', '/borclar', '/reports', '/seo-products', '/publishing', '/knowledge-center', '/settings', '/integrations', '/market-analizi', '/hesap-makinesi', '/sales', '/crm', '/staff'];
+// hangi path'lere hangi roller erişebilir
+const roleAllowedPaths: Record<UserRole, string[]> = {
+  OWNER: [], // boş = hepsine erişebilir
+  MANAGER: [
+    '/dashboard', '/products', '/media', '/model-codes', '/barcodes', '/stock-cards',
+    '/hesap-makinesi', '/orders', '/staff/orders', '/sales', '/crm',
+    '/integrations', '/market-analizi', '/reports', '/staff/tasks',
+  ],
+  STAFF: ['/staff/orders', '/products'],
+};
+
+const roleLabel: Record<UserRole, string> = {
+  OWNER: 'Sistem sahibi',
+  MANAGER: 'Müdür',
+  STAFF: 'Personel',
+};
+
+const roleHome: Record<UserRole, string> = {
+  OWNER: '/dashboard',
+  MANAGER: '/dashboard',
+  STAFF: '/staff/orders',
+};
 
 export function AdminShell({ title, children }: { title: string; children: React.ReactNode }) {
   const pathname = usePathname();
@@ -107,9 +134,11 @@ export function AdminShell({ title, children }: { title: string; children: React
     api<CurrentUser>('/auth/me')
       .then((currentUser) => {
         setUser(currentUser);
-        if (currentUser.role !== 'OWNER') {
-          const allowed = staffAllowedPaths.some((p) => pathname === p || pathname.startsWith(`${p}/`));
-          if (!allowed) router.replace('/orders');
+        const role = currentUser.role;
+        if (role !== 'OWNER') {
+          const allowed = roleAllowedPaths[role] ?? [];
+          const canAccess = allowed.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+          if (!canAccess) router.replace(roleHome[role]);
         }
       })
       .catch(() => router.replace('/login'))
@@ -142,7 +171,7 @@ export function AdminShell({ title, children }: { title: string; children: React
       <header className="sticky top-0 z-50 border-b border-line bg-white shadow-sm overflow-visible">
         <div className="flex h-14 items-center gap-4 px-4 lg:px-6" ref={navRef}>
           {/* Logo */}
-          <Link href="/dashboard" className="flex shrink-0 items-center gap-2">
+          <Link href={roleHome[user?.role ?? 'STAFF']} className="flex shrink-0 items-center gap-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-md bg-brand text-white">
               <BarChart3 size={16} />
             </div>
@@ -154,12 +183,14 @@ export function AdminShell({ title, children }: { title: string; children: React
           {/* Group tabs */}
           <nav className="flex flex-1 items-center gap-0.5 flex-wrap">
             {navGroups.map((group) => {
-              const visibleItems = group.items.filter((item) => (item.enabled ?? true) && canSeeNav(item.ownerOnly, user?.role));
+              const visibleItems = group.items.filter(
+                (item) => (item.enabled ?? true) && canSee(item.roles, user?.role)
+              );
               if (!visibleItems.length) return null;
 
               const isSingleItem = visibleItems.length === 1;
-              const isActive = visibleItems.some((item) =>
-                pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(`${item.href}/`))
+              const isActive = visibleItems.some(
+                (item) => pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(`${item.href}/`))
               );
               const GroupIcon = group.icon;
 
@@ -224,7 +255,7 @@ export function AdminShell({ title, children }: { title: string; children: React
           <div className="ml-auto flex shrink-0 items-center gap-3">
             <div className="hidden text-right sm:block">
               <div className="text-xs font-semibold leading-tight">{user?.name}</div>
-              <div className="text-[11px] text-slate-400">{user?.role === 'OWNER' ? 'Sistem sahibi' : 'Personel'}</div>
+              <div className="text-[11px] text-slate-400">{roleLabel[user?.role ?? 'STAFF']}</div>
             </div>
             <button className="btn btn-secondary min-h-8 px-3 text-xs" onClick={logout} title="Çıkış yap">
               <LogOut size={15} />
@@ -234,7 +265,7 @@ export function AdminShell({ title, children }: { title: string; children: React
         </div>
       </header>
 
-      {/* PAGE CONTENT — full width */}
+      {/* PAGE CONTENT */}
       <main className="px-4 py-6 lg:px-8">
         <div className="mb-5">
           <h1 className="text-xl font-bold text-ink">{title}</h1>
@@ -245,6 +276,7 @@ export function AdminShell({ title, children }: { title: string; children: React
   );
 }
 
-function canSeeNav(ownerOnly: boolean, role?: UserRole) {
-  return !ownerOnly || role === 'OWNER';
+function canSee(roles: UserRole[], userRole?: UserRole): boolean {
+  if (!userRole) return false;
+  return roles.includes(userRole);
 }

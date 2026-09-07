@@ -1,5 +1,5 @@
 export type Status = 'ACTIVE' | 'PASSIVE';
-export type UserRole = 'OWNER' | 'STAFF';
+export type UserRole = 'OWNER' | 'MANAGER' | 'STAFF';
 
 export type CurrentUser = {
   id: number;

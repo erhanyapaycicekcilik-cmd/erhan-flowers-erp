@@ -350,6 +350,7 @@ export default function ProductsPage() {
   const [imageGenerationStatus, setImageGenerationStatus] = useState<ImageGenerationStatus | null>(null);
   const [referenceSearchLoading, setReferenceSearchLoading] = useState(false);
   const [referenceImageUrl, setReferenceImageUrl] = useState('');
+  const [imageUrlInput, setImageUrlInput] = useState('');
   const [referenceSearchResult, setReferenceSearchResult] = useState<GeminiReferenceSearchResult | null>(null);
   const [componentPickerOpen, setComponentPickerOpen] = useState(false);
   const [stockCardsLoading, setStockCardsLoading] = useState(false);
@@ -1300,6 +1301,41 @@ export default function ProductsPage() {
     setMessage(nextImages.length < flowerVisualImageLimit ? `${flowerVisualImageLimit - nextImages.length} görsel daha seçilebilir.` : `${flowerVisualImageLimit} görsel seçildi.`);
   }
 
+  function addImageByUrl() {
+    const url = imageUrlInput.trim();
+    if (!url) return;
+    if (form.images.includes(url)) { setMessage('Bu görsel zaten eklenmiş.'); return; }
+    if (form.images.length >= flowerVisualImageLimit) { setMessage(`En fazla ${flowerVisualImageLimit} görsel eklenebilir.`); return; }
+    update('images', [...form.images, url]);
+    setImageUrlInput('');
+    setMessage('Görsel URL\'si eklendi.');
+  }
+
+  async function downloadAllChannelExcels() {
+    const entry = await saveEntry();
+    const variantId = Number(entry?.variantId || form.variantId);
+    if (!variantId) { setMessage('Excel için önce ürünü kaydedin.'); return; }
+    for (const platform of publishableChannels) {
+      try {
+        const result = await api<ExcelExportResult>('/publishing/excel-export', {
+          method: 'POST',
+          json: { variantIds: [variantId], platform },
+        });
+        const binary = atob(result.contentBase64);
+        const bytes = new Uint8Array(binary.length);
+        for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+        const url = window.URL.createObjectURL(new Blob([bytes], { type: result.mimeType }));
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = result.fileName;
+        link.click();
+        window.URL.revokeObjectURL(url);
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      } catch { /* devam et */ }
+    }
+    setMessage('Tüm kanal Excel dosyaları indirildi.');
+  }
+
   function applyTreeVisualStandard() {
     update('images', form.images.slice(0, treeVisualSlots.length));
     setMessage(form.images.length > 0 ? treeVisualSourceReadyText : 'Ağaç standardı açıldı; önce 1 ana ürün görseli seç.');
@@ -2004,7 +2040,18 @@ export default function ProductsPage() {
 
             {(
               <div className="space-y-4">
-                <button type="button" className="btn btn-primary w-full justify-center" onClick={() => setImagePickerOpen(true)}><Upload size={16} /> Bilgisayardan Görsel Yükle ({form.images.length}/{treeVisualImageLimit})</button>
+                <div className="flex gap-2">
+                  <input
+                    className="field flex-1"
+                    type="url"
+                    placeholder="Görsel URL yapıştır (https://...)"
+                    value={imageUrlInput}
+                    onChange={(event) => setImageUrlInput(event.target.value)}
+                    onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); addImageByUrl(); } }}
+                  />
+                  <button type="button" className="btn btn-primary shrink-0" onClick={addImageByUrl}><Plus size={16} /> URL Ekle</button>
+                </div>
+                <button type="button" className="btn btn-secondary w-full justify-center" onClick={() => setImagePickerOpen(true)}><Upload size={16} /> Bilgisayardan Görsel Yükle ({form.images.length}/{treeVisualImageLimit})</button>
                 <button type="button" className="btn btn-primary w-full justify-center" onClick={createShopCard}><FileText size={16} /> Dükkan PDF Kartı Oluştur</button>
                 <button type="button" className="btn btn-secondary w-full justify-center" disabled><ImageIcon size={16} /> Bileşenden / ChatGPT görsel pasif</button>
                 <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm font-semibold text-emerald-800">
@@ -2083,6 +2130,11 @@ export default function ProductsPage() {
                   <div className="mb-3">
                     <div className="font-bold">Excel şablonu ile dışa aktar</div>
                     <div className="text-xs text-slate-500">Ürün, pazaryerinin kendi Excel şablonu bozulmadan doldurulur. Entegrasyon gönderimi ayrı yapılır.</div>
+                  </div>
+                  <div className="mb-2">
+                    <button type="button" className="btn btn-primary w-full justify-center" onClick={downloadAllChannelExcels}>
+                      <FileText size={16} /> Tüm Kanallar İçin Excel İndir (Trendyol + Hepsiburada + N11 + Ticimax)
+                    </button>
                   </div>
                   <div className="grid gap-2 md:grid-cols-4">
                     {publishableChannels.map((platform) => (

@@ -1,57 +1,56 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
-import { api } from '@/lib/api';
-import { Link2, CheckCircle2, AlertTriangle, Search, RefreshCw } from 'lucide-react';
+import { useEffect, useRef, useState, useCallback } from 'react';
+import { api, apiBaseUrl } from '@/lib/api';
+import { ChevronDown, ChevronRight, Plus, Trash2, CheckCircle2, AlertCircle, RefreshCw, Package, Download, Upload } from 'lucide-react';
 
-interface UnmatchedSku {
+interface SkuRow {
   sku: string;
   barcode: string | null;
   orderCount: number;
+  components: Component[];
+  singleMapping: { stock_card_id: number; sku: string; name: string } | null;
+}
+
+interface Component {
+  id?: number;
+  stock_card_id: number;
+  quantity: number;
+  sku: string;
+  name: string;
+  unit: string;
 }
 
 interface StockCard {
   id: number;
   sku: string;
   name: string;
+  unit: string;
+  stockQuantity: number;
 }
 
-interface SavedMapping {
-  id: number;
-  external_sku: string;
-  external_barcode: string | null;
-  stock_card_id: number;
-  sku: string;
-  name: string;
-}
-
-const PLATFORMS = [
-  { code: 'TRENDYOL', label: 'Trendyol' },
-  { code: 'N11', label: 'N11' },
-];
+const PLATFORMS = [{ code: 'TRENDYOL', label: 'Trendyol' }, { code: 'N11', label: 'N11' }];
 
 export default function SkuMappingPage() {
   const [platform, setPlatform] = useState('TRENDYOL');
-  const [unmatched, setUnmatched] = useState<UnmatchedSku[]>([]);
-  const [mappings, setMappings] = useState<SavedMapping[]>([]);
+  const [rows, setRows] = useState<SkuRow[]>([]);
   const [stockCards, setStockCards] = useState<StockCard[]>([]);
-  const [search, setSearch] = useState('');
-  const [selections, setSelections] = useState<Record<string, number>>({});
-  const [saving, setSaving] = useState<string | null>(null);
-  const [applying, setApplying] = useState(false);
-  const [applyResult, setApplyResult] = useState<{ updated: number } | null>(null);
   const [loading, setLoading] = useState(true);
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [u, m, sc] = await Promise.all([
-        api<UnmatchedSku[]>(`/integrations/sku-mappings/unmatched?platform=${platform}`),
-        api<SavedMapping[]>(`/integrations/sku-mappings?platform=${platform}`),
+      const [r, sc] = await Promise.all([
+        api<SkuRow[]>(`/integrations/sku-mappings/all?platform=${platform}`),
         api<StockCard[]>('/stock-cards?limit=2000'),
       ]);
-      setUnmatched(u);
-      setMappings(m);
+      setRows(r);
       setStockCards(sc as unknown as StockCard[]);
     } finally {
       setLoading(false);
@@ -60,241 +59,269 @@ export default function SkuMappingPage() {
 
   useEffect(() => { void load(); }, [load]);
 
-  async function saveMapping(externalSku: string, externalBarcode: string | null) {
-    const stockCardId = selections[externalSku];
-    if (!stockCardId) return;
-    setSaving(externalSku);
+  async function downloadTemplate() {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') ?? sessionStorage.getItem('auth_token') ?? '' : '';
+    const res = await fetch(`${apiBaseUrl}/integrations/sku-mappings/excel-template?platform=${platform}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return;
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `${platform.toLowerCase()}-sku-eslestirme.xlsx`; a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function importExcel(file: File) {
+    setImporting(true); setImportResult(null);
     try {
-      await api('/integrations/sku-mappings', {
-        method: 'POST',
-        json: { platform, externalSku, externalBarcode: externalBarcode ?? undefined, stockCardId },
+      const fd = new FormData();
+      fd.append('file', file);
+      const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') ?? sessionStorage.getItem('auth_token') ?? '' : '';
+      const res = await fetch(`${apiBaseUrl}/integrations/sku-mappings/excel-import?platform=${platform}`, {
+        method: 'POST', body: fd, headers: { Authorization: `Bearer ${token}` },
       });
+      const data = await res.json() as { message: string };
+      setImportResult(data.message);
+      await load();
+    } finally { setImporting(false); }
+  }
+
+  async function triggerSync() {
+    setSyncing(true);
+    setSyncResult(null);
+    try {
+      const r = await api<{ processed: number; newOrders: number; stockDeductions: number }>('/integrations/orders/sync', { method: 'POST' });
+      setSyncResult(`${r.newOrders} yeni sipariş, ${r.stockDeductions} stok düşümü`);
       await load();
     } finally {
-      setSaving(null);
+      setSyncing(false);
     }
   }
 
-  async function applyRetroactive() {
-    setApplying(true);
-    setApplyResult(null);
-    try {
-      const result = await api<{ updated: number }>('/integrations/sku-mappings/apply-retroactive', { method: 'POST' });
-      setApplyResult(result);
-    } finally {
-      setApplying(false);
-    }
-  }
-
-  const filteredUnmatched = unmatched.filter(
-    (u) => !search || u.sku.toLowerCase().includes(search.toLowerCase()) || (u.barcode ?? '').toLowerCase().includes(search.toLowerCase()),
-  );
-
-  const filteredCards = (query: string) =>
-    stockCards
-      .filter((c) => c.sku.toLowerCase().includes(query.toLowerCase()) || c.name.toLowerCase().includes(query.toLowerCase()))
-      .slice(0, 50);
+  const matched = rows.filter(r => r.components.length > 0 || r.singleMapping);
+  const unmatched = rows.filter(r => r.components.length === 0 && !r.singleMapping);
 
   return (
-    <main className="p-6 space-y-6">
+    <main className="p-5 space-y-4 max-w-5xl mx-auto">
+      {/* Header */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Link2 size={22} className="text-brand" />
-          <div>
-            <h1 className="text-xl font-bold">SKU Eşleştirme</h1>
-            <p className="text-sm text-slate-500">Pazaryeri ürünlerini ERP stok kartlarıyla eşleştir</p>
-          </div>
+        <div>
+          <h1 className="text-lg font-bold">SKU Eşleştirme</h1>
+          <p className="text-sm text-slate-500">Trendyol/N11 ürünlerini ERP bileşenleriyle eşleştir — sipariş gelince stok otomatik düşer</p>
         </div>
         <div className="flex items-center gap-2">
-          {PLATFORMS.map((p) => (
-            <button
-              key={p.code}
-              onClick={() => setPlatform(p.code)}
-              className={`px-3 py-1.5 rounded-md text-sm font-semibold transition ${platform === p.code ? 'bg-brand text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
-            >
+          {PLATFORMS.map(p => (
+            <button key={p.code} onClick={() => setPlatform(p.code)}
+              className={`px-3 py-1.5 rounded text-sm font-semibold transition ${platform === p.code ? 'bg-brand text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
               {p.label}
             </button>
           ))}
-          <button onClick={() => void load()} className="btn btn-secondary text-sm flex items-center gap-1">
-            <RefreshCw size={14} /> Yenile
+          <button onClick={() => void load()} className="btn btn-secondary text-sm"><RefreshCw size={14} /></button>
+          <button onClick={() => void downloadTemplate()} className="btn btn-secondary text-sm"><Download size={14} /> Excel Şablonu</button>
+          <label className="btn btn-secondary text-sm cursor-pointer">
+            <Upload size={14} /> {importing ? 'Yükleniyor...' : 'Excel ile Eşleştir'}
+            <input ref={fileInputRef} type="file" accept=".xlsx,.xls" className="hidden" disabled={importing} onChange={(e) => { const f = e.target.files?.[0]; if (f) void importExcel(f); e.target.value = ''; }} />
+          </label>
+          <button onClick={() => void triggerSync()} disabled={syncing} className="btn btn-primary text-sm">
+            {syncing ? 'Çekiliyor...' : 'Sipariş Çek'}
           </button>
         </div>
       </div>
 
+      {syncResult && (
+        <div className="flex items-center gap-2 rounded border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
+          <CheckCircle2 size={14} /> {syncResult}
+        </div>
+      )}
+      {importResult && (
+        <div className="flex items-center gap-2 rounded border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-700">
+          <CheckCircle2 size={14} /> {importResult}
+        </div>
+      )}
+
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-3 gap-3">
+        <div className="panel p-4">
+          <div className="text-2xl font-bold text-slate-800">{rows.length}</div>
+          <div className="text-xs text-slate-500 mt-0.5">Toplam SKU</div>
+        </div>
+        <div className="panel p-4">
+          <div className="text-2xl font-bold text-green-600">{matched.length}</div>
+          <div className="text-xs text-slate-500 mt-0.5">Eşleştirilmiş</div>
+        </div>
         <div className="panel p-4">
           <div className="text-2xl font-bold text-red-500">{unmatched.length}</div>
-          <div className="text-sm text-slate-500 mt-1">Eşleşmeyen SKU</div>
-        </div>
-        <div className="panel p-4">
-          <div className="text-2xl font-bold text-green-600">{mappings.length}</div>
-          <div className="text-sm text-slate-500 mt-1">Kayıtlı Eşleştirme</div>
-        </div>
-        <div className="panel p-4">
-          <div className="text-2xl font-bold text-slate-700">{unmatched.reduce((s, u) => s + u.orderCount, 0)}</div>
-          <div className="text-sm text-slate-500 mt-1">Etkilenen Sipariş Satırı</div>
+          <div className="text-xs text-slate-500 mt-0.5">Bekliyor</div>
         </div>
       </div>
 
-      {/* Retroactive apply */}
-      {mappings.length > 0 && (
-        <div className="panel p-4 flex items-center justify-between">
-          <div>
-            <div className="font-semibold text-sm">Geçmiş siparişlere uygula</div>
-            <div className="text-xs text-slate-500">Yeni eklediğin eşleştirmeleri geçmiş sipariş satırlarına da uygular</div>
-          </div>
-          <div className="flex items-center gap-3">
-            {applyResult && (
-              <span className="text-sm text-green-600 font-semibold">
-                <CheckCircle2 size={14} className="inline mr-1" />{applyResult.updated} satır güncellendi
-              </span>
-            )}
-            <button onClick={() => void applyRetroactive()} disabled={applying} className="btn btn-primary text-sm">
-              {applying ? 'Uygulanıyor...' : 'Uygula'}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Unmatched SKUs */}
       {loading ? (
-        <div className="panel p-8 text-center text-slate-400">Yükleniyor...</div>
-      ) : unmatched.length === 0 ? (
-        <div className="panel p-8 text-center">
-          <CheckCircle2 size={32} className="text-green-500 mx-auto mb-2" />
-          <div className="font-semibold text-green-700">Tüm SKU'lar eşleştirilmiş!</div>
-        </div>
+        <div className="panel p-8 text-center text-slate-400 text-sm">Yükleniyor...</div>
       ) : (
-        <div className="panel overflow-hidden">
-          <div className="p-4 border-b border-line flex items-center gap-3">
-            <AlertTriangle size={16} className="text-amber-500" />
-            <span className="font-semibold text-sm">Eşleşmeyen SKU'lar ({unmatched.length})</span>
-            <div className="ml-auto relative">
-              <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                className="field pl-8 py-1.5 text-sm w-52"
-                placeholder="SKU veya barkod ara..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-            </div>
-          </div>
-          <div className="divide-y divide-line">
-            {filteredUnmatched.map((u) => (
-              <SkuRow
-                key={u.sku}
-                item={u}
-                stockCards={stockCards}
-                filteredCards={filteredCards}
-                selectedId={selections[u.sku]}
-                onSelect={(id) => setSelections((s) => ({ ...s, [u.sku]: id }))}
-                onSave={() => void saveMapping(u.sku, u.barcode)}
-                saving={saving === u.sku}
-              />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Existing mappings */}
-      {mappings.length > 0 && (
-        <div className="panel overflow-hidden">
-          <div className="p-4 border-b border-line font-semibold text-sm flex items-center gap-2">
-            <CheckCircle2 size={16} className="text-green-500" /> Kayıtlı Eşleştirmeler
-          </div>
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-xs text-slate-500 uppercase">
-              <tr>
-                <th className="px-4 py-2 text-left">Pazaryeri SKU</th>
-                <th className="px-4 py-2 text-left">Barkod</th>
-                <th className="px-4 py-2 text-left">ERP Stok Kodu</th>
-                <th className="px-4 py-2 text-left">Ürün Adı</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-line">
-              {mappings.map((m) => (
-                <tr key={m.id} className="hover:bg-slate-50">
-                  <td className="px-4 py-2 font-mono">{m.external_sku}</td>
-                  <td className="px-4 py-2 text-slate-500 text-xs">{m.external_barcode ?? '—'}</td>
-                  <td className="px-4 py-2 font-mono text-brand">{m.sku}</td>
-                  <td className="px-4 py-2">{m.name}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="panel overflow-hidden divide-y divide-line">
+          {rows.map(row => (
+            <SkuRow
+              key={row.sku}
+              row={row}
+              stockCards={stockCards}
+              platform={platform}
+              expanded={expanded === row.sku}
+              onToggle={() => setExpanded(expanded === row.sku ? null : row.sku)}
+              onUpdate={load}
+            />
+          ))}
+          {rows.length === 0 && (
+            <div className="p-8 text-center text-slate-400 text-sm">Henüz sipariş verisi yok</div>
+          )}
         </div>
       )}
     </main>
   );
 }
 
-function SkuRow({
-  item,
-  stockCards,
-  filteredCards,
-  selectedId,
-  onSelect,
-  onSave,
-  saving,
-}: {
-  item: UnmatchedSku;
-  stockCards: StockCard[];
-  filteredCards: (q: string) => StockCard[];
-  selectedId: number | undefined;
-  onSelect: (id: number) => void;
-  onSave: () => void;
-  saving: boolean;
+function SkuRow({ row, stockCards, platform, expanded, onToggle, onUpdate }: {
+  row: SkuRow; stockCards: StockCard[]; platform: string;
+  expanded: boolean; onToggle: () => void; onUpdate: () => void;
 }) {
+  const isMatched = row.components.length > 0 || row.singleMapping;
+  const [adding, setAdding] = useState(false);
   const [query, setQuery] = useState('');
-  const [open, setOpen] = useState(false);
-  const results = query.length > 0 ? filteredCards(query) : stockCards.slice(0, 30);
-  const selected = stockCards.find((c) => c.id === selectedId);
+  const [qty, setQty] = useState('1');
+  const [dropOpen, setDropOpen] = useState(false);
+  const [selectedCard, setSelectedCard] = useState<StockCard | null>(null);
+  const [saving, setSaving] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const filtered = query.length > 1
+    ? stockCards.filter(c => c.sku.toLowerCase().includes(query.toLowerCase()) || c.name.toLowerCase().includes(query.toLowerCase())).slice(0, 20)
+    : [];
+
+  async function addComponent() {
+    if (!selectedCard) return;
+    setSaving(true);
+    try {
+      await api('/integrations/sku-components', {
+        method: 'POST',
+        json: { platform, externalSku: row.sku, stockCardId: selectedCard.id, quantity: Number(qty) || 1 },
+      });
+      setAdding(false); setSelectedCard(null); setQuery(''); setQty('1');
+      await onUpdate();
+    } finally { setSaving(false); }
+  }
+
+  async function removeComponent(stockCardId: number) {
+    await api('/integrations/sku-components/delete', {
+      method: 'POST',
+      json: { platform, externalSku: row.sku, stockCardId },
+    });
+    await onUpdate();
+  }
 
   return (
-    <div className="p-4 flex items-center gap-4 flex-wrap">
-      <div className="flex-1 min-w-[200px]">
-        <div className="font-mono font-semibold">{item.sku}</div>
-        {item.barcode && <div className="text-xs text-slate-400 mt-0.5">{item.barcode}</div>}
-      </div>
-      <div className="text-xs text-slate-500 whitespace-nowrap">
-        {item.orderCount} sipariş
-      </div>
-      <div className="relative w-64">
-        <input
-          className="field text-sm py-1.5"
-          placeholder="ERP ürünü ara..."
-          value={selected ? `${selected.sku} — ${selected.name}` : query}
-          onFocus={() => { setQuery(''); setOpen(true); }}
-          onChange={(e) => { setQuery(e.target.value); setOpen(true); if (selectedId) onSelect(0); }}
-          onBlur={() => setTimeout(() => setOpen(false), 150)}
-        />
-        {open && (
-          <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-line rounded-md shadow-lg max-h-48 overflow-y-auto">
-            {results.length === 0 ? (
-              <div className="px-3 py-2 text-xs text-slate-400">Sonuç yok</div>
-            ) : (
-              results.map((c) => (
-                <button
-                  key={c.id}
-                  type="button"
-                  className="w-full text-left px-3 py-1.5 text-sm hover:bg-brand hover:text-white transition"
-                  onMouseDown={() => { onSelect(c.id); setQuery(''); setOpen(false); }}
-                >
-                  <span className="font-mono">{c.sku}</span> — {c.name}
-                </button>
-              ))
-            )}
+    <div>
+      {/* Row header */}
+      <div
+        onClick={onToggle}
+        className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-slate-50 transition select-none"
+      >
+        <div className="text-slate-400">
+          {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+        </div>
+        <div className={`w-2 h-2 rounded-full flex-shrink-0 ${isMatched ? 'bg-green-500' : 'bg-red-400'}`} />
+        <div className="flex-1 min-w-0">
+          <span className="font-mono font-semibold text-sm">{row.sku}</span>
+          {row.barcode && <span className="ml-2 text-xs text-slate-400">{row.barcode}</span>}
+        </div>
+        <div className="text-xs text-slate-400 whitespace-nowrap">{row.orderCount} sipariş</div>
+        {row.components.length > 0 && (
+          <div className="flex items-center gap-1 text-xs text-green-600 font-medium">
+            <Package size={12} /> {row.components.length} bileşen
+          </div>
+        )}
+        {!isMatched && (
+          <div className="flex items-center gap-1 text-xs text-red-500">
+            <AlertCircle size={12} /> Eşleşmedi
           </div>
         )}
       </div>
-      <button
-        onClick={onSave}
-        disabled={!selectedId || saving}
-        className="btn btn-primary text-sm py-1.5 disabled:opacity-40"
-      >
-        {saving ? 'Kaydediliyor...' : 'Kaydet'}
-      </button>
+
+      {/* Expanded */}
+      {expanded && (
+        <div className="bg-slate-50 border-t border-line px-6 py-4 space-y-3">
+          {/* Components list */}
+          {row.components.length > 0 && (
+            <div className="space-y-1.5">
+              {row.components.map(c => (
+                <div key={c.stock_card_id} className="flex items-center gap-3 bg-white rounded border border-line px-3 py-2">
+                  <div className="flex-1">
+                    <span className="font-mono text-xs text-brand">{c.sku}</span>
+                    <span className="ml-2 text-sm">{c.name}</span>
+                  </div>
+                  <div className="text-sm font-semibold">{c.quantity} {c.unit}</div>
+                  <button onClick={() => void removeComponent(c.stock_card_id)} className="text-slate-300 hover:text-red-500 transition">
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Add component */}
+          {adding ? (
+            <div className="flex items-center gap-2 bg-white rounded border border-line px-3 py-2">
+              <div className="relative flex-1">
+                <input
+                  ref={inputRef}
+                  className="field text-sm py-1.5 w-full"
+                  placeholder="ERP stok kartı ara (sku veya ad)..."
+                  value={selectedCard ? `${selectedCard.sku} — ${selectedCard.name}` : query}
+                  onChange={e => { setQuery(e.target.value); setSelectedCard(null); setDropOpen(true); }}
+                  onFocus={() => setDropOpen(true)}
+                  onBlur={() => setTimeout(() => setDropOpen(false), 150)}
+                  autoFocus
+                />
+                {dropOpen && filtered.length > 0 && (
+                  <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-line rounded shadow-lg max-h-44 overflow-y-auto">
+                    {filtered.map(c => (
+                      <button key={c.id} type="button" onMouseDown={() => { setSelectedCard(c); setQuery(''); setDropOpen(false); }}
+                        className="w-full text-left px-3 py-1.5 text-sm hover:bg-brand hover:text-white transition">
+                        <span className="font-mono">{c.sku}</span> — {c.name}
+                        <span className="ml-1 text-xs opacity-60">({c.stockQuantity} {c.unit})</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <input
+                className="field text-sm py-1.5 w-20 text-center"
+                type="number"
+                min="0.001"
+                step="0.001"
+                value={qty}
+                onChange={e => setQty(e.target.value)}
+                placeholder="Miktar"
+              />
+              <span className="text-xs text-slate-500">{selectedCard?.unit ?? 'adet'}</span>
+              <button onClick={() => void addComponent()} disabled={!selectedCard || saving}
+                className="btn btn-primary text-xs py-1.5 disabled:opacity-40">
+                {saving ? '...' : 'Ekle'}
+              </button>
+              <button onClick={() => { setAdding(false); setSelectedCard(null); setQuery(''); }}
+                className="text-slate-400 hover:text-slate-600 text-xs">İptal</button>
+            </div>
+          ) : (
+            <button onClick={() => setAdding(true)}
+              className="flex items-center gap-1.5 text-sm text-brand hover:text-brand/80 font-medium transition">
+              <Plus size={14} /> Bileşen Ekle
+            </button>
+          )}
+
+          {row.components.length === 0 && !adding && (
+            <p className="text-xs text-slate-400">Henüz bileşen eklenmedi. Sipariş stoktan düşmeyecek.</p>
+          )}
+        </div>
+      )}
     </div>
   );
 }

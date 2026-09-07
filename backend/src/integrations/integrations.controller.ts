@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Param, Patch, Post, Put, Query, Req, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Put, Query, Req, Res, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { Response } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Request } from 'express';
 import { memoryStorage } from 'multer';
@@ -7,6 +8,7 @@ import { OwnerGuard } from '../auth/owner.guard';
 import { IntegrationCenterService } from './services/integration-center.service';
 import { IntegrationsService } from './integrations.service';
 import { OrderSyncService } from './services/order-sync.service';
+import { GmailOrderService } from './services/gmail-order.service';
 
 type AuthenticatedRequest = Request & { user?: { id: number; role: string } };
 
@@ -17,6 +19,7 @@ export class IntegrationsController {
     private readonly integrations: IntegrationsService,
     private readonly integrationCenter: IntegrationCenterService,
     private readonly orderSync: OrderSyncService,
+    private readonly gmailOrder: GmailOrderService,
   ) {}
 
   @Get('connections')
@@ -215,4 +218,43 @@ export class IntegrationsController {
   applyRetroactiveMappings() {
     return this.orderSync.applyRetroactiveMappings();
   }
+
+  @Get('sku-components')
+  listSkuComponents(@Query('platform') platform: string, @Query('sku') sku: string) {
+    return this.orderSync.listSkuComponents(platform ?? 'TRENDYOL', sku);
+  }
+
+  @Post('sku-components')
+  @UseGuards(OwnerGuard)
+  saveSkuComponent(@Body() body: { platform: string; externalSku: string; stockCardId: number; quantity: number }) {
+    return this.orderSync.saveSkuComponent(body);
+  }
+
+  @Post('sku-components/delete')
+  @UseGuards(OwnerGuard)
+  deleteSkuComponent(@Body() body: { platform: string; externalSku: string; stockCardId: number }) {
+    return this.orderSync.deleteSkuComponent(body);
+  }
+
+  @Get('sku-mappings/all')
+  allSkuMappings(@Query('platform') platform?: string) {
+    return this.orderSync.getAllMappingsWithComponents(platform ?? 'TRENDYOL');
+  }
+
+  @Get('sku-mappings/excel-template')
+  @UseGuards(OwnerGuard)
+  async skuMappingExcelTemplate(@Query('platform') platform: string = 'TRENDYOL', @Res() res: Response) {
+    const buffer = await this.orderSync.exportSkuMappingTemplate(platform);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${platform.toLowerCase()}-sku-eslestirme.xlsx"`);
+    res.send(buffer);
+  }
+
+  @Post('sku-mappings/excel-import')
+  @UseGuards(OwnerGuard)
+  @UseInterceptors(FileInterceptor('file', { storage: memoryStorage() }))
+  importSkuMappingExcel(@Query('platform') platform: string = 'TRENDYOL', @UploadedFile() file: Express.Multer.File | undefined) {
+    return this.orderSync.importSkuMappingExcel(platform, file);
+  }
+
 }

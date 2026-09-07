@@ -73,27 +73,32 @@ export class ProductionCostsService {
     const liveBarcodes = new Set(catalog.filter((item) => !item.archived && item.onSale).map((item) => item.barcode));
 
     let updated = 0;
+    let created = 0;
     let passivatedFromArchive = 0;
     for (const item of catalog) {
       const imageUrls = (item.images ?? [])
         .map((image) => (typeof image === 'string' ? image : image?.url))
         .filter((url): url is string => Boolean(url));
       const isLive = !item.archived && item.onSale;
-      const result = await this.prisma.trendyolProductVariant.updateMany({
-        where: { barcode: item.barcode },
-        data: {
-          productName: item.title || undefined,
-          brand: item.brand ?? undefined,
-          trendyolCategoryName: item.categoryName ?? undefined,
-          productDescription: item.description ?? undefined,
-          stockQuantity: item.quantity ?? undefined,
-          trendyolSalePrice: item.salePrice ?? undefined,
-          images: imageUrls.length ? imageUrls : undefined,
-          status: isLive ? 'ACTIVE' : 'PASSIVE',
-        },
-      });
-      updated += result.count;
-      if (!isLive) passivatedFromArchive += result.count;
+      const data = {
+        productName: item.title || item.barcode,
+        brand: item.brand ?? null,
+        trendyolCategoryName: item.categoryName ?? null,
+        productDescription: item.description ?? null,
+        stockQuantity: item.quantity ?? 0,
+        trendyolSalePrice: item.salePrice ?? 0,
+        images: imageUrls.length ? imageUrls : [],
+        status: (isLive ? 'ACTIVE' : 'PASSIVE') as 'ACTIVE' | 'PASSIVE',
+      };
+      const existing = await this.prisma.trendyolProductVariant.findFirst({ where: { barcode: item.barcode }, select: { id: true } });
+      if (existing) {
+        await this.prisma.trendyolProductVariant.update({ where: { id: existing.id }, data });
+        updated++;
+        if (!isLive) passivatedFromArchive++;
+      } else {
+        await this.prisma.trendyolProductVariant.create({ data: { barcode: item.barcode, ...data } });
+        created++;
+      }
     }
 
     const passivatedMissing = await this.prisma.trendyolProductVariant.updateMany({
@@ -104,6 +109,7 @@ export class ProductionCostsService {
     return {
       total: catalog.length,
       updated,
+      created,
       passivated: passivatedFromArchive + passivatedMissing.count,
       liveCount: liveBarcodes.size,
     };
@@ -459,27 +465,37 @@ export class ProductionCostsService {
   }
 
   async listVariants() {
-    const variants = await this.prisma.trendyolProductVariant.findMany({
-      where: { status: 'ACTIVE' },
-      include: {
-        family: true,
-        sizeOption: true,
-        potOption: true,
-        template: true,
-        productCostDraft: {
-          include: {
-            items: { include: { stockCard: true } },
-            pots: { include: { stockCard: true } },
+    const [variants, orderCounts] = await Promise.all([
+      this.prisma.trendyolProductVariant.findMany({
+        where: { status: 'ACTIVE' },
+        include: {
+          family: true,
+          sizeOption: true,
+          potOption: true,
+          template: true,
+          productCostDraft: {
+            include: {
+              items: { include: { stockCard: true } },
+              pots: { include: { stockCard: true } },
+            },
           },
         },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.marketplaceOrderItem.groupBy({
+        by: ['barcode'],
+        _sum: { quantity: true },
+        where: { barcode: { not: null } },
+      }),
+    ]);
+
+    const orderCountMap = new Map(orderCounts.map((row) => [row.barcode, row._sum.quantity ?? 0]));
 
     return variants.map((variant) => ({
       ...variant,
       lastCalculatedCost: variant.productCostDraft ? this.serializeCostDraft(variant.productCostDraft).totalCost : 0,
       productCostStatus: this.variantCostStatus(variant),
+      orderCount: orderCountMap.get(variant.barcode) ?? 0,
     }));
   }
 
@@ -981,6 +997,18 @@ export class ProductionCostsService {
     }
 
     return { ok: true, totalRows: preview.totalRows, added, updated, errorRows: preview.errorRows, skippedRows: preview.skippedRows };
+  }
+
+  async saveVariantSeo(id: number, data: { seoProductName?: string; seoLongDescription?: string; seoKeywords?: string }) {
+    await this.prisma.trendyolProductVariant.update({
+      where: { id },
+      data: {
+        ...(data.seoProductName !== undefined && { seoProductName: data.seoProductName }),
+        ...(data.seoLongDescription !== undefined && { seoLongDescription: data.seoLongDescription }),
+        ...(data.seoKeywords !== undefined && { seoKeywords: data.seoKeywords ? data.seoKeywords.split(',').map((k) => k.trim()).filter(Boolean) : [] }),
+      },
+    });
+    return { ok: true };
   }
 
   async assignVariantToFamily(variantId: number, payload: { familyId?: number; masterId?: number }) {
@@ -1557,7 +1585,7 @@ export class ProductionCostsService {
   private async costProgress() {
     const [total, completed] = await Promise.all([
       this.prisma.trendyolProductVariant.count({ where: { status: 'ACTIVE' } }),
-      this.prisma.trendyolProductVariant.count({ where: { status: 'ACTIVE', productCostDraft: { status: 'APPROVED' } } }),
+      this.prisma.trendyolProductVariant.count({ where: { status: 'ACTIVE', productCostDraft: { status: { in: ['APPROVED', 'DRAFT'] } } } }),
     ]);
     return { total, completed };
   }

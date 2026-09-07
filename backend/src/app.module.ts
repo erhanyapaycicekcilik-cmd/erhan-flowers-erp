@@ -33,12 +33,18 @@ import { SuppliersModule } from './suppliers/suppliers.module';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, envFilePath: process.env.ENV_FILE || '.env' }),
-    ThrottlerModule.forRoot([{ ttl: 60000, limit: 10 }]),
+    ThrottlerModule.forRoot([{ ttl: 60000, limit: 30 }]),
     ScheduleModule.forRoot(),
-    ServeStaticModule.forRoot({
-      rootPath: join(process.cwd(), 'uploads'),
-      serveRoot: '/uploads',
-    }),
+    ServeStaticModule.forRoot(
+      {
+        rootPath: join(process.cwd(), 'uploads'),
+        serveRoot: '/uploads',
+      },
+      {
+        rootPath: join(process.cwd(), 'uploads', 'stock-cards'),
+        serveRoot: '/stock-images',
+      },
+    ),
     PrismaModule,
     AuthModule,
     DashboardModule,

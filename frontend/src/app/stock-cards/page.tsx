@@ -1097,7 +1097,8 @@ function StockImage({ item }: { item: StockCard }) {
 }
 
 function SafeStockImage({ className, src, alt, compact = false }: { className: string; src: string; alt: string; compact?: boolean }) {
-  const [failed, setFailed] = useState(false);
+  const [retries, setRetries] = useState(0);
+  const failed = retries >= 3;
   if (!src || failed) {
     return (
       <div className={`flex items-center justify-center bg-white text-center font-semibold text-slate-400 ${compact ? 'text-[10px]' : 'text-sm'} ${className}`}>
@@ -1106,7 +1107,8 @@ function SafeStockImage({ className, src, alt, compact = false }: { className: s
     );
   }
 
-  return <img className={className} src={apiFileUrl(src)} alt={alt} onError={() => setFailed(true)} />;
+  const url = apiFileUrl(src) + (retries > 0 ? `?r=${retries}` : '');
+  return <img className={className} src={url} alt={alt} onError={() => setTimeout(() => setRetries((r) => r + 1), 1000 * retries + 500)} />;
 }
 
 function stockImages(item: StockCard) {

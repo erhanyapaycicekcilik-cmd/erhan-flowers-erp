@@ -25,6 +25,9 @@ type Variant = {
   commissionPercent: string;
   images: string[] | null;
   stockQuantity?: number;
+  seoProductName?: string | null;
+  seoLongDescription?: string | null;
+  seoKeywords?: string[] | null;
 };
 
 type VariantListItem = {
@@ -171,6 +174,7 @@ export default function ProductCostDetailPage() {
   const [productQuery, setProductQuery] = useState('');
   const [stockCards, setStockCards] = useState<StockCard[]>([]);
   const [stockSearchQuery, setStockSearchQuery] = useState('');
+  const [stockSearchOpen, setStockSearchOpen] = useState(false);
   const [materials, setMaterials] = useState<MaterialItem[]>([]);
   const [pots, setPots] = useState<PotItem[]>([]);
   const [expenses, setExpenses] = useState<ExpenseItem[]>([]);
@@ -644,7 +648,21 @@ export default function ProductCostDetailPage() {
           pots: pots.map((pot) => ({ ...pot, width: 0, length: 0, height: 0, diameter: 0 })),
         },
       });
-      if (result.ok) setMessage(approve ? 'Maliyet kaydedildi.' : 'Taslak kaydedildi.');
+      if (result.ok) {
+        setMessage(approve ? 'Maliyet kaydedildi.' : 'Taslak kaydedildi.');
+        // Bileşenleri Trendyol SKU eşleştirmesine senkronize et (barcode = external SKU)
+        if (variant?.barcode) {
+          const stockComponents = materials.filter(m => m.stockCardId !== '' && m.quantity > 0);
+          await Promise.allSettled(
+            stockComponents.map(m =>
+              api('/integrations/sku-components', {
+                method: 'POST',
+                json: { platform: 'TRENDYOL', externalSku: variant.barcode, stockCardId: Number(m.stockCardId), quantity: m.quantity },
+              })
+            )
+          );
+        }
+      }
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Maliyet kaydedilemedi.');
     }
@@ -990,8 +1008,13 @@ export default function ProductCostDetailPage() {
             <Info label="Boy" value={variant?.detectedSize ?? '-'} />
             <Info label="Mevcut satış" value={money(parseMoney(variant?.trendyolSalePrice))} />
           </div>
-          {variant?.trendyolProductUrl && (
-            <a className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-brand" href={variant.trendyolProductUrl} target="_blank" rel="noreferrer">
+          {variant?.barcode && (
+            <a
+              className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-brand hover:underline"
+              href={variant.trendyolProductUrl && !variant.trendyolProductUrl.includes('/sr?q=') ? variant.trendyolProductUrl : `https://www.trendyol.com/sr?q=${encodeURIComponent(variant.productName)}`}
+              target="_blank"
+              rel="noreferrer"
+            >
               <ExternalLink size={14} />
               Trendyol’da aç
             </a>
@@ -1085,49 +1108,30 @@ export default function ProductCostDetailPage() {
           </CompactPanel>
 
           <CompactPanel
-            title="Ürün Bilgi Motoru"
-            action={
-              <button className="btn btn-primary min-h-8 px-2 text-xs" onClick={fillFromKnowledge} disabled={knowledgeLoading}>
-                <Brain size={14} />
-                {knowledgeLoading ? 'Analiz ediliyor' : 'Ürün Adından Reçete Getir'}
-              </button>
-            }
-          >
-            <div className="grid gap-2 text-xs md:grid-cols-4">
-              <Info label="Okunan ürün adı" value={variant?.productName ?? '-'} />
-              <Info label="Bitki" value={knowledgeResult?.plantType?.name ?? '-'} />
-              <Info label="Boy" value={knowledgeResult?.heightCm ? `${knowledgeResult.heightCm} cm` : '-'} />
-              <Info label="Saksı" value={knowledgeResult?.potProfile?.name ?? '-'} />
-              <Info label="Bambu/Gövde adedi" value={knowledgeResult?.detected?.stemCount ? `${knowledgeResult.detected.stemCount} adet` : '-'} />
-            </div>
-            {knowledgeResult?.recipeProfile && (
-              <div className="mt-2 rounded-md bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800">
-                Önerilen reçete: {knowledgeResult.recipeProfile.name}
-              </div>
-            )}
-            {knowledgeResult?.warnings?.length ? (
-              <div className="mt-2 rounded-md bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
-                {knowledgeResult.warnings.join(' ')}
-              </div>
-            ) : null}
-          </CompactPanel>
-
-          <CompactPanel
             title="Stoklu Malzemeler"
             action={
               <div className="flex flex-wrap gap-2">
-                <button className="btn btn-secondary min-h-8 px-2 text-xs" onClick={() => setStoneModalOpen(true)}><Plus size={14} />Yeni Taş Ekle</button>
-                <button className="btn btn-primary min-h-8 px-2 text-xs" onClick={() => addMaterial()}><Plus size={14} />Malzeme Ekle</button>
+                <button className="btn btn-secondary min-h-8 px-2 text-xs" onClick={fillFromKnowledge} disabled={knowledgeLoading}>
+                  <Brain size={14} />
+                  {knowledgeLoading ? 'Analiz ediliyor...' : 'Reçete Getir'}
+                </button>
+                <button className="btn btn-secondary min-h-8 px-2 text-xs" onClick={() => setStoneModalOpen(true)}><Plus size={14} />Taş Ekle</button>
+                <button className="btn btn-primary min-h-8 px-2 text-xs" onClick={() => { setStockSearchQuery(''); setStockSearchOpen(o => !o); }}><Plus size={14} />Malzeme Ekle</button>
               </div>
             }
           >
-            <StockSearchPanel
-              query={stockSearchQuery}
-              stockCards={stockCards}
-              onQueryChange={setStockSearchQuery}
-              onAddMaterial={addStockAsMaterial}
-              onAddPot={addStockAsPot}
-            />
+            {knowledgeResult?.warnings?.length ? (
+              <div className="mb-2 rounded-md bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">{knowledgeResult.warnings.join(' ')}</div>
+            ) : null}
+            {stockSearchOpen && (
+              <StockSearchPanel
+                query={stockSearchQuery}
+                stockCards={stockCards}
+                onQueryChange={setStockSearchQuery}
+                onAddMaterial={(s) => { addStockAsMaterial(s); setStockSearchOpen(false); setStockSearchQuery(''); }}
+                onAddPot={(s) => { addStockAsPot(s); setStockSearchOpen(false); setStockSearchQuery(''); }}
+              />
+            )}
             {unverifiedStockCards.length > 0 && !stockWarningAccepted && (
               <div className="mb-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs font-semibold text-amber-800">
                 <div>Bu stok kartının fiziksel sayımı henüz doğrulanmamıştır.</div>
@@ -1170,6 +1174,28 @@ export default function ProductCostDetailPage() {
               ))}
             </div>
           </CompactPanel>
+
+          {variant && (
+            <SeoPanel
+              variantId={variant.id}
+              productName={variant.productName}
+              detectedSize={variant.detectedSize}
+              seoProductName={variant.seoProductName}
+              seoLongDescription={variant.seoLongDescription}
+              seoKeywords={variant.seoKeywords}
+              knowledgeResult={knowledgeResult}
+              materials={materials}
+            />
+          )}
+
+          <KargoPanel onAdd={(amount) => {
+            const existing = expenses.find((e) => e.name === 'Kargo');
+            if (existing) {
+              updateExpense(existing.key, { amount, isActive: true });
+            } else {
+              setExpenses((curr) => [...curr, { key: crypto.randomUUID(), name: 'Kargo', amount, description: 'Trendyol kargo tarifesi', isActive: true }]);
+            }
+          }} />
 
           <CompactPanel
             title="Stok Dışı Giderler"
@@ -1227,14 +1253,12 @@ export default function ProductCostDetailPage() {
             </div>
 
             <div className="mt-4 grid grid-cols-2 gap-2">
-              <button className="btn btn-secondary justify-center" onClick={() => save(false)}><Save size={16} />Taslak Kaydet</button>
-              <button className="btn btn-primary justify-center" onClick={() => save(true)}>Maliyeti Kaydet</button>
+              <button className="btn btn-primary justify-center col-span-2" onClick={saveAndNext}><Save size={16} />Kaydet ve Sonraki Ürüne Geç</button>
+              <button className="btn btn-primary justify-center col-span-2" onClick={pushPriceToTrendyol}>Trendyol'a Gönder</button>
               <button className="btn btn-secondary justify-center" onClick={() => setCopyModalOpen(true)}><Copy size={16} />Reçeteyi Kopyala</button>
               <button className="btn btn-secondary justify-center" onClick={copySummary}><Copy size={16} />Özeti Kopyala</button>
               <button className="btn btn-secondary justify-center" onClick={copyRecipe}><Copy size={16} />Reçete Metni</button>
               <button className="btn btn-secondary justify-center" onClick={exportPriceUpdateFile}>Fiyat Dosyası</button>
-              <button className="btn btn-primary justify-center" onClick={pushPriceToTrendyol}>Trendyol'a Fiyat Gönder</button>
-              <button className="btn btn-primary justify-center" onClick={saveAndNext}>Kaydet ve Sonraki Ürüne Geç</button>
             </div>
           </section>
         </aside>
@@ -1369,6 +1393,13 @@ function CompactPanel({ title, action, children }: { title: string; action?: Rea
   return <section className="panel p-3"><div className="mb-2 flex items-center justify-between gap-2"><h2 className="font-bold">{title}</h2>{action}</div>{children}</section>;
 }
 
+const STOCK_TABS = [
+  { key: 'govde', label: 'Gövde', filter: isTreeBodyStock },
+  { key: 'yaprak', label: 'Yaprak / Çiçek', filter: isLeafStock },
+  { key: 'saksi', label: 'Saksı', filter: isPotStock, pot: true },
+  { key: 'hepsi', label: 'Tümü', filter: (_s: StockCard) => true },
+] as const;
+
 function StockSearchPanel({
   query,
   stockCards,
@@ -1382,56 +1413,91 @@ function StockSearchPanel({
   onAddMaterial: (stock: StockCard) => void;
   onAddPot: (stock: StockCard) => void;
 }) {
-  const normalizedQuery = normalizeSearchText(query);
-  const hasQuery = normalizedQuery.length >= 2;
-  const windows = stockPickerWindows(stockCards, query);
+  const [tab, setTab] = useState<string>('govde');
+  const [quantities, setQuantities] = useState<Record<number, string>>({});
+
+  const activeTab = STOCK_TABS.find(t => t.key === tab) ?? STOCK_TABS[0];
+  const hasQuery = query.trim().length >= 2;
+
+  const results = (() => {
+    const pool = hasQuery
+      ? rankedStockCards(stockCards, query)
+      : rankedStockCards(stockCards.filter(activeTab.filter as (s: StockCard) => boolean), '');
+    return pool.slice(0, 30);
+  })();
 
   return (
-    <div className="mb-3 rounded-md border border-emerald-100 bg-emerald-50 p-3">
-      <div className="mb-2 flex items-center gap-2 text-sm font-bold text-emerald-900">
-        <Search size={16} />
-        Ürün Merkezi - Stoktan Ara ve Listeye Ekle
-      </div>
-      <input
-        className="w-full rounded-md border border-emerald-200 bg-white px-3 py-2 text-sm outline-none focus:border-brand"
-        value={query}
-        onChange={(event) => onQueryChange(event.target.value)}
-        placeholder="Ağaç gövde, bambu gövde, bitki yaprak, saksı, stok kodu veya barkod ara"
-      />
-      {query.trim().length > 0 && query.trim().length < 2 && (
-        <div className="mt-2 text-xs font-semibold text-emerald-800">Aramak için en az 2 karakter yazın.</div>
-      )}
-
-      <div className="mt-3 grid gap-3 xl:grid-cols-4">
-        {windows.map((window) => (
-          <div key={window.key} className="flex min-h-[260px] flex-col rounded-md border border-line bg-white p-2">
-            <div className="rounded-md bg-slate-50 px-2 py-2">
-              <div className="text-sm font-black text-ink">{window.title}</div>
-              <div className="mt-1 text-[11px] font-semibold leading-4 text-slate-500">{window.description}</div>
-            </div>
-            <div className="mt-2 grid flex-1 content-start gap-2">
-              {window.items.map((stock) => (
-                <StockPickerCard
-                  key={stock.id}
-                  stock={stock}
-                  primaryAction={window.primaryAction}
-                  onAddMaterial={onAddMaterial}
-                  onAddPot={onAddPot}
-                />
-              ))}
-              {window.items.length === 0 && (
-                <div className="rounded-md bg-slate-50 px-3 py-3 text-xs font-semibold text-slate-500">
-                  {hasQuery ? 'Bu pencerede sonuç yok.' : 'Bu grupta stok bulunamadı.'}
-                </div>
-              )}
-            </div>
-          </div>
-        ))}
+    <div className="mb-3 rounded-md border border-line bg-white">
+      {/* Arama */}
+      <div className="flex items-center gap-2 border-b border-line px-3 py-2">
+        <Search size={14} className="shrink-0 text-slate-400" />
+        <input
+          className="flex-1 bg-transparent text-sm outline-none placeholder:text-slate-400"
+          value={query}
+          onChange={(e) => onQueryChange(e.target.value)}
+          placeholder="Stok adı, kodu veya barkod ara..."
+        />
+        {query && (
+          <button className="text-slate-400 hover:text-slate-600" onClick={() => onQueryChange('')}>✕</button>
+        )}
       </div>
 
-      {hasQuery && windows.every((window) => window.items.length === 0) && (
-        <div className="mt-2 rounded-md bg-white px-3 py-2 text-xs font-semibold text-slate-500">Stok kartı bulunamadı.</div>
+      {/* Kategori sekmeleri — sadece arama yokken */}
+      {!hasQuery && (
+        <div className="flex gap-1 border-b border-line px-3 pt-2 pb-0">
+          {STOCK_TABS.map(t => (
+            <button
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-t transition ${tab === t.key ? 'bg-brand text-white' : 'text-slate-500 hover:text-ink'}`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
       )}
+
+      {/* Sonuç listesi */}
+      <div className="max-h-64 overflow-y-auto divide-y divide-line">
+        {results.map(stock => {
+          const qty = quantities[stock.id] ?? '1';
+          const isPot = isPotStock(stock);
+          return (
+            <div key={stock.id} className="flex items-center gap-2 px-3 py-2 hover:bg-slate-50">
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-semibold truncate">{stock.name}</div>
+                <div className="text-xs text-slate-400">{stock.sku} · Stok: {Number(stock.stockQuantity ?? 0).toLocaleString('tr-TR')} {stock.unit}</div>
+              </div>
+              <input
+                type="number"
+                min="0.001"
+                step="0.001"
+                value={qty}
+                onChange={e => setQuantities(q => ({ ...q, [stock.id]: e.target.value }))}
+                className="w-16 rounded border border-line px-1.5 py-1 text-center text-xs"
+              />
+              <span className="text-xs text-slate-400 w-8">{stock.unit}</span>
+              <button
+                className="shrink-0 rounded bg-brand px-2 py-1 text-xs font-semibold text-white"
+                onClick={() => {
+                  const customStock = { ...stock, stockQuantity: Number(qty) || 1 } as StockCard;
+                  if (isPot && (activeTab as typeof STOCK_TABS[number]).key === 'saksi') {
+                    onAddPot(customStock);
+                  } else {
+                    onAddMaterial(customStock);
+                  }
+                  setQuantities(q => ({ ...q, [stock.id]: '1' }));
+                }}
+              >
+                Ekle
+              </button>
+            </div>
+          );
+        })}
+        {results.length === 0 && (
+          <div className="px-3 py-4 text-center text-xs text-slate-400">Sonuç bulunamadı.</div>
+        )}
+      </div>
     </div>
   );
 }
@@ -1778,6 +1844,222 @@ function PriceLine({ label, value }: { label: string; value: number }) {
 
 function Warning({ text }: { text: string }) {
   return <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">{text}</div>;
+}
+
+function SeoPanel({ variantId, productName, detectedSize, seoProductName, seoLongDescription, seoKeywords, knowledgeResult, materials }: {
+  variantId: number;
+  productName: string;
+  detectedSize?: string | null;
+  seoProductName?: string | null;
+  seoLongDescription?: string | null;
+  seoKeywords?: string[] | null;
+  knowledgeResult: KnowledgeAnalysis | null;
+  materials: { name: string }[];
+}) {
+  const [name, setName] = useState(seoProductName ?? '');
+  const [desc, setDesc] = useState(seoLongDescription ?? '');
+  const [keywords, setKeywords] = useState(Array.isArray(seoKeywords) ? seoKeywords.join(', ') : '');
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState('');
+
+  function generate() {
+    const pn = productName;
+    const plant = knowledgeResult?.plantType?.name ?? '';
+    const pot = knowledgeResult?.potProfile?.name ?? '';
+    const height = knowledgeResult?.heightCm ? `${knowledgeResult.heightCm}cm` : (detectedSize ?? '');
+    const recipe = knowledgeResult?.recipeProfile?.name ?? '';
+
+    const isSeprator = /seperat|speratör|seperatör/i.test(pn);
+    const isBambu = /bambu/i.test(pn);
+    const stemMatch = pn.match(/(\d+)\s*(adet|li|lü|lu)\s*bambu/i) ?? pn.match(/bambu\s*(\d+)/i);
+    const stemCount = stemMatch ? stemMatch[1] : '';
+    // Saksı bilgisini stok bileşenlerinden al
+    const potMaterial = materials.find((m) => /saks[iı]/i.test(m.name));
+    const hasPot = Boolean(potMaterial);
+    const potDesc = potMaterial ? potMaterial.name : '';
+
+    // SEO adı
+    const seoName = [
+      height && `${height}`,
+      isBambu && stemCount ? `${stemCount} Adet Yapay Bambu` : plant ? `Yapay ${plant} Ağacı` : pn.split(' ').slice(0, 5).join(' '),
+      hasPot ? `| ${potDesc}` : '',
+      isSeprator ? '| Bambu Seperatör' : '',
+      '| Dekoratif Yapay Bitki',
+    ].filter(Boolean).join(' ');
+    const sepNote = isSeprator && hasPot
+      ? '\n🏠 MONTAJ BİLGİSİ:\n• Bambu çubuklar ve saksı AYRI gönderilir\n• Bambuları saksıya yerleştirmek 5 dakika sürer\n• Montaj talimatı pakete dahildir\n'
+      : (isBambu && hasPot ? '\n📦 PAKET BİLGİSİ:\n• Bambu gövde(ler) ve saksı AYRI gönderilir\n• Kolay montaj, ek alet gerekmez\n' : '');
+    const leafInfo = recipe ? `• Yaprak/Demet: ${recipe}` : '';
+    const potLine = hasPot ? `• Saksı: ${potDesc}` : '';
+
+    const seoDesc = `${pn}
+
+🌿 ÜRÜN ÖZELLİKLERİ:
+• Toplam yükseklik: ${height || 'Ürün adına bakınız'}
+• ${stemCount ? `Bambu gövde: ${stemCount} adet` : plant ? `Bitki türü: ${plant}` : ''}
+${leafInfo}
+${potLine}
+• Malzeme: Yüksek kaliteli yapay bitki
+• Renk: Doğal yeşil${sepNote}
+🧹 BAKIM VE TEMİZLİK:
+• Islak bez ile kolayca temizlenir
+• Güneş ışığı gerekmez
+• Sulama gerekmez
+• Tüm mevsimlerde taze görünüm
+
+✅ NEDEN BİZİ SEÇMELİSİNİZ?
+• Hızlı ve güvenli kargo
+• Sağlam paketleme
+• Yüksek kalite garantisi
+• Depo stoktan anında kargolama`;
+
+    const kw = [
+      isBambu ? 'yapay bambu' : '',
+      plant ? `yapay ${plant}` : '',
+      height ? `${height} yapay ağaç` : '',
+      isSeprator ? 'bambu seperatör' : '',
+      hasPot && /mdf/i.test(potDesc) ? 'mdf saksılı yapay bitki' : '',
+      'dekoratif yapay bitki', 'salon bitkisi', 'ofis bitkisi', 'yapay ağaç',
+    ].filter(Boolean).join(', ');
+
+    setName(seoName);
+    setDesc(seoDesc);
+    setKeywords(kw);
+  }
+
+  async function save() {
+    setSaving(true);
+    setMsg('');
+    try {
+      await api(`/production-costs/variants/${variantId}/seo`, { method: 'POST', json: { seoProductName: name, seoLongDescription: desc, seoKeywords: keywords } });
+      setMsg('Kaydedildi.');
+    } catch {
+      setMsg('Hata oluştu.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <CompactPanel
+      title="SEO Ürün Adı & Açıklama"
+      action={
+        <button className="btn btn-secondary min-h-8 px-2 text-xs" onClick={generate}>
+          ✨ Otomatik Oluştur
+        </button>
+      }
+    >
+      <div className="space-y-3">
+        <div>
+          <label className="mb-1 block text-[11px] font-semibold uppercase text-slate-400">SEO Ürün Adı <span className="text-slate-300 normal-case">(Trendyol'da görünen başlık)</span></label>
+          <input
+            className="input w-full text-sm"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Otomatik oluştur veya manuel yaz..."
+          />
+          <div className="mt-0.5 text-right text-[11px] text-slate-400">{name.length} / 100 karakter</div>
+        </div>
+        <div>
+          <label className="mb-1 block text-[11px] font-semibold uppercase text-slate-400">Ürün Açıklaması <span className="text-slate-300 normal-case">(saksı boyutu, yaprak sayısı, bakım, montaj)</span></label>
+          <textarea
+            className="input w-full text-sm"
+            rows={12}
+            value={desc}
+            onChange={(e) => setDesc(e.target.value)}
+            placeholder="Otomatik oluştur veya manuel yaz..."
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-[11px] font-semibold uppercase text-slate-400">Anahtar Kelimeler</label>
+          <input
+            className="input w-full text-sm"
+            value={keywords}
+            onChange={(e) => setKeywords(e.target.value)}
+            placeholder="yapay bambu, dekoratif ağaç, salon bitkisi..."
+          />
+        </div>
+        <div className="flex items-center gap-3">
+          <button className="btn btn-primary min-h-8 px-3 text-xs" onClick={save} disabled={saving || !name}>
+            {saving ? 'Kaydediliyor...' : 'Kaydet'}
+          </button>
+          {msg && <span className="text-xs font-semibold text-emerald-600">{msg}</span>}
+        </div>
+      </div>
+    </CompactPanel>
+  );
+}
+
+// Trendyol Express tarifesi: 164,18 TL / 10 desi
+const TRENDYOL_EXPRESS_PER_DESI = 164.18 / 10;
+const SURAT_PER_DESI = 170.86 / 10;
+
+function KargoPanel({ onAdd }: { onAdd: (amount: number) => void }) {
+  const [en, setEn] = useState('');
+  const [boy, setBoy] = useState('');
+  const [yukseklik, setYukseklik] = useState('');
+  const [agirlik, setAgirlik] = useState('');
+
+  const desiHacim = en && boy && yukseklik ? (Number(en) * Number(boy) * Number(yukseklik)) / 3000 : 0;
+  const desi = Math.max(desiHacim, Number(agirlik) || 0);
+  const expressCost = desi > 0 ? Math.ceil(desi) * TRENDYOL_EXPRESS_PER_DESI : 0;
+  const suratCost = desi > 0 ? Math.ceil(desi) * SURAT_PER_DESI : 0;
+
+  return (
+    <CompactPanel title="Kargo Maliyeti">
+      <div className="space-y-3">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <div>
+            <label className="mb-1 block text-[11px] font-semibold uppercase text-slate-400">En (cm)</label>
+            <input type="number" className="input w-full text-sm" placeholder="0" value={en} onChange={(e) => setEn(e.target.value)} />
+          </div>
+          <div>
+            <label className="mb-1 block text-[11px] font-semibold uppercase text-slate-400">Boy (cm)</label>
+            <input type="number" className="input w-full text-sm" placeholder="0" value={boy} onChange={(e) => setBoy(e.target.value)} />
+          </div>
+          <div>
+            <label className="mb-1 block text-[11px] font-semibold uppercase text-slate-400">Yükseklik (cm)</label>
+            <input type="number" className="input w-full text-sm" placeholder="0" value={yukseklik} onChange={(e) => setYukseklik(e.target.value)} />
+          </div>
+          <div>
+            <label className="mb-1 block text-[11px] font-semibold uppercase text-slate-400">Ağırlık (kg)</label>
+            <input type="number" className="input w-full text-sm" placeholder="0" value={agirlik} onChange={(e) => setAgirlik(e.target.value)} />
+          </div>
+        </div>
+
+        {desi > 0 && (
+          <div className="rounded-md bg-slate-50 p-3">
+            <div className="mb-2 text-xs font-bold text-slate-500">
+              Desi: <span className="text-ink">{desiHacim.toFixed(2)} (hacim)</span>
+              {Number(agirlik) > 0 && <span className="ml-2 text-slate-400">| {agirlik} kg (ağırlık)</span>}
+              <span className="ml-2 font-bold text-brand">→ Faturalanan: {Math.ceil(desi)} desi</span>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-md border border-line bg-white p-3">
+                <div className="text-xs font-semibold text-slate-500">Trendyol Express</div>
+                <div className="mt-1 text-xl font-bold text-ink">{expressCost.toLocaleString('tr-TR', { minimumFractionDigits: 2 })} TL</div>
+                <div className="mt-0.5 text-[11px] text-slate-400">{TRENDYOL_EXPRESS_PER_DESI.toFixed(2)} TL/desi</div>
+                <button className="btn btn-primary mt-2 w-full min-h-7 px-2 text-xs" onClick={() => onAdd(Math.round(expressCost * 100) / 100)}>
+                  Maliyete Ekle
+                </button>
+              </div>
+              <div className="rounded-md border border-line bg-white p-3">
+                <div className="text-xs font-semibold text-slate-500">Sürat Kargo</div>
+                <div className="mt-1 text-xl font-bold text-ink">{suratCost.toLocaleString('tr-TR', { minimumFractionDigits: 2 })} TL</div>
+                <div className="mt-0.5 text-[11px] text-slate-400">{SURAT_PER_DESI.toFixed(2)} TL/desi</div>
+                <button className="btn btn-secondary mt-2 w-full min-h-7 px-2 text-xs" onClick={() => onAdd(Math.round(suratCost * 100) / 100)}>
+                  Maliyete Ekle
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+        {desi === 0 && (
+          <p className="text-xs text-slate-400">En, boy ve yükseklik girerek kargo maliyetini hesapla. Desi = (En × Boy × Yükseklik) / 3000</p>
+        )}
+      </div>
+    </CompactPanel>
+  );
 }
 
 function materialTotal(item: MaterialItem) {

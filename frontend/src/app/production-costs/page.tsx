@@ -21,6 +21,7 @@ type Variant = {
   productCostStatus?: string;
   trendyolSalePrice?: number | string | null;
   trendyolProductUrl?: string | null;
+  orderCount?: number;
 };
 
 type ImportPreview = {
@@ -42,6 +43,7 @@ export default function ProductCostListPage() {
   const [message, setMessage] = useState('');
   const [loadingImport, setLoadingImport] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [sortBy, setSortBy] = useState<'default' | 'orders'>('orders');
 
   useEffect(() => {
     loadProducts();
@@ -54,7 +56,7 @@ export default function ProductCostListPage() {
 
   const filtered = useMemo(() => {
     const needle = query.trim().toLocaleLowerCase('tr-TR');
-    return variants.filter((item) => {
+    const result = variants.filter((item) => {
       const status = item.productCostStatus || item.costStatus || 'Maliyet Girilmedi';
       const statusOk = statusFilter === 'Tümü' || status === statusFilter;
       const queryOk = !needle || [item.productName, item.barcode, item.currentModelCode, item.proposedModelCode, item.supplierStockCode]
@@ -62,7 +64,9 @@ export default function ProductCostListPage() {
         .some((value) => String(value).toLocaleLowerCase('tr-TR').includes(needle));
       return statusOk && queryOk;
     });
-  }, [query, statusFilter, variants]);
+    if (sortBy === 'orders') result.sort((a, b) => (b.orderCount ?? 0) - (a.orderCount ?? 0));
+    return result;
+  }, [query, statusFilter, variants, sortBy]);
 
   async function previewExcel(event: ChangeEvent<HTMLInputElement>) {
     const selectedFile = event.target.files?.[0] ?? null;
@@ -188,9 +192,13 @@ export default function ProductCostListPage() {
         </section>
       </div>
 
-      <div className="mb-3 flex items-center justify-between text-sm text-slate-500">
+      <div className="mb-3 flex items-center justify-between gap-3 text-sm text-slate-500">
         <span>{filtered.length} ürün gösteriliyor</span>
-        <span>Kartın tamamı tıklanabilir</span>
+        <div className="flex items-center gap-2">
+          <span className="text-xs">Sırala:</span>
+          <button onClick={() => setSortBy('orders')} className={`rounded-md px-3 py-1.5 text-xs font-semibold ${sortBy === 'orders' ? 'bg-brand text-white' : 'bg-slate-100 text-slate-600'}`}>En Çok Sipariş</button>
+          <button onClick={() => setSortBy('default')} className={`rounded-md px-3 py-1.5 text-xs font-semibold ${sortBy === 'default' ? 'bg-brand text-white' : 'bg-slate-100 text-slate-600'}`}>Son Eklenen</button>
+        </div>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
@@ -216,18 +224,19 @@ export default function ProductCostListPage() {
               </div>
             </Link>
             <div className="flex items-center justify-between gap-2 p-4 pt-3">
-              <span className="rounded bg-slate-100 px-2 py-1 text-xs font-semibold">{variant.productCostStatus || variant.costStatus || 'Maliyet Girilmedi'}</span>
-              {variant.trendyolProductUrl && (
-                <a
-                  href={variant.trendyolProductUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-xs font-semibold text-brand underline"
-                  onClick={(event) => event.stopPropagation()}
-                >
-                  Trendyol'da Gör
-                </a>
-              )}
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="rounded bg-slate-100 px-2 py-1 text-xs font-semibold">{variant.productCostStatus || variant.costStatus || 'Maliyet Girilmedi'}</span>
+                {(variant.orderCount ?? 0) > 0 && <span className="rounded bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700">{variant.orderCount} sipariş</span>}
+              </div>
+              <a
+                href={variant.trendyolProductUrl && !variant.trendyolProductUrl.includes('/sr?q=') ? variant.trendyolProductUrl : `https://www.trendyol.com/sr?q=${encodeURIComponent(variant.productName)}`}
+                target="_blank"
+                rel="noreferrer"
+                className="text-xs font-semibold text-brand underline"
+                onClick={(event) => event.stopPropagation()}
+              >
+                Trendyol'da Gör
+              </a>
             </div>
           </div>
         ))}

@@ -14,4 +14,9 @@ export class DashboardController {
   summary(@Req() request: AuthenticatedRequest) {
     return this.dashboard.summary(request.user?.role);
   }
+
+  @Get('daily-sales')
+  dailySales() {
+    return this.dashboard.dailySales();
+  }
 }
