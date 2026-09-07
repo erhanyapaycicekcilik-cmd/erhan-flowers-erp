@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, Printer } from 'lucide-react';
 import JsBarcode from 'jsbarcode';
 import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { api } from '@/lib/api';
+import { api, apiFileUrl } from '@/lib/api';
 
 const COMPANY_ADDRESS = 'Sarılar Mahallesi Cumhuriyet Caddesi No: 52, Manavgat / Antalya';
 const COMPANY_LOGO = '/logo-erhan-flowers.png';
@@ -284,10 +284,12 @@ export default function OrderPrintPreviewPage() {
           vertical-align: top;
           overflow-wrap: anywhere;
         }
-        .items-section th:nth-child(1) { width: 39%; }
-        .items-section th:nth-child(2) { width: 21%; }
-        .items-section th:nth-child(3) { width: 10%; }
-        .items-section th:nth-child(4) { width: 30%; }
+        .items-section th:nth-child(1) { width: 13%; }
+        .items-section th:nth-child(2) { width: 30%; }
+        .items-section th:nth-child(3) { width: 17%; }
+        .items-section th:nth-child(4) { width: 9%; }
+        .items-section th:nth-child(5) { width: 31%; }
+        .item-thumb { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; }
         .receipt-footer {
           display: grid;
           grid-template-columns: repeat(4, 1fr);
@@ -498,6 +500,7 @@ function A5Receipt({ sale, company, barcodeRef }: { sale: Record<string, unknown
         <table>
           <thead>
             <tr>
+              <th>Görsel</th>
               <th>Ürün Adı</th>
               <th>Model Kodu</th>
               <th>Adet</th>
@@ -505,14 +508,23 @@ function A5Receipt({ sale, company, barcodeRef }: { sale: Record<string, unknown
             </tr>
           </thead>
           <tbody>
-            {items.map((item) => (
+            {items.map((item) => {
+              const rawImg = text(item.external_image_url ?? item.imagePath ?? item.image_path);
+              const imgSrc = rawImg ? (rawImg.startsWith('http') ? rawImg : apiFileUrl(rawImg)) : null;
+              return (
               <tr key={String(item.id)}>
+                <td style={{ padding: '1mm', verticalAlign: 'middle' }}>
+                  {imgSrc
+                    ? <img src={imgSrc} alt="" className="item-thumb" crossOrigin="anonymous" />
+                    : <div style={{ width: '100%', aspectRatio: '1', background: '#f1f5f9' }} />}
+                </td>
                 <td>{text(item.product_name_snapshot ?? item.productNameSnapshot) || '-'}</td>
                 <td>{text(item.model_code ?? item.modelCode) || '-'}</td>
                 <td>{Number(item.quantity || 0)}</td>
                 <td>{text(item.variation_text ?? item.variationText ?? sale.customer_note ?? sale.customerNote) || '-'}</td>
               </tr>
-            ))}
+              );
+            })}
             {!items.length && <tr><td colSpan={4}>Ürün bilgisi yok.</td></tr>}
           </tbody>
         </table>
