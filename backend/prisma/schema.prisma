@@ -1364,6 +1364,7 @@ model RetailSaleItem {
   productNameSnapshot  String                  @map("product_name_snapshot")
   externalLineId       String?                 @map("external_line_id")
   externalVariantId    String?                 @map("external_variant_id")
+  externalImageUrl     String?                 @map("external_image_url")
   variationText        String?                 @map("variation_text")
   quantity             Decimal                 @db.Decimal(12, 3)
   unitPrice            Decimal                 @map("unit_price") @db.Decimal(14, 2)

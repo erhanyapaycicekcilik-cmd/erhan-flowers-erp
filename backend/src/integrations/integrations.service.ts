@@ -491,7 +491,7 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
               'quantity', i.quantity,
               'unitPrice', i.unit_price,
               'lineTotal', i.line_total,
-              'imagePath', sc.image_path,
+              'imagePath', COALESCE(sc.image_path, sc.external_image_url, i.external_image_url),
               'color', sc.color
             )
             ORDER BY i.id
@@ -505,6 +505,8 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
       LEFT JOIN users u ON u.id = s.cancelled_by_id
       LEFT JOIN retail_sale_items i ON i.sale_id = s.id
       LEFT JOIN stock_cards sc ON sc.id = i.stock_card_id
+        OR (i.stock_card_id IS NULL AND i.barcode IS NOT NULL AND sc.barcode = i.barcode)
+        OR (i.stock_card_id IS NULL AND i.model_code IS NOT NULL AND sc.sku = i.model_code)
       WHERE s.integration_sync_status <> 'MANUAL'
         AND (${platform} = '' OR s.channel::text = ${platform})
         AND (${statuses.length} = 0 OR s.status::text IN (${Prisma.join(statuses.length ? statuses : ['__NONE__'])}))
@@ -661,12 +663,12 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
         const itemRows = await tx.$queryRaw<Array<{ id: number; stockCardId: number | null; unit: string | null }>>`
           INSERT INTO retail_sale_items (
             sale_id, variant_id, stock_card_id, barcode, model_code, product_name_snapshot, external_line_id,
-            external_variant_id, variation_text, quantity, unit_price, discount_amount, line_total, unit_cost_snapshot,
+            external_variant_id, external_image_url, variation_text, quantity, unit_price, discount_amount, line_total, unit_cost_snapshot,
             stock_fulfillment_type, created_at
           )
           VALUES (
             ${saleId}, ${match.variantId}, ${match.stockCardId}, ${item.barcode ?? null}, ${item.modelCode ?? null}, ${item.productName},
-            ${item.externalLineId ?? null}, ${item.externalVariantId ?? null}, ${item.variationText ?? null}, ${item.quantity},
+            ${item.externalLineId ?? null}, ${item.externalVariantId ?? null}, ${item.imageUrl ?? null}, ${item.variationText ?? null}, ${item.quantity},
             ${item.unitPrice}, 0, ${lineTotal}, ${match.unitCost}, 'READY_STOCK'::"StockFulfillmentType", NOW()
           )
           RETURNING id, stock_card_id AS "stockCardId", (SELECT unit FROM stock_cards WHERE id = stock_card_id) AS unit

@@ -17,6 +17,7 @@ export type ExternalOrderItem = {
   sku?: string;
   barcode?: string;
   modelCode?: string;
+  imageUrl?: string;
   quantity: number;
   unitPrice: number;
 };
