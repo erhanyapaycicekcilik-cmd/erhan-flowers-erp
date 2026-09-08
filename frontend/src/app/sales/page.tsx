@@ -1,7 +1,7 @@
 'use client';
 
-import { FormEvent, Suspense, useEffect, useMemo, useRef, useState } from 'react';
-import { Calculator, CreditCard, Eye, FileText, MapPin, Phone, Plus, Printer, Search, ShoppingCart, Trash2, Truck, UserRound } from 'lucide-react';
+import { Dispatch, FormEvent, SetStateAction, Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { Calculator, CreditCard, Eye, FileText, MapPin, Phone, Plus, Printer, Search, ShoppingCart, Store, Trash2, Truck, UserRound } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 import { AdminShell } from '@/components/AdminShell';
 import { api, apiFileUrl } from '@/lib/api';
@@ -163,6 +163,7 @@ function SalesCenterPageContent() {
   const [selectedSale, setSelectedSale] = useState<Record<string, any> | null>(null);
   const [loadingSaleId, setLoadingSaleId] = useState<string | number | null>(null);
   const [quickSaleLoading, setQuickSaleLoading] = useState(false);
+  const [showDetails, setShowDetails] = useState(false);
   const quickBarcode = searchParams.get('barcode')?.trim() ?? '';
 
   useEffect(() => {
@@ -418,6 +419,16 @@ function SalesCenterPageContent() {
     }
   }
 
+  async function runCompleteSale() {
+    setQuickSaleLoading(true);
+    try {
+      if (delivery.method === STORE_PICKUP) await completeQuickStoreSale();
+      else await completeSale();
+    } finally {
+      setQuickSaleLoading(false);
+    }
+  }
+
   function validateSale(nextCustomer = customer, nextDelivery = delivery) {
     const nextIsStorePickup = nextDelivery.method === STORE_PICKUP;
     if (!nextCustomer.firstName.trim() || !nextCustomer.lastName.trim() || !nextCustomer.phone.trim()) {
@@ -509,12 +520,16 @@ function SalesCenterPageContent() {
                 <p className="text-sm text-slate-500">Satış No: {saleNumber}</p>
               </div>
               <div className="flex flex-wrap gap-2">
-                <button className="btn btn-secondary" type="button" onClick={() => saveSale('DRAFT')}>
-                  Taslak Kaydet
-                </button>
-                <button className="btn btn-secondary" type="button" onClick={() => saveSale('CONFIRMED')}>
-                  Müşteri ve Siparişi Kaydet
-                </button>
+                {showDetails && (
+                  <>
+                    <button className="btn btn-secondary" type="button" onClick={() => saveSale('DRAFT')}>
+                      Taslak Kaydet
+                    </button>
+                    <button className="btn btn-secondary" type="button" onClick={() => saveSale('CONFIRMED')}>
+                      Müşteri ve Siparişi Kaydet
+                    </button>
+                  </>
+                )}
                 {savedSale && customerSummary && (
                   <a className="btn btn-secondary" href={`/customers/${customerSummary.id}`} target="_blank" rel="noreferrer">
                     Müşteri Kartını Aç
@@ -525,10 +540,6 @@ function SalesCenterPageContent() {
                     Yeni Sipariş Oluştur
                   </button>
                 )}
-                <button className="btn btn-primary" type="button" onClick={completeSale}>
-                  <ShoppingCart size={17} />
-                  Satışı Tamamla
-                </button>
                 {quickBarcode && (
                   <button className="btn btn-primary" type="button" onClick={completeQuickStoreSale} disabled={quickSaleLoading || items.length === 0}>
                     <ShoppingCart size={17} />
@@ -548,6 +559,39 @@ function SalesCenterPageContent() {
             )}
           </section>
 
+          <QuickSalePanel
+            customer={customer}
+            setCustomer={setCustomer}
+            findCustomerByPhone={findCustomerByPhone}
+            customerSummary={customerSummary}
+            query={query}
+            setQuery={setQuery}
+            searchProducts={searchProducts}
+            results={results}
+            addItem={addItem}
+            items={items}
+            updateItem={updateItem}
+            removeItem={removeItem}
+            delivery={delivery}
+            setDelivery={setDelivery}
+            address={address}
+            setAddress={setAddress}
+            payments={payments}
+            setPayments={setPayments}
+            totals={totals}
+            onComplete={runCompleteSale}
+            completing={quickSaleLoading}
+            sourceOptions={sourceOptions}
+          />
+
+          <div className="text-center">
+            <button className="text-sm font-semibold text-brand underline underline-offset-4" type="button" onClick={() => setShowDetails((current) => !current)}>
+              {showDetails ? 'Detaylı görünümü gizle' : 'Detaylı görünümü göster (CRM, geçmiş siparişler, ek alanlar)'}
+            </button>
+          </div>
+
+          {showDetails && (
+          <>
           <section className="grid gap-5 lg:grid-cols-2">
             <div className="panel p-5">
               <div className="mb-4 flex items-center gap-2">
@@ -839,6 +883,8 @@ function SalesCenterPageContent() {
               {sales.length === 0 && <div className="py-8 text-center text-sm text-slate-500">Kayıtlı satış bulunamadı.</div>}
             </div>
           </section>
+          </>
+          )}
 
           {selectedSale && (
             <section id="eski-siparis-yazdir" className="panel p-5">
@@ -873,6 +919,8 @@ function SalesCenterPageContent() {
         </div>
 
         <aside className="space-y-5 xl:sticky xl:top-24 xl:self-start">
+          {showDetails && (
+          <>
           <section className="panel p-5">
             <div className="mb-4 flex items-center gap-2">
               <CreditCard size={18} />
@@ -938,6 +986,8 @@ function SalesCenterPageContent() {
               <textarea className="field min-h-16" placeholder="Teslimat notu" value={delivery.note} onChange={(e) => setDelivery({ ...delivery, note: e.target.value })} />
             </div>
           </section>
+          </>
+          )}
 
           <section className="panel p-5">
             <h3 className="mb-4 font-bold">Canlı Satış Özeti</h3>
@@ -953,6 +1003,218 @@ function SalesCenterPageContent() {
         </aside>
       </div>
     </AdminShell>
+  );
+}
+
+function QuickSalePanel({
+  customer,
+  setCustomer,
+  findCustomerByPhone,
+  customerSummary,
+  query,
+  setQuery,
+  searchProducts,
+  results,
+  addItem,
+  items,
+  updateItem,
+  removeItem,
+  delivery,
+  setDelivery,
+  address,
+  setAddress,
+  payments,
+  setPayments,
+  totals,
+  onComplete,
+  completing,
+  sourceOptions,
+}: {
+  customer: typeof emptyCustomer;
+  setCustomer: Dispatch<SetStateAction<typeof emptyCustomer>>;
+  findCustomerByPhone: () => Promise<void>;
+  customerSummary: CustomerSummary | null;
+  query: string;
+  setQuery: Dispatch<SetStateAction<string>>;
+  searchProducts: (event: FormEvent) => Promise<void>;
+  results: SaleProduct[];
+  addItem: (product: SaleProduct) => void;
+  items: SaleItem[];
+  updateItem: (id: number, data: Partial<SaleItem>) => void;
+  removeItem: (id: number) => void;
+  delivery: typeof emptyDelivery;
+  setDelivery: Dispatch<SetStateAction<typeof emptyDelivery>>;
+  address: typeof emptyAddress;
+  setAddress: Dispatch<SetStateAction<typeof emptyAddress>>;
+  payments: Array<typeof emptyPayment>;
+  setPayments: Dispatch<SetStateAction<Array<typeof emptyPayment>>>;
+  totals: { gross: number; discount: number; total: number; remaining: number };
+  onComplete: () => void;
+  completing: boolean;
+  sourceOptions: Array<{ id: number; code: string; name: string; isActive: boolean }>;
+}) {
+  const isPickup = delivery.method === STORE_PICKUP;
+
+  function selectDeliveryMode(pickup: boolean) {
+    setDelivery((current) => ({ ...current, method: pickup ? STORE_PICKUP : (current.method === STORE_PICKUP ? 'Kargo' : current.method) }));
+    if (!pickup) {
+      setCustomer((current) => (current.source === 'STORE' ? { ...current, source: 'PHONE' } : current));
+      setAddress((current) => (current.title.trim() ? current : { ...current, title: 'Teslimat adresi' }));
+    } else {
+      setCustomer((current) => ({ ...current, source: 'STORE' }));
+    }
+  }
+
+  function setPaymentField(data: Partial<typeof emptyPayment>) {
+    setPayments((current) => {
+      if (current.length === 0) return [{ ...emptyPayment, clientKey: crypto.randomUUID(), ...data }];
+      return current.map((row, index) => (index === 0 ? { ...row, ...data } : row));
+    });
+  }
+
+  const payment = payments[0] ?? emptyPayment;
+  const canComplete = items.length > 0 && customer.firstName.trim().length > 0 && customer.phone.trim().length > 0 && (isPickup || (address.city.trim() && address.district.trim() && address.fullAddress.trim()));
+
+  return (
+    <section className="panel space-y-5 border-2 border-brand/20 bg-white p-6 shadow-sm">
+      <div>
+        <h2 className="text-xl font-bold text-ink">Hızlı Satış</h2>
+        <p className="text-sm text-slate-500">Ürün seç, adet ve fiyatı gir, müşteriyi ekle, satışı tamamla — mağaza, telefon veya WhatsApp siparişleri için tek ekran.</p>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        {sourceOptions.map((source) => (
+          <button
+            key={source.code}
+            type="button"
+            className={`rounded-full border px-4 py-1.5 text-sm font-semibold transition ${customer.source === source.code ? 'border-brand bg-brand text-white' : 'border-line bg-white text-slate-600 hover:border-brand'}`}
+            onClick={() => setCustomer((current) => ({ ...current, source: source.code }))}
+          >
+            {source.name}
+          </button>
+        ))}
+      </div>
+
+      <div>
+        <div className="mb-2 flex items-center gap-2 text-sm font-bold text-ink">
+          <Search size={16} />
+          Ürün Seç
+        </div>
+        <form onSubmit={searchProducts} className="mb-3 grid gap-2 md:grid-cols-[1fr_auto]">
+          <input className="field" placeholder="Barkod, model kodu veya ürün adı yaz" value={query} onChange={(e) => setQuery(e.target.value)} autoFocus />
+          <button className="btn btn-primary" type="submit">
+            <Search size={17} />
+            Ara
+          </button>
+        </form>
+        {results.length > 0 && (
+          <div className="grid max-h-72 gap-2 overflow-y-auto rounded-md border border-line p-2">
+            {results.map((product) => (
+              <button key={product.id} type="button" className="flex items-center gap-3 rounded-md border border-line bg-white p-2 text-left hover:border-brand" onClick={() => addItem(product)}>
+                {product.imageUrl ? <img src={apiFileUrl(product.imageUrl)} alt="" className="h-12 w-12 rounded object-cover" /> : <div className="h-12 w-12 rounded bg-slate-100" />}
+                <div className="min-w-0 flex-1">
+                  <div className="truncate font-semibold text-ink">{product.productName}</div>
+                  <div className="text-xs text-slate-500">Stok: {product.stockQuantity} {product.stockUnit || 'Adet'} · Fiyat: {formatMoney(product.salePrice || product.trendyolSalePrice)}</div>
+                </div>
+                <Plus className="text-brand" size={20} />
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div>
+        <div className="mb-2 text-sm font-bold text-ink">Sepet</div>
+        <div className="space-y-2">
+          {items.map((item) => (
+            <div key={item.id} className="grid items-center gap-2 rounded-md border border-line p-3 sm:grid-cols-[1fr_90px_140px_44px]">
+              <div className="min-w-0">
+                <div className="truncate font-semibold text-ink">{item.productName}</div>
+                <div className="text-xs text-slate-500">{item.barcode || 'Barkod yok'}</div>
+              </div>
+              <div>
+                <label className="mb-1 block text-[10px] font-bold uppercase text-slate-400">Adet</label>
+                <input className="field" type="number" min="1" value={item.quantity} onChange={(e) => updateItem(item.id, { quantity: Number(e.target.value) })} />
+              </div>
+              <div>
+                <label className="mb-1 block text-[10px] font-bold uppercase text-slate-400">Fiyat (elle değiştirilebilir)</label>
+                <input className="field" type="number" min="0" value={item.unitPrice} onChange={(e) => updateItem(item.id, { unitPrice: Number(e.target.value) })} />
+              </div>
+              <button className="btn btn-secondary mt-4 justify-center" type="button" onClick={() => removeItem(item.id)} title="Sil">
+                <Trash2 size={17} />
+              </button>
+            </div>
+          ))}
+          {items.length === 0 && <div className="rounded-md border border-dashed border-line p-5 text-center text-sm text-slate-500">Henüz ürün eklenmedi. Yukarıdan arayıp seçin.</div>}
+        </div>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div>
+          <label className="mb-1 block text-xs font-bold uppercase text-slate-400">Ad Soyad *</label>
+          <div className="grid grid-cols-2 gap-2">
+            <input className="field" placeholder="Ad" value={customer.firstName} onChange={(e) => setCustomer({ ...customer, firstName: e.target.value })} />
+            <input className="field" placeholder="Soyad" value={customer.lastName} onChange={(e) => setCustomer({ ...customer, lastName: e.target.value })} />
+          </div>
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-bold uppercase text-slate-400">Telefon *</label>
+          <div className="grid grid-cols-[1fr_auto] gap-2">
+            <input className="field" placeholder="05xx xxx xx xx" value={customer.phone} onChange={(e) => setCustomer({ ...customer, phone: e.target.value })} onBlur={() => findCustomerByPhone()} />
+            <button className="btn btn-secondary justify-center" type="button" onClick={() => findCustomerByPhone()} title="Müşteri bul">
+              <Phone size={17} />
+            </button>
+          </div>
+          {customerSummary && <div className="mt-1 text-xs font-semibold text-emerald-700">✓ {customerSummary.displayName} kayıtlı müşteri</div>}
+        </div>
+      </div>
+
+      <div>
+        <div className="mb-2 text-xs font-bold uppercase text-slate-400">Teslimat</div>
+        <div className="flex gap-2">
+          <button type="button" className={`btn ${isPickup ? 'btn-primary' : 'btn-secondary'}`} onClick={() => selectDeliveryMode(true)}>
+            <Store size={17} />
+            Mağazadan Teslim
+          </button>
+          <button type="button" className={`btn ${!isPickup ? 'btn-primary' : 'btn-secondary'}`} onClick={() => selectDeliveryMode(false)}>
+            <Truck size={17} />
+            Adrese Teslim
+          </button>
+        </div>
+        {!isPickup && (
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            <input className="field" placeholder="İl" value={address.city} onChange={(e) => setAddress({ ...address, city: e.target.value })} />
+            <input className="field" placeholder="İlçe" value={address.district} onChange={(e) => setAddress({ ...address, district: e.target.value })} />
+            <textarea className="field sm:col-span-2 min-h-16" placeholder="Açık adres" value={address.fullAddress} onChange={(e) => setAddress({ ...address, fullAddress: e.target.value })} />
+          </div>
+        )}
+      </div>
+
+      <div className="grid gap-3 rounded-md bg-slate-50 p-4 sm:grid-cols-[1fr_1fr_auto]">
+        <select className="field" value={payment.method} onChange={(e) => setPaymentField({ method: e.target.value })}>
+          <option>Nakit</option>
+          <option>Kredi kartı</option>
+          <option>Havale</option>
+          <option>Veresiye</option>
+        </select>
+        <input className="field" type="number" min="0" placeholder="Ödenen tutar" value={payment.paidAmount} onChange={(e) => setPaymentField({ paidAmount: Number(e.target.value) })} />
+        <button className="btn btn-secondary justify-center" type="button" onClick={() => setPaymentField({ paidAmount: totals.total })}>
+          Tamamı Ödendi
+        </button>
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-4 border-t border-line pt-4">
+        <div>
+          <div className="text-xs font-bold uppercase text-slate-400">Toplam Tutar</div>
+          <div className="text-2xl font-black text-ink">{formatMoney(totals.total)}</div>
+          {totals.remaining > 0 && <div className="text-xs font-semibold text-red-600">Kalan: {formatMoney(totals.remaining)}</div>}
+        </div>
+        <button className="btn btn-primary min-h-12 px-8 text-base" type="button" onClick={onComplete} disabled={completing || !canComplete}>
+          <ShoppingCart size={19} />
+          {completing ? 'Kaydediliyor...' : 'Satışı Tamamla'}
+        </button>
+      </div>
+    </section>
   );
 }
 

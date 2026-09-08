@@ -31,7 +31,9 @@ export class HepsiburadaAdapter extends HttpMarketplaceOrderAdapter {
     if (missing.length) return this.missing(missing);
 
     const apiBaseUrl = this.env('API_URL') || HB_ORDERS_URL;
-    const url = new URL(`/orders/merchantid/${encodeURIComponent(merchantId)}/openorders`, `${apiBaseUrl.replace(/\/+$/, '')}/`);
+    const orderPath = this.env('ORDER_PATH') || `/orders/merchantid/${encodeURIComponent(merchantId)}`;
+    const resolvedPath = orderPath.replace('{merchantId}', encodeURIComponent(merchantId));
+    const url = new URL(resolvedPath.startsWith('/') ? resolvedPath : `/${resolvedPath}`, `${apiBaseUrl.replace(/\/+$/, '')}/`);
     url.searchParams.set('offset', '0');
     url.searchParams.set('limit', '1');
 
