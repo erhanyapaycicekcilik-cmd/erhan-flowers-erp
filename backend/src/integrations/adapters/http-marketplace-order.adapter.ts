@@ -157,7 +157,7 @@ export abstract class HttpMarketplaceOrderAdapter extends BaseIntegrationAdapter
   private mapGenericOrder(order: Record<string, any>): ExternalOrder {
     const shipment = this.record(order.shipmentAddress ?? order.shippingAddress ?? order.deliveryAddress ?? order.address);
     const invoice = this.record(order.invoiceAddress ?? order.billingAddress);
-    const lines = this.array(order.lines) || this.array(order.items) || this.array(order.orderItems) || this.array(order.products) || [];
+    const lines = this.array(order.lines) || this.array(order.orderLineList) || this.array(order.items) || this.array(order.orderItems) || this.array(order.products) || [];
     const customer = this.record(order.customer ?? order.buyer ?? order.recipient ?? order.shippingAddress ?? order.billingAddress);
     const customerName = this.firstText(
       order.customerName,
@@ -204,6 +204,7 @@ export abstract class HttpMarketplaceOrderAdapter extends BaseIntegrationAdapter
           sku: sku || undefined,
           barcode: this.firstText(line.barcode, line.ean) || undefined,
           modelCode: sku || this.firstText(line.modelCode, line.productCode) || undefined,
+          imageUrl: this.firstText(line.imageUrl, line.image, line.productImage, line.thumbnailUrl, line.thumbnail, line.productImageUrl, line.imgUrl) || undefined,
           quantity: Number(line.quantity ?? line.qty ?? line.count ?? 1),
           unitPrice: Number(line.price ?? line.unitPrice ?? line.amount ?? line.salePrice ?? 0),
         };
