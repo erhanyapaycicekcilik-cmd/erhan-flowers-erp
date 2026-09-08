@@ -31,8 +31,15 @@ type OrderRow = {
   items: OrderItem[];
 };
 
+const PLATFORMS = [
+  { key: 'all', label: 'Tümü' },
+  { key: 'TRENDYOL', label: 'Trendyol' },
+  { key: 'N11', label: 'N11' },
+  { key: 'HEPSIBURADA', label: 'Hepsiburada' },
+];
+
 const CATEGORIES = [
-  { key: 'all', label: 'Tüm Siparişler' },
+  { key: 'all', label: 'Tüm Kategoriler' },
   { key: 'agac', label: 'Ağaç' },
   { key: 'bambu', label: 'Bambu' },
   { key: 'saksi', label: 'Saksı' },
@@ -68,13 +75,14 @@ function remainingDays(due?: string | null, status?: string) {
 export default function StaffOrdersPage() {
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [platform, setPlatform] = useState('all');
   const [category, setCategory] = useState('all');
   const [search, setSearch] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await api<OrderRow[]>('/orders?limit=200&status=Yeni,İşleme Alındı,Kargoya Hazır,Taşıma Durumunda');
+      const data = await api<OrderRow[]>('/integrations/orders?limit=200&status=CONFIRMED,PREPARING,IN_PRODUCTION,READY,OUT_FOR_DELIVERY');
       setOrders(Array.isArray(data) ? data : []);
     } finally {
       setLoading(false);
@@ -84,6 +92,7 @@ export default function StaffOrdersPage() {
   useEffect(() => { void load(); }, [load]);
 
   const filtered = orders.filter((o) => {
+    if (platform !== 'all' && o.platform !== platform) return false;
     if (!matchCategory(o, category)) return false;
     if (search) {
       const q = search.toLowerCase();
@@ -102,6 +111,21 @@ export default function StaffOrdersPage() {
           <button onClick={() => void load()} className="btn btn-secondary text-sm">
             <RefreshCw size={14} /> Yenile
           </button>
+        </div>
+
+        {/* Platform filtreleri */}
+        <div className="flex gap-2 flex-wrap border-b border-line pb-3">
+          {PLATFORMS.map((p) => (
+            <button
+              key={p.key}
+              onClick={() => setPlatform(p.key)}
+              className={`px-4 py-2 rounded-lg text-sm font-bold transition ${
+                platform === p.key ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              {p.label}
+            </button>
+          ))}
         </div>
 
         {/* Kategori filtreleri */}
@@ -154,14 +178,17 @@ function OrderCard({ order }: { order: OrderRow }) {
   const isLate = days !== null && days < 0;
 
   const firstImage = order.items.find((i) => i.imagePath)?.imagePath;
+  const imgSrc = firstImage
+    ? firstImage.startsWith('http') ? firstImage : apiFileUrl(firstImage)
+    : null;
 
   return (
     <div className={`panel overflow-hidden flex flex-col ${isLate ? 'border-red-400' : isUrgent ? 'border-orange-400' : ''}`}>
       {/* Ürün görseli — büyük */}
       <div className="relative bg-slate-100" style={{ aspectRatio: '4/3' }}>
-        {firstImage ? (
+        {imgSrc ? (
           <img
-            src={apiFileUrl(firstImage)}
+            src={imgSrc}
             alt=""
             className="w-full h-full object-cover"
           />
