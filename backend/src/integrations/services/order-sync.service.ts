@@ -379,11 +379,12 @@ export class OrderSyncService {
       url.searchParams.set('size', '50');
       const res = await fetch(url.toString(), { method: 'GET', headers });
       if (!res.ok) { this.logger.warn(`N11 orders API hatasi: HTTP ${res.status}`); break; }
-      const data = await res.json() as { shipmentPackages?: Array<Record<string, unknown>>; totalCount?: number };
-      const packages = data.shipmentPackages ?? [];
+      const data = await res.json() as { content?: Array<Record<string, unknown>>; shipmentPackages?: Array<Record<string, unknown>>; totalCount?: number; pageCount?: number; totalPages?: number };
+      const packages = data.content ?? data.shipmentPackages ?? [];
       if (!packages.length) break;
       allOrders.push(...packages);
-      if (allOrders.length >= (data.totalCount ?? 0)) break;
+      const total = data.totalCount ?? data.pageCount ?? 0;
+      if (total > 0 && allOrders.length >= total) break;
       page++;
     }
 
@@ -391,30 +392,31 @@ export class OrderSyncService {
     let newOrders = 0; let stockDeductions = 0;
 
     for (const order of allOrders) {
-      const externalOrderId = String(order.shipmentPackageId ?? order.id ?? '');
+      const externalOrderId = String(order.id ?? order.shipmentPackageId ?? '');
       if (!externalOrderId) continue;
-      const orderDate = order.orderDate ? new Date(String(order.orderDate)) : null;
+      const rawDate = order.lastModifiedDate ?? order.orderDate;
+      const orderDate = rawDate ? new Date(typeof rawDate === 'number' ? rawDate : String(rawDate)) : null;
       if (orderDate && orderDate.getTime() < lookback) continue;
 
       const existing = await this.prisma.marketplaceOrder.findUnique({
         where: { platform_externalOrderId: { platform: 'N11', externalOrderId } },
       });
       if (existing) {
-        const newStatus = String(order.status ?? '');
+        const newStatus = String(order.shipmentPackageStatus ?? order.status ?? '');
         if (newStatus && existing.status !== newStatus) {
           await this.prisma.marketplaceOrder.update({ where: { id: existing.id }, data: { status: newStatus } });
         }
         continue;
       }
 
-      const lines = Array.isArray(order.orderItems) ? order.orderItems as Array<Record<string, unknown>> : [];
+      const lines = Array.isArray(order.lines) ? order.lines as Array<Record<string, unknown>> : (Array.isArray(order.orderItems) ? order.orderItems as Array<Record<string, unknown>> : []);
       const savedOrder = await this.prisma.marketplaceOrder.create({
         data: {
           platform: 'N11',
           externalOrderId,
           orderNumber: String(order.orderNumber ?? externalOrderId),
-          status: String(order.status ?? 'CREATED'),
-          customerName: String(order.buyerName ?? order.recipientName ?? ''),
+          status: String(order.shipmentPackageStatus ?? order.status ?? 'CREATED'),
+          customerName: String(order.customerfullName ?? (order.billingAddress as Record<string,unknown>)?.fullName ?? order.buyerName ?? ''),
           totalAmount: Number(order.totalAmount ?? order.amount ?? 0),
           cargoAmount: Number(order.cargoAmount ?? 0),
           currency: 'TRY',
@@ -425,10 +427,10 @@ export class OrderSyncService {
       newOrders++;
 
       for (const line of lines) {
-        const sku = line.productSellerCode ? String(line.productSellerCode) : null;
+        const sku = (line.stockCode ?? line.productSellerCode ?? line.merchantSku) ? String(line.stockCode ?? line.productSellerCode ?? line.merchantSku) : null;
         const barcode = line.barcode ? String(line.barcode) : null;
         const qty = Number(line.quantity ?? 1);
-        const unitPrice = Number(line.unitPrice ?? line.price ?? 0);
+        const unitPrice = Number(line.price ?? line.unitPrice ?? 0);
 
         let stockCard: { id: number; stockQuantity: unknown; unit: string } | null = null;
         if (barcode) stockCard = await this.prisma.stockCard.findFirst({ where: { barcode, status: 'ACTIVE' }, select: { id: true, stockQuantity: true, unit: true } });
