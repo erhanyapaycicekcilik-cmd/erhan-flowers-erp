@@ -2,7 +2,8 @@
   "name": "Erhan Flowers ERP",
   "short_name": "ERP",
   "description": "Erhan Flowers yönetim sistemi",
-  "start_url": "/orders",
+  "start_url": "/dashboard",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#f7f8f6",
   "theme_color": "#16a34a",
@@ -12,7 +13,7 @@
       "src": "/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
     },
     {
       "src": "/icon-512.png",
