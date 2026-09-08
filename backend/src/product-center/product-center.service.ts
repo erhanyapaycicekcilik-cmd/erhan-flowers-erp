@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { revalidateSite } from '../common/site-revalidate';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as XLSX from 'xlsx';
@@ -177,7 +178,10 @@ export class ProductCenterService {
             create: data,
           });
 
-      return { ok: true, entry: await this.findEntry(tx, variant.id) };
+      const result = { ok: true, entry: await this.findEntry(tx, variant.id) };
+      // sitePrice > 0 ise site cache'ini anında sıfırla
+      void revalidateSite();
+      return result;
     });
   }
 
@@ -312,7 +316,7 @@ export class ProductCenterService {
       });
 
       const entry = await this.findEntry(tx, variant.id);
-      return {
+      const result = {
         ok: true,
         entry,
         productId: product.id,
@@ -326,6 +330,9 @@ export class ProductCenterService {
         shopPrice,
         sitePrice,
       };
+      // sitePrice > 0 ise siteyi anında güncelle
+      if (sitePrice > 0) void revalidateSite();
+      return result;
     });
   }
 

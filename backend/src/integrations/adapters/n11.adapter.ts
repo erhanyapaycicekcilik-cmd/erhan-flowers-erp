@@ -25,14 +25,11 @@ export class N11Adapter extends HttpMarketplaceOrderAdapter {
     url.searchParams.set('page', '0');
     url.searchParams.set('size', '1');
 
-    const basicToken = Buffer.from(`${appKey}:${appSecret}`).toString('base64');
-
-    // N11 yeni REST API: Authorization: Basic <base64(appKey:appSecret)>
+    // N11 REST API: sadece appkey/appsecret header yeterli, Basic Auth gönderme
     const response = await fetch(url, {
       method: 'GET',
       headers: {
         Accept: 'application/json',
-        Authorization: `Basic ${basicToken}`,
         appkey: appKey,
         appsecret: appSecret,
         'User-Agent': 'ErhanFlowersERP-N11',

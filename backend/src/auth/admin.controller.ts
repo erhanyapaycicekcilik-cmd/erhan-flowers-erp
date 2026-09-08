@@ -29,7 +29,7 @@ export class AdminController {
   async createUser(@Body() body: { email: string; name: string; password: string; role: string }) {
     const hash = await bcrypt.hash(body.password, 10);
     return this.prisma.user.create({
-      data: { email: body.email, name: body.name, passwordHash: hash, role: body.role as 'OWNER' | 'MANAGER' | 'STAFF' },
+      data: { email: body.email, name: body.name, passwordHash: hash, role: body.role as any },
       select: { id: true, email: true, name: true, role: true },
     });
   }

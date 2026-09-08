@@ -9,6 +9,7 @@ import { IntegrationCenterService } from './services/integration-center.service'
 import { IntegrationsService } from './integrations.service';
 import { OrderSyncService } from './services/order-sync.service';
 import { GmailOrderService } from './services/gmail-order.service';
+import { HepsiburadaSyncService, HbStockItem, HbPriceItem } from './services/hepsiburada-sync.service';
 
 type AuthenticatedRequest = Request & { user?: { id: number; role: string } };
 
@@ -20,6 +21,7 @@ export class IntegrationsController {
     private readonly integrationCenter: IntegrationCenterService,
     private readonly orderSync: OrderSyncService,
     private readonly gmailOrder: GmailOrderService,
+    private readonly hbSync: HepsiburadaSyncService,
   ) {}
 
   @Get('connections')
@@ -255,6 +257,45 @@ export class IntegrationsController {
   @UseInterceptors(FileInterceptor('file', { storage: memoryStorage() }))
   importSkuMappingExcel(@Query('platform') platform: string = 'TRENDYOL', @UploadedFile() file: Express.Multer.File | undefined) {
     return this.orderSync.importSkuMappingExcel(platform, file);
+  }
+
+  // ── Hepsiburada API ────────────────────────────────────────────────────────
+
+  @Get('hepsiburada/status')
+  hbStatus() {
+    return this.hbSync.getStatus();
+  }
+
+  @Post('hepsiburada/test')
+  @UseGuards(OwnerGuard)
+  hbTest() {
+    return this.hbSync.testConnection();
+  }
+
+  @Post('hepsiburada/sync-orders')
+  @UseGuards(OwnerGuard)
+  hbSyncOrders() {
+    return this.hbSync.syncOrdersNow();
+  }
+
+  @Post('hepsiburada/push-stock')
+  @UseGuards(OwnerGuard)
+  hbPushStock(@Body() body: { items?: HbStockItem[] }) {
+    if (body.items?.length) return this.hbSync.pushStock(body.items);
+    return this.hbSync.pushAllStockFromERP();
+  }
+
+  @Post('hepsiburada/push-prices')
+  @UseGuards(OwnerGuard)
+  hbPushPrices(@Body() body: { items?: HbPriceItem[] }) {
+    if (body.items?.length) return this.hbSync.pushPrice(body.items);
+    return this.hbSync.pushAllPricesFromERP();
+  }
+
+  @Get('hepsiburada/listings')
+  @UseGuards(OwnerGuard)
+  hbListings(@Query('offset') offset?: string, @Query('limit') limit?: string) {
+    return this.hbSync.getListings(Number(offset ?? 0), Number(limit ?? 50));
   }
 
 }

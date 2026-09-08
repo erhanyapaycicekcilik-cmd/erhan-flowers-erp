@@ -13,12 +13,13 @@ import { CredentialVaultService } from './services/credential-vault.service';
 import { IntegrationCenterService } from './services/integration-center.service';
 import { OrderSyncService } from './services/order-sync.service';
 import { GmailOrderService } from './services/gmail-order.service';
+import { HepsiburadaSyncService } from './services/hepsiburada-sync.service';
 import { GmailController } from './gmail.controller';
 
 @Module({
   imports: [PrismaModule, AuthModule, StaffTasksModule],
   controllers: [IntegrationsController, GmailController],
-  providers: [IntegrationsService, IntegrationCenterService, CredentialVaultService, OrderSyncService, GmailOrderService, TrendyolAdapter, HepsiburadaAdapter, N11Adapter, TicimaxAdapter, MockMarketplaceAdapter],
-  exports: [IntegrationCenterService, TrendyolAdapter, HepsiburadaAdapter, N11Adapter, TicimaxAdapter, OrderSyncService, GmailOrderService],
+  providers: [IntegrationsService, IntegrationCenterService, CredentialVaultService, OrderSyncService, GmailOrderService, HepsiburadaSyncService, TrendyolAdapter, HepsiburadaAdapter, N11Adapter, TicimaxAdapter, MockMarketplaceAdapter],
+  exports: [IntegrationCenterService, TrendyolAdapter, HepsiburadaAdapter, N11Adapter, TicimaxAdapter, OrderSyncService, GmailOrderService, HepsiburadaSyncService],
 })
 export class IntegrationsModule {}

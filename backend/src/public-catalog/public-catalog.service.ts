@@ -1,22 +1,30 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
-// Yalnızca müşteriye gösterilebilecek alanlar seçilir; maliyet alanları
-// (purchasePrice, manualUnitCost, automaticUnitCost, supplierName vb.) burada
-// kesinlikle YER ALMAZ çünkü bu servis auth'suz (public) bir controller'dan çağrılır.
+// Müşteriye güvenli gösterilebilecek alanlar.
+// Maliyet alanları (costPrice, purchasePrice, supplierName vb.) KESİNLİKLE YOK —
+// bu servis AuthGuard olmadan (public) çağrılır.
 const SAFE_SELECT = {
   id: true,
-  name: true,
-  sku: true,
-  category: true,
-  shortDescription: true,
+  productName: true,
+  modelCode: true,
+  barcode: true,
+  sitePrice: true,    // FloraYapayCicek.com satış fiyatı
+  shopPrice: true,    // Dükkan barkod okutma fiyatı (kasaya gönderilir, siteye yansımaz)
+  listPrice: true,    // Liste / tavsiye edilen fiyat (üstü çizili gösterim için)
+  marketPrice: true,  // Pazar yeri referans fiyatı
+  imageUrls: true,
+  brand: true,
   description: true,
-  technicalSpecs: true,
-  salePrice: true,
+  colorVariant: true,
+  material: true,
+  origin: true,
+  vatRate: true,
+  warrantyMonths: true,
   stockQuantity: true,
-  images: {
-    select: { filePath: true, isMain: true },
-    orderBy: { isMain: 'desc' as const },
+  status: true,
+  category: {
+    select: { id: true, name: true },
   },
 };
 
@@ -33,79 +41,225 @@ function slugify(value: string) {
     .replace(/^-+|-+$/g, '');
 }
 
+function productSlug(name: string, modelCode: string) {
+  return `${slugify(name)}-${modelCode.toLowerCase()}`;
+}
+
 @Injectable()
 export class PublicCatalogService {
   constructor(private readonly prisma: PrismaService) {}
 
-  private async trendyolListedBarcodes(): Promise<string[]> {
-    const rows = await this.prisma.trendyolProductVariant.findMany({
-      where: { barcode: { not: '' } },
-      select: { barcode: true },
-    });
-    return rows.map((row) => row.barcode);
-  }
-
   async listCategories() {
-    const barcodes = await this.trendyolListedBarcodes();
-    const cards = await this.prisma.stockCard.findMany({
-      where: { status: 'ACTIVE', stockQuantity: { gt: 0 }, barcode: { in: barcodes } },
-      select: { category: true },
+    const categories = await this.prisma.category.findMany({
+      where: {
+        products: {
+          some: { status: 'ACTIVE', stockQuantity: { gt: 0 }, sitePrice: { gt: 0 } },
+        },
+      },
+      select: {
+        id: true,
+        name: true,
+        _count: { select: { products: { where: { status: 'ACTIVE', stockQuantity: { gt: 0 }, sitePrice: { gt: 0 } } } } },
+      },
+      orderBy: { name: 'asc' },
     });
-    const counts = new Map<string, number>();
-    for (const card of cards) {
-      const name = card.category?.trim();
-      if (!name) continue;
-      counts.set(name, (counts.get(name) ?? 0) + 1);
-    }
-    return Array.from(counts.entries()).map(([name, count]) => ({ name, slug: slugify(name), count }));
+
+    return categories.map((cat) => ({
+      id: cat.id,
+      name: cat.name,
+      slug: slugify(cat.name),
+      count: cat._count.products,
+    }));
   }
 
-  async listProducts(categorySlug?: string) {
-    const barcodes = await this.trendyolListedBarcodes();
-    const cards = await this.prisma.stockCard.findMany({
-      where: { status: 'ACTIVE', stockQuantity: { gt: 0 }, barcode: { in: barcodes } },
-      select: SAFE_SELECT,
-      orderBy: { updatedAt: 'desc' },
-    });
-    const filtered = categorySlug
-      ? cards.filter((card) => card.category && slugify(card.category) === categorySlug)
-      : cards;
-    return filtered.map((card) => this.toPublicProduct(card));
-  }
-
-  async getProduct(id: number) {
-    const barcodes = await this.trendyolListedBarcodes();
-    const card = await this.prisma.stockCard.findFirst({
-      where: { id, status: 'ACTIVE', stockQuantity: { gt: 0 }, barcode: { in: barcodes } },
-      select: SAFE_SELECT,
-    });
-    return card ? this.toPublicProduct(card) : null;
-  }
-
-  private toPublicProduct(card: {
-    id: number;
-    name: string;
-    sku: string | null;
-    category: string | null;
-    shortDescription: string | null;
-    description: string | null;
-    technicalSpecs: string | null;
-    salePrice: unknown;
-    stockQuantity: unknown;
-    images: Array<{ filePath: string; isMain: boolean }>;
+  async listProducts(params: {
+    categorySlug?: string;
+    search?: string;
+    page?: number;
+    limit?: number;
+    sort?: 'price_asc' | 'price_desc' | 'newest' | 'name';
   }) {
-    return {
-      id: card.id,
-      name: card.name,
-      sku: card.sku,
-      category: card.category,
-      categorySlug: card.category ? slugify(card.category) : null,
-      shortDescription: card.shortDescription,
-      description: card.description,
-      technicalSpecs: card.technicalSpecs,
-      salePrice: Number(card.salePrice),
-      inStock: Number(card.stockQuantity) > 0,
-      images: card.images.map((image) => image.filePath),
+    const page = Math.max(1, params.page ?? 1);
+    const limit = Math.min(100, Math.max(1, params.limit ?? 48));
+    const skip = (page - 1) * limit;
+
+    const where: Record<string, unknown> = {
+      status: 'ACTIVE',
+      stockQuantity: { gt: 0 },
+      sitePrice: { gt: 0 }, // Sadece site fiyatı tanımlanmış ürünler
     };
+
+    // Kategori filtresi
+    if (params.categorySlug) {
+      const allCategories = await this.prisma.category.findMany({ select: { id: true, name: true } });
+      const matchedCat = allCategories.find((c) => slugify(c.name) === params.categorySlug);
+      if (matchedCat) where['categoryId'] = matchedCat.id;
+    }
+
+    // Arama filtresi
+    if (params.search?.trim()) {
+      const term = params.search.trim();
+      where['OR'] = [
+        { productName: { contains: term, mode: 'insensitive' } },
+        { modelCode: { contains: term, mode: 'insensitive' } },
+        { description: { contains: term, mode: 'insensitive' } },
+        { colorVariant: { contains: term, mode: 'insensitive' } },
+      ];
+    }
+
+    const orderBy: Record<string, string> =
+      params.sort === 'price_asc'  ? { sitePrice: 'asc' }  :
+      params.sort === 'price_desc' ? { sitePrice: 'desc' } :
+      params.sort === 'name'       ? { productName: 'asc' } :
+                                     { id: 'desc' }; // newest
+
+    const [total, products] = await Promise.all([
+      this.prisma.product.count({ where: where as any }),
+      this.prisma.product.findMany({ where: where as any, select: SAFE_SELECT, orderBy: orderBy as any, skip, take: limit }),
+    ]);
+
+    return {
+      products: products.map((p) => this.toPublicProduct(p)),
+      pagination: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  async getProductBySlug(slug: string) {
+    // Slug = slugify(name)-modelCode → modelCode'u ayıkla
+    const parts = slug.split('-');
+    // modelCode ERH-XXXX formatında, son iki parçayı al
+    const modelCode = parts.slice(-2).join('-').toUpperCase();
+
+    const product = await this.prisma.product.findFirst({
+      where: { modelCode, status: 'ACTIVE', sitePrice: { gt: 0 } },
+      select: SAFE_SELECT,
+    });
+    return product ? this.toPublicProduct(product) : null;
+  }
+
+  async getProductById(id: number) {
+    const product = await this.prisma.product.findFirst({
+      where: { id, status: 'ACTIVE', sitePrice: { gt: 0 } },
+      select: SAFE_SELECT,
+    });
+    return product ? this.toPublicProduct(product) : null;
+  }
+
+  // Trendyol ürünlerinden sitePrice toplu doldur — sitePrice=0 olanları günceller
+  // Kural: sitePrice = trendyolSalePrice (müşteri sonradan manuel ayarlayabilir)
+  async bulkSyncSitePriceFromTrendyol(): Promise<{ updated: number; skipped: number }> {
+    // sitePrice=0 olan ürünleri bul, Trendyol varyantı varsa fiyatını al
+    const products = await this.prisma.product.findMany({
+      where: { status: 'ACTIVE', sitePrice: 0 },
+      select: {
+        id: true,
+        productCenterVariant: {
+          select: { trendyolSalePrice: true, status: true },
+        },
+      },
+    });
+
+    let updated = 0;
+    let skipped = 0;
+
+    for (const product of products) {
+      const variant = product.productCenterVariant;
+      if (!variant || variant.status !== 'ACTIVE') { skipped++; continue; }
+
+      const trendyolPrice = Number(variant.trendyolSalePrice ?? 0);
+      if (trendyolPrice <= 0) { skipped++; continue; }
+
+      // sitePrice = trendyolSalePrice (kullanıcı sonradan ERP'den manuel ayarlayabilir)
+      await this.prisma.product.update({
+        where: { id: product.id },
+        data: {
+          sitePrice: trendyolPrice,
+          shopPrice: trendyolPrice,
+          listPrice: trendyolPrice,
+          marketPrice: trendyolPrice,
+        },
+      });
+      updated++;
+    }
+
+    return { updated, skipped };
+  }
+
+  // Dükkan barkod okutma — sadece shopPrice döner, diğer fiyat bilgileri YOK
+  async getShopPrice(barcode: string) {
+    const product = await this.prisma.product.findFirst({
+      where: { barcode, status: 'ACTIVE' },
+      select: { id: true, productName: true, modelCode: true, shopPrice: true, imageUrls: true },
+    });
+    if (!product) return null;
+    return {
+      id: product.id,
+      name: product.productName,
+      modelCode: product.modelCode,
+      shopPrice: product.shopPrice,
+      image: this.firstImage(product.imageUrls),
+    };
+  }
+
+  private toPublicProduct(product: {
+    id: number;
+    productName: string;
+    modelCode: string;
+    barcode: string | null;
+    sitePrice: number;
+    shopPrice: number;
+    listPrice: number;
+    marketPrice: number;
+    imageUrls: unknown;
+    brand: string;
+    description: string | null;
+    colorVariant: string | null;
+    material: string | null;
+    origin: string;
+    vatRate: number;
+    warrantyMonths: number;
+    stockQuantity: number;
+    category: { id: number; name: string } | null;
+  }) {
+    const images = this.parseImageUrls(product.imageUrls);
+
+    return {
+      id: product.id,
+      name: product.productName,
+      slug: productSlug(product.productName, product.modelCode),
+      modelCode: product.modelCode,
+      category: product.category?.name ?? null,
+      categorySlug: product.category ? slugify(product.category.name) : null,
+      sitePrice: product.sitePrice,
+      // listPrice > sitePrice ise üstü çizili "önceki fiyat" olarak göster
+      originalPrice: product.listPrice > product.sitePrice ? product.listPrice : null,
+      brand: product.brand,
+      description: product.description,
+      colorVariant: product.colorVariant,
+      material: product.material,
+      origin: product.origin,
+      vatRate: product.vatRate,
+      warrantyMonths: product.warrantyMonths,
+      inStock: product.stockQuantity > 0,
+      images,
+      mainImage: images[0] ?? null,
+    };
+  }
+
+  private parseImageUrls(raw: unknown): string[] {
+    if (Array.isArray(raw)) return raw.filter((v) => typeof v === 'string');
+    if (typeof raw === 'string') {
+      try { return JSON.parse(raw); } catch { return []; }
+    }
+    return [];
+  }
+
+  private firstImage(raw: unknown): string | null {
+    return this.parseImageUrls(raw)[0] ?? null;
   }
 }

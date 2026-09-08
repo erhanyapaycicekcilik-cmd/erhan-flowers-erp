@@ -43,9 +43,9 @@ api.florayapaycicek.com {
     }
 }
 
-# B2C Satış Sitesi — Güvenli HTTPS
+# B2C Müşteri Sitesi — FloraYapayCiçek.com
 florayapaycicek.com, www.florayapaycicek.com {
-    reverse_proxy frontend:3000
+    reverse_proxy florayapay:3200
 
     header {
         Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
@@ -53,6 +53,7 @@ florayapaycicek.com, www.florayapaycicek.com {
         X-Content-Type-Options "nosniff"
         X-XSS-Protection "1; mode=block"
         Referrer-Policy "strict-origin-when-cross-origin"
+        Permissions-Policy "geolocation=(self), microphone=(), camera=()"
     }
 
     log {

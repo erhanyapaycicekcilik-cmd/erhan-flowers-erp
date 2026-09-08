@@ -420,6 +420,24 @@ export default function IntegrationsPage() {
     URL.revokeObjectURL(url);
   }
 
+  const [siteSyncLoading, setSiteSyncLoading] = useState(false);
+  const [siteSyncResult, setSiteSyncResult] = useState<{ updated: number; skipped: number } | null>(null);
+
+  async function syncSitePrices() {
+    setSiteSyncLoading(true);
+    setSiteSyncResult(null);
+    setMessage('');
+    try {
+      const result = await api<{ updated: number; skipped: number }>('/public/catalog/admin/sync-site-prices', { method: 'POST' });
+      setSiteSyncResult(result);
+      setMessage(`Site fiyatları güncellendi: ${result.updated} ürün güncellendi, ${result.skipped} ürün atlandı.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Site fiyat senkronizasyonu yapılamadı.');
+    } finally {
+      setSiteSyncLoading(false);
+    }
+  }
+
   async function runDryRun() {
     setLoadingPlatform('DRY_RUN_PRODUCT');
     setMessage('');
@@ -532,6 +550,33 @@ export default function IntegrationsPage() {
             <div className="text-sm text-slate-500 mt-0.5">Pazaryeri ürünlerini ERP stok kartlarıyla eşleştir, geçmiş siparişleri düzelt</div>
           </div>
           <Link href="/integrations/sku-mapping" className="btn btn-primary text-sm">Eşleştirmeye Git →</Link>
+        </section>
+
+        {/* FloraYapayCiçek site fiyat senkronizasyonu */}
+        <section className="panel p-5">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-bold text-ink">FloraYapayCiçek — Site Fiyat Senkronizasyonu</h2>
+              <p className="text-sm text-slate-500">Trendyol satış fiyatlarını, site fiyatı (sitePrice) boş olan tüm ürünlere otomatik uygular. Bir kez çalıştır; yeni ürünler ERP'ye kaydedilince otomatik eklenir.</p>
+            </div>
+            <a href="https://florayapaycicek.com" target="_blank" rel="noopener noreferrer" className="btn btn-secondary text-xs">
+              Siteyi Aç ↗
+            </a>
+          </div>
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <button className="btn btn-primary" type="button" onClick={syncSitePrices} disabled={siteSyncLoading}>
+              <RefreshCw size={16} className={siteSyncLoading ? 'animate-spin' : ''} />
+              {siteSyncLoading ? 'Senkronize ediliyor...' : 'Trendyol → Site Fiyatı Doldur'}
+            </button>
+            {siteSyncResult && (
+              <span className="text-sm font-medium text-emerald-700">
+                ✓ {siteSyncResult.updated} ürün güncellendi, {siteSyncResult.skipped} atlandı
+              </span>
+            )}
+          </div>
+          <p className="mt-3 text-xs text-slate-400">
+            Yalnızca sitePrice = 0 olan aktif ürünleri günceller. Halihazırda fiyatı olan ürünlere dokunmaz.
+          </p>
         </section>
 
         <section className="panel p-5">

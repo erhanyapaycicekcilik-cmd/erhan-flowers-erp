@@ -36,6 +36,15 @@ services:
     depends_on:
       - backend
 
+  florayapay:
+    build: ./florayapay
+    container_name: erhan-flowers-florayapay-prod
+    restart: unless-stopped
+    env_file:
+      - ./florayapay/.env.production
+    depends_on:
+      - backend
+
   caddy:
     image: caddy:2-alpine
     container_name: erhan-flowers-caddy-prod
@@ -50,9 +59,11 @@ services:
     depends_on:
       - backend
       - frontend
+      - florayapay
 
 volumes:
   postgres_prod_data:
   backend_uploads:
   caddy_data:
   caddy_config:
+  florayapay_next_cache:

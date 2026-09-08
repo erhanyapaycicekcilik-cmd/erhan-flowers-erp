@@ -158,7 +158,7 @@ export abstract class HttpMarketplaceOrderAdapter extends BaseIntegrationAdapter
     const shipment = this.record(order.shipmentAddress ?? order.shippingAddress ?? order.deliveryAddress ?? order.address);
     const invoice = this.record(order.invoiceAddress ?? order.billingAddress);
     const lines = this.array(order.lines) || this.array(order.items) || this.array(order.orderItems) || this.array(order.products) || [];
-    const customer = this.record(order.customer ?? order.buyer ?? order.recipient);
+    const customer = this.record(order.customer ?? order.buyer ?? order.recipient ?? order.shippingAddress ?? order.billingAddress);
     const customerName = this.firstText(
       order.customerName,
       order.buyerName,
@@ -171,7 +171,7 @@ export abstract class HttpMarketplaceOrderAdapter extends BaseIntegrationAdapter
     const phone = this.firstText(order.phone, order.customerPhone, customer.phone, shipment.phone, invoice.phone);
     const packageId = this.firstText(order.packageNumber, order.packageId, order.shipmentPackageId, order.id);
     const orderNumber = this.firstText(order.orderNumber, order.orderNo, order.orderId, order.id);
-    const status = this.mapStatus(order.status ?? order.orderStatus ?? order.packageStatus);
+    const status = this.mapStatus(order.status ?? order.orderStatus ?? order.packageStatus ?? order.shipmentPackageStatus);
 
     return {
       externalOrderId: packageId || orderNumber,
@@ -179,7 +179,7 @@ export abstract class HttpMarketplaceOrderAdapter extends BaseIntegrationAdapter
       platform: this.platform,
       status: status.saleStatus,
       invoiceStatus: status.invoiceStatus,
-      externalStatus: this.text(order.status ?? order.orderStatus ?? order.packageStatus) || undefined,
+      externalStatus: this.text(order.status ?? order.orderStatus ?? order.packageStatus ?? order.shipmentPackageStatus) || undefined,
       unknownStatus: status.unknown,
       customerName,
       phone,
