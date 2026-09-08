@@ -354,9 +354,10 @@ export class OrderSyncService {
       JOIN sales_channels sc ON sc.id = ca.sales_channel_id
       WHERE sc.code = 'N11' AND ca.is_active = true AND cc.is_active = true LIMIT 10
     `;
-    if (!rows.length) { this.logger.warn('N11 credentials bulunamadi.'); return { processed: 0, newOrders: 0, stockDeductions: 0 }; }
-
-    const creds: Record<string, string> = {};
+    const creds: Record<string, string> = {
+      API_KEY: process.env.N11_API_KEY ?? '',
+      API_SECRET: process.env.N11_API_SECRET ?? '',
+    };
     for (const row of rows) {
       try {
         const val = this.credentialVault.decrypt(row.encryptedValue);
@@ -364,7 +365,7 @@ export class OrderSyncService {
         if (row.credentialType === 'API_SECRET') creds.API_SECRET = val;
       } catch { /* skip */ }
     }
-    if (!creds.API_KEY || !creds.API_SECRET) { this.logger.warn('N11 API_KEY veya API_SECRET eksik.'); return { processed: 0, newOrders: 0, stockDeductions: 0 }; }
+    if (!creds.API_KEY || !creds.API_SECRET) { this.logger.warn('N11 credentials bulunamadi.'); return { processed: 0, newOrders: 0, stockDeductions: 0 }; }
 
     const apiBase = (process.env.N11_API_URL ?? 'https://api.n11.com').replace(/\/+$/, '');
     const lookback = Date.now() - this.lookbackDays * 24 * 60 * 60 * 1000;
