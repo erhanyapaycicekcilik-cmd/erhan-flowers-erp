@@ -449,6 +449,24 @@ export default function OrdersPage() {
         </section>
 
         <section className="panel overflow-hidden">
+          {/* Platform sekmeleri */}
+          <div className="flex gap-2 px-4 pt-3 pb-0 border-b border-line overflow-x-auto">
+            {platformOptions.map((p) => (
+              <button
+                key={p.value}
+                type="button"
+                onClick={() => { setFilters((f) => ({ ...f, platform: p.value })); setAppliedFilters((f) => ({ ...f, platform: p.value })); }}
+                className={`px-4 py-2 text-sm font-bold rounded-t-lg border-b-2 transition whitespace-nowrap ${
+                  appliedFilters.platform === p.value
+                    ? 'border-indigo-600 text-indigo-600 bg-indigo-50'
+                    : 'border-transparent text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+
           <div className="flex gap-2 overflow-x-auto border-b border-line px-4 py-3">
             {tabs.map((item) => {
               const count = tabCount(item.key, item.statuses);
