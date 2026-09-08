@@ -303,13 +303,25 @@ export default function ProductCostDetailPage() {
       .reduce((sum, item) => sum + (item.isActive ? Number(item.amount || 0) : 0), 0);
     const materialTotalValue = stockTotal + consumableTotal + potTotalValue;
     const totalCost = materialTotalValue + automaticExpenseTotal + manualExpenseTotal;
-    const vatAmount = totalCost * (Math.max(vatPercent, 0) / 100);
-    const vatIncludedCost = totalCost + vatAmount;
-    const profitAmount = vatIncludedCost * (Math.max(profitMarginPercent, 0) / 100);
-    const shopSalePrice = vatIncludedCost + profitAmount;
-    const siteSalePrice = shopSalePrice + Math.max(shippingCost, 0);
-    const marketplaceBasePrice = siteSalePrice * (1 + Math.max(marketplaceMarkupPercent, 0) / 100);
-    const marketplaceSalePrice = marketplaceBasePrice * (1 + Math.max(campaignBufferPercent, 0) / 100);
+    // maliyet + kâr = base
+    const profitAmount = totalCost * (Math.max(profitMarginPercent, 0) / 100);
+    const basePrice = totalCost + profitAmount;
+
+    // Dükkan: maliyet + kâr + KDV
+    const vatAmount = basePrice * (Math.max(vatPercent, 0) / 100);
+    const vatIncludedCost = basePrice + vatAmount;
+    const shopSalePrice = vatIncludedCost;
+
+    // Site: maliyet + kâr + kargo + KDV
+    const siteBeforeVat = basePrice + Math.max(shippingCost, 0);
+    const siteSalePrice = siteBeforeVat * (1 + Math.max(vatPercent, 0) / 100);
+
+    // Pazaryeri: maliyet + kâr + komisyon + kargo + KDV
+    const commissionAmount = basePrice * (Math.max(marketplaceMarkupPercent, 0) / 100);
+    const campaignAmount = (basePrice + commissionAmount) * (Math.max(campaignBufferPercent, 0) / 100);
+    const marketplaceBeforeVat = basePrice + commissionAmount + campaignAmount + Math.max(shippingCost, 0);
+    const marketplaceBasePrice = marketplaceBeforeVat;
+    const marketplaceSalePrice = marketplaceBeforeVat * (1 + Math.max(vatPercent, 0) / 100);
     return {
       stockTotal,
       consumableTotal,
@@ -318,11 +330,15 @@ export default function ProductCostDetailPage() {
       automaticExpenseTotal,
       manualExpenseTotal,
       totalCost,
+      profitAmount,
+      basePrice,
       vatAmount,
       vatIncludedCost,
-      profitAmount,
       shopSalePrice,
+      siteBeforeVat,
       siteSalePrice,
+      commissionAmount,
+      campaignAmount,
       marketplaceBasePrice,
       marketplaceSalePrice,
     };
@@ -1220,23 +1236,56 @@ export default function ProductCostDetailPage() {
               <h2 className="font-bold">Canlı Özet</h2>
               <div className="text-2xl font-bold text-brand">{money(totals.totalCost)}</div>
             </div>
+            {/* Maliyet + Kâr tabanı */}
             <div className="space-y-2">
               <Summary label="Malzeme Toplamı" value={totals.materialTotalValue} />
               <Summary label="Otomatik Giderler" value={totals.automaticExpenseTotal} />
               <Summary label="Manuel Giderler" value={totals.manualExpenseTotal} />
               <Summary label="Toplam Ürün Maliyeti" value={totals.totalCost} strong />
-              <NumberField label="KDV oranı" value={vatPercent} onChange={setVatPercent} suffix="%" />
-              <Summary label="KDV Tutarı" value={totals.vatAmount} />
-              <Summary label="KDV dahil maliyet" value={totals.vatIncludedCost} strong />
               <NumberField label="Kâr oranı" value={profitMarginPercent} onChange={setProfitMarginPercent} suffix="%" />
               {profitMarginPercent < 45 && <Warning text="Erhan Flowers minimum kâr oranı %45'tir." />}
               <Summary label="Kâr Tutarı" value={totals.profitAmount} />
-              <Summary label="Dükkan Satış Fiyatı" value={totals.shopSalePrice} strong />
+              <Summary label="Maliyet + Kâr (KDV'siz taban)" value={totals.basePrice} strong />
+            </div>
+
+            {/* Dükkan: maliyet + kâr + KDV */}
+            <div className="mt-3 rounded-lg border border-blue-200 bg-blue-50 p-3 space-y-2">
+              <div className="text-[11px] font-bold uppercase text-blue-700 tracking-wide">🏪 Dükkan Fiyatı</div>
+              <div className="text-[10px] text-blue-500">maliyet + kâr + KDV</div>
+              <NumberField label="KDV oranı" value={vatPercent} onChange={setVatPercent} suffix="%" />
+              <Summary label="KDV Tutarı" value={totals.vatAmount} />
+              <div className="rounded-md bg-blue-100 px-2 py-1.5 flex items-center justify-between">
+                <span className="text-xs font-bold text-blue-900">Dükkan Satış Fiyatı</span>
+                <span className="text-base font-black text-blue-900">{money(totals.shopSalePrice)}</span>
+              </div>
+            </div>
+
+            {/* Site: maliyet + kâr + kargo + KDV */}
+            <div className="mt-3 rounded-lg border border-violet-200 bg-violet-50 p-3 space-y-2">
+              <div className="text-[11px] font-bold uppercase text-violet-700 tracking-wide">🌐 Site Satış Fiyatı</div>
+              <div className="text-[10px] text-violet-500">maliyet + kâr + kargo + KDV</div>
               <NumberField label="Kargo Bedeli" value={shippingCost} onChange={setShippingCost} suffix="TL" />
               <NumberField label="Desi" value={desi} onChange={setDesi} />
-              <Summary label="Site Satış Fiyatı" value={totals.siteSalePrice} strong />
-              <NumberField label="Pazaryeri Farkı" value={marketplaceMarkupPercent} onChange={setMarketplaceMarkupPercent} suffix="%" />
+              <div className="rounded-md bg-violet-100 px-2 py-1.5 flex items-center justify-between">
+                <span className="text-xs font-bold text-violet-900">Site Satış Fiyatı</span>
+                <span className="text-base font-black text-violet-900">{money(totals.siteSalePrice)}</span>
+              </div>
+            </div>
+
+            {/* Pazaryeri: maliyet + kâr + komisyon + kargo + KDV */}
+            <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 space-y-2">
+              <div className="text-[11px] font-bold uppercase text-emerald-700 tracking-wide">🛒 Pazaryeri Fiyatı</div>
+              <div className="text-[10px] text-emerald-600">maliyet + kâr + komisyon + kargo + KDV</div>
+              <NumberField label="Komisyon oranı" value={marketplaceMarkupPercent} onChange={setMarketplaceMarkupPercent} suffix="%" />
+              <Summary label="Komisyon Tutarı" value={totals.commissionAmount} />
               <NumberField label="Kampanya Tamponu" value={campaignBufferPercent} onChange={setCampaignBufferPercent} suffix="%" />
+              <Summary label="Kampanya Tutarı" value={totals.campaignAmount} />
+              <div className="rounded-md bg-emerald-100 px-2 py-1.5 flex items-center justify-between">
+                <span className="text-xs font-bold text-emerald-900">Pazaryeri Satış Fiyatı</span>
+                <span className="text-base font-black text-emerald-900">{money(totals.marketplaceSalePrice)}</span>
+              </div>
+            </div>
+            <div className="space-y-1 pt-1">
               <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3">
                 <div className="text-xs font-bold uppercase text-emerald-800">SEO arama motoru</div>
                 <div className="mt-1 text-sm font-black text-emerald-950">{seoSearchName() || 'Ürün adı bekleniyor'}</div>
