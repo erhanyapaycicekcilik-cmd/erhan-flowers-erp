@@ -1,7 +1,7 @@
 'use client';
 
 import { FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from 'react';
-import { Boxes, Calculator, ChevronDown, CheckCircle2, Copy, Edit3, ExternalLink, Eye, Facebook, FileText, ImageIcon, Instagram, PackagePlus, Plus, Printer, RefreshCw, Save, Search, Send, Sparkles, Trash2, Upload, X } from 'lucide-react';
+import { Boxes, Calculator, ChevronDown, CheckCircle2, Copy, Edit3, ExternalLink, Eye, Facebook, FileText, ImageIcon, Instagram, PackagePlus, Plus, Printer, RefreshCw, Save, Search, Send, Sparkles, Trash2, Upload, X, XCircle } from 'lucide-react';
 import { AdminShell } from '@/components/AdminShell';
 import { api, apiBaseUrl, apiFileUrl } from '@/lib/api';
 import type { Category, CurrentUser, MediaFile } from '@/types';
@@ -171,6 +171,7 @@ type QuickForm = {
   sitePrice: number;
   initialStockQuantity: number;
   mainImageUrl: string;
+  platforms: string[];
 };
 
 type QuickResult = {
@@ -184,6 +185,7 @@ type QuickResult = {
   initialStockQuantity: number;
   shopPrice: number;
   sitePrice: number;
+  publishResult?: { success: number; failed: number; results: Array<{ platform: string; ok: boolean; errorMessage?: string | null; batchRequestId?: string | null }> };
 };
 
 type PriceResearch = {
@@ -258,6 +260,7 @@ const emptyQuickForm: QuickForm = {
   sitePrice: 0,
   initialStockQuantity: 0,
   mainImageUrl: '',
+  platforms: ['TRENDYOL'],
 };
 
 const emptyPriceResearch: PriceResearch = {
@@ -729,7 +732,7 @@ export default function ProductsPage() {
     setMessage('Ana görsel yüklendi.');
   }
 
-  async function saveQuickEntry(event: FormEvent) {
+  async function saveQuickEntry(event: FormEvent, sendNow = false) {
     event.preventDefault();
     setQuickSaving(true);
     try {
@@ -743,9 +746,23 @@ export default function ProductsPage() {
           initialStockQuantity: Number(quickForm.initialStockQuantity),
         },
       });
-      setQuickResult(result);
+
+      let publishResult: QuickResult['publishResult'] | undefined;
+      if (sendNow && quickForm.platforms.length > 0) {
+        try {
+          const pub = await api<{ success: number; failed: number; results: Array<{ platform: string; ok: boolean; errorMessage?: string | null; batchRequestId?: string | null }> }>('/publishing/send', {
+            method: 'POST',
+            json: { variantIds: [result.variantId], platforms: quickForm.platforms, allowIncomplete: true },
+          });
+          publishResult = pub;
+        } catch {
+          publishResult = { success: 0, failed: quickForm.platforms.length, results: quickForm.platforms.map((p) => ({ platform: p, ok: false, errorMessage: 'Gönderim başlatılamadı.' })) };
+        }
+      }
+
+      setQuickResult({ ...result, publishResult });
       await load();
-      setMessage('Ürün başarıyla kaydedildi.');
+      setMessage(sendNow ? 'Ürün kaydedildi ve kanallara gönderildi.' : 'Ürün başarıyla kaydedildi.');
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Hızlı ürün kaydı tamamlanamadı.');
     } finally {
@@ -760,8 +777,18 @@ export default function ProductsPage() {
       productType: quickKeepProductType ? current.productType : '',
       shopPrice: quickKeepPrices ? current.shopPrice : 0,
       sitePrice: quickKeepPrices ? current.sitePrice : 0,
+      platforms: current.platforms,
     }));
     setQuickResult(null);
+  }
+
+  function toggleQuickPlatform(platform: string) {
+    setQuickForm((current) => ({
+      ...current,
+      platforms: current.platforms.includes(platform)
+        ? current.platforms.filter((p) => p !== platform)
+        : [...current.platforms, platform],
+    }));
   }
 
   function editQuickResult() {
@@ -1594,9 +1621,23 @@ export default function ProductsPage() {
               <input className="hidden" type="file" accept="image/*" onChange={(event) => uploadQuickImage(event.target.files)} />
             </label>
           </Field>
-          <div className="flex flex-wrap gap-2 lg:col-span-4">
-            <button className="btn btn-primary" type="submit" disabled={quickSaving}><Save size={16} /> {quickSaving ? 'Kaydediliyor' : 'Ürünü Kaydet'}</button>
-            <button className="btn btn-secondary" type="button" onClick={newQuickEntry}><PackagePlus size={16} /> Yeni Ürün Ekle</button>
+          <div className="lg:col-span-4">
+            <div className="mb-3 flex flex-wrap items-center gap-3">
+              <span className="text-sm font-semibold text-slate-600">Kanallara gönder:</span>
+              {[{ value: 'TRENDYOL', label: 'Trendyol' }, { value: 'N11', label: 'N11' }, { value: 'HEPSIBURADA', label: 'Hepsiburada' }].map((p) => (
+                <label key={p.value} className="flex cursor-pointer items-center gap-1.5 rounded-md border border-line bg-white px-3 py-1.5 text-sm font-semibold">
+                  <input type="checkbox" checked={quickForm.platforms.includes(p.value)} onChange={() => toggleQuickPlatform(p.value)} />
+                  {p.label}
+                </label>
+              ))}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button className="btn btn-secondary" type="submit" disabled={quickSaving}><Save size={16} /> {quickSaving ? 'Kaydediliyor…' : 'Sadece Kaydet'}</button>
+              <button className="btn btn-primary" type="button" disabled={quickSaving || quickForm.platforms.length === 0} onClick={(e) => saveQuickEntry(e as any, true)}>
+                <Send size={16} /> {quickSaving ? 'Gönderiliyor…' : `Kaydet ve ${quickForm.platforms.length > 0 ? quickForm.platforms.join('+') : 'Kanallara'} Gönder`}
+              </button>
+              <button className="btn btn-secondary" type="button" onClick={newQuickEntry}><PackagePlus size={16} /> Yeni Ürün Ekle</button>
+            </div>
           </div>
         </form>
 
@@ -1612,6 +1653,19 @@ export default function ProductsPage() {
               <Info label="Dükkan fiyatı" value={money(quickResult.shopPrice)} />
               <Info label="Site fiyatı" value={money(quickResult.sitePrice)} />
             </div>
+            {quickResult.publishResult && (
+              <div className="mt-4">
+                <div className="mb-2 text-sm font-semibold text-slate-700">Kanal Gönderim Sonucu</div>
+                <div className="flex flex-wrap gap-2">
+                  {quickResult.publishResult.results.map((r) => (
+                    <div key={r.platform} className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold ${r.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
+                      {r.ok ? <CheckCircle2 size={15} /> : <XCircle size={15} />}
+                      {r.platform}: {r.ok ? (r.batchRequestId ? 'Kuyruğa alındı' : 'Gönderildi') : (r.errorMessage ?? 'Hata')}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="mt-4 flex flex-wrap gap-2">
               <button type="button" className="btn btn-primary" onClick={newQuickEntry}><PackagePlus size={16} /> Yeni Ürün Ekle</button>
               <button type="button" className="btn btn-secondary" onClick={() => window.open(`/products?variantId=${quickResult.variantId}`, '_self')}><Eye size={16} /> Ürünü Görüntüle</button>
