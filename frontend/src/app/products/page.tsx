@@ -1020,7 +1020,7 @@ export default function ProductsPage() {
     }
   }
 
-  function matchComponentStock(role: ComponentRole, stockCard: StockCard) {
+  function matchComponentStock(role: ComponentRole, stockCard: StockCard, quantity = 1) {
     const draft = normalizeDraftTotals(costDetail?.costDraft ?? defaultCostDraft(Number(form.salePrice), Number(form.commissionPercent)));
     const unitCost = Number(stockCard.automaticUnitCost || stockCard.manualUnitCost || 0);
     const matchedCategoryId = findCategoryIdForStock(stockCard, categories, form.productName);
@@ -1033,22 +1033,19 @@ export default function ProductsPage() {
         name: stockCard.name,
         potType: stockCard.productType ?? stockCard.category ?? 'Saksı',
         color: null,
-        quantity: 1,
+        quantity,
         unit: stockCard.unit,
         source: 'AUTO',
         stockCardId: stockCard.id,
         manualUnitCost: 0,
         automaticUnitCost: unitCost,
-        totalCost: unitCost,
+        totalCost: unitCost * quantity,
       };
       setCostDetail({
         hasSavedCostDraft: costDetail?.hasSavedCostDraft,
-        costDraft: normalizeDraftTotals({
-          ...draft,
-          pots: [nextPot],
-        }),
+        costDraft: normalizeDraftTotals({ ...draft, pots: [nextPot] }),
       });
-      setMessage(`${stockCard.name} saksı olarak eşleştirildi.`);
+      setMessage(`${stockCard.name} saksı olarak eşleştirildi (adet: ${quantity}).`);
       return;
     }
 
@@ -1057,13 +1054,13 @@ export default function ProductsPage() {
     const nextItem = {
       name: stockCard.name,
       group,
-      quantity: 1,
+      quantity,
       unit: stockCard.unit,
       source: 'AUTO',
       stockCardId: stockCard.id,
       manualUnitCost: 0,
       automaticUnitCost: unitCost,
-      totalCost: unitCost,
+      totalCost: unitCost * quantity,
     };
     const remainingItems = draft.items.filter((item) => {
       if (item.stockCardId === stockCard.id) return false;
@@ -1077,7 +1074,7 @@ export default function ProductsPage() {
         items: [...remainingItems, { ...nextItem, name: stockCard.name || roleName }],
       }),
     });
-    setMessage(`${stockCard.name} ${roleName.toLocaleLowerCase('tr-TR')} olarak eşleştirildi.`);
+    setMessage(`${stockCard.name} ${roleName.toLocaleLowerCase('tr-TR')} olarak eklendi (adet: ${quantity}).`);
   }
 
   function applySalesStockMatch(stockCard: StockCard, silent = false) {
@@ -3109,48 +3106,114 @@ function ComponentStockMatcher({
   productName: string;
   stockCards: StockCard[];
   selectedIds: Set<number>;
-  onSelect: (role: ComponentRole, stockCard: StockCard) => void;
+  onSelect: (role: ComponentRole, stockCard: StockCard, quantity: number) => void;
   onClose: () => void;
   onRefresh: () => Promise<void>;
   loading: boolean;
 }) {
   const [search, setSearch] = useState('');
+  const [pending, setPending] = useState<{ stockCard: StockCard; role: ComponentRole } | null>(null);
+  const [qty, setQty] = useState('1');
+  const [added, setAdded] = useState<Array<{ name: string; qty: number; unit: string }>>([]);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const qtyRef = useRef<HTMLInputElement>(null);
+
   const searchText = search.trim();
   const rankingText = searchText || productName;
   const suggestions = stockCards
-    .filter((stockCard) => stockCard.status !== 'PASSIVE')
-    .map((stockCard) => {
-      const role = inferComponentRole(stockCard);
-      const score = stockSuggestionScore(stockCard, rankingText, productName, stockCard.category ?? '') + componentRoleScore(stockCard, role);
-      return { stockCard, role, score };
+    .filter((sc) => sc.status !== 'PASSIVE')
+    .map((sc) => {
+      const role = inferComponentRole(sc);
+      const score = stockSuggestionScore(sc, rankingText, productName, sc.category ?? '') + componentRoleScore(sc, role);
+      return { stockCard: sc, role, score };
     })
     .filter((item) => !searchText || item.score > 0)
     .sort((a, b) => b.score - a.score || a.stockCard.name.localeCompare(b.stockCard.name, 'tr'))
-    .slice(0, 200);
+    .slice(0, 100);
+
+  function selectCard(role: ComponentRole, stockCard: StockCard) {
+    setPending({ stockCard, role });
+    setQty('1');
+    setSearch('');
+    setTimeout(() => qtyRef.current?.select(), 50);
+  }
+
+  function confirmAdd() {
+    if (!pending) return;
+    const quantity = Math.max(0.01, Number(qty) || 1);
+    onSelect(pending.role, pending.stockCard, quantity);
+    setAdded((prev) => [...prev, { name: pending.stockCard.name, qty: quantity, unit: pending.stockCard.unit }]);
+    setPending(null);
+    setQty('1');
+    setTimeout(() => searchRef.current?.focus(), 50);
+  }
+
+  function cancelPending() {
+    setPending(null);
+    setQty('1');
+    setTimeout(() => searchRef.current?.focus(), 50);
+  }
 
   return (
     <div className="rounded-md border border-line bg-slate-50 p-4">
       <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="font-bold">Stok bileşeni ara ve ekle</div>
-          <div className="text-xs text-slate-500">Ürün adı, stok adı, stok kodu veya barkod yazın; seçilen kart reçeteye aynı ad, birim, maliyet ve stok bağlantısıyla eklenir.</div>
+          <div className="text-xs text-slate-500">Arama yaz → ürünü seç → adet gir → Ekle. Birden fazla bileşen ekleyebilirsin.</div>
         </div>
         <div className="flex gap-2">
           <button type="button" className="btn btn-secondary min-h-9 px-3 text-xs" onClick={onRefresh} disabled={loading}>
             <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> Yenile
           </button>
-          <button type="button" className="btn btn-secondary min-h-9 px-3 text-xs" onClick={onClose}>Geri / Kapat</button>
+          <button type="button" className="btn btn-secondary min-h-9 px-3 text-xs" onClick={onClose}>Bitti / Kapat</button>
         </div>
       </div>
-      <div className="space-y-3">
+
+      {added.length > 0 && (
+        <div className="mb-3 flex flex-wrap gap-2">
+          {added.map((item, i) => (
+            <span key={i} className="flex items-center gap-1 rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-800">
+              <CheckCircle2 size={12} /> {item.name} × {item.qty} {item.unit}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {pending ? (
+        <div className="mb-3 rounded-md border border-emerald-300 bg-emerald-50 p-4">
+          <div className="mb-2 font-bold text-emerald-900">{pending.stockCard.name}</div>
+          <div className="mb-3 text-xs text-slate-500">{componentRoleLabel(pending.role)} · {pending.stockCard.unit} · {money(pending.stockCard.automaticUnitCost || pending.stockCard.manualUnitCost)}</div>
+          <div className="flex items-center gap-3">
+            <label className="text-sm font-semibold text-slate-700">Adet:</label>
+            <input
+              ref={qtyRef}
+              className="field w-28 text-center text-lg font-bold"
+              type="number"
+              min="0.01"
+              step="1"
+              value={qty}
+              onChange={(e) => setQty(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') confirmAdd(); if (e.key === 'Escape') cancelPending(); }}
+            />
+            <button type="button" className="btn btn-primary" onClick={confirmAdd}>
+              <CheckCircle2 size={16} /> Ekle
+            </button>
+            <button type="button" className="btn btn-secondary" onClick={cancelPending}>İptal</button>
+          </div>
+        </div>
+      ) : (
         <input
-          className="field"
+          ref={searchRef}
+          className="field mb-3"
           autoFocus
           value={search}
-          onChange={(event) => setSearch(event.target.value)}
-          placeholder={`Örn: ağaç gövde, menekşe, saksı, taş, stok kodu veya barkod${productName ? ` · Ürün: ${productName}` : ''}`}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder={`Stok adı, stok kodu veya barkod yaz${productName ? ` · Ürün: ${productName}` : ''}`}
         />
-        <div className="max-h-[520px] overflow-auto rounded-md border border-line bg-white">
+      )}
+
+      {!pending && (
+        <div className="max-h-[400px] overflow-auto rounded-md border border-line bg-white">
           {loading ? (
             <div className="p-4 text-sm font-semibold text-slate-500">Stok kartları güncelleniyor...</div>
           ) : suggestions.length > 0 ? suggestions.map(({ stockCard, role }) => {
@@ -3159,33 +3222,27 @@ function ComponentStockMatcher({
               <button
                 type="button"
                 key={stockCard.id}
-                className={`block w-full border-b border-line px-3 py-3 text-left transition hover:bg-slate-50 ${selected ? 'bg-emerald-50' : 'bg-white'}`}
-                onClick={() => {
-                  onSelect(role, stockCard);
-                  onClose();
-                }}
+                className={`block w-full border-b border-line px-3 py-2.5 text-left transition hover:bg-emerald-50 ${selected ? 'bg-emerald-50' : 'bg-white'}`}
+                onClick={() => selectCard(role, stockCard)}
               >
-                <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
-                    <div className="font-bold">{stockCard.name}</div>
-                    <div className="mt-1 text-xs text-slate-500">{stockCard.sku || 'Stok kodu yok'} · {stockCard.category || 'Kategori yok'} · {number(stockCard.stockQuantity)} {stockCard.unit}</div>
+                    <span className="font-semibold">{stockCard.name}</span>
+                    <span className="ml-2 text-xs text-slate-400">{stockCard.sku || ''}</span>
                   </div>
-                  <div className="text-right text-xs font-semibold text-slate-600">
-                    <div>{componentRoleLabel(role)}</div>
-                    <div className="mt-1">{money(stockCard.automaticUnitCost || stockCard.manualUnitCost)}</div>
-                    {selected && <div className="mt-1 text-emerald-700">Eklendi</div>}
+                  <div className="flex items-center gap-3 text-xs font-semibold text-slate-600">
+                    <span className="text-slate-400">{componentRoleLabel(role)}</span>
+                    <span>{money(stockCard.automaticUnitCost || stockCard.manualUnitCost)}</span>
+                    {selected && <span className="text-emerald-600">✓ Eklendi</span>}
                   </div>
                 </div>
               </button>
             );
           }) : (
-            <div className="p-4 text-sm font-semibold text-slate-500">Bu aramaya uygun aktif stok kartı bulunamadı. Yeni stok eklediyseniz Yenile düğmesine basın.</div>
+            <div className="p-4 text-sm text-slate-500">{searchText ? 'Sonuç bulunamadı.' : 'Aramak için bir şeyler yazın.'}</div>
           )}
         </div>
-        <div className="text-xs font-semibold text-slate-500">
-          Gösterilen sonuç: {suggestions.length}. Daha dar sonuç için ürün adını veya stok kodunu yazın.
-        </div>
-      </div>
+      )}
     </div>
   );
 }
