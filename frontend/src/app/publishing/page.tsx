@@ -5,6 +5,12 @@ import { CheckCircle2, Download, Eye, FileSpreadsheet, RefreshCw, Send, TestTube
 import { AdminShell } from '@/components/AdminShell';
 import { api } from '@/lib/api';
 
+type Category = {
+  id: number;
+  name: string;
+  trendyolCategoryId: number | null;
+};
+
 type PublishProduct = {
   id: number;
   barcode: string;
@@ -70,20 +76,25 @@ const platformOptions = [
 export default function PublishingPage() {
   const [products, setProducts] = useState<PublishProduct[]>([]);
   const [history, setHistory] = useState<PublishHistory[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [selected, setSelected] = useState<number[]>([]);
   const [search, setSearch] = useState('');
   const [onlyReady, setOnlyReady] = useState(false);
   const [excelPlatform, setExcelPlatform] = useState('TRENDYOL');
   const [preview, setPreview] = useState<PreviewData | null>(null);
   const [message, setMessage] = useState('');
+  const [categoryInputs, setCategoryInputs] = useState<Record<number, string>>({});
 
   async function load() {
-    const [productData, historyData] = await Promise.all([
+    const [productData, historyData, categoryData] = await Promise.all([
       api<PublishProduct[]>('/publishing/products'),
       api<PublishHistory[]>('/publishing/history'),
+      api<Category[]>('/categories'),
     ]);
     setProducts(productData);
     setHistory(historyData);
+    setCategories(categoryData);
+    setCategoryInputs(Object.fromEntries(categoryData.map((c) => [c.id, String(c.trendyolCategoryId ?? '')])));
   }
 
   useEffect(() => {
@@ -138,6 +149,18 @@ export default function PublishingPage() {
     } catch (err: any) {
       setMessage(`❌ SEO üretimi hatası: ${err.message}`);
     }
+  }
+
+  async function saveCategoryId(categoryId: number) {
+    const value = categoryInputs[categoryId] ?? '';
+    const trendyolCategoryId = value.trim() === '' ? null : Number(value);
+    if (trendyolCategoryId !== null && isNaN(trendyolCategoryId)) {
+      setMessage('Trendyol kategori ID sayı olmalıdır.');
+      return;
+    }
+    await api(`/categories/${categoryId}`, { method: 'PATCH', json: { trendyolCategoryId } });
+    setMessage('Kategori Trendyol ID kaydedildi.');
+    await load();
   }
 
   async function exportExcel(ids: number[], label: string) {
@@ -297,6 +320,26 @@ export default function PublishingPage() {
           <pre className="max-h-96 overflow-auto rounded-md bg-slate-50 p-3 text-xs">{JSON.stringify(preview.payload, null, 2)}</pre>
         </section>
       )}
+
+      <section className="panel mb-6 p-4">
+        <h3 className="mb-3 font-bold">Kategori Trendyol ID Ayarları</h3>
+        <p className="mb-4 text-sm text-slate-500">Her kategoriye karşılık gelen Trendyol kategori numarasını girin. Yapay Çiçek/Ağaç → 2995, Saksı → 2615</p>
+        <div className="flex flex-wrap gap-4">
+          {categories.map((cat) => (
+            <div key={cat.id} className="flex items-center gap-2 rounded-md border border-line p-3">
+              <span className="min-w-40 text-sm font-semibold">{cat.name}</span>
+              <input
+                className="field w-28"
+                type="number"
+                placeholder="Trendyol ID"
+                value={categoryInputs[cat.id] ?? ''}
+                onChange={(e) => setCategoryInputs((prev) => ({ ...prev, [cat.id]: e.target.value }))}
+              />
+              <button className="btn btn-primary px-3 py-1.5 text-sm" onClick={() => saveCategoryId(cat.id)}>Kaydet</button>
+            </div>
+          ))}
+        </div>
+      </section>
 
       <section className="panel overflow-hidden">
         <div className="border-b border-line px-5 py-4">

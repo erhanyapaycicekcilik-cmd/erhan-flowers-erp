@@ -6,6 +6,10 @@ import { PrismaService } from '../prisma/prisma.service';
 export class CategoriesService {
   constructor(private readonly prisma: PrismaService) {}
 
+  async update(id: number, data: { trendyolCategoryId?: number | null }) {
+    return this.prisma.category.update({ where: { id }, data });
+  }
+
   async list() {
     const categories = await this.prisma.category.findMany({
       where: { status: 'ACTIVE' },
