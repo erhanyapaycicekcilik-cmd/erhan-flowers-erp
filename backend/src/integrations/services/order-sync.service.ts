@@ -236,7 +236,8 @@ export class OrderSyncService {
       FROM channel_credentials cc
       JOIN channel_accounts ca ON ca.id = cc.channel_account_id
       JOIN sales_channels sc ON sc.id = ca.sales_channel_id
-      WHERE sc.code = 'TRENDYOL' AND ca.is_active = true AND cc.is_active = true
+      JOIN companies co ON co.id = ca.company_id
+      WHERE sc.code = 'TRENDYOL' AND ca.is_active = true AND cc.is_active = true AND co.code = 'ERHAN'
       LIMIT 20
     `;
 
@@ -352,7 +353,8 @@ export class OrderSyncService {
       FROM channel_credentials cc
       JOIN channel_accounts ca ON ca.id = cc.channel_account_id
       JOIN sales_channels sc ON sc.id = ca.sales_channel_id
-      WHERE sc.code = 'N11' AND ca.is_active = true AND cc.is_active = true LIMIT 10
+      JOIN companies co ON co.id = ca.company_id
+      WHERE sc.code = 'N11' AND ca.is_active = true AND cc.is_active = true AND co.code = 'ERHAN' LIMIT 10
     `;
     const creds: Record<string, string> = {
       API_KEY: process.env.N11_API_KEY ?? '',
