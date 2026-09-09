@@ -23,17 +23,20 @@ export class N11Adapter extends HttpMarketplaceOrderAdapter {
     const p = payload as Record<string, any>;
     const images = this.extractImages(p.images);
     const stockCode = p.modelCode || p.barcode || '';
-    const n11CategoryId = this.env('CATEGORY_ID') || p.n11CategoryId || null;
+    // N11 yapay çiçek kategorisi: 1000675 (şablondan alındı)
+    const n11CategoryId = Number(this.env('CATEGORY_ID') || p.n11CategoryId || 1000675);
     const preparingDay = Number(this.env('PREPARING_DAY') || 2);
     const shipmentTemplate = this.env('DELIVERY_TEMPLATE_NAME') || 'Standart Teslimat';
+    const height = this.extractHeight(p.productName, p.description);
 
     const n11Payload: Record<string, any> = {
       productSellerCode: stockCode,
       title: p.productName || '',
       subtitle: (p.shortDescription || p.productName || '').slice(0, 100),
       description: p.description || p.productName || '',
-      category: n11CategoryId ? { id: Number(n11CategoryId) } : undefined,
+      category: { id: n11CategoryId },
       price: Number(p.salePrice || 0),
+      listPrice: Number(p.listPrice || p.salePrice || 0),
       currencyType: 'TL',
       preparingDay,
       shipmentTemplate,
@@ -51,12 +54,11 @@ export class N11Adapter extends HttpMarketplaceOrderAdapter {
         },
       ],
       attributes: [
-        { id: 338, value: p.color || 'Çok Renkli' },
+        ...(p.color ? [{ name: 'Renk', value: p.color }] : []),
+        ...(p.flowerType ? [{ name: 'Çiçek Türü', value: p.flowerType }] : []),
+        ...(height ? [{ name: 'Yükseklik', value: height }] : []),
       ],
     };
-
-    // category yoksa alanı çıkar
-    if (!n11CategoryId) delete n11Payload.category;
 
     const apiUrl = this.env('API_URL') || 'https://api.n11.com';
     const url = new URL('/ms/product/tasks/product-create', apiUrl);
@@ -91,6 +93,11 @@ export class N11Adapter extends HttpMarketplaceOrderAdapter {
     } catch (error) {
       return { ok: false, status: 'FAILED', message: `N11 urun gonderimi basarisiz: ${error instanceof Error ? error.message : String(error)}` };
     }
+  }
+
+  private extractHeight(...values: unknown[]): string {
+    const text = values.map((v) => String(v ?? '')).join(' ');
+    return text.match(/\b\d{2,3}\s*cm\b/i)?.[0] ?? '';
   }
 
   private extractImages(images: unknown): string[] {
