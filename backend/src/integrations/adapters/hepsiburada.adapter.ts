@@ -27,29 +27,38 @@ export class HepsiburadaAdapter extends HttpMarketplaceOrderAdapter {
     const p = payload as Record<string, any>;
     const images = this.extractImages(p.images);
     const stockCode = p.modelCode || p.barcode || '';
-    const hbCategoryId = this.env('CATEGORY_ID') || p.hepsiburadaCategoryId || null;
+    // Hepsiburada yapay çiçekler: categoryId=60001290, productTypeId=3210 (şablondan)
+    const hbCategoryId = this.env('CATEGORY_ID') || p.hepsiburadaCategoryId || '60001290';
+    const hbProductTypeId = Number(this.env('PRODUCT_TYPE_ID') || 3210);
     const hbProductPath = this.env('PRODUCT_PATH') || '/product/api/merchant/v1/listings';
     const apiBaseUrl = this.env('PRODUCT_API_URL') || 'https://listing-external.hepsiburada.com';
+    const height = this.extractHeight(p.productName, p.description);
 
     const hbPayload: Record<string, any> = {
       merchantSku: stockCode,
-      productName: p.productName || '',
-      description: p.description || p.productName || '',
-      brand: p.brand || 'Erhan Flowers',
-      categoryId: hbCategoryId ? String(hbCategoryId) : undefined,
-      price: Number(p.salePrice || 0),
-      availableStock: Number(p.stockQuantity ?? 0),
-      VatRate: Number(p.vatRate ?? 20),
-      images: images.slice(0, 10),
-      barcode: p.barcode || undefined,
-      attributes: [
-        { attributeName: 'Renk', attributeValue: p.color || 'Çok Renkli' },
-      ],
+      VaryantGroupID: p.modelCode || stockCode,
+      Barcode: p.barcode || undefined,
+      UrunAdi: p.productName || '',
+      UrunAciklamasi: p.description || p.productName || '',
+      Marka: p.brand || 'Erhan Flowers',
+      categoryId: String(hbCategoryId),
+      productTypeId: hbProductTypeId,
+      Fiyat: Number(p.salePrice || 0),
+      Stok: Number(p.stockQuantity ?? 0),
+      KDV: Number(p.vatRate ?? 20),
+      Desi: Number(p.desi || 1),
       dispatchTime: Number(this.env('PREPARING_DAY') || 2),
+      images: images.slice(0, 10),
+      attributes: [
+        { name: 'Renk', value: p.color || 'Çok Renkli' },
+        ...(p.flowerType ? [{ name: 'Çiçek Türü', value: p.flowerType }] : []),
+        ...(height ? [{ name: 'Boy', value: height }] : []),
+        { name: 'Materyal', value: 'Plastik' },
+        { name: 'Menşei', value: p.origin || 'TR' },
+      ],
     };
 
-    if (!hbCategoryId) delete hbPayload.categoryId;
-    if (!p.barcode) delete hbPayload.barcode;
+    if (!p.barcode) delete hbPayload.Barcode;
 
     const url = new URL(hbProductPath.startsWith('/') ? hbProductPath : `/${hbProductPath}`, `${apiBaseUrl.replace(/\/+$/, '')}/`);
     const auth = Buffer.from(`${username}:${password}`).toString('base64');
@@ -83,6 +92,11 @@ export class HepsiburadaAdapter extends HttpMarketplaceOrderAdapter {
     } catch (error) {
       return { ok: false, status: 'FAILED', message: `Hepsiburada urun gonderimi basarisiz: ${error instanceof Error ? error.message : String(error)}` };
     }
+  }
+
+  private extractHeight(...values: unknown[]): string {
+    const text = values.map((v) => String(v ?? '')).join(' ');
+    return text.match(/\b\d{2,3}\s*cm\b/i)?.[0] ?? '';
   }
 
   private extractImages(images: unknown): string[] {
