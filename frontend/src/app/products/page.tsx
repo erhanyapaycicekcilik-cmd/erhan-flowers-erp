@@ -1,7 +1,7 @@
 'use client';
 
 import { FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from 'react';
-import { Boxes, Calculator, CheckCircle2, Copy, Edit3, ExternalLink, Eye, FileText, ImageIcon, PackagePlus, Plus, Printer, RefreshCw, Save, Search, Send, Sparkles, Trash2, Upload, X } from 'lucide-react';
+import { Boxes, Calculator, ChevronDown, CheckCircle2, Copy, Edit3, ExternalLink, Eye, FileText, ImageIcon, PackagePlus, Plus, Printer, RefreshCw, Save, Search, Send, Sparkles, Trash2, Upload, X } from 'lucide-react';
 import { AdminShell } from '@/components/AdminShell';
 import { api, apiBaseUrl, apiFileUrl } from '@/lib/api';
 import type { Category, CurrentUser, MediaFile } from '@/types';
@@ -339,6 +339,7 @@ export default function ProductsPage() {
   const [quickKeepProductType, setQuickKeepProductType] = useState(true);
   const [quickKeepPrices, setQuickKeepPrices] = useState(true);
   const [compositeBuilder, setCompositeBuilder] = useState(emptyCompositeBuilder);
+  const [compositeOpen, setCompositeOpen] = useState(false);
   const [cleanupItems, setCleanupItems] = useState<AutoStockCardCandidate[]>([]);
   const [cleanupLoading, setCleanupLoading] = useState(false);
   const [showPassiveEntries, setShowPassiveEntries] = useState(false);
@@ -1792,12 +1793,19 @@ export default function ProductsPage() {
                   </div>
                 </div>
                 <div className="md:col-span-2 xl:col-span-4">
-                  <div className="rounded-md border border-emerald-200 bg-emerald-50 p-4">
+                  <div className="rounded-md border border-emerald-200 bg-emerald-50">
+                    <button
+                      type="button"
+                      className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
+                      onClick={() => setCompositeOpen((v) => !v)}
+                    >
+                      <div className="flex items-center gap-2 font-black text-emerald-900"><Sparkles size={18} /> ChatGPT ürün hazırlayıcı</div>
+                      <ChevronDown size={16} className={`text-emerald-700 transition-transform ${compositeOpen ? 'rotate-180' : ''}`} />
+                    </button>
+                    {compositeOpen && (
+                    <div className="border-t border-emerald-200 p-4">
                     <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-                      <div>
-                        <div className="flex items-center gap-2 font-black text-emerald-900"><Sparkles size={18} /> ChatGPT ürün hazırlayıcı</div>
-                        <div className="mt-1 text-xs font-semibold text-emerald-800">Ağaç/bitki, yaprak, gövde/bambu ve saksıyı ayrı seç; her biri reçeteye ayrı stok satırı olarak eklensin.</div>
-                      </div>
+                      <div className="text-xs font-semibold text-emerald-800">Ağaç/bitki, yaprak, gövde/bambu ve saksıyı ayrı seç; her biri reçeteye ayrı stok satırı olarak eklensin.</div>
                       <button type="button" className="btn btn-secondary min-h-9 px-3 text-xs" onClick={refreshStockCards} disabled={stockCardsLoading}>
                         <RefreshCw size={14} className={stockCardsLoading ? 'animate-spin' : ''} /> Stokları yenile
                       </button>
@@ -1914,6 +1922,8 @@ export default function ProductsPage() {
                         <button type="button" className="btn btn-primary min-h-9 px-3 text-xs" onClick={() => setImagePickerOpen(true)}><Upload size={14} /> Bilgisayardan görsel yükle</button>
                         <button type="button" className="btn btn-secondary min-h-9 px-3 text-xs" disabled><ImageIcon size={14} /> Bileşenden görsel pasif</button>
                       </div>
+                    )}
+                  </div>
                     )}
                   </div>
                 </div>
