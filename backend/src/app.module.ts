@@ -29,6 +29,7 @@ import { ProductCenterModule } from './product-center/product-center.module';
 import { MarketIntelligenceModule } from './market-intelligence/market-intelligence.module';
 import { PublicCatalogModule } from './public-catalog/public-catalog.module';
 import { SuppliersModule } from './suppliers/suppliers.module';
+import { EftModule } from './eft/eft.module';
 
 @Module({
   imports: [
@@ -68,6 +69,7 @@ import { SuppliersModule } from './suppliers/suppliers.module';
     MarketIntelligenceModule,
     PublicCatalogModule,
     SuppliersModule,
+    EftModule,
   ],
   controllers: [AppController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

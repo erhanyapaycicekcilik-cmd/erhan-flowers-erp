@@ -1,7 +1,7 @@
 'use client';
 
 import { Dispatch, FormEvent, SetStateAction, Suspense, useEffect, useMemo, useRef, useState } from 'react';
-import { Calculator, CreditCard, Eye, FileText, MapPin, Phone, Plus, Printer, Search, ShoppingCart, Store, Trash2, Truck, UserRound } from 'lucide-react';
+import { Calculator, CopyCheck, CreditCard, Eye, FileText, Link2, MapPin, Phone, Plus, Printer, Search, ShoppingCart, Store, Trash2, Truck, UserRound } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 import { AdminShell } from '@/components/AdminShell';
 import { api, apiFileUrl } from '@/lib/api';
@@ -164,6 +164,9 @@ function SalesCenterPageContent() {
   const [loadingSaleId, setLoadingSaleId] = useState<string | number | null>(null);
   const [quickSaleLoading, setQuickSaleLoading] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
+  const [eftLinkBySale, setEftLinkBySale] = useState<Record<string | number, string>>({});
+  const [eftLoadingSale, setEftLoadingSale] = useState<string | number | null>(null);
+  const [eftCopiedSale, setEftCopiedSale] = useState<string | number | null>(null);
   const quickBarcode = searchParams.get('barcode')?.trim() ?? '';
 
   useEffect(() => {
@@ -444,6 +447,21 @@ function SalesCenterPageContent() {
       return false;
     }
     return true;
+  }
+
+  async function createEftLink(saleId: string | number) {
+    setEftLoadingSale(saleId);
+    try {
+      const data = await api<{ token: string; finalAmount: number }>(`/eft/create/${saleId}`, { method: 'POST' });
+      const link = `${window.location.origin}/eft/${data.token}`;
+      setEftLinkBySale(prev => ({ ...prev, [saleId]: link }));
+      await navigator.clipboard.writeText(link).catch(() => {});
+      setEftCopiedSale(saleId);
+      setTimeout(() => setEftCopiedSale(null), 3000);
+    } catch (e) {
+      setMessage(String(e));
+    }
+    setEftLoadingSale(null);
   }
 
   function openPrint(saleId: string | number, type: PrintType) {
@@ -873,6 +891,16 @@ function SalesCenterPageContent() {
                           <button className="btn btn-secondary" type="button" onClick={() => openCustomerCard(sale.id)}>
                             <UserRound size={16} />
                             Müşteri Kartı
+                          </button>
+                          <button
+                            type="button"
+                            disabled={eftLoadingSale === sale.id}
+                            onClick={() => createEftLink(sale.id)}
+                            className="btn btn-secondary"
+                            title="EFT ödeme linki oluştur (%3 indirimli)"
+                          >
+                            {eftCopiedSale === sale.id ? <CopyCheck size={16} className="text-emerald-600" /> : <Link2 size={16} />}
+                            {eftCopiedSale === sale.id ? 'Link Kopyalandı!' : eftLinkBySale[sale.id] ? 'EFT Linki' : 'EFT Link'}
                           </button>
                         </div>
                       </td>

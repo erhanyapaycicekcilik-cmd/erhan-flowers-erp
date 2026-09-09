@@ -390,6 +390,7 @@ model User {
   retailSalesCompleted  RetailSale[]              @relation("RetailSaleCompletedBy")
   retailSalesCancelled  RetailSale[]              @relation("RetailSaleCancelledBy")
   retailPayments        RetailSalePayment[]       @relation("RetailPaymentCreatedBy")
+  eftConfirmed          EftPaymentRequest[]       @relation("EftConfirmedBy")
   retailDeliveries      RetailDelivery[]          @relation("RetailDeliveryAssignedTo")
   retailDeliveriesDone  RetailDelivery[]          @relation("RetailDeliveryDeliveredBy")
   retailPrintLogs       RetailPrintLog[]          @relation("RetailPrintLogPrintedBy")
@@ -1337,6 +1338,7 @@ model RetailSale {
   statusHistory         RetailSaleStatusHistory[]
   invoiceStatus         RetailInvoiceStatus       @default(WAITING) @map("invoice_status")
   invoiceNote           String?                   @map("invoice_note")
+  eftRequests           EftPaymentRequest[]
 
   @@index([createdAt])
   @@index([customerId])
@@ -1408,6 +1410,35 @@ model RetailSalePayment {
 
   @@index([saleId])
   @@map("retail_sale_payments")
+}
+
+model EftPaymentRequest {
+  id               Int       @id @default(autoincrement())
+  saleId           Int       @map("sale_id")
+  token            String    @unique
+  status           String    @default("PENDING")
+  originalAmount   Decimal   @map("original_amount") @db.Decimal(14, 2)
+  discountRate     Decimal   @default(0.03) @map("discount_rate") @db.Decimal(5, 4)
+  discountAmount   Decimal   @map("discount_amount") @db.Decimal(14, 2)
+  finalAmount      Decimal   @map("final_amount") @db.Decimal(14, 2)
+  bankName         String?   @map("bank_name")
+  iban             String?
+  accountHolder    String?   @map("account_holder")
+  dekontPath       String?   @map("dekont_path")
+  dekontUploadedAt DateTime? @map("dekont_uploaded_at")
+  customerNote     String?   @map("customer_note")
+  staffNote        String?   @map("staff_note")
+  confirmedById    Int?      @map("confirmed_by_id")
+  confirmedAt      DateTime? @map("confirmed_at")
+  expiresAt        DateTime  @map("expires_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+  sale             RetailSale @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  confirmedBy      User?      @relation("EftConfirmedBy", fields: [confirmedById], references: [id])
+
+  @@index([saleId])
+  @@index([status])
+  @@map("eft_payment_requests")
 }
 
 model RetailDelivery {
