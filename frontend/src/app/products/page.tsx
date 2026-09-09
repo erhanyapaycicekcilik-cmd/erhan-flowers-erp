@@ -1,7 +1,7 @@
 'use client';
 
 import { FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from 'react';
-import { Boxes, Calculator, ChevronDown, CheckCircle2, Copy, Edit3, ExternalLink, Eye, FileText, ImageIcon, PackagePlus, Plus, Printer, RefreshCw, Save, Search, Send, Sparkles, Trash2, Upload, X } from 'lucide-react';
+import { Boxes, Calculator, ChevronDown, CheckCircle2, Copy, Edit3, ExternalLink, Eye, Facebook, FileText, ImageIcon, Instagram, PackagePlus, Plus, Printer, RefreshCw, Save, Search, Send, Sparkles, Trash2, Upload, X } from 'lucide-react';
 import { AdminShell } from '@/components/AdminShell';
 import { api, apiBaseUrl, apiFileUrl } from '@/lib/api';
 import type { Category, CurrentUser, MediaFile } from '@/types';
@@ -340,6 +340,7 @@ export default function ProductsPage() {
   const [quickKeepPrices, setQuickKeepPrices] = useState(true);
   const [compositeBuilder, setCompositeBuilder] = useState(emptyCompositeBuilder);
   const [compositeOpen, setCompositeOpen] = useState(false);
+  const [quickFormOpen, setQuickFormOpen] = useState(false);
   const [cleanupItems, setCleanupItems] = useState<AutoStockCardCandidate[]>([]);
   const [cleanupLoading, setCleanupLoading] = useState(false);
   const [showPassiveEntries, setShowPassiveEntries] = useState(false);
@@ -1505,10 +1506,6 @@ export default function ProductsPage() {
   }
 
   async function downloadChannelExcel(platform: 'TRENDYOL' | 'HEPSIBURADA' | 'N11' | 'TICIMAX') {
-    if (!canResearch) {
-      setMessage('Excel almadan önce ürün hazırlığı ve kanal zorunlu alanları tamamlanmalı.');
-      return;
-    }
     const entry = await saveEntry();
     const variantId = Number(entry?.variantId || form.variantId);
     if (!variantId) return setMessage('Excel için önce ürünü kaydedin.');
@@ -1553,6 +1550,7 @@ export default function ProductsPage() {
           <p className="text-sm text-slate-500">Ürün, reçete, maliyet ve kanal gönderimi tek akış içinde yönetilir.</p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <button className="btn btn-primary" onClick={() => { setQuickFormOpen((v) => !v); setQuickResult(null); }}><PackagePlus size={17} /> Hızlı Ürün Ekle</button>
           <button className="btn btn-secondary" onClick={downloadUnlinkedExcel}><FileText size={17} /> Bağlanmamış Ürünler Excel</button>
           <label className="btn btn-secondary cursor-pointer">
             <Upload size={17} /> {importingExcel ? 'Yükleniyor...' : 'Excel ile Toplu Yükle'}
@@ -1571,7 +1569,7 @@ export default function ProductsPage() {
         <button type="button" className="btn btn-secondary min-h-9 px-3 text-xs" onClick={() => openErpContextLink('MEDIA')}><ExternalLink size={14} /> Medyayı Aç</button>
       </div>
 
-      <section className="hidden">
+      <section className={quickFormOpen ? 'mb-6 rounded-md border border-emerald-200 bg-emerald-50 p-4' : 'hidden'}>
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-lg font-black">Hızlı Yeni Ürün Kaydı</h2>
@@ -2092,6 +2090,18 @@ export default function ProductsPage() {
                   </div>
                   <textarea className="field min-h-40" value={form.description} onChange={(event) => update('description', event.target.value)} />
                 </div>
+                <SocialShareDraftPanel
+                  productName={form.productName}
+                  description={form.description}
+                  categoryName={categories.find((category) => String(category.id) === form.categoryId)?.name || form.channelCategoryName}
+                  colorVariant={form.colorVariant}
+                  image={form.images[0] ? normalizeImage(form.images[0]) : ''}
+                  onCopy={(text) => {
+                    navigator.clipboard.writeText(text)
+                      .then(() => setMessage('Instagram/Facebook paylaşım metni panoya kopyalandı.'))
+                      .catch(() => setMessage('Metin kopyalanamadı. Tarayıcı izinlerini kontrol edin.'));
+                  }}
+                />
               </div>
             )}
 
@@ -2156,7 +2166,7 @@ export default function ProductsPage() {
                   </div>
                   <div className="grid gap-2 md:grid-cols-4">
                     {publishableChannels.map((platform) => (
-                      <button key={platform} type="button" className="btn btn-secondary justify-center" onClick={() => downloadChannelExcel(platform)} disabled={!canResearch}>
+                      <button key={platform} type="button" className="btn btn-secondary justify-center" onClick={() => downloadChannelExcel(platform)}>
                         <FileText size={16} /> {channelLabel(platform)} Excel
                       </button>
                     ))}
@@ -2666,6 +2676,85 @@ function ReadinessList({ title, items }: { title: string; items: ReadinessItem[]
       </div>
     </div>
   );
+}
+
+function SocialShareDraftPanel({
+  productName,
+  description,
+  categoryName,
+  colorVariant,
+  image,
+  onCopy,
+}: {
+  productName: string;
+  description: string;
+  categoryName: string;
+  colorVariant: string;
+  image: string;
+  onCopy: (text: string) => void;
+}) {
+  const ready = Boolean(productName.trim() && description.trim() && image);
+  const productUrl = `https://erhanflowers.com/urunler?q=${encodeURIComponent(productName.trim())}`;
+  const hashtags = buildSocialHashtags(productName, categoryName, colorVariant);
+  const caption = [
+    `🌿 ${productName.trim() || 'Yeni ürün'}`,
+    '',
+    truncateSocialDescription(description),
+    '',
+    'Fiyat ve detay için internet sitemizi ziyaret edin:',
+    productUrl,
+    '',
+    hashtags.join(' '),
+  ].filter((line, index, lines) => line || (index > 0 && index < lines.length - 1)).join('\n');
+
+  return (
+    <section className="rounded-md border border-fuchsia-200 bg-fuchsia-50/40 p-4">
+      <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="flex items-center gap-2 font-black text-fuchsia-950"><Instagram size={19} /> Instagram / Facebook paylaşım taslağı</div>
+          <p className="mt-1 text-xs font-medium text-fuchsia-900/75">Bu adım yalnızca taslak oluşturur; sosyal hesaplarda gönderi yayınlamaz.</p>
+        </div>
+        <span className={`rounded-full px-3 py-1 text-xs font-bold ${ready ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-900'}`}>
+          {ready ? 'Paylaşım taslağı hazır' : 'Ürün bilgisi veya görsel bekliyor'}
+        </span>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-[180px_1fr]">
+        <div className="overflow-hidden rounded-md border border-fuchsia-200 bg-white">
+          {image ? <img src={image} alt={`${productName || 'Ürün'} paylaşım görseli`} className="aspect-square w-full object-cover" /> : <div className="flex aspect-square items-center justify-center p-4 text-center text-xs font-semibold text-slate-500"><ImageIcon size={20} className="mr-2" /> Ana ürün görseli bekleniyor</div>}
+        </div>
+        <div className="min-w-0">
+          <div className="mb-2 flex items-center gap-2 text-sm font-bold text-slate-700"><Facebook size={16} className="text-blue-700" /> Gönderi metni</div>
+          <pre className="max-h-64 overflow-auto whitespace-pre-wrap rounded-md border border-fuchsia-100 bg-white p-3 font-sans text-sm leading-6 text-slate-700">{caption}</pre>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button type="button" className="btn btn-secondary" onClick={() => onCopy(caption)} disabled={!productName.trim()}><Copy size={16} /> Metni Kopyala</button>
+            <a className="btn btn-secondary" href={productUrl} target="_blank" rel="noreferrer"><ExternalLink size={16} /> Mağaza Linkini Aç</a>
+            <button type="button" className="btn btn-primary opacity-60" disabled title="Meta bağlantısı tamamlandığında aktif olur"><Send size={16} /> Bağlantı sonrası yayınla</button>
+          </div>
+        </div>
+      </div>
+      <p className="mt-3 text-xs text-slate-500">Instagram açıklamasındaki bağlantı metin olarak görünür. Meta bağlantısı tamamlandığında bu taslak, onay düğmesiyle doğrudan Instagram ve Facebook&apos;ta yayınlanacak.</p>
+    </section>
+  );
+}
+
+function truncateSocialDescription(description: string) {
+  const normalized = description.trim().replace(/\s+/g, ' ');
+  if (!normalized) return 'Yeni ürünümüz için detaylar ve sipariş bilgisi internet sitemizde.';
+  return normalized.length > 360 ? `${normalized.slice(0, 357).trimEnd()}...` : normalized;
+}
+
+function buildSocialHashtags(productName: string, categoryName: string, colorVariant: string) {
+  const tokens = [productName, categoryName, colorVariant]
+    .join(' ')
+    .toLocaleLowerCase('tr-TR')
+    .replace(/ç/g, 'c').replace(/ğ/g, 'g').replace(/ı/g, 'i').replace(/ö/g, 'o').replace(/ş/g, 's').replace(/ü/g, 'u')
+    .split(/[^a-z0-9]+/)
+    .filter((token) => token.length >= 4)
+    .filter((token, index, list) => list.indexOf(token) === index)
+    .slice(0, 4)
+    .map((token) => `#${token}`);
+  return Array.from(new Set(['#ErhanFlowers', '#YapayCicek', '#YapayAgac', '#EvDekorasyonu', '#OfisDekorasyonu', ...tokens]));
 }
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
