@@ -28,6 +28,8 @@ type EntryPayload = {
   description?: unknown;
   stockQuantity?: unknown;
   salePrice?: unknown;
+  n11SalePrice?: unknown;
+  hepsiburadaSalePrice?: unknown;
   commissionPercent?: unknown;
   images?: unknown;
   status?: unknown;
@@ -96,6 +98,8 @@ export class ProductCenterService {
     const productId = this.optionalInt(payload.productId);
     const images = this.stringArray(payload.images);
     const salePrice = this.optionalNumber(payload.salePrice) ?? 0;
+    const n11SalePrice = this.optionalNumber(payload.n11SalePrice) ?? 0;
+    const hepsiburadaSalePrice = this.optionalNumber(payload.hepsiburadaSalePrice) ?? 0;
     const shippingCost = this.optionalNumber((payload as any).shippingCost) ?? 0;
     const marketPrice = salePrice > 0 ? salePrice : 0;
     const status = payload.status === 'PASSIVE' ? 'PASSIVE' as const : 'ACTIVE' as const;
@@ -166,6 +170,8 @@ export class ProductCenterService {
         potOptionId: this.optionalInt(payload.potOptionId),
         templateId: this.optionalInt(payload.templateId),
         trendyolSalePrice: new Prisma.Decimal(salePrice),
+        n11SalePrice: new Prisma.Decimal(n11SalePrice || salePrice),
+        hepsiburadaSalePrice: new Prisma.Decimal(hepsiburadaSalePrice || salePrice),
         commissionPercent: new Prisma.Decimal(this.optionalNumber(payload.commissionPercent) ?? 20),
         status,
       };
@@ -665,6 +671,8 @@ export class ProductCenterService {
       description: variant.productDescription ?? product?.description ?? '',
       stockQuantity: variant.stockQuantity,
       salePrice: Number(variant.trendyolSalePrice ?? product?.marketPrice ?? 0),
+      n11SalePrice: Number(variant.n11SalePrice ?? variant.trendyolSalePrice ?? 0),
+      hepsiburadaSalePrice: Number(variant.hepsiburadaSalePrice ?? variant.trendyolSalePrice ?? 0),
       commissionPercent: Number(variant.commissionPercent ?? 20),
       images,
       costStatus: draft?.status === 'APPROVED' ? 'Tamamlandi' : draft ? 'Taslak' : 'Maliyet Girilmedi',

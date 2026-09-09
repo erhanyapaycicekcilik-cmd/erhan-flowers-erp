@@ -201,7 +201,10 @@ export class PublishingService {
   }
 
   private async sendToPlatform(platform: IntegrationPlatform, variantId: number, userId: number, actionType: PublishingActionType, payload: Record<string, unknown>, missingFields: string[], allowIncomplete: boolean) {
-    const platformPayload = { ...payload, platform, allowIncomplete };
+    const platformPrice = platform === 'N11' ? (payload.n11SalePrice ?? payload.salePrice)
+      : platform === 'HEPSIBURADA' ? (payload.hepsiburadaSalePrice ?? payload.salePrice)
+      : payload.salePrice;
+    const platformPayload = { ...payload, salePrice: platformPrice, listPrice: platformPrice, platform, allowIncomplete };
     if (platform === 'TRENDYOL' && this.useLegacyTrendyolPublisher()) {
       return this.sendToTrendyol(variantId, userId, actionType, platformPayload, missingFields);
     }
@@ -289,9 +292,11 @@ export class PublishingService {
   }
 
   private buildPayload(variant: any) {
-    const images = this.marketplaceImageUrls(this.collectVariantImages(variant));
     const productName = variant.seoManualProductName ?? variant.seoProductName ?? variant.productName;
+    const imageSlug = this.productNameSlug(productName);
+    const images = this.marketplaceImageUrls(this.collectVariantImages(variant), imageSlug);
     const color = this.acceptedColor(variant.productColor || this.extractColor(productName) || 'Çok Renkli');
+    const trendyolPrice = Number(variant.trendyolSalePrice);
     return {
       barcode: variant.barcode,
       contentId: this.extractContentId(variant.trendyolProductUrl),
@@ -305,8 +310,10 @@ export class PublishingService {
       color,
       flowerType: this.extractFlowerType(productName),
       origin: variant.product?.origin || 'Türkiye',
-      salePrice: Number(variant.trendyolSalePrice),
-      listPrice: Number(variant.trendyolSalePrice),
+      salePrice: trendyolPrice,
+      listPrice: trendyolPrice,
+      n11SalePrice: Number(variant.n11SalePrice) || trendyolPrice,
+      hepsiburadaSalePrice: Number(variant.hepsiburadaSalePrice) || trendyolPrice,
       stockQuantity: variant.stockQuantity,
       desi: variant.productCostDraft?.desi ? Number(variant.productCostDraft.desi) : 1,
       vatRate: Number(variant.productCostDraft?.vatPercent ?? variant.product?.vatRate ?? 20),
@@ -516,7 +523,6 @@ export class PublishingService {
     }
     if (!payload.salePrice || payload.salePrice <= 0) missing.push('Satış fiyatı');
     if (!Array.isArray(payload.images) || payload.images.length === 0) missing.push('Ürün görseli');
-    if (variant.seoApprovalStatus !== 'Hazır Onay') missing.push('SEO onayı');
     return missing;
   }
 
@@ -555,10 +561,41 @@ export class PublishingService {
       .filter(Boolean);
   }
 
-  private marketplaceImageUrls(images: unknown) {
-    const urls = this.imageUrls(images).slice(0, 6);
+  private marketplaceImageUrls(images: unknown, productSlug?: string) {
+    const urls = this.imageUrls(images)
+      .map((url) => productSlug ? this.namedImageUrl(url, productSlug) : url)
+      .slice(0, 6);
     if (urls.length === 1) return Array.from({ length: 6 }, () => urls[0]);
     return urls;
+  }
+
+  private namedImageUrl(url: string, slug: string) {
+    if (!url || !slug) return url;
+    try {
+      const parsed = new URL(url);
+      const ext = parsed.pathname.split('.').pop()?.toLowerCase() ?? 'jpg';
+      const safeName = slug.replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').slice(0, 80);
+      const filename = parsed.pathname.split('/').pop() ?? '';
+      // Eğer URL zaten ürün adını içeriyorsa değiştirme
+      if (filename.startsWith(safeName)) return url;
+      // /uploads/... yolunu /img/:slug/:filename olarak yeniden yapılandır
+      const base = `${parsed.protocol}//${parsed.host}`;
+      const filePart = filename || `${safeName}.${ext}`;
+      const namedFile = filePart.match(/^[0-9a-f-]{36}\.|^\d{13}/) ? `${safeName}.${ext}` : filePart;
+      return `${base}/img/${safeName}/${namedFile}`;
+    } catch {
+      return url;
+    }
+  }
+
+  private productNameSlug(name: string) {
+    return String(name ?? '')
+      .toLocaleLowerCase('tr-TR')
+      .replace(/ı/g, 'i').replace(/ğ/g, 'g').replace(/ü/g, 'u')
+      .replace(/ş/g, 's').replace(/ö/g, 'o').replace(/ç/g, 'c')
+      .normalize('NFD').replace(/[̀-ͯ]/g, '')
+      .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+      .slice(0, 80);
   }
 
   private toPublicImageUrl(image: string) {

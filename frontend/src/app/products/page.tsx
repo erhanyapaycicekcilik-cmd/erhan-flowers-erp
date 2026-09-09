@@ -28,6 +28,8 @@ type Entry = {
   description: string;
   stockQuantity: number;
   salePrice: number;
+  n11SalePrice?: number;
+  hepsiburadaSalePrice?: number;
   commissionPercent: number;
   images: string[];
   costStatus: string;
@@ -240,6 +242,8 @@ const emptyForm = {
   description: '',
   stockQuantity: 0,
   salePrice: 0,
+  n11SalePrice: 0,
+  hepsiburadaSalePrice: 0,
   commissionPercent: 20,
   images: [] as string[],
   status: 'ACTIVE' as 'ACTIVE' | 'PASSIVE',
@@ -320,7 +324,7 @@ export default function ProductsPage() {
   const [step, setStep] = useState(0);
   const [sourceRecipeId, setSourceRecipeId] = useState('');
   const [costDetail, setCostDetail] = useState<CostDetail | null>(null);
-  const [selectedChannels, setSelectedChannels] = useState<string[]>(['SHOP', 'SITE', 'TRENDYOL']);
+  const [selectedChannels, setSelectedChannels] = useState<string[]>(['SHOP', 'SITE', 'TRENDYOL', 'HEPSIBURADA', 'N11']);
   const [allowIncomplete, setAllowIncomplete] = useState(true);
   const [query, setQuery] = useState('');
   const [familyPickerOpen, setFamilyPickerOpen] = useState(false);
@@ -804,6 +808,8 @@ export default function ProductsPage() {
       description: entry.description || '',
       stockQuantity: Number(entry.stockQuantity || 0),
       salePrice: Number(entry.salePrice || 0),
+      n11SalePrice: Number((entry as any).n11SalePrice || 0),
+      hepsiburadaSalePrice: Number((entry as any).hepsiburadaSalePrice || 0),
       commissionPercent: Number(entry.commissionPercent || 20),
       images: entry.images ?? [],
       status: entry.status,
@@ -827,6 +833,8 @@ export default function ProductsPage() {
         templateId: form.templateId ? Number(form.templateId) : undefined,
         stockQuantity: Number(form.stockQuantity),
         salePrice: Number(form.salePrice),
+        n11SalePrice: Number(form.n11SalePrice) || Number(form.salePrice),
+        hepsiburadaSalePrice: Number(form.hepsiburadaSalePrice) || Number(form.salePrice),
         commissionPercent: Number(form.commissionPercent),
       },
     });
@@ -1435,20 +1443,12 @@ export default function ProductsPage() {
   }
 
   async function sendToChannels() {
-    if (!canResearch) {
+    if (!canResearch && !allowIncomplete) {
       const blockers = [...preparation.blockingMissing, ...trendyolReadiness.blockingMissing];
       const text = `Gönderim yapılamadı. Eksik alanlar: ${blockers.join(', ') || 'Ürün hazırlığı tamamlanmadı.'}`;
       setMessage(text);
       setSendMessage(text);
       setMissingPanelOpen(true);
-      return;
-    }
-    const selectedPricing = channelPricing.filter((item) => selectedChannels.includes(item.key));
-    const blocked = selectedPricing.filter((item) => item.status === 'Eksik veri');
-    if (blocked.length > 0 && !allowIncomplete) {
-      const text = `Gönderim durduruldu. Eksik veri olan kanal: ${blocked.map((item) => item.label).join(', ')}`;
-      setMessage(text);
-      setSendMessage(text);
       return;
     }
     const platforms = selectedChannels.filter((item) => (publishableChannels as readonly string[]).includes(item));
@@ -2112,6 +2112,14 @@ export default function ProductsPage() {
                       {channelLabel(channel)}
                     </label>
                   ))}
+                </div>
+                <div className="rounded-md border border-emerald-200 bg-emerald-50 p-4">
+                  <div className="mb-3 font-bold text-emerald-900">Kanal fiyatları (her platforma ayrı fiyat)</div>
+                  <div className="grid gap-3 md:grid-cols-3">
+                    <Field label="Trendyol satış fiyatı (TL)"><MoneyInput value={form.salePrice} onChange={(value) => { update('salePrice', value); if (!form.n11SalePrice) update('n11SalePrice', value); if (!form.hepsiburadaSalePrice) update('hepsiburadaSalePrice', value); }} /></Field>
+                    <Field label="N11 satış fiyatı (TL)"><MoneyInput value={form.n11SalePrice || form.salePrice} onChange={(value) => update('n11SalePrice', value)} /></Field>
+                    <Field label="Hepsiburada satış fiyatı (TL)"><MoneyInput value={form.hepsiburadaSalePrice || form.salePrice} onChange={(value) => update('hepsiburadaSalePrice', value)} /></Field>
+                  </div>
                 </div>
                 <ChannelComparisonTable channels={channelPricing.filter((item) => selectedChannels.includes(item.key))} compact />
                 <div className="flex flex-wrap items-center gap-3 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800">

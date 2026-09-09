@@ -905,6 +905,8 @@ model TrendyolProductVariant {
   potOptionId           Int?                      @map("pot_option_id")
   templateId            Int?                      @map("template_id")
   trendyolSalePrice     Decimal                   @default(0) @map("trendyol_sale_price") @db.Decimal(12, 2)
+  n11SalePrice          Decimal                   @default(0) @map("n11_sale_price") @db.Decimal(12, 2)
+  hepsiburadaSalePrice  Decimal                   @default(0) @map("hepsiburada_sale_price") @db.Decimal(12, 2)
   commissionPercent     Decimal                   @default(20) @map("commission_percent") @db.Decimal(5, 2)
   trendyolRatingAverage Decimal?                  @map("trendyol_rating_average") @db.Decimal(4, 2)
   trendyolRatingCount   Int                       @default(0) @map("trendyol_rating_count")
@@ -1321,11 +1323,13 @@ model RetailSale {
   createdById           Int                       @map("created_by_id")
   completedById         Int?                      @map("completed_by_id")
   cancelledById         Int?                      @map("cancelled_by_id")
+  companyId             Int                       @default(1) @map("company_id")
   customer              RetailCustomer            @relation(fields: [customerId], references: [id])
   address               RetailCustomerAddress?    @relation(fields: [addressId], references: [id])
   createdBy             User                      @relation("RetailSaleCreatedBy", fields: [createdById], references: [id])
   completedBy           User?                     @relation("RetailSaleCompletedBy", fields: [completedById], references: [id])
   cancelledBy           User?                     @relation("RetailSaleCancelledBy", fields: [cancelledById], references: [id])
+  company               Company                   @relation(fields: [companyId], references: [id])
   items                 RetailSaleItem[]
   payments              RetailSalePayment[]
   delivery              RetailDelivery?
@@ -1336,6 +1340,8 @@ model RetailSale {
 
   @@index([createdAt])
   @@index([customerId])
+  @@index([companyId])
+  @@index([companyId, createdAt])
   @@map("retail_sales")
 }
 
@@ -1470,6 +1476,7 @@ model Company {
   updatedAt       DateTime             @updatedAt @map("updated_at")
   channelAccounts ChannelAccount[]
   syncJobs        IntegrationSyncJob[]
+  retailSales     RetailSale[]
 
   @@index([isActive])
   @@map("companies")
