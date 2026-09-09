@@ -125,14 +125,14 @@ export class IntegrationsController {
   }
 
   @Get('platform-settings')
-  platformSettings() {
-    return this.integrationCenter.listPlatformSettings();
+  platformSettings(@Query('company') company?: string) {
+    return this.integrationCenter.listPlatformSettings(company || 'ERHAN');
   }
 
   @Put('platform-settings/:platform')
   @UseGuards(OwnerGuard)
-  savePlatformSettings(@Param('platform') platform: string, @Body() body: unknown) {
-    return this.integrationCenter.savePlatformSettings({ ...(body as Record<string, unknown>), platform });
+  savePlatformSettings(@Param('platform') platform: string, @Query('company') company: string, @Body() body: unknown) {
+    return this.integrationCenter.savePlatformSettings({ ...(body as Record<string, unknown>), platform, companyCode: company || 'ERHAN' });
   }
 
   @Post('platform-settings/analyze-screenshot')

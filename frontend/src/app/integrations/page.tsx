@@ -75,7 +75,8 @@ type SyncJob = {
   createdAt: string;
 };
 
-type PlatformCode = 'TRENDYOL' | 'HEPSIBURADA' | 'N11' | 'TICIMAX';
+type PlatformCode = 'TRENDYOL' | 'HEPSIBURADA' | 'N11' | 'TICIMAX' | 'AMAZON' | 'PAZARAMA' | 'IDEFIX' | 'TEKLIKLE' | 'TRENDRUM';
+type CompanyCode = 'ERHAN' | 'FLORA';
 
 type PlatformSettings = {
   platform: PlatformCode;
@@ -126,6 +127,27 @@ const platformFields: Record<PlatformCode, Array<{ key: string; label: string; t
     { key: 'API_KEY', label: 'API Key' },
     { key: 'API_SECRET', label: 'API Secret', type: 'password' },
   ],
+  AMAZON: [
+    { key: 'MERCHANT_ID', label: 'Merchant ID' },
+    { key: 'API_KEY', label: 'API Key' },
+    { key: 'API_SECRET', label: 'API Secret', type: 'password' },
+  ],
+  PAZARAMA: [
+    { key: 'API_KEY', label: 'API Key' },
+    { key: 'API_SECRET', label: 'API Secret', type: 'password' },
+  ],
+  IDEFIX: [
+    { key: 'API_KEY', label: 'API Key' },
+    { key: 'API_SECRET', label: 'API Secret', type: 'password' },
+  ],
+  TEKLIKLE: [
+    { key: 'API_KEY', label: 'API Key' },
+    { key: 'API_SECRET', label: 'API Secret', type: 'password' },
+  ],
+  TRENDRUM: [
+    { key: 'API_KEY', label: 'API Key' },
+    { key: 'API_SECRET', label: 'API Secret', type: 'password' },
+  ],
 };
 
 const defaultTicimaxSettings: TicimaxSettings & { uyeKodu: string } = {
@@ -157,6 +179,7 @@ export default function IntegrationsPage() {
   const [dryRunResult, setDryRunResult] = useState<Record<string, unknown> | null>(null);
   const [message, setMessage] = useState('');
   const [loadingPlatform, setLoadingPlatform] = useState('');
+  const [company, setCompany] = useState<CompanyCode>('ERHAN');
 
   function load() {
     Promise.all([
@@ -174,19 +197,19 @@ export default function IntegrationsPage() {
     }).catch((error) => setMessage(error instanceof Error ? error.message : 'Entegrasyon verileri yüklenemedi.'));
   }
 
-  function loadSprint1A() {
+  function loadSprint1A(companyCode: CompanyCode = company) {
     Promise.allSettled([
       api<SalesChannel[]>('/integrations/channels'),
       api<ChannelAccount[]>('/integrations/accounts'),
       api<SyncJob[]>('/integrations/sync-jobs'),
-      api<PlatformSettings[]>('/integrations/platform-settings'),
+      api<PlatformSettings[]>(`/integrations/platform-settings?company=${companyCode}`),
     ]).then(([nextChannels, nextAccounts, nextSyncJobs, nextPlatformSettings]) => {
       if (nextChannels.status === 'fulfilled') setChannels(nextChannels.value);
       if (nextAccounts.status === 'fulfilled') setAccounts(nextAccounts.value);
       if (nextSyncJobs.status === 'fulfilled') setSyncJobs(nextSyncJobs.value);
       if (nextPlatformSettings.status === 'fulfilled') {
         setPlatformSettings(nextPlatformSettings.value);
-        setPlatformForms((current) => mergePlatformForms(nextPlatformSettings.value, current));
+        setPlatformForms({});
       }
     });
   }
@@ -208,10 +231,10 @@ export default function IntegrationsPage() {
 
   useEffect(() => {
     load();
-    loadSprint1A();
+    loadSprint1A(company);
     const interval = setInterval(refreshLiveData, 30000);
     return () => clearInterval(interval);
-  }, []);
+  }, [company]);
 
   async function test(platform: string) {
     setLoadingPlatform(platform);
@@ -319,14 +342,14 @@ export default function IntegrationsPage() {
     setLoadingPlatform(`SAVE_${platform}`);
     setMessage('');
     try {
-      const settings = await api<PlatformSettings[]>(`/integrations/platform-settings/${platform}`, {
+      const settings = await api<PlatformSettings[]>(`/integrations/platform-settings/${platform}?company=${company}`, {
         method: 'PUT',
         json: form,
       });
       setPlatformSettings(settings);
       setPlatformForms((current) => mergePlatformForms(settings, current, true));
       setMessage(`${platformLabel(platform)} API bilgileri guvenli kasaya kaydedildi.`);
-      loadSprint1A();
+      loadSprint1A(company);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'API bilgileri kaydedilemedi.');
     } finally {
@@ -463,16 +486,36 @@ export default function IntegrationsPage() {
     }
   }
 
+  const isFlora = company === 'FLORA';
+
   return (
     <AdminShell title="Entegrasyon Merkezi">
       <div className="space-y-5">
+        {/* Şirket Sekmesi */}
+        <div className="flex gap-1 rounded-lg border border-slate-200 bg-slate-100 p-1 w-fit">
+          {([['ERHAN', 'Erhan Flowers'], ['FLORA', 'Florayapaycicek']] as [CompanyCode, string][]).map(([code, label]) => (
+            <button
+              key={code}
+              type="button"
+              onClick={() => setCompany(code)}
+              className={`rounded-md px-4 py-1.5 text-sm font-medium transition-all ${company === code ? 'bg-white shadow text-emerald-700 font-semibold' : 'text-slate-500 hover:text-slate-700'}`}
+            >
+              {label}
+              {code === 'FLORA' && <span className="ml-1.5 rounded text-[10px] bg-amber-100 text-amber-700 px-1 py-0.5">Stok Yok</span>}
+            </button>
+          ))}
+        </div>
+
         {message && <div className="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">{message}</div>}
 
         <section className="panel p-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <h2 className="text-lg font-bold text-ink">Magaza API Bilgileri</h2>
-              <p className="text-sm text-slate-500">Trendyol, Hepsiburada, N11 ve Ticimax bilgilerini elden gir veya ekran goruntusunden okut.</p>
+              <h2 className="text-lg font-bold text-ink">
+                {isFlora ? 'Florayapaycicek' : 'Erhan Flowers'} — Magaza API Bilgileri
+                {isFlora && <span className="ml-2 rounded bg-amber-100 px-2 py-0.5 text-xs text-amber-700">Stok düşümü kapalı</span>}
+              </h2>
+              <p className="text-sm text-slate-500">Trendyol, Hepsiburada, N11, Pazarama ve diger platform bilgilerini elden gir veya ekran goruntusunden okut.</p>
             </div>
             <div className="flex flex-wrap gap-2">
               <label className="btn btn-secondary cursor-pointer">
@@ -824,6 +867,11 @@ function platformLabel(platform: PlatformCode) {
     HEPSIBURADA: 'Hepsiburada',
     N11: 'N11',
     TICIMAX: 'Ticimax',
+    AMAZON: 'Amazon',
+    PAZARAMA: 'Pazarama',
+    IDEFIX: 'Idefix',
+    TEKLIKLE: 'Teklikle',
+    TRENDRUM: 'Trendrum',
   };
-  return labels[platform];
+  return labels[platform] ?? platform;
 }

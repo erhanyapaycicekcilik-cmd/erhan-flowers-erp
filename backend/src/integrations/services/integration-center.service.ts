@@ -58,18 +58,32 @@ type DryRunPayload = {
 const credentialTypes = new Set(['API_KEY', 'API_SECRET', 'SUPPLIER_ID', 'TOKEN', 'UYE_KODU', 'USERNAME', 'PASSWORD', 'OTHER']);
 const accountStatuses = new Set(['NOT_CONFIGURED', 'CONFIGURED', 'CONNECTED', 'FAILED', 'DISABLED']);
 const publicationStatuses = new Set(['DRAFT', 'READY', 'PUBLISHED', 'ERROR', 'PAUSED']);
-const managedPlatforms = ['TRENDYOL', 'HEPSIBURADA', 'N11', 'TICIMAX'] as const;
+const managedPlatforms = ['TRENDYOL', 'HEPSIBURADA', 'N11', 'TICIMAX', 'AMAZON', 'PAZARAMA', 'IDEFIX', 'TEKLIKLE', 'TRENDRUM'] as const;
 const managedPlatformNames: Record<string, string> = {
   TRENDYOL: 'Trendyol',
   HEPSIBURADA: 'Hepsiburada',
   N11: 'N11',
   TICIMAX: 'Ticimax',
+  AMAZON: 'Amazon',
+  PAZARAMA: 'Pazarama',
+  IDEFIX: 'Idefix',
+  TEKLIKLE: 'Teklikle',
+  TRENDRUM: 'Trendrum',
 };
 const platformCredentialFields: Record<string, string[]> = {
   TRENDYOL: ['SUPPLIER_ID', 'API_KEY', 'API_SECRET'],
   HEPSIBURADA: ['MERCHANT_ID', 'API_KEY', 'API_SECRET', 'USER_AGENT'],
   N11: ['MERCHANT_ID', 'API_KEY', 'API_SECRET'],
   TICIMAX: ['UYE_KODU', 'API_KEY', 'API_SECRET'],
+  AMAZON: ['MERCHANT_ID', 'API_KEY', 'API_SECRET'],
+  PAZARAMA: ['API_KEY', 'API_SECRET'],
+  IDEFIX: ['API_KEY', 'API_SECRET'],
+  TEKLIKLE: ['API_KEY', 'API_SECRET'],
+  TRENDRUM: ['API_KEY', 'API_SECRET'],
+};
+const managedCompanies: Record<string, { name: string; legalName: string; domain: string; skipStockDeduction: boolean }> = {
+  ERHAN: { name: 'Erhan Flowers', legalName: 'Erhan Flowers', domain: 'erhanflowers.com', skipStockDeduction: false },
+  FLORA: { name: 'Florayapaycicek', legalName: 'Flora Yapay Çiçekçilik', domain: 'florayapaycicek.com', skipStockDeduction: true },
 };
 
 @Injectable()
@@ -81,7 +95,8 @@ export class IntegrationCenterService {
     private readonly config: ConfigService,
   ) {}
 
-  async listPlatformSettings() {
+  async listPlatformSettings(companyCode = 'ERHAN') {
+    const code = companyCode.toUpperCase();
     await this.ensureManagedIntegrationSeed();
     const rows = await this.prisma.$queryRaw<Array<Record<string, unknown>>>`
       SELECT a.id AS "accountId", a.name AS "accountName", a.external_account_id AS "externalAccountId",
@@ -90,12 +105,17 @@ export class IntegrationCenterService {
         cr.credential_type AS "credentialType", cr.masked_value AS "maskedValue", cr.updated_at AS "credentialUpdatedAt"
       FROM sales_channels sc
       LEFT JOIN channel_accounts a ON a.sales_channel_id = sc.id AND a.is_active = true
+        AND a.company_id = (SELECT id FROM companies WHERE code = ${code} LIMIT 1)
       LEFT JOIN channel_credentials cr ON cr.channel_account_id = a.id AND cr.is_active = true
-      WHERE sc.code IN ('TRENDYOL', 'HEPSIBURADA', 'N11', 'TICIMAX')
-      ORDER BY CASE sc.code WHEN 'TRENDYOL' THEN 1 WHEN 'HEPSIBURADA' THEN 2 WHEN 'N11' THEN 3 WHEN 'TICIMAX' THEN 4 ELSE 99 END,
+      WHERE sc.code = ANY(${managedPlatforms as unknown as string[]})
+      ORDER BY CASE sc.code
+        WHEN 'TRENDYOL' THEN 1 WHEN 'HEPSIBURADA' THEN 2 WHEN 'N11' THEN 3
+        WHEN 'AMAZON' THEN 4 WHEN 'PAZARAMA' THEN 5 WHEN 'IDEFIX' THEN 6
+        WHEN 'TEKLIKLE' THEN 7 WHEN 'TRENDRUM' THEN 8 WHEN 'TICIMAX' THEN 9 ELSE 99 END,
         cr.credential_type ASC
     `;
 
+    const skipStock = managedCompanies[code]?.skipStockDeduction ?? false;
     return managedPlatforms.map((platform) => {
       const platformRows = rows.filter((row) => row.platform === platform);
       const first = platformRows[0] ?? {};
@@ -114,19 +134,21 @@ export class IntegrationCenterService {
         isTestMode: first.isTestMode ?? true,
         lastConnectionTestAt: first.lastConnectionTestAt ?? null,
         lastConnectionStatus: first.lastConnectionStatus ?? null,
-        requiredCredentials: platformCredentialFields[platform],
+        requiredCredentials: platformCredentialFields[platform] ?? ['API_KEY', 'API_SECRET'],
         credentials,
+        skipStockDeduction: skipStock,
       };
     });
   }
 
-  async savePlatformSettings(payload: PlatformSettingsPayload) {
+  async savePlatformSettings(payload: PlatformSettingsPayload & { companyCode?: unknown }) {
     await this.ensureManagedIntegrationSeed();
+    const companyCode = this.text(payload.companyCode).toUpperCase() || 'ERHAN';
     const platform = this.managedPlatform(payload.platform);
     const accountName = this.text(payload.accountName) || `${managedPlatformNames[platform]} Magaza`;
     const externalAccountId = this.text(payload.externalAccountId) || null;
     const isTestMode = this.boolean(payload.isTestMode, true);
-    const accountId = await this.ensureManagedAccount(platform, accountName, externalAccountId, isTestMode);
+    const accountId = await this.ensureManagedAccount(companyCode, platform, accountName, externalAccountId, isTestMode);
     const credentials = payload.credentials ?? {};
 
     for (const field of platformCredentialFields[platform]) {
@@ -142,7 +164,7 @@ export class IntegrationCenterService {
         is_test_mode = ${isTestMode}, status = 'CONFIGURED'::"ChannelAccountStatus", updated_at = NOW()
       WHERE id = ${accountId}
     `;
-    return this.listPlatformSettings();
+    return this.listPlatformSettings(companyCode);
   }
 
   async runtimeCredentials(platformValue: unknown) {
@@ -535,11 +557,13 @@ export class IntegrationCenterService {
   }
 
   private async ensureManagedIntegrationSeed() {
-    await this.prisma.$executeRaw`
-      INSERT INTO companies (code, name, legal_name, domain, is_active, created_at, updated_at)
-      VALUES ('ERHAN', 'Erhan Flowers', 'Erhan Flowers', 'erhanflowers.com', true, NOW(), NOW())
-      ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name, is_active = true, updated_at = NOW()
-    `;
+    for (const [code, info] of Object.entries(managedCompanies)) {
+      await this.prisma.$executeRaw`
+        INSERT INTO companies (code, name, legal_name, domain, is_active, created_at, updated_at)
+        VALUES (${code}, ${info.name}, ${info.legalName}, ${info.domain}, true, NOW(), NOW())
+        ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name, is_active = true, updated_at = NOW()
+      `;
+    }
 
     for (const platform of managedPlatforms) {
       const channelType = platform === 'TICIMAX' ? 'WEBSITE' : 'MARKETPLACE';
@@ -553,17 +577,13 @@ export class IntegrationCenterService {
         ON CONFLICT (code) DO UPDATE SET
           name = EXCLUDED.name,
           is_active = true,
-          supports_products = true,
-          supports_stock = true,
-          supports_price = true,
-          supports_orders = true,
           updated_at = NOW()
       `;
     }
   }
 
-  private async ensureManagedAccount(platform: string, accountName: string, externalAccountId: string | null, isTestMode: boolean) {
-    const [company] = await this.prisma.$queryRaw<Array<{ id: number }>>`SELECT id FROM companies WHERE code = 'ERHAN' LIMIT 1`;
+  private async ensureManagedAccount(companyCode: string, platform: string, accountName: string, externalAccountId: string | null, isTestMode: boolean) {
+    const [company] = await this.prisma.$queryRaw<Array<{ id: number }>>`SELECT id FROM companies WHERE code = ${companyCode} LIMIT 1`;
     const [channel] = await this.prisma.$queryRaw<Array<{ id: number }>>`SELECT id FROM sales_channels WHERE code = ${platform} LIMIT 1`;
     if (!company || !channel) throw new BadRequestException('Entegrasyon temel kayitlari hazirlanamadi.');
 
