@@ -154,6 +154,15 @@ export abstract class HttpMarketplaceOrderAdapter extends BaseIntegrationAdapter
     return { content, totalPages: Number(root.totalPages ?? root.totalPage ?? root.pageCount ?? 1) };
   }
 
+  private numericPrice(value: unknown): number {
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      const obj = value as Record<string, unknown>;
+      const amount = obj.amount ?? obj.value ?? obj.price;
+      if (amount != null) return Number(amount) || 0;
+    }
+    return Number(value) || 0;
+  }
+
   private mapGenericOrder(order: Record<string, any>): ExternalOrder {
     const shipment = this.record(order.shipmentAddress ?? order.shippingAddress ?? order.deliveryAddress ?? order.address);
     const invoice = this.record(order.invoiceAddress ?? order.billingAddress);
@@ -186,9 +195,9 @@ export abstract class HttpMarketplaceOrderAdapter extends BaseIntegrationAdapter
       addressText: this.firstText(shipment.fullAddress, shipment.address, shipment.address1, invoice.fullAddress),
       city: this.firstText(shipment.city, invoice.city) || undefined,
       district: this.firstText(shipment.district, invoice.district) || undefined,
-      totalAmount: Number(order.totalPrice ?? order.totalAmount ?? order.grossAmount ?? order.amount ?? 0),
-      paidAmount: Number(order.paidAmount ?? order.totalPrice ?? order.totalAmount ?? order.grossAmount ?? 0),
-      deliveryFee: Number(order.cargoPrice ?? order.shippingPrice ?? order.deliveryFee ?? 0),
+      totalAmount: this.numericPrice(order.totalPrice ?? order.totalAmount ?? order.grossAmount ?? order.amount ?? 0),
+      paidAmount: this.numericPrice(order.paidAmount ?? order.totalPrice ?? order.totalAmount ?? order.grossAmount ?? 0),
+      deliveryFee: this.numericPrice(order.cargoPrice ?? order.shippingPrice ?? order.deliveryFee ?? 0),
       paymentStatus: 'PAID',
       cargoProvider: this.firstText(order.cargoProviderName, order.cargoCompany, order.shippingCompany) || undefined,
       cargoTrackingNumber: this.firstText(order.cargoTrackingNumber, order.trackingNumber, order.cargoCode) || undefined,
@@ -206,7 +215,7 @@ export abstract class HttpMarketplaceOrderAdapter extends BaseIntegrationAdapter
           modelCode: sku || this.firstText(line.modelCode, line.productCode) || undefined,
           imageUrl: this.firstText(line.imageUrl, line.image, line.productImage, line.thumbnailUrl, line.thumbnail, line.productImageUrl, line.imgUrl) || undefined,
           quantity: Number(line.quantity ?? line.qty ?? line.count ?? 1),
-          unitPrice: Number(line.price ?? line.unitPrice ?? line.amount ?? line.salePrice ?? 0),
+          unitPrice: this.numericPrice(line.price ?? line.unitPrice ?? line.amount ?? line.salePrice ?? 0),
         };
       }),
     };

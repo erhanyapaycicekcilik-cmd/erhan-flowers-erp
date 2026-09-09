@@ -11,7 +11,7 @@ export class HepsiburadaAdapter extends HttpMarketplaceOrderAdapter {
       platform: 'HEPSIBURADA',
       envPrefix: 'HEPSIBURADA',
       defaultApiUrl: HB_ORDERS_URL,
-      defaultOrderPath: '/orders/merchantid/{merchantId}/openorders',
+      defaultOrderPath: '/orders/merchantid/{merchantId}',
       defaultProductPath: '',
       runtimeCredentials,
     });
