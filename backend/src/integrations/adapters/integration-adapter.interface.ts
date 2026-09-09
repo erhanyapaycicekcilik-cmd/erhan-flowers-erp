@@ -26,6 +26,7 @@ export type ExternalOrder = {
   externalOrderId: string;
   platformOrderNumber: string;
   platform: IntegrationPlatform;
+  companyCode?: string;
   status?: 'DRAFT' | 'PAYMENT_PENDING' | 'CONFIRMED' | 'PREPARING' | 'IN_PRODUCTION' | 'READY' | 'OUT_FOR_DELIVERY' | 'DELIVERED' | 'COMPLETED' | 'CANCELLED';
   invoiceStatus?: 'WAITING' | 'E_ARCHIVE' | 'E_INVOICE' | 'ISSUED' | 'CANCELLED' | 'RETURNED';
   externalStatus?: string;

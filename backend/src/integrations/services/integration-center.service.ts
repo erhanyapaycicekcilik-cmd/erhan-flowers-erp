@@ -167,7 +167,7 @@ export class IntegrationCenterService {
     return this.listPlatformSettings(companyCode);
   }
 
-  async runtimeCredentials(platformValue: unknown) {
+  async runtimeCredentials(platformValue: unknown, companyCode = 'ERHAN') {
     await this.ensureManagedIntegrationSeed();
     const platform = this.managedPlatform(platformValue);
     const [account] = await this.prisma.$queryRaw<Array<Record<string, unknown>>>`
@@ -175,7 +175,7 @@ export class IntegrationCenterService {
       FROM channel_accounts a
       JOIN sales_channels sc ON sc.id = a.sales_channel_id
       JOIN companies c ON c.id = a.company_id
-      WHERE sc.code = ${platform} AND c.code = 'ERHAN' AND a.is_active = true
+      WHERE sc.code = ${platform} AND c.code = ${companyCode} AND a.is_active = true
       ORDER BY a.id ASC
       LIMIT 1
     `;

@@ -30,6 +30,9 @@ type DashboardSummary = {
 type SalesPeriod = { orderCount: number; revenue: number; platforms: Record<string, number> };
 type DailySalesData = { today: SalesPeriod; yesterday: SalesPeriod; thisWeek: SalesPeriod; thisMonth: SalesPeriod };
 
+type CompanyRevRow = { companyCode: string; companyName: string; todayRevenue: number; todayOrders: number; monthRevenue: number; monthOrders: number };
+type CompanyRevenueData = { byCompany: CompanyRevRow[]; total: { todayRevenue: number; todayOrders: number; monthRevenue: number; monthOrders: number } };
+
 type CostProgress = { completed: number; total: number };
 
 const quickLinks = [
@@ -46,18 +49,43 @@ export default function DashboardPage() {
   const [user, setUser] = useState<CurrentUser | null>(null);
   const [sales, setSales] = useState<DailySalesData | null>(null);
   const [costProgress, setCostProgress] = useState<CostProgress | null>(null);
+  const [companyRev, setCompanyRev] = useState<CompanyRevenueData | null>(null);
 
   useEffect(() => {
     api<DashboardSummary>('/dashboard').then(setData).catch(() => null);
     api<CurrentUser>('/auth/me').then(setUser).catch(() => null);
     api<DailySalesData>('/dashboard/daily-sales').then(setSales).catch(() => null);
     api<CostProgress>('/production-costs/progress').then(setCostProgress).catch(() => null);
+    api<CompanyRevenueData>('/dashboard/company-revenue').then(setCompanyRev).catch(() => null);
   }, []);
 
   const isOwner = user?.role === 'OWNER';
 
   return (
     <AdminShell title="Dashboard">
+      {/* Firma bazlı günlük ciro */}
+      {companyRev && companyRev.byCompany.length > 1 && (
+        <div className="mb-6 panel overflow-hidden">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line bg-slate-50 px-5 py-3">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wide text-slate-400">Günlük Ciro</p>
+              <p className="text-xl font-black text-ink">{money(companyRev.total.todayRevenue)}</p>
+              <p className="text-xs text-slate-500">{companyRev.total.todayOrders} sipariş · Bugün genel toplam</p>
+            </div>
+            <div className="flex gap-2">
+              {companyRev.byCompany.map(r => (
+                <div key={r.companyCode} className={`rounded-xl border px-4 py-3 text-center ${r.companyCode === 'FLORA' ? 'border-emerald-200 bg-emerald-50' : 'border-blue-200 bg-blue-50'}`}>
+                  <p className={`text-xs font-bold uppercase tracking-wide ${r.companyCode === 'FLORA' ? 'text-emerald-600' : 'text-blue-600'}`}>{r.companyName}</p>
+                  <p className={`text-lg font-black ${r.companyCode === 'FLORA' ? 'text-emerald-800' : 'text-blue-800'}`}>{money(r.todayRevenue)}</p>
+                  <p className="text-xs text-slate-500">{r.todayOrders} sipariş bugün</p>
+                  <p className="mt-1 text-xs text-slate-400">Bu ay: {money(r.monthRevenue)}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Satış özeti */}
       {sales && (
         <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">

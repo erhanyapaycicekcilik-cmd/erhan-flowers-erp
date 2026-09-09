@@ -96,4 +96,43 @@ export class DashboardService {
     }
     return { orderCount: orders.length, revenue: Math.round(revenue * 100) / 100, platforms };
   }
+
+  async dailySalesByCompany() {
+    const rows = await this.prisma.$queryRaw<Array<{ companyCode: string; companyName: string; todayRevenue: number; todayOrders: number; monthRevenue: number; monthOrders: number }>>`
+      SELECT
+        co.code AS "companyCode",
+        co.name AS "companyName",
+        COALESCE(SUM(s.grand_total) FILTER (WHERE s.created_at::date = CURRENT_DATE AND s.status NOT IN ('CANCELLED')), 0)::float AS "todayRevenue",
+        COUNT(*) FILTER (WHERE s.created_at::date = CURRENT_DATE AND s.status NOT IN ('CANCELLED'))::int AS "todayOrders",
+        COALESCE(SUM(s.grand_total) FILTER (WHERE DATE_TRUNC('month', s.created_at) = DATE_TRUNC('month', CURRENT_DATE) AND s.status NOT IN ('CANCELLED')), 0)::float AS "monthRevenue",
+        COUNT(*) FILTER (WHERE DATE_TRUNC('month', s.created_at) = DATE_TRUNC('month', CURRENT_DATE) AND s.status NOT IN ('CANCELLED'))::int AS "monthOrders"
+      FROM companies co
+      LEFT JOIN retail_sales s ON s.company_id = co.id AND s.integration_sync_status <> 'MANUAL'
+      WHERE co.is_active = true
+      GROUP BY co.id, co.code, co.name
+      ORDER BY co.code
+    `;
+
+    const totalToday = rows.reduce((sum, r) => sum + Number(r.todayRevenue), 0);
+    const totalMonth = rows.reduce((sum, r) => sum + Number(r.monthRevenue), 0);
+    const totalTodayOrders = rows.reduce((sum, r) => sum + Number(r.todayOrders), 0);
+    const totalMonthOrders = rows.reduce((sum, r) => sum + Number(r.monthOrders), 0);
+
+    return {
+      byCompany: rows.map(r => ({
+        companyCode: r.companyCode,
+        companyName: r.companyName,
+        todayRevenue: Math.round(Number(r.todayRevenue) * 100) / 100,
+        todayOrders: Number(r.todayOrders),
+        monthRevenue: Math.round(Number(r.monthRevenue) * 100) / 100,
+        monthOrders: Number(r.monthOrders),
+      })),
+      total: {
+        todayRevenue: Math.round(totalToday * 100) / 100,
+        todayOrders: totalTodayOrders,
+        monthRevenue: Math.round(totalMonth * 100) / 100,
+        monthOrders: totalMonthOrders,
+      },
+    };
+  }
 }

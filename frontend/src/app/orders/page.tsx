@@ -163,12 +163,19 @@ const statusRank: Record<string, number> = {
   CANCELLED: 9,
 };
 
+const companyTabs = [
+  { key: '', label: 'Tüm Firmalar' },
+  { key: 'ERHAN', label: 'Erhan Flowers' },
+  { key: 'FLORA', label: 'Florayapaycicek' },
+];
+
 export default function OrdersPage() {
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [summary, setSummary] = useState<OrderSummary | null>(null);
   const [filters, setFilters] = useState<Filters>(emptyFilters);
   const [appliedFilters, setAppliedFilters] = useState<Filters>(emptyFilters);
   const [activeTab, setActiveTab] = useState('all');
+  const [activeCompany, setActiveCompany] = useState('');
   const [sort, setSort] = useState('newest');
   const [pageSize, setPageSize] = useState(25);
   const [page, setPage] = useState(1);
@@ -191,10 +198,11 @@ export default function OrdersPage() {
       if (key !== 'status' && value.trim()) search.set(key, value.trim());
     });
     if (appliedFilters.status) search.set('status', appliedFilters.status);
+    if (activeCompany) search.set('company', activeCompany);
     search.set('sort', sort);
     search.set('pageSize', '500');
     return search.toString();
-  }, [appliedFilters, sort]);
+  }, [appliedFilters, sort, activeCompany]);
 
   const summaryParams = useMemo(() => {
     const search = new URLSearchParams();
@@ -449,6 +457,24 @@ export default function OrdersPage() {
         </section>
 
         <section className="panel overflow-hidden">
+          {/* Şirket sekmeleri */}
+          <div className="flex gap-2 px-4 pt-3 pb-0 border-b-2 border-line overflow-x-auto bg-slate-50">
+            {companyTabs.map((ct) => (
+              <button
+                key={ct.key}
+                type="button"
+                onClick={() => { setActiveCompany(ct.key); setPage(1); }}
+                className={`px-5 py-2.5 text-sm font-bold rounded-t-lg border-b-2 transition whitespace-nowrap -mb-0.5 ${
+                  activeCompany === ct.key
+                    ? 'border-emerald-600 text-emerald-700 bg-white'
+                    : 'border-transparent text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                {ct.label}
+              </button>
+            ))}
+          </div>
+
           {/* Platform sekmeleri */}
           <div className="flex gap-2 px-4 pt-3 pb-0 border-b border-line overflow-x-auto">
             {platformOptions.map((p) => (

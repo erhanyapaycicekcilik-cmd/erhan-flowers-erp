@@ -179,9 +179,9 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
     return result;
   }
 
-  async syncOrders(platformValue: string, userId: number) {
+  async syncOrders(platformValue: string, userId: number, companyCode = 'ERHAN') {
     const platform = this.platform(platformValue);
-    const adapter = await this.adapter(platform);
+    const adapter = await this.adapter(platform, companyCode);
     const connection = await this.safeAdapterTest(adapter);
     if (!connection.ok) {
       await this.log(platform, 'FETCH_ORDERS', connection.status, connection.message);
@@ -210,7 +210,7 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
         continue;
       }
       try {
-        const result = await this.importExternalOrder(order, userId);
+        const result = await this.importExternalOrder({ ...order, companyCode }, userId);
         if (result.created) imported += 1;
         else duplicated += 1;
       } catch (error) {
@@ -464,6 +464,7 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
     const cargoProvider = this.text(query.cargoProvider);
     const startDate = this.text(query.startDate);
     const endDate = this.text(query.endDate);
+    const companyCode = this.text(query.company).toUpperCase();
 
     return this.prisma.$queryRaw<Array<Record<string, unknown>>>(Prisma.sql`
       SELECT s.id, s.sale_number AS "saleNumber", s.platform_order_number AS "platformOrderNumber",
@@ -508,6 +509,7 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
         OR (i.stock_card_id IS NULL AND i.barcode IS NOT NULL AND sc.barcode = i.barcode)
         OR (i.stock_card_id IS NULL AND i.model_code IS NOT NULL AND sc.sku = i.model_code)
       WHERE s.integration_sync_status <> 'MANUAL'
+        AND (${companyCode} = '' OR EXISTS (SELECT 1 FROM companies co WHERE co.id = s.company_id AND co.code = ${companyCode}))
         AND (${platform} = '' OR s.channel::text = ${platform})
         AND (${statuses.length} = 0 OR s.status::text IN (${Prisma.join(statuses.length ? statuses : ['__NONE__'])}))
         AND (${q} = '' OR s.sale_number ILIKE ${`%${q}%`} OR s.platform_order_number ILIKE ${`%${q}%`} OR c.display_name ILIKE ${`%${q}%`} OR c.phone ILIKE ${`%${q}%`})
@@ -555,7 +557,19 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
       GROUP BY assignment_group, status
       ORDER BY assignment_group, status
     `;
-    return { ...summary, byPlatform, taskLoad };
+    // Günlük ciro: firma bazlı + genel toplam
+    const dailyRevenue = await this.prisma.$queryRaw<Array<{ companyCode: string; companyName: string; todayRevenue: number; todayOrders: number }>>`
+      SELECT co.code AS "companyCode", co.name AS "companyName",
+        COALESCE(SUM(s.grand_total) FILTER (WHERE s.created_at::date = CURRENT_DATE AND s.status NOT IN ('CANCELLED')), 0)::float AS "todayRevenue",
+        COUNT(*) FILTER (WHERE s.created_at::date = CURRENT_DATE AND s.status NOT IN ('CANCELLED'))::int AS "todayOrders"
+      FROM companies co
+      LEFT JOIN retail_sales s ON s.company_id = co.id AND s.integration_sync_status <> 'MANUAL'
+      WHERE co.is_active = true
+      GROUP BY co.id, co.code, co.name
+      ORDER BY co.code
+    `;
+    const totalDailyRevenue = dailyRevenue.reduce((sum, r) => sum + Number(r.todayRevenue), 0);
+    return { ...summary, byPlatform, taskLoad, dailyRevenue, totalDailyRevenue };
   }
 
   private async localOrderSummary(platform: IntegrationPlatform): Promise<ExternalOrderSummary> {
@@ -604,7 +618,8 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async importExternalOrder(order: ExternalOrder, userId: number) {
-    const idempotencyKey = `${order.platform}:${order.externalOrderId}`;
+    const companyPrefix = order.companyCode && order.companyCode !== 'ERHAN' ? `${order.companyCode}:` : '';
+    const idempotencyKey = `${companyPrefix}${order.platform}:${order.externalOrderId}`;
     return this.prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${idempotencyKey}))`;
       const existing = await tx.$queryRaw<Array<{ id: number }>>`
@@ -635,19 +650,22 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
       const status = order.status ?? (totals.remainingTotal > 0 ? 'PAYMENT_PENDING' : 'CONFIRMED');
       const invoiceStatus = order.invoiceStatus ?? 'WAITING';
       const syncStatus = await this.hasUnmatchedItems(order) ? 'MATCHING_REQUIRED' : 'SYNCED';
+      const companyCode = order.companyCode ?? 'ERHAN';
       const saleRows = await tx.$queryRaw<Array<{ id: number }>>`
         INSERT INTO retail_sales (
           sale_number, customer_id, address_id, channel, sale_type, status, currency, subtotal, discount_total,
           delivery_fee, grand_total, paid_total, remaining_total, customer_note, internal_note, event_key, created_by_id,
           platform_order_number, external_order_id, idempotency_key, integration_sync_status, last_synced_at,
-          cargo_provider, cargo_tracking_number, order_date, delivery_due_at, invoice_status, created_at, updated_at
+          cargo_provider, cargo_tracking_number, order_date, delivery_due_at, invoice_status, company_id, created_at, updated_at
         )
         VALUES (
           ${saleNumber}, ${Number(customer.id)}, ${Number(address.id)}, ${order.platform}::"RetailSaleChannel", 'DELIVERY_SALE'::"RetailSaleType",
           ${status}::"RetailSaleStatus", 'TRY', ${totals.subtotal}, 0, 0, ${totals.grandTotal}, ${totals.paidTotal}, ${totals.remainingTotal},
           NULL, ${`Platform siparişi: ${order.platform}`}, ${`INTEGRATION_ORDER:${idempotencyKey}`}, ${userId},
           ${order.platformOrderNumber}, ${order.externalOrderId}, ${idempotencyKey}, ${syncStatus}, NOW(),
-          ${order.cargoProvider ?? null}, ${order.cargoTrackingNumber ?? null}, ${order.orderDate ?? null}, ${order.deliveryDueAt ?? null}, ${invoiceStatus}::"RetailInvoiceStatus", NOW(), NOW()
+          ${order.cargoProvider ?? null}, ${order.cargoTrackingNumber ?? null}, ${order.orderDate ?? null}, ${order.deliveryDueAt ?? null}, ${invoiceStatus}::"RetailInvoiceStatus",
+          (SELECT id FROM companies WHERE code = ${companyCode} LIMIT 1),
+          NOW(), NOW()
         )
         RETURNING id
       `;
@@ -1139,10 +1157,10 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  private async adapter(platform: IntegrationPlatform): Promise<IntegrationAdapter> {
-    if (platform === 'TRENDYOL') return new TrendyolAdapter(await this.integrationCenter.runtimeCredentials(platform));
-    if (platform === 'HEPSIBURADA') return new HepsiburadaAdapter(await this.integrationCenter.runtimeCredentials(platform));
-    if (platform === 'N11') return new N11Adapter(await this.integrationCenter.runtimeCredentials(platform));
+  private async adapter(platform: IntegrationPlatform, companyCode = 'ERHAN'): Promise<IntegrationAdapter> {
+    if (platform === 'TRENDYOL') return new TrendyolAdapter(await this.integrationCenter.runtimeCredentials(platform, companyCode));
+    if (platform === 'HEPSIBURADA') return new HepsiburadaAdapter(await this.integrationCenter.runtimeCredentials(platform, companyCode));
+    if (platform === 'N11') return new N11Adapter(await this.integrationCenter.runtimeCredentials(platform, companyCode));
     if (platform === 'TICIMAX') return new TicimaxAdapter(await this.integrationCenter.ticimaxRuntimeCredentials());
     return new GenericMarketplaceAdapter(platform);
   }

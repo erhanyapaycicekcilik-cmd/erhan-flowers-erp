@@ -19,4 +19,9 @@ export class DashboardController {
   dailySales() {
     return this.dashboard.dailySales();
   }
+
+  @Get('company-revenue')
+  companyRevenue() {
+    return this.dashboard.dailySalesByCompany();
+  }
 }

@@ -54,6 +54,12 @@ export class OrderSyncService {
     try { await this.runN11Sync(); } catch (err) {
       this.logger.error('N11 sync hatasi', err instanceof Error ? err.message : String(err));
     }
+    try { await this.runFloraTrendyolSync(); } catch (err) {
+      this.logger.error('FLORA Trendyol sync hatasi', err instanceof Error ? err.message : String(err));
+    }
+    try { await this.runFloraN11Sync(); } catch (err) {
+      this.logger.error('FLORA N11 sync hatasi', err instanceof Error ? err.message : String(err));
+    }
   }
 
   async runSync(): Promise<{ processed: number; newOrders: number; stockDeductions: number }> {
@@ -646,5 +652,165 @@ export class OrderSyncService {
     if (!text) return null;
     const parsed = /^\d+$/.test(text) ? new Date(Number(text)) : new Date(text);
     return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+
+  private async loadFloraCredentials(platform: 'TRENDYOL' | 'N11'): Promise<Record<string, string> | null> {
+    const rows = await this.prisma.$queryRaw<Array<{ credentialType: string; encryptedValue: string; externalAccountId: string | null }>>`
+      SELECT cc.credential_type AS "credentialType", cc.encrypted_value AS "encryptedValue",
+             ca.external_account_id AS "externalAccountId"
+      FROM channel_credentials cc
+      JOIN channel_accounts ca ON ca.id = cc.channel_account_id
+      JOIN sales_channels sc ON sc.id = ca.sales_channel_id
+      JOIN companies co ON co.id = ca.company_id
+      WHERE sc.code = ${platform} AND ca.is_active = true AND cc.is_active = true AND co.code = 'FLORA'
+      LIMIT 20
+    `;
+    if (!rows.length) return null;
+    const creds: Record<string, string> = {};
+    for (const row of rows) {
+      try {
+        const val = this.credentialVault.decrypt(row.encryptedValue);
+        if (row.credentialType === 'API_KEY') creds.API_KEY = val;
+        if (row.credentialType === 'API_SECRET') creds.API_SECRET = val;
+        if (row.credentialType === 'SUPPLIER_ID') creds.SUPPLIER_ID = val;
+      } catch { /* skip */ }
+    }
+    if (!creds.SUPPLIER_ID && rows[0]?.externalAccountId) creds.SUPPLIER_ID = rows[0].externalAccountId;
+    return creds;
+  }
+
+  async runFloraTrendyolSync(): Promise<{ processed: number; newOrders: number }> {
+    const creds = await this.loadFloraCredentials('TRENDYOL');
+    if (!creds || !creds.SUPPLIER_ID || !creds.API_KEY || !creds.API_SECRET) {
+      this.logger.warn('FLORA Trendyol credentials bulunamadi, sync atlanıyor.');
+      return { processed: 0, newOrders: 0 };
+    }
+
+    const apiBase = (process.env.TRENDYOL_API_URL ?? 'https://api.trendyol.com/sapigw').replace(/\/+$/, '');
+    const now = Date.now();
+    const startDate = now - this.lookbackDays * 24 * 60 * 60 * 1000;
+    const auth = Buffer.from(`${creds.API_KEY}:${creds.API_SECRET}`).toString('base64');
+    const headers = { Authorization: `Basic ${auth}`, 'User-Agent': `${creds.SUPPLIER_ID} - SelfIntegration`, Accept: 'application/json' };
+
+    const allOrders: TrendyolOrder[] = [];
+    let page = 0; let totalPages = 1;
+    while (page < totalPages && page < 10) {
+      const url = new URL(`${apiBase}/order/sellers/${creds.SUPPLIER_ID}/v2/orders`);
+      url.searchParams.set('startDate', String(startDate));
+      url.searchParams.set('endDate', String(now));
+      url.searchParams.set('orderByField', 'PackageLastModifiedDate');
+      url.searchParams.set('orderByDirection', 'DESC');
+      url.searchParams.set('page', String(page));
+      url.searchParams.set('size', '50');
+      const response = await fetch(url.toString(), { method: 'GET', headers });
+      if (!response.ok) { this.logger.warn(`FLORA Trendyol orders API hatasi: HTTP ${response.status}`); break; }
+      const data = (await response.json()) as { content?: TrendyolOrder[]; totalPages?: number };
+      if (page === 0) totalPages = Math.min(Number(data.totalPages ?? 1), 10);
+      if (Array.isArray(data.content)) allOrders.push(...data.content);
+      page++;
+    }
+
+    this.logger.log(`FLORA Trendyol'dan ${allOrders.length} siparis cekildi.`);
+    let newOrders = 0;
+
+    for (const order of allOrders) {
+      const externalOrderId = this.text(order.shipmentPackageId ?? order.orderNumber ?? order.id);
+      if (!externalOrderId) continue;
+      const existing = await this.prisma.marketplaceOrder.findUnique({
+        where: { platform_externalOrderId: { platform: 'TRENDYOL', externalOrderId: `FLORA_${externalOrderId}` } },
+      });
+      if (existing) continue;
+
+      const shipmentAddress = (order.shipmentAddress ?? {}) as Record<string, unknown>;
+      const invoiceAddress = (order.invoiceAddress ?? {}) as Record<string, unknown>;
+      const customerName = [shipmentAddress.firstName, shipmentAddress.lastName].filter(Boolean).join(' ') ||
+        this.text(shipmentAddress.fullName) || this.text(invoiceAddress.fullName) || '';
+
+      await this.prisma.marketplaceOrder.create({
+        data: {
+          platform: 'TRENDYOL',
+          externalOrderId: `FLORA_${externalOrderId}`,
+          orderNumber: this.text(order.orderNumber ?? order.id),
+          status: this.text(order.status) || 'CREATED',
+          customerName: customerName || null,
+          totalAmount: Number(order.totalPrice ?? order.grossAmount ?? 0),
+          cargoAmount: Number(order.cargoPrice ?? order.shipmentPrice ?? 0),
+          currency: 'TRY',
+          orderDate: this.parseDate(order.orderDate ?? order.createdDate),
+          cargoTrackingNumber: order.cargoTrackingNumber ? String(order.cargoTrackingNumber) : null,
+          cargoProvider: order.cargoProviderName ? String(order.cargoProviderName) : null,
+          rawPayload: { ...order as object, _company: 'FLORA' },
+          stockDeducted: true,
+        },
+      });
+      newOrders++;
+    }
+
+    this.logger.log(`FLORA Trendyol sync tamamlandi: ${newOrders} yeni siparis.`);
+    return { processed: allOrders.length, newOrders };
+  }
+
+  async runFloraN11Sync(): Promise<{ processed: number; newOrders: number }> {
+    const creds = await this.loadFloraCredentials('N11');
+    if (!creds || !creds.API_KEY || !creds.API_SECRET) {
+      this.logger.warn('FLORA N11 credentials bulunamadi, sync atlanıyor.');
+      return { processed: 0, newOrders: 0 };
+    }
+
+    const apiBase = (process.env.N11_API_URL ?? 'https://api.n11.com').replace(/\/+$/, '');
+    const lookback = Date.now() - this.lookbackDays * 24 * 60 * 60 * 1000;
+    const headers = { appkey: creds.API_KEY, appsecret: creds.API_SECRET, Accept: 'application/json', 'User-Agent': 'FloraERP-N11' };
+
+    const allOrders: Array<Record<string, unknown>> = [];
+    let page = 0;
+    while (page < 10) {
+      const url = new URL(`${apiBase}/rest/delivery/v1/shipmentPackages`);
+      url.searchParams.set('page', String(page)); url.searchParams.set('size', '50');
+      const res = await fetch(url.toString(), { method: 'GET', headers });
+      if (!res.ok) { this.logger.warn(`FLORA N11 orders API hatasi: HTTP ${res.status}`); break; }
+      const data = await res.json() as { content?: Array<Record<string, unknown>>; shipmentPackages?: Array<Record<string, unknown>>; totalCount?: number };
+      const packages = data.content ?? data.shipmentPackages ?? [];
+      if (!packages.length) break;
+      allOrders.push(...packages);
+      const total = data.totalCount ?? 0;
+      if (total > 0 && allOrders.length >= total) break;
+      page++;
+    }
+
+    this.logger.log(`FLORA N11'den ${allOrders.length} siparis cekildi.`);
+    let newOrders = 0;
+
+    for (const order of allOrders) {
+      const externalOrderId = String(order.id ?? order.shipmentPackageId ?? '');
+      if (!externalOrderId) continue;
+      const rawDate = order.lastModifiedDate ?? order.orderDate;
+      const orderDate = rawDate ? new Date(typeof rawDate === 'number' ? rawDate : String(rawDate)) : null;
+      if (orderDate && orderDate.getTime() < lookback) continue;
+
+      const existing = await this.prisma.marketplaceOrder.findUnique({
+        where: { platform_externalOrderId: { platform: 'N11', externalOrderId: `FLORA_${externalOrderId}` } },
+      });
+      if (existing) continue;
+
+      await this.prisma.marketplaceOrder.create({
+        data: {
+          platform: 'N11',
+          externalOrderId: `FLORA_${externalOrderId}`,
+          orderNumber: String(order.orderNumber ?? externalOrderId),
+          status: String(order.shipmentPackageStatus ?? order.status ?? 'CREATED'),
+          customerName: String(order.customerfullName ?? (order.billingAddress as Record<string,unknown>)?.fullName ?? ''),
+          totalAmount: Number(order.totalAmount ?? order.amount ?? 0),
+          cargoAmount: Number(order.cargoAmount ?? 0),
+          currency: 'TRY',
+          orderDate: orderDate,
+          rawPayload: { ...order as object, _company: 'FLORA' },
+          stockDeducted: true,
+        },
+      });
+      newOrders++;
+    }
+
+    this.logger.log(`FLORA N11 sync tamamlandi: ${newOrders} yeni siparis.`);
+    return { processed: allOrders.length, newOrders };
   }
 }
