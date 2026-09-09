@@ -4,7 +4,6 @@ import { useCallback, useEffect, useState } from 'react';
 import { CheckCircle2, XCircle, Clock, Eye, RefreshCw, ExternalLink } from 'lucide-react';
 import { AdminShell } from '@/components/AdminShell';
 import { api, apiFileUrl } from '@/lib/api';
-import type { CurrentUser } from '@/types';
 
 type EftRow = {
   id: number;
@@ -39,17 +38,12 @@ function statusBadge(status: string) {
 }
 
 export default function EftYonetimPage() {
-  const [user, setUser] = useState<CurrentUser | null>(null);
   const [rows, setRows] = useState<EftRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<EftRow | null>(null);
   const [staffNote, setStaffNote] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-
-  useEffect(() => {
-    api<CurrentUser>('/auth/me').then(setUser).catch(() => {});
-  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -94,7 +88,7 @@ export default function EftYonetimPage() {
   const hasDekont = (row: EftRow) => Boolean(row.dekontPath && row.dekontUploadedAt);
 
   return (
-    <AdminShell user={user} title="EFT Ödeme Yönetimi">
+    <AdminShell title="EFT Ödeme Yönetimi">
       <div className="mx-auto max-w-5xl px-4 py-6 space-y-4">
         <div className="flex items-center justify-between">
           <h1 className="text-xl font-black text-slate-800">EFT Ödemeleri</h1>
