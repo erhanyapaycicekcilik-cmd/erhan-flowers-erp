@@ -190,10 +190,28 @@ export class IntegrationCenterService {
     for (const row of rows) {
       const key = this.runtimeCredentialField(platform, String(row.credentialType));
       const encryptedValue = this.text(row.encryptedValue);
-      if (key && encryptedValue) values[key] = this.credentialVault.decrypt(encryptedValue);
+      if (key && encryptedValue) {
+        try { values[key] = this.credentialVault.decrypt(encryptedValue); } catch { /* şifreli değer okunamadı, env'den alınacak */ }
+      }
     }
     const externalAccountId = this.text(account.externalAccountId);
     if (externalAccountId && !values.MERCHANT_ID) values.MERCHANT_ID = externalAccountId;
+
+    // DB'de credential yoksa veya decrypt başarısızsa process.env'den fallback
+    const prefix = platform === 'HEPSIBURADA' ? 'HEPSIBURADA' : platform === 'N11' ? 'N11' : platform === 'TRENDYOL' ? 'TRENDYOL' : platform;
+    const envFallbacks: Record<string, string> = {
+      API_KEY: process.env[`${prefix}_API_KEY`] ?? '',
+      API_SECRET: process.env[`${prefix}_API_SECRET`] ?? '',
+      MERCHANT_ID: process.env[`${prefix}_MERCHANT_ID`] ?? '',
+      USERNAME: process.env[`${prefix}_USERNAME`] ?? '',
+      PASSWORD: process.env[`${prefix}_PASSWORD`] ?? '',
+      USER_AGENT: process.env[`${prefix}_USER_AGENT`] ?? '',
+      SUPPLIER_ID: process.env[`${prefix}_SUPPLIER_ID`] ?? '',
+      TOKEN: process.env[`${prefix}_TOKEN`] ?? '',
+    };
+    for (const [key, envVal] of Object.entries(envFallbacks)) {
+      if (envVal && !values[key]) values[key] = envVal;
+    }
     return values;
   }
 
