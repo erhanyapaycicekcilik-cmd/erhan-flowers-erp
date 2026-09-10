@@ -171,9 +171,9 @@ export default function OrderPrintPreviewPage() {
           min-height: 196mm;
           overflow: hidden;
           font-family: Arial, Helvetica, sans-serif;
-          font-size: clamp(10px, 2mm, 12px);
-          line-height: 1.35;
-          font-weight: 600;
+          font-size: clamp(14px, 3mm, 17px);
+          line-height: 1.4;
+          font-weight: 700;
         }
         .receipt-header {
           display: grid;
@@ -200,20 +200,20 @@ export default function OrderPrintPreviewPage() {
           object-fit: contain;
         }
         .brand-social span {
-          font-size: 1.9mm;
+          font-size: 2.5mm;
           font-weight: 800;
           color: #334155;
         }
         .brand-copy h1 {
           margin: 0 0 1mm;
-          font-size: 5.2mm;
+          font-size: 6.5mm;
           font-weight: 900;
           letter-spacing: 0;
         }
         .brand-copy p {
           margin: 0.4mm 0;
           color: #334155;
-          font-size: 2.45mm;
+          font-size: 3mm;
           font-weight: 700;
         }
         .code-grid,
@@ -235,7 +235,7 @@ export default function OrderPrintPreviewPage() {
         .receipt-footer span {
           display: block;
           color: #475569;
-          font-size: 2.4mm;
+          font-size: 2.9mm;
           font-weight: 900;
           text-transform: uppercase;
         }
@@ -243,7 +243,7 @@ export default function OrderPrintPreviewPage() {
         .info-box b {
           display: block;
           margin-top: 0.8mm;
-          font-size: 3.2mm;
+          font-size: 4mm;
           font-weight: 900;
           overflow-wrap: anywhere;
         }
@@ -259,7 +259,7 @@ export default function OrderPrintPreviewPage() {
         .customer-section h2,
         .items-section h2 {
           margin: 3mm 0 1.5mm;
-          font-size: 3.8mm;
+          font-size: 4.8mm;
           font-weight: 900;
           text-transform: uppercase;
           letter-spacing: 0.3mm;
@@ -277,7 +277,7 @@ export default function OrderPrintPreviewPage() {
           width: 100%;
           border-collapse: collapse;
           table-layout: fixed;
-          font-size: 2.6mm;
+          font-size: 3.2mm;
           font-weight: 700;
         }
         .items-section th {
@@ -286,7 +286,7 @@ export default function OrderPrintPreviewPage() {
           text-align: left;
           vertical-align: top;
           background: #f1f5f9;
-          font-size: 2.3mm;
+          font-size: 2.8mm;
           font-weight: 900;
           text-transform: uppercase;
         }
@@ -320,7 +320,7 @@ export default function OrderPrintPreviewPage() {
         .receipt-footer b {
           display: block;
           margin-top: 4mm;
-          font-size: 2.35mm;
+          font-size: 3mm;
           overflow-wrap: anywhere;
         }
         .label-receipt,

@@ -640,7 +640,7 @@ export class TrendyolAdapter extends BaseIntegrationAdapter {
         sku: line.merchantSku ? String(line.merchantSku) : undefined,
         barcode: line.barcode ? String(line.barcode) : undefined,
         modelCode: line.merchantSku ? String(line.merchantSku) : undefined,
-        imageUrl: line.images?.[0] ? String(line.images[0]) : undefined,
+        imageUrl: line.images?.[0]?.url ? String(line.images[0].url) : (line.images?.[0] && typeof line.images[0] === 'string' ? line.images[0] : undefined),
         quantity: Number(line.quantity ?? 1),
         unitPrice: Number(line.price ?? line.amount ?? 0),
       })),
