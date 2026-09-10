@@ -298,4 +298,10 @@ export class IntegrationsController {
     return this.hbSync.getListings(Number(offset ?? 0), Number(limit ?? 50));
   }
 
+  @Post('trendyol/sync-stock-cards')
+  @UseGuards(OwnerGuard)
+  syncTrendyolStockCards() {
+    return this.integrations.syncTrendyolStockCards();
+  }
+
 }

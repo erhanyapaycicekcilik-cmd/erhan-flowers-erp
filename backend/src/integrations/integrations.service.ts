@@ -1157,6 +1157,84 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  async syncTrendyolStockCards(companyCode = 'ERHAN') {
+    const creds = await this.integrationCenter.runtimeCredentials('TRENDYOL', companyCode);
+    const supplierId = String(creds['SUPPLIER_ID'] ?? '');
+    const apiKey     = String(creds['API_KEY']     ?? '');
+    const apiSecret  = String(creds['API_SECRET']  ?? '');
+    const apiUrl     = String(creds['API_URL']      ?? 'https://api.trendyol.com/sapigw').replace(/\/+$/, '');
+
+    if (!supplierId || !apiKey || !apiSecret) {
+      return { ok: false, message: 'Trendyol API bilgileri eksik.' };
+    }
+
+    const auth = Buffer.from(`${apiKey}:${apiSecret}`).toString('base64');
+    const headers = {
+      Authorization: `Basic ${auth}`,
+      'User-Agent':  `${supplierId} - SelfIntegration`,
+      Accept:        'application/json',
+    };
+
+    let page = 0;
+    let totalPages = 1;
+    let created = 0;
+    let updated = 0;
+
+    while (page < totalPages) {
+      const url = `${apiUrl}/product/sellers/${supplierId}/products?approved=true&page=${page}&size=200`;
+      const res = await fetch(url, { headers });
+      if (!res.ok) {
+        const msg = await res.text().catch(() => res.statusText);
+        return { ok: false, message: `Trendyol API hatasi ${res.status}: ${msg}` };
+      }
+      const data: any = await res.json();
+      totalPages = data.totalPages ?? 1;
+      const items: any[] = data.content ?? [];
+
+      for (const item of items) {
+        const barcode  = item.barcode   ? String(item.barcode)   : null;
+        const sku      = item.stockCode ? String(item.stockCode) : null;
+        const name     = String(item.title ?? item.productName ?? sku ?? barcode ?? 'Trendyol Urun');
+        const imageUrl = item.images?.[0]?.url ? String(item.images[0].url) : null;
+        const salePrice = Number(item.salePrice ?? item.listPrice ?? 0);
+        const brand    = item.brand ? String(item.brand) : null;
+
+        if (!barcode && !sku) continue;
+
+        try {
+          const where = sku ? { sku } : { barcode: barcode! };
+          const existing = await this.prisma.stockCard.findFirst({ where, select: { id: true, imagePath: true } });
+
+          if (existing) {
+            if (imageUrl && !existing.imagePath) {
+              await this.prisma.stockCard.update({ where: { id: existing.id }, data: { imagePath: imageUrl } });
+              updated++;
+            }
+          } else {
+            await this.prisma.stockCard.create({
+              data: {
+                name,
+                sku:       sku      ?? undefined,
+                barcode:   barcode  ?? undefined,
+                imagePath: imageUrl ?? undefined,
+                brand:     brand    ?? undefined,
+                salePrice,
+                unit:     'Adet',
+                category: 'Trendyol',
+              },
+            });
+            created++;
+          }
+        } catch { /* skip duplicate */ }
+      }
+
+      page++;
+      if (page < totalPages) await new Promise(r => setTimeout(r, 200));
+    }
+
+    return { ok: true, created, updated, message: `${created} yeni stok karti olusturuldu, ${updated} gorsel guncellendi.` };
+  }
+
   private async adapter(platform: IntegrationPlatform, companyCode = 'ERHAN'): Promise<IntegrationAdapter> {
     if (platform === 'TRENDYOL') return new TrendyolAdapter(await this.integrationCenter.runtimeCredentials(platform, companyCode));
     if (platform === 'HEPSIBURADA') return new HepsiburadaAdapter(await this.integrationCenter.runtimeCredentials(platform, companyCode));
