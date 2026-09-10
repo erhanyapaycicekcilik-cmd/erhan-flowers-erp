@@ -323,6 +323,36 @@ export default function OrderPrintPreviewPage() {
           font-size: 3mm;
           overflow-wrap: anywhere;
         }
+        .thankyou-strip {
+          margin-top: 4mm;
+          border-top: 0.6mm solid #0f172a;
+          padding-top: 3mm;
+          text-align: center;
+        }
+        .thankyou-strip .ty-main {
+          font-size: 4.5mm;
+          font-weight: 900;
+          letter-spacing: 0.2mm;
+          text-transform: uppercase;
+        }
+        .thankyou-strip .ty-sub {
+          font-size: 3mm;
+          font-weight: 700;
+          margin-top: 1mm;
+          color: #334155;
+        }
+        .thankyou-strip .ty-links {
+          display: flex;
+          justify-content: center;
+          gap: 8mm;
+          margin-top: 2mm;
+          font-size: 3.2mm;
+          font-weight: 900;
+        }
+        .thankyou-strip .ty-links span::before {
+          content: '◆ ';
+          font-size: 2.5mm;
+        }
         .label-receipt,
         .a4-order-form {
           font-family: Arial, Helvetica, sans-serif;
@@ -551,6 +581,16 @@ function A5Receipt({ sale, company, barcodeRef }: { sale: Record<string, unknown
         <div><span>Kontrol / İmza</span><b>&nbsp;</b></div>
         <div><span>Çıktı Tarihi</span><b>{printDate}</b></div>
       </footer>
+
+      <div className="thankyou-strip">
+        <div className="ty-main">Bizi tercih ettiğiniz için teşekkür ederiz 🌸</div>
+        <div className="ty-sub">Siparişiniz özenle hazırlandı. Memnuniyetiniz bizim önceliğimizdir.</div>
+        <div className="ty-links">
+          <span>www.erhanflowers.com</span>
+          <span>@erhanflowers</span>
+          <span>0544 654 62 20</span>
+        </div>
+      </div>
     </section>
   );
 }
