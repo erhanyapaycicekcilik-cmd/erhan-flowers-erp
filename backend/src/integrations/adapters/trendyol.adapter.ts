@@ -374,7 +374,6 @@ export class TrendyolAdapter extends BaseIntegrationAdapter {
       !this.env('SUPPLIER_ID') ? 'TRENDYOL_SUPPLIER_ID' : '',
       !this.env('API_KEY') ? 'TRENDYOL_API_KEY' : '',
       !this.env('API_SECRET') ? 'TRENDYOL_API_SECRET' : '',
-      !this.env('API_URL') ? 'TRENDYOL_API_URL' : '',
     ].filter(Boolean);
   }
 
@@ -516,7 +515,9 @@ export class TrendyolAdapter extends BaseIntegrationAdapter {
   }
 
   private env(key: string) {
-    return String(this.runtimeCredentials[key] ?? process.env[`TRENDYOL_${key}`] ?? '').trim();
+    const val = String(this.runtimeCredentials[key] ?? process.env[`TRENDYOL_${key}`] ?? '').trim();
+    if (!val && key === 'API_URL') return 'https://api.trendyol.com/sapigw';
+    return val;
   }
 
   private buildAttributes(data: Record<string, any>) {

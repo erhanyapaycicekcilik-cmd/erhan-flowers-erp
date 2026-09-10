@@ -2059,6 +2059,7 @@ export default function ProductsPage() {
                   <Field label="Hedef kâr %"><PercentInput value={activeDraft.profitMarginPercent} onChange={(value) => updateCostDraft({ ...activeDraft, profitMarginPercent: value })} /></Field>
                   <Field label="KDV %"><PercentInput value={activeDraft.vatPercent} onChange={(value) => updateCostDraft({ ...activeDraft, vatPercent: value })} /></Field>
                   <Field label="Kargo maliyeti"><MoneyInput value={activeDraft.shippingCost} onChange={(value) => updateCostDraft({ ...activeDraft, shippingCost: value })} /></Field>
+                  <Field label="Desi (paket ağırlığı)"><input type="number" min={0} step={0.1} value={Number(activeDraft.desi) || ''} onChange={(e) => updateCostDraft({ ...activeDraft, desi: Number(e.target.value) })} className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500" placeholder="ör. 2.5" /></Field>
                 </div>
                 <p className="text-xs font-semibold text-slate-500">E-ticaret fiyatına, site fiyatı üzerine sabit %35 ek pay uygulanır.</p>
                 <VisiblePricingGuide
