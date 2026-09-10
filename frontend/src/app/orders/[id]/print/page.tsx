@@ -171,8 +171,9 @@ export default function OrderPrintPreviewPage() {
           min-height: 196mm;
           overflow: hidden;
           font-family: Arial, Helvetica, sans-serif;
-          font-size: clamp(8px, 1.55mm, 10px);
-          line-height: 1.25;
+          font-size: clamp(10px, 2mm, 12px);
+          line-height: 1.35;
+          font-weight: 600;
         }
         .receipt-header {
           display: grid;
@@ -233,16 +234,16 @@ export default function OrderPrintPreviewPage() {
         .info-box span,
         .receipt-footer span {
           display: block;
-          color: #64748b;
-          font-size: 2.15mm;
-          font-weight: 800;
+          color: #475569;
+          font-size: 2.4mm;
+          font-weight: 900;
           text-transform: uppercase;
         }
         .code-box strong,
         .info-box b {
           display: block;
           margin-top: 0.8mm;
-          font-size: 2.8mm;
+          font-size: 3.2mm;
           font-weight: 900;
           overflow-wrap: anywhere;
         }
@@ -258,8 +259,10 @@ export default function OrderPrintPreviewPage() {
         .customer-section h2,
         .items-section h2 {
           margin: 3mm 0 1.5mm;
-          font-size: 3.2mm;
+          font-size: 3.8mm;
           font-weight: 900;
+          text-transform: uppercase;
+          letter-spacing: 0.3mm;
         }
         .info-wide {
           grid-column: 1 / -1;
@@ -274,22 +277,34 @@ export default function OrderPrintPreviewPage() {
           width: 100%;
           border-collapse: collapse;
           table-layout: fixed;
-          font-size: 2.35mm;
+          font-size: 2.6mm;
+          font-weight: 700;
         }
-        .items-section th,
-        .items-section td {
-          border: 0.3mm solid #cbd5e1;
-          padding: 1.2mm;
+        .items-section th {
+          border: 0.3mm solid #94a3b8;
+          padding: 1.5mm;
           text-align: left;
           vertical-align: top;
-          overflow-wrap: anywhere;
+          background: #f1f5f9;
+          font-size: 2.3mm;
+          font-weight: 900;
+          text-transform: uppercase;
         }
-        .items-section th:nth-child(1) { width: 13%; }
-        .items-section th:nth-child(2) { width: 30%; }
+        .items-section td {
+          border: 0.3mm solid #cbd5e1;
+          padding: 1.5mm;
+          text-align: left;
+          vertical-align: middle;
+          overflow-wrap: anywhere;
+          font-weight: 700;
+        }
+        .items-section th:nth-child(1) { width: 16%; }
+        .items-section th:nth-child(2) { width: 29%; }
         .items-section th:nth-child(3) { width: 17%; }
         .items-section th:nth-child(4) { width: 9%; }
-        .items-section th:nth-child(5) { width: 31%; }
-        .item-thumb { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; }
+        .items-section th:nth-child(5) { width: 29%; }
+        .item-thumb { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; border-radius: 1mm; }
+        .item-no-img { width: 100%; aspect-ratio: 1; background: #e2e8f0; display: flex; align-items: center; justify-content: center; font-size: 2mm; color: #94a3b8; font-weight: 800; border-radius: 1mm; }
         .receipt-footer {
           display: grid;
           grid-template-columns: repeat(4, 1fr);
@@ -516,7 +531,7 @@ function A5Receipt({ sale, company, barcodeRef }: { sale: Record<string, unknown
                 <td style={{ padding: '1mm', verticalAlign: 'middle' }}>
                   {imgSrc
                     ? <img src={imgSrc} alt="" className="item-thumb" crossOrigin="anonymous" />
-                    : <div style={{ width: '100%', aspectRatio: '1', background: '#f1f5f9' }} />}
+                    : <div className="item-no-img">FOTO</div>}
                 </td>
                 <td>{text(item.product_name_snapshot ?? item.productNameSnapshot) || '-'}</td>
                 <td>{text(item.model_code ?? item.modelCode) || '-'}</td>
