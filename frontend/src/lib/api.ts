@@ -64,8 +64,15 @@ export async function api<T>(path: string, options: ApiOptions = {}): Promise<T>
     throw new Error(data?.message ?? 'İşlem tamamlanamadı.');
   }
 
-  if (response.headers.get('content-type')?.includes('application/json')) {
+  const ct = response.headers.get('content-type') ?? '';
+  if (ct.includes('application/json') || ct.includes('text/plain')) {
     return response.json();
+  }
+
+  // Content-Type yoksa yine de JSON parse etmeyi dene
+  const text = await response.text();
+  if (text) {
+    try { return JSON.parse(text); } catch { /* ignore */ }
   }
 
   return undefined as T;
