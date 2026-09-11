@@ -88,7 +88,7 @@ export class N11Adapter extends HttpMarketplaceOrderAdapter {
       return {
         ok: false,
         status: response.status === 401 || response.status === 403 ? 'MISSING_CREDENTIALS' : 'FAILED',
-        message: `N11 urun gonderimi basarisiz. HTTP ${response.status}: ${responseText.slice(0, 300)}`,
+        message: `N11 urun gonderimi basarisiz. HTTP ${response.status}: ${responseText.slice(0, 800)}`,
       };
     } catch (error) {
       return { ok: false, status: 'FAILED', message: `N11 urun gonderimi basarisiz: ${error instanceof Error ? error.message : String(error)}` };
