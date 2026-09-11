@@ -74,7 +74,7 @@ export class HepsiburadaAdapter extends HttpMarketplaceOrderAdapter {
           Authorization: `Basic ${auth}`,
           'User-Agent': userAgent || 'ErhanFlowersERP-HB',
         },
-        body: JSON.stringify(hbPayload),
+        body: JSON.stringify([hbPayload]),
       });
 
       const responseText = await response.text().catch(() => '');
