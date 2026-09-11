@@ -62,6 +62,7 @@ export class HepsiburadaAdapter extends HttpMarketplaceOrderAdapter {
     if (!p.barcode) delete hbPayload.Barcode;
 
     const url = new URL(hbProductPath.startsWith('/') ? hbProductPath : `/${hbProductPath}`, `${apiBaseUrl.replace(/\/+$/, '')}/`);
+    url.searchParams.set('merchantId', merchantId);
     const auth = Buffer.from(`${merchantId}:${secretKey}`).toString('base64');
 
     try {

@@ -42,18 +42,9 @@ export class N11Adapter extends HttpMarketplaceOrderAdapter {
       preparingDay,
       shipmentTemplateName: shipmentTemplate,
       images: images.map((url: string) => ({ url })),
-      stockItems: [
-        {
-          bundle: false,
-          mpn: p.modelCode || stockCode,
-          gtin: p.barcode || undefined,
-          oem: p.modelCode || stockCode,
-          sellerStockCode: stockCode,
-          quantity: Number(p.stockQuantity ?? 0),
-          attributes: [],
-          files: [],
-        },
-      ],
+      quantity: Number(p.stockQuantity ?? 0),
+      sellerStockCode: stockCode,
+      ...(p.barcode ? { productMainId: p.barcode } : {}),
       attributes: [
         ...(p.color ? [{ name: 'Renk', value: p.color }] : []),
         ...(p.flowerType ? [{ name: 'Çiçek Türü', value: p.flowerType }] : []),
