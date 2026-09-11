@@ -2284,3 +2284,37 @@ model AppSetting {
 
   @@map("app_settings")
 }
+
+model CustomerQuestion {
+  id          Int       @id @default(autoincrement())
+  platform    String
+  externalId  String    @map("external_id")
+  productName String?   @map("product_name")
+  productSku  String?   @map("product_sku")
+  customerName String?  @map("customer_name")
+  question    String
+  answer      String?
+  status      String    @default("PENDING")
+  askedAt     DateTime? @map("asked_at")
+  answeredAt  DateTime? @map("answered_at")
+  rawPayload  Json?     @map("raw_payload")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  @@unique([platform, externalId])
+  @@index([status])
+  @@index([platform])
+  @@index([createdAt(sort: Desc)])
+  @@map("customer_questions")
+}
+
+model PushSubscription {
+  id        Int      @id @default(autoincrement())
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("push_subscriptions")
+}
+

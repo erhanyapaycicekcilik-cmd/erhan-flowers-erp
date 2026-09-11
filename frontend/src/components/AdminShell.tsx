@@ -19,6 +19,7 @@ import {
   Menu,
   PackagePlus,
   Landmark,
+  MessageSquare,
   PlugZap,
   QrCode,
   Settings,
@@ -29,6 +30,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { api, clearAuthToken } from '@/lib/api';
+import { usePushNotifications } from '@/lib/use-push-notifications';
 import type { CurrentUser, UserRole } from '@/types';
 
 type NavItem = {
@@ -78,6 +80,7 @@ const navGroups: { section: string; icon: LucideIcon; items: NavItem[] }[] = [
       { href: '/sales', label: 'Satış Merkezi', icon: ShoppingCart, roles: OWNER_MANAGER, enabled: process.env.NEXT_PUBLIC_ENABLE_SALES_CENTER === 'true' },
       { href: '/crm', label: 'CRM', icon: Users, roles: OWNER_MANAGER },
       { href: '/eft-yonetim', label: 'EFT Ödemeleri', icon: Landmark, roles: OWNER_MANAGER },
+      { href: '/musteri-sorulari', label: 'Müşteri Soruları', icon: MessageSquare, roles: OWNER_MANAGER },
     ],
   },
   {
@@ -478,6 +481,7 @@ export function AdminShell({ title, children }: { title: string; children: React
   const pathname = usePathname();
   const router = useRouter();
   const [user, setUser] = useState<CurrentUser | null>(null);
+  usePushNotifications();
   const [loading, setLoading] = useState(true);
   const [openGroup, setOpenGroup] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);

@@ -30,6 +30,7 @@ import { MarketIntelligenceModule } from './market-intelligence/market-intellige
 import { PublicCatalogModule } from './public-catalog/public-catalog.module';
 import { SuppliersModule } from './suppliers/suppliers.module';
 import { EftModule } from './eft/eft.module';
+import { CustomerQuestionsModule } from './customer-questions/customer-questions.module';
 
 @Module({
   imports: [
@@ -70,6 +71,7 @@ import { EftModule } from './eft/eft.module';
     PublicCatalogModule,
     SuppliersModule,
     EftModule,
+    CustomerQuestionsModule,
   ],
   controllers: [AppController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
