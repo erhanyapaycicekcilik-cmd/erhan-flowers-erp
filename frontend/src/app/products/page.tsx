@@ -334,6 +334,7 @@ export default function ProductsPage() {
   const [familySearch, setFamilySearch] = useState('');
   const [message, setMessage] = useState('');
   const [sendMessage, setSendMessage] = useState('');
+  const [sendResults, setSendResults] = useState<Array<{ platform: string; ok: boolean; message: string }>>([]);
   const [sendingChannels, setSendingChannels] = useState(false);
   const [quickForm, setQuickForm] = useState(emptyQuickForm);
   const [quickResult, setQuickResult] = useState<QuickResult | null>(null);
@@ -1486,6 +1487,7 @@ export default function ProductsPage() {
     }
     setSendingChannels(true);
     setSendMessage('Gönderiliyor...');
+    setSendResults([]);
     try {
       const entry = form.variantId ? null : await saveEntry();
       const variantId = Number(form.variantId || entry?.variantId);
@@ -1493,17 +1495,20 @@ export default function ProductsPage() {
         method: 'POST',
         json: { variantIds: [variantId], platforms, allowIncomplete },
       });
-      const errors = result.results.filter((item) => !item.ok && item.errorMessage);
-      const successes = result.results.filter((item) => item.ok && item.successMessage);
-      const errorText = errors.length > 0 ? ` Hatalar: ${errors.map((item) => `${item.platform ?? ''}: ${item.errorMessage}`).join(' | ')}` : '';
-      const successText = successes.length > 0 ? ` ${successes.map((item) => `${item.platform ?? ''}: ${item.successMessage}`).join(' | ')}` : '';
-      const text = `Gönderim tamamlandı. Başarılı: ${result.success}, Hatalı: ${result.failed}.${successText}${errorText}`;
+      const rows = result.results.map((item) => ({
+        platform: item.platform ?? '?',
+        ok: item.ok,
+        message: item.ok ? (item.successMessage ?? 'Gönderildi') : (item.errorMessage ?? 'Hata'),
+      }));
+      const text = `Gönderim tamamlandı. Başarılı: ${result.success}, Hatalı: ${result.failed}.`;
       setMessage(text);
       setSendMessage(text);
+      setSendResults(rows);
     } catch (error) {
       const text = `Gönderim başarısız: ${error instanceof Error ? error.message : 'Bilinmeyen hata.'}`;
       setMessage(text);
       setSendMessage(text);
+      setSendResults([]);
     } finally {
       setSendingChannels(false);
     }
@@ -2234,7 +2239,16 @@ export default function ProductsPage() {
                   </button>
                 </div>
                 <p className="text-xs text-slate-500">Trendyol&apos;un API&apos;si zaten yayındaki bir görseli silmeyi desteklemiyor (sadece ekleme yapabiliyoruz) — istenmeyen görseli kaldırmak için satıcı panelini kullanman gerekiyor.</p>
-                {sendMessage && <div className="rounded-md bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800">{sendMessage}</div>}
+                {sendMessage && (
+                  <div className="flex flex-col gap-1">
+                    <div className="rounded-md bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-600">{sendMessage}</div>
+                    {sendResults.map((r) => (
+                      <div key={r.platform} className={`rounded-md px-3 py-2 text-xs font-semibold break-all ${r.ok ? 'bg-emerald-50 text-emerald-800' : 'bg-red-50 text-red-800'}`}>
+                        <span className="font-bold">{r.platform}:</span> {r.message}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 
