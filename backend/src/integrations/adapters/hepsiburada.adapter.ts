@@ -19,10 +19,9 @@ export class HepsiburadaAdapter extends HttpMarketplaceOrderAdapter {
 
   override async pushProduct(payload: unknown): Promise<AdapterConnectionResult> {
     const merchantId = this.env('MERCHANT_ID');
-    const username = this.env('USERNAME') || this.env('API_KEY');
-    const password = this.env('PASSWORD') || this.env('API_SECRET');
+    const secretKey = this.env('SECRET_KEY') || this.env('PASSWORD') || this.env('API_SECRET');
     const userAgent = this.env('USER_AGENT');
-    if (!merchantId || !username || !password) return this.missing(['HEPSIBURADA_MERCHANT_ID', 'HEPSIBURADA_USERNAME', 'HEPSIBURADA_PASSWORD']);
+    if (!merchantId || !secretKey) return this.missing(['HEPSIBURADA_MERCHANT_ID', 'HEPSIBURADA_SECRET_KEY']);
 
     const p = payload as Record<string, any>;
     const images = this.extractImages(p.images);
@@ -30,12 +29,13 @@ export class HepsiburadaAdapter extends HttpMarketplaceOrderAdapter {
     // Hepsiburada yapay çiçekler: categoryId=60001290, productTypeId=3210 (şablondan)
     const hbCategoryId = this.env('CATEGORY_ID') || p.hepsiburadaCategoryId || '60001290';
     const hbProductTypeId = Number(this.env('PRODUCT_TYPE_ID') || 3210);
-    const hbProductPath = this.env('PRODUCT_PATH') || `/product/api/merchant/v1/listings/${encodeURIComponent(merchantId)}`;
+    // Auth: merchantId:secretKey (Basic)
+    // URL: /listings/merchantid/{merchantId}
+    const hbProductPath = this.env('PRODUCT_PATH') || `/listings/merchantid/${encodeURIComponent(merchantId)}`;
     const apiBaseUrl = this.env('PRODUCT_API_URL') || 'https://listing-external.hepsiburada.com';
     const height = this.extractHeight(p.productName, p.description);
 
     const hbPayload: Record<string, any> = {
-      merchantId,
       merchantSku: stockCode,
       VaryantGroupID: p.modelCode || stockCode,
       Barcode: p.barcode || undefined,
@@ -62,7 +62,7 @@ export class HepsiburadaAdapter extends HttpMarketplaceOrderAdapter {
     if (!p.barcode) delete hbPayload.Barcode;
 
     const url = new URL(hbProductPath.startsWith('/') ? hbProductPath : `/${hbProductPath}`, `${apiBaseUrl.replace(/\/+$/, '')}/`);
-    const auth = Buffer.from(`${username}:${password}`).toString('base64');
+    const auth = Buffer.from(`${merchantId}:${secretKey}`).toString('base64');
 
     try {
       const response = await fetch(url, {
