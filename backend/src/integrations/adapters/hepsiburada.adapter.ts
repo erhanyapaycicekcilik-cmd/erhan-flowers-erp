@@ -27,6 +27,7 @@ export class HepsiburadaAdapter extends HttpMarketplaceOrderAdapter {
     const images = this.extractImages(p.images);
     const stockCode = (p.modelCode || p.barcode || '').toUpperCase();
     const hbCategoryId = Number(this.env('CATEGORY_ID') || p.hepsiburadaCategoryId || 60001290);
+    const hbProductTypeId = Number(this.env('PRODUCT_TYPE_ID') || p.hepsiburadaProductTypeId || 3210);
     const hbProductPath = this.env('PRODUCT_PATH') || '/product/api/products/import';
     const apiBaseUrl = this.env('PRODUCT_API_URL') || 'https://mpop.hepsiburada.com';
     const height = this.extractHeight(p.productName, p.description);
@@ -36,6 +37,7 @@ export class HepsiburadaAdapter extends HttpMarketplaceOrderAdapter {
     const priceStr = salePrice.toFixed(2).replace('.', ',');
     const hbProduct: Record<string, any> = {
       categoryId: hbCategoryId,
+      productTypeId: hbProductTypeId,
       merchant: merchantId,
       merchantSku: stockCode,
       VaryantGroupID: (p.modelCode || stockCode).toUpperCase(),
