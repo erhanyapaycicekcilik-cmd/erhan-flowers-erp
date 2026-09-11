@@ -42,7 +42,7 @@ export class HepsiburadaAdapter extends HttpMarketplaceOrderAdapter {
       UrunAdi: p.productName || '',
       UrunAciklamasi: p.description || p.productName || '',
       Marka: p.brand || 'Erhan Flowers',
-      GarantiSuresi: 0,
+      GarantiSuresi: '0',
       kg: String(p.desi || 1),
       price: priceStr,
       stock: String(Number(p.stockQuantity ?? 0)),
@@ -88,35 +88,41 @@ export class HepsiburadaAdapter extends HttpMarketplaceOrderAdapter {
 
       const trackingId: string | null = responseJson?.data?.trackingId || responseJson?.trackingId || null;
 
-      // trackingId ile islem durumunu kontrol et (3 saniye bekle)
+      // trackingId ile islem durumunu kontrol et (8 saniye bekle — HB async isleme)
       if (trackingId) {
-        await new Promise((r) => setTimeout(r, 3000));
+        await new Promise((r) => setTimeout(r, 8000));
         try {
           const statusUrl = new URL(`/product/api/products/import/${trackingId}`, `${apiBaseUrl.replace(/\/+$/, '')}/`);
           statusUrl.searchParams.set('merchantId', merchantId);
           const statusResp = await fetch(statusUrl, {
             headers: { Accept: 'application/json', Authorization: `Basic ${auth}`, 'User-Agent': userAgent || 'ErhanFlowersERP-HB' },
           });
+
+          // 404 = HB henuz islemiyor, birkaç dakika sonra panelde gorunur
+          if (statusResp.status === 404) {
+            return { ok: true, status: 'CONNECTED', message: `Hepsiburada dosya kabul edildi ve isleme alindi. TrackingId: ${trackingId} — HB panelinde "Indirme Gecmisi"nden takip edebilirsiniz (1-5 dakika surabilir).` };
+          }
+
           const statusText = await statusResp.text().catch(() => '');
           let statusJson: any;
           try { statusJson = JSON.parse(statusText); } catch { statusJson = null; }
 
           const statusData = statusJson?.data || statusJson;
-          const statusStr = statusData?.status || statusData?.importStatus || '';
-          const errors: string[] = statusData?.errors?.map?.((e: any) => e?.message || JSON.stringify(e)) || [];
-          const failCount: number = statusData?.failedProductCount ?? statusData?.failCount ?? 0;
-          const successCount: number = statusData?.successProductCount ?? statusData?.successCount ?? 0;
+          const statusStr: string = String(statusData?.status || statusData?.importStatus || '');
+          const errors: string[] = (statusData?.errors ?? statusData?.failedItems ?? []).map?.((e: any) => e?.message || e?.errorMessage || JSON.stringify(e)) || [];
+          const failCount: number = Number(statusData?.failedProductCount ?? statusData?.failCount ?? 0);
+          const successCount: number = Number(statusData?.successProductCount ?? statusData?.successCount ?? 0);
 
-          if (errors.length || failCount > 0) {
+          if (errors.length > 0 || failCount > 0) {
             return {
               ok: false,
               status: 'FAILED',
-              message: `Hepsiburada icerik hatasi (trackingId: ${trackingId}): Basarili=${successCount} Basarisiz=${failCount} Durum=${statusStr} | ${errors.join(' | ') || statusText.slice(0, 400)}`,
+              message: `Hepsiburada icerik hatasi (TrackingId: ${trackingId}): Basarili=${successCount}, Basarisiz=${failCount}, Durum=${statusStr} | Hatalar: ${errors.join(' | ') || statusText.slice(0, 400)}`,
             };
           }
-          return { ok: true, status: 'CONNECTED', message: `Hepsiburada gonderimi tamamlandi. TrackingId: ${trackingId} | Durum: ${statusStr || 'PROCESSING'} | Basarili: ${successCount}` };
+          return { ok: true, status: 'CONNECTED', message: `Hepsiburada gonderimi basarili. TrackingId: ${trackingId} | Durum: ${statusStr || 'PROCESSING'} | Basarili urun: ${successCount}` };
         } catch {
-          return { ok: true, status: 'CONNECTED', message: `Hepsiburada dosya kabul edildi (trackingId: ${trackingId}), durum sorgulanamadi.` };
+          return { ok: true, status: 'CONNECTED', message: `Hepsiburada dosya kabul edildi (TrackingId: ${trackingId}). HB panelinde "Indirme Gecmisi"nden takip edin.` };
         }
       }
 
