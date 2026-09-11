@@ -31,7 +31,7 @@ export class HepsiburadaAdapter extends HttpMarketplaceOrderAdapter {
     const hbProductTypeId = Number(this.env('PRODUCT_TYPE_ID') || 3210);
     // Auth: merchantId:secretKey (Basic)
     // URL: /listings/merchantid/{merchantId}
-    const hbProductPath = this.env('PRODUCT_PATH') || `/listings/merchantid/${encodeURIComponent(merchantId)}`;
+    const hbProductPath = this.env('PRODUCT_PATH') || '/product/api/merchant/v1/listings';
     const apiBaseUrl = this.env('PRODUCT_API_URL') || 'https://listing-external.hepsiburada.com';
     const height = this.extractHeight(p.productName, p.description);
 

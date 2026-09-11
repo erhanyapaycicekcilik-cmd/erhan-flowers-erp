@@ -29,17 +29,18 @@ export class N11Adapter extends HttpMarketplaceOrderAdapter {
     const shipmentTemplate = this.env('DELIVERY_TEMPLATE_NAME') || 'Standart Teslimat';
     const height = this.extractHeight(p.productName, p.description);
 
+    const salePrice = Number(p.salePrice || 0);
+    const listPrice = Math.max(Number(p.listPrice || p.salePrice || 0), salePrice);
     const n11Payload: Record<string, any> = {
       productSellerCode: stockCode,
       title: p.productName || '',
-      subtitle: (p.shortDescription || p.productName || '').slice(0, 100),
       description: p.description || p.productName || '',
       category: { id: n11CategoryId },
-      price: Number(p.salePrice || 0),
-      listPrice: Number(p.listPrice || p.salePrice || 0),
+      price: salePrice,
+      listPrice,
       currencyType: 'TL',
       preparingDay,
-      shipmentTemplate,
+      shipmentTemplateName: shipmentTemplate,
       images: images.map((url: string) => ({ url })),
       stockItems: [
         {
