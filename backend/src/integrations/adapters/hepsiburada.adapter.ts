@@ -35,26 +35,31 @@ export class HepsiburadaAdapter extends HttpMarketplaceOrderAdapter {
     // HB katalog ürün JSON: düz alan yapısı (array içinde), fiyat Türkçe virgüllü string
     const salePrice = Number(p.salePrice || 0);
     const priceStr = salePrice.toFixed(2).replace('.', ',');
-    const hbProduct: Record<string, any> = {
-      categoryId: hbCategoryId,
-      productTypeId: hbProductTypeId,
-      merchant: merchantId,
+
+    // HB doğru format: categoryId + merchant üstte, geri kalan her şey attributes içinde
+    const hbAttributes: Record<string, any> = {
       merchantSku: stockCode,
       VaryantGroupID: (p.modelCode || stockCode).toUpperCase(),
       UrunAdi: p.productName || '',
-      UrunAciklamasi: p.description || p.productName || '',
+      UrunAciklamasi: (p.description || p.productName || '').replace(/\n/g, '\r\n'),
       Marka: p.brand || 'Erhan Flowers',
-      GarantiSuresi: '0',
+      GarantiSuresi: 0,
       kg: String(p.desi || 1),
+      tax_vat_rate: '10',
       price: priceStr,
       stock: String(Number(p.stockQuantity ?? 0)),
-      Renk: p.color || 'Çok Renkli',
+      renk_variant_property: p.color || 'Çok Renkli',
       ...(p.flowerType ? { 'Çiçek Türü': p.flowerType } : {}),
       ...(height ? { Boy: height } : {}),
       ...(p.barcode ? { Barcode: p.barcode } : {}),
     };
-    // Görseller: Image1, Image2, ... şeklinde düz alanlar (HB katalog formatı)
-    images.slice(0, 8).forEach((url, i) => { hbProduct[`Image${i + 1}`] = url; });
+    images.slice(0, 10).forEach((url, i) => { hbAttributes[`Image${i + 1}`] = url; });
+
+    const hbProduct: Record<string, any> = {
+      categoryId: hbCategoryId,
+      merchant: merchantId,
+      attributes: hbAttributes,
+    };
 
     const url = new URL(hbProductPath.startsWith('/') ? hbProductPath : `/${hbProductPath}`, `${apiBaseUrl.replace(/\/+$/, '')}/`);
     url.searchParams.set('merchantId', merchantId);
