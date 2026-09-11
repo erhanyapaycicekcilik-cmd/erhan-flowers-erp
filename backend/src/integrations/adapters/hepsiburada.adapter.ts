@@ -29,10 +29,10 @@ export class HepsiburadaAdapter extends HttpMarketplaceOrderAdapter {
     // Hepsiburada yapay çiçekler: categoryId=60001290, productTypeId=3210 (şablondan)
     const hbCategoryId = this.env('CATEGORY_ID') || p.hepsiburadaCategoryId || '60001290';
     const hbProductTypeId = Number(this.env('PRODUCT_TYPE_ID') || 3210);
-    // Auth: merchantId:secretKey (Basic)
-    // URL: /listings/merchantid/{merchantId}
-    const hbProductPath = this.env('PRODUCT_PATH') || '/product/api/merchant/v1/listings';
-    const apiBaseUrl = this.env('PRODUCT_API_URL') || 'https://listing-external.hepsiburada.com';
+    // Auth: merchantId:serviceKey (Basic Auth)
+    // Katalog urun yuklemesi mpop.hepsiburada.com'a gider (listing-external degil)
+    const hbProductPath = this.env('PRODUCT_PATH') || '/product/api/products/import';
+    const apiBaseUrl = this.env('PRODUCT_API_URL') || 'https://mpop.hepsiburada.com';
     const height = this.extractHeight(p.productName, p.description);
 
     const hbPayload: Record<string, any> = {
