@@ -48,6 +48,7 @@
     "@types/multer": "^1.4.12",
     "@types/node": "^22.10.2",
     "@types/pdfkit": "^0.13.5",
+    "@types/web-push": "^3.6.4",
     "prisma": "^5.22.0",
     "ts-node": "^10.9.2",
     "typescript": "^5.7.2"

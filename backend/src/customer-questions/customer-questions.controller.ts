@@ -1,9 +1,9 @@
 import { Body, Controller, Get, Param, ParseIntPipe, Post, Query, UseGuards } from '@nestjs/common';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { AuthGuard } from '../auth/auth.guard';
 import { CustomerQuestionsService } from './customer-questions.service';
 import { PushNotificationService } from './push-notification.service';
 
-@UseGuards(JwtAuthGuard)
+@UseGuards(AuthGuard)
 @Controller('customer-questions')
 export class CustomerQuestionsController {
   constructor(

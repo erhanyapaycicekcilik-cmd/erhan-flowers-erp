@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import * as webpush from 'web-push';
 import { PrismaService } from '../prisma/prisma.service';
 
 type PushPayload = {
@@ -39,16 +40,7 @@ export class PushNotificationService {
       return;
     }
 
-    // web-push kütüphanesi
-    let webpush: any;
-    try {
-      webpush = await import('web-push');
-      webpush = webpush.default ?? webpush;
-      webpush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey);
-    } catch {
-      this.logger.warn('web-push paketi yuklu degil.');
-      return;
-    }
+    webpush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey);
 
     const notification = JSON.stringify({
       title: payload.title,
