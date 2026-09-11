@@ -26,7 +26,7 @@ export class N11Adapter extends HttpMarketplaceOrderAdapter {
     // N11 yapay çiçek kategorisi: 1000675 (şablondan alındı)
     const n11CategoryId = Number(this.env('CATEGORY_ID') || p.n11CategoryId || 1000675);
     const preparingDay = Number(this.env('PREPARING_DAY') || 2);
-    const shipmentTemplate = this.env('DELIVERY_TEMPLATE_NAME') || 'Standart Teslimat';
+    const shipmentTemplate = this.env('DELIVERY_TEMPLATE_NAME') || 'Sürat Kargo';
     const height = this.extractHeight(p.productName, p.description);
 
     const salePrice = Number(p.salePrice || 0);
@@ -49,6 +49,8 @@ export class N11Adapter extends HttpMarketplaceOrderAdapter {
       ...(p.barcode ? { productMainId: p.barcode } : {}),
       attributes: [
         { name: 'Renk', value: p.color || 'Çok Renkli' },
+        { name: 'Çiçek Türü', value: p.flowerType || 'Yapay Çiçek' },
+        { name: 'Marka', value: p.brand || 'Erhan Flowers' },
       ],
     };
 
