@@ -89,14 +89,44 @@ export class N11Adapter extends HttpMarketplaceOrderAdapter {
       try { responseJson = JSON.parse(responseText); } catch { responseJson = { raw: responseText }; }
 
       if (response.ok || response.status === 201 || response.status === 202) {
-        const taskId = responseJson?.taskId || responseJson?.id || responseJson?.batchRequestId || null;
-        return { ok: true, status: 'CONNECTED', message: `N11 urun gonderimi tamamlandi.${taskId ? ` Task ID: ${taskId}` : ''}`, batchRequestId: taskId ?? undefined };
+        const taskId: number | null = responseJson?.id ?? null;
+        const taskStatus: string = responseJson?.status || '';
+        const reasons: string[] = responseJson?.reasons || [];
+
+        if (!taskId) {
+          return { ok: true, status: 'CONNECTED', message: `N11 urun gonderimi tamamlandi. Yanit: ${responseText.slice(0, 200)}` };
+        }
+
+        // Task durumunu sorgula: POST /ms/product/task-details/page-query
+        await new Promise((r) => setTimeout(r, 5000));
+        try {
+          const detailUrl = new URL('/ms/product/task-details/page-query', apiUrl);
+          const detailResp = await fetch(detailUrl, {
+            method: 'POST',
+            headers: { Accept: 'application/json', 'Content-Type': 'application/json', appkey: appKey, appsecret: appSecret },
+            body: JSON.stringify({ taskId, pageable: { page: 0, size: 100 } }),
+          });
+          const detailText = await detailResp.text().catch(() => '');
+          let detailJson: any;
+          try { detailJson = JSON.parse(detailText); } catch { detailJson = null; }
+          const detailStatus: string = detailJson?.status || taskStatus;
+          const skus: any[] = detailJson?.skus?.content || [];
+          const failed = skus.filter((s: any) => s.status === 'FAIL');
+          const succeeded = skus.filter((s: any) => s.status === 'SUCCESS');
+          if (failed.length > 0) {
+            const errs = failed.map((s: any) => (s.reasons || []).join(', ')).join(' | ');
+            return { ok: false, status: 'FAILED', message: `N11 urun hatali. Task ${taskId} | Durum: ${detailStatus} | Hatalar: ${errs}` };
+          }
+          return { ok: true, status: 'CONNECTED', message: `N11 urun gonderimi basarili. Task ${taskId} | Durum: ${detailStatus} | Basarili: ${succeeded.length || reasons.join(', ')}`, batchRequestId: String(taskId) };
+        } catch {
+          return { ok: true, status: 'CONNECTED', message: `N11 urun kuyruga alindi. Task ID: ${taskId} | ${reasons.join(', ')}`, batchRequestId: String(taskId) };
+        }
       }
 
       return {
         ok: false,
         status: response.status === 401 || response.status === 403 ? 'MISSING_CREDENTIALS' : 'FAILED',
-        message: `N11 urun gonderimi basarisiz. HTTP ${response.status}: ${responseText.slice(0, 800)} | PAYLOAD: ${JSON.stringify(n11Payload).slice(0, 400)}`,
+        message: `N11 urun gonderimi basarisiz. HTTP ${response.status}: ${responseText.slice(0, 600)}`,
       };
     } catch (error) {
       return { ok: false, status: 'FAILED', message: `N11 urun gonderimi basarisiz: ${error instanceof Error ? error.message : String(error)}` };
