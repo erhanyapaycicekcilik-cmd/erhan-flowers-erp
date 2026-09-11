@@ -1,6 +1,11 @@
 # ERP Yönetim Paneli — Güvenli HTTPS
 erp.florayapaycicek.com {
-    reverse_proxy frontend:3000
+    reverse_proxy frontend:3000 {
+        lb_policy round_robin
+        health_uri /
+        health_interval 10s
+        health_timeout 5s
+    }
 
     header {
         Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
@@ -29,7 +34,12 @@ api.florayapaycicek.com {
         respond "" 204
     }
 
-    reverse_proxy backend:8001
+    reverse_proxy backend:8001 {
+        lb_policy round_robin
+        health_uri /health
+        health_interval 10s
+        health_timeout 5s
+    }
 
     request_body {
         max_size 50MB
