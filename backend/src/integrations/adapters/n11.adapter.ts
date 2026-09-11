@@ -31,15 +31,17 @@ export class N11Adapter extends HttpMarketplaceOrderAdapter {
 
     const salePrice = Number(p.salePrice || 0);
     const listPrice = Math.max(Number(p.listPrice || p.salePrice || 0), salePrice);
+    const cleanDesc = (p.description || p.productName || '').replace(/[\r\n]+/g, ' ').trim();
     const n11Payload: Record<string, any> = {
       productSellerCode: stockCode,
       title: p.productName || '',
-      description: p.description || p.productName || '',
+      description: cleanDesc,
       category: { id: n11CategoryId },
       price: salePrice,
-      listPrice,
+      listPrice: listPrice > salePrice ? listPrice : salePrice,
       currencyType: 1,
       preparingDay,
+      productCondition: 1,
       shipmentTemplateName: shipmentTemplate,
       images: images.slice(0, 8).map((url: string) => ({ url })),
       quantity: Number(p.stockQuantity ?? 0),
