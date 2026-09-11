@@ -47,6 +47,9 @@ export class N11Adapter extends HttpMarketplaceOrderAdapter {
       quantity: Number(p.stockQuantity ?? 0),
       sellerStockCode: stockCode,
       ...(p.barcode ? { productMainId: p.barcode } : {}),
+      attributes: [
+        { name: 'Renk', value: p.color || 'Çok Renkli' },
+      ],
     };
 
     const apiUrl = this.env('API_URL') || 'https://api.n11.com';
