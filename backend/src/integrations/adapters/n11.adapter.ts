@@ -33,25 +33,39 @@ export class N11Adapter extends HttpMarketplaceOrderAdapter {
     const listPrice = Math.max(Number(p.listPrice || p.salePrice || 0), salePrice);
     const cleanDesc = (p.description || p.productName || '').replace(/[\r\n]+/g, ' ').trim().slice(0, 2000);
     const effectiveListPrice = listPrice > salePrice ? listPrice : Math.ceil(salePrice * 1.1);
-    const n11Payload: Record<string, any> = {
-      productSellerCode: stockCode,
-      title: (p.productName || '').slice(0, 150),
-      description: cleanDesc,
-      category: { id: n11CategoryId },
-      price: salePrice,
-      listPrice: effectiveListPrice,
-      currencyType: 1,
+    // N11 baslik: min 10, max 150 karakter; kisa ise stok kodu ile doldur
+    const rawTitle = (p.productName || '').slice(0, 150).trim();
+    const title = rawTitle.length >= 10 ? rawTitle : `${rawTitle} ${stockCode}`.slice(0, 150).trim();
+    const safeDesc = cleanDesc.length >= 10 ? cleanDesc : `${title} - dekoratif yapay çiçek ürünü.`;
+
+    // N11 yeni REST API: payload.skus wrapper, currencyType string, categoryId sayı, attributes id/customValue
+    // Kategori 1000675 attribute ID'leri: 429=Renk, 1275=Çiçek Türü, 1=Marka (hepsi customValue=true)
+    const n11Sku: Record<string, any> = {
+      title,
+      description: safeDesc,
+      categoryId: n11CategoryId,
+      currencyType: 'TL',
+      productMainId: (p.modelCode || stockCode).toUpperCase(),
       preparingDay,
-      shipmentTemplateName: shipmentTemplate,
-      images: images.slice(0, 8).map((url: string) => ({ url })),
+      shipmentTemplate,
+      stockCode,
       quantity: Number(p.stockQuantity ?? 0),
-      sellerStockCode: stockCode,
-      ...(p.barcode ? { productMainId: p.barcode } : {}),
+      salePrice,
+      listPrice: effectiveListPrice,
+      vatRate: 10,
+      images: images.slice(0, 8).map((url: string, i: number) => ({ url, order: i + 1 })),
       attributes: [
-        { name: 'Renk', value: p.color || 'Çok Renkli' },
-        { name: 'Çiçek Türü', value: p.flowerType || 'Yapay Çiçek' },
-        { name: 'Marka', value: p.brand || 'Erhan Flowers' },
+        { id: 429, customValue: p.color || 'Çok Renkli' },
+        { id: 1275, customValue: p.flowerType || 'Yapay Çiçek' },
+        { id: 1, customValue: p.brand || 'Erhan Flowers' },
       ],
+      ...(p.barcode ? { barcode: p.barcode } : {}),
+    };
+    const n11Payload = {
+      payload: {
+        integrator: 'Erhan Flowers ERP',
+        skus: [n11Sku],
+      },
     };
 
     const apiUrl = this.env('API_URL') || 'https://api.n11.com';
