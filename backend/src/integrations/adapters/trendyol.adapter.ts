@@ -243,7 +243,7 @@ export class TrendyolAdapter extends BaseIntegrationAdapter {
 
     const supplierId = this.env('SUPPLIER_ID');
     const apiBaseUrl = this.env('API_URL').replace(/\/+$/, '');
-    const url = `${apiBaseUrl}/product/sellers/${supplierId}/products/batch-requests/${batchRequestId}`;
+    const url = `${apiBaseUrl}/product/sellers/${supplierId}/v2/products/batch-requests/${batchRequestId}`;
     const response = await fetch(url, { headers: this.productHeaders(supplierId) });
     if (!response.ok) {
       return {
@@ -286,7 +286,7 @@ export class TrendyolAdapter extends BaseIntegrationAdapter {
 
     const supplierId = this.env('SUPPLIER_ID');
     const apiBaseUrl = this.env('API_URL').replace(/\/+$/, '');
-    const url = `${apiBaseUrl}/product/sellers/${supplierId}/products?barcode=${encodeURIComponent(barcode)}`;
+    const url = `${apiBaseUrl}/product/sellers/${supplierId}/v2/products?barcode=${encodeURIComponent(barcode)}`;
     const response = await fetch(url, { headers: this.productHeaders(supplierId) });
     if (!response.ok) {
       return {
@@ -446,7 +446,7 @@ export class TrendyolAdapter extends BaseIntegrationAdapter {
   private requestProductUpsert(payload: unknown) {
     const supplierId = this.env('SUPPLIER_ID');
     const apiBaseUrl = this.env('API_URL').replace(/\/+$/, '');
-    const url = `${apiBaseUrl}/product/sellers/${supplierId}/products`;
+    const url = `${apiBaseUrl}/product/sellers/${supplierId}/v2/products`;
     return fetch(url, {
       method: 'POST',
       headers: this.productHeaders(supplierId),
@@ -461,7 +461,7 @@ export class TrendyolAdapter extends BaseIntegrationAdapter {
   private requestContentUpdate(payload: unknown, contentId: string) {
     const supplierId = this.env('SUPPLIER_ID');
     const apiBaseUrl = this.env('API_URL').replace(/\/+$/, '');
-    const url = `${apiBaseUrl}/product/sellers/${supplierId}/products/content-bulk-update`;
+    const url = `${apiBaseUrl}/product/sellers/${supplierId}/v2/products/content-bulk-update`;
     const data = this.record(payload);
     return fetch(url, {
       method: 'POST',
