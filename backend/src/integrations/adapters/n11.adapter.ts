@@ -38,7 +38,7 @@ export class N11Adapter extends HttpMarketplaceOrderAdapter {
       category: { id: n11CategoryId },
       price: salePrice,
       listPrice,
-      currencyType: 'TL',
+      currencyType: 1,
       preparingDay,
       shipmentTemplateName: shipmentTemplate,
       images: images.slice(0, 8).map((url: string) => ({ url })),
