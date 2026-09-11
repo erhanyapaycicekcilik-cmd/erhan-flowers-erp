@@ -35,6 +35,7 @@ export class HepsiburadaAdapter extends HttpMarketplaceOrderAdapter {
     const height = this.extractHeight(p.productName, p.description);
 
     const hbPayload: Record<string, any> = {
+      merchantId,
       merchantSku: stockCode,
       VaryantGroupID: p.modelCode || stockCode,
       Barcode: p.barcode || undefined,
