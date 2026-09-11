@@ -78,15 +78,16 @@ export class HepsiburadaAdapter extends HttpMarketplaceOrderAdapter {
       let responseJson: any;
       try { responseJson = JSON.parse(responseText); } catch { responseJson = { raw: responseText }; }
 
+      const responseSnippet = responseText.slice(0, 600);
       if (response.ok || response.status === 201 || response.status === 202) {
-        const listingId = responseJson?.listingId || responseJson?.id || null;
-        return { ok: true, status: 'CONNECTED', message: `Hepsiburada urun gonderimi tamamlandi.${listingId ? ` Listing ID: ${listingId}` : ''}`, listingUploadId: listingId ?? undefined };
+        const listingId = responseJson?.jobId || responseJson?.batchId || responseJson?.listingId || responseJson?.id || null;
+        return { ok: true, status: 'CONNECTED', message: `Hepsiburada HTTP ${response.status}: ${responseSnippet}`, listingUploadId: listingId ?? undefined };
       }
 
       return {
         ok: false,
         status: response.status === 401 || response.status === 403 ? 'MISSING_CREDENTIALS' : 'FAILED',
-        message: `Hepsiburada urun gonderimi basarisiz. HTTP ${response.status}: ${responseText.slice(0, 500)}`,
+        message: `Hepsiburada urun gonderimi basarisiz. HTTP ${response.status}: ${responseSnippet}`,
       };
     } catch (error) {
       return { ok: false, status: 'FAILED', message: `Hepsiburada urun gonderimi basarisiz: ${error instanceof Error ? error.message : String(error)}` };
