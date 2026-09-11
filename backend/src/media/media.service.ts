@@ -480,8 +480,13 @@ export class MediaService {
     const parsed = path.parse(value);
     const name = (parsed.name || 'gorsel')
       .replace(/[<>:"/\\|?*\u0000-\u001F]/g, '-')
-      .replace(/\s+/g, '-')
-      .slice(0, 80);
+      .replace(/ı/g, 'i').replace(/İ/g, 'I').replace(/ğ/g, 'g').replace(/Ğ/g, 'G')
+      .replace(/ü/g, 'u').replace(/Ü/g, 'U').replace(/ş/g, 's').replace(/Ş/g, 'S')
+      .replace(/ö/g, 'o').replace(/Ö/g, 'O').replace(/ç/g, 'c').replace(/Ç/g, 'C')
+      .normalize('NFD').replace(/[̀-ͯ]/g, '')
+      .replace(/[^A-Za-z0-9._-]/g, '-')
+      .replace(/-+/g, '-').replace(/^-|-$/g, '')
+      .slice(0, 80) || 'gorsel';
     const ext = (parsed.ext || '.jpg').replace(/[^A-Za-z0-9.]/g, '').slice(0, 12) || '.jpg';
     return `${name}${ext}`;
   }
