@@ -78,17 +78,49 @@ export class HepsiburadaAdapter extends HttpMarketplaceOrderAdapter {
       let responseJson: any;
       try { responseJson = JSON.parse(responseText); } catch { responseJson = { raw: responseText }; }
 
-      const responseSnippet = responseText.slice(0, 600);
-      if (response.ok || response.status === 201 || response.status === 202) {
-        const listingId = responseJson?.jobId || responseJson?.batchId || responseJson?.listingId || responseJson?.id || null;
-        return { ok: true, status: 'CONNECTED', message: `Hepsiburada HTTP ${response.status}: ${responseSnippet}`, listingUploadId: listingId ?? undefined };
+      if (!(response.ok || response.status === 201 || response.status === 202)) {
+        return {
+          ok: false,
+          status: response.status === 401 || response.status === 403 ? 'MISSING_CREDENTIALS' : 'FAILED',
+          message: `Hepsiburada urun gonderimi basarisiz. HTTP ${response.status}: ${responseText.slice(0, 500)}`,
+        };
       }
 
-      return {
-        ok: false,
-        status: response.status === 401 || response.status === 403 ? 'MISSING_CREDENTIALS' : 'FAILED',
-        message: `Hepsiburada urun gonderimi basarisiz. HTTP ${response.status}: ${responseSnippet}`,
-      };
+      const trackingId: string | null = responseJson?.data?.trackingId || responseJson?.trackingId || null;
+
+      // trackingId ile islem durumunu kontrol et (3 saniye bekle)
+      if (trackingId) {
+        await new Promise((r) => setTimeout(r, 3000));
+        try {
+          const statusUrl = new URL(`/product/api/products/import/${trackingId}`, `${apiBaseUrl.replace(/\/+$/, '')}/`);
+          statusUrl.searchParams.set('merchantId', merchantId);
+          const statusResp = await fetch(statusUrl, {
+            headers: { Accept: 'application/json', Authorization: `Basic ${auth}`, 'User-Agent': userAgent || 'ErhanFlowersERP-HB' },
+          });
+          const statusText = await statusResp.text().catch(() => '');
+          let statusJson: any;
+          try { statusJson = JSON.parse(statusText); } catch { statusJson = null; }
+
+          const statusData = statusJson?.data || statusJson;
+          const statusStr = statusData?.status || statusData?.importStatus || '';
+          const errors: string[] = statusData?.errors?.map?.((e: any) => e?.message || JSON.stringify(e)) || [];
+          const failCount: number = statusData?.failedProductCount ?? statusData?.failCount ?? 0;
+          const successCount: number = statusData?.successProductCount ?? statusData?.successCount ?? 0;
+
+          if (errors.length || failCount > 0) {
+            return {
+              ok: false,
+              status: 'FAILED',
+              message: `Hepsiburada icerik hatasi (trackingId: ${trackingId}): Basarili=${successCount} Basarisiz=${failCount} Durum=${statusStr} | ${errors.join(' | ') || statusText.slice(0, 400)}`,
+            };
+          }
+          return { ok: true, status: 'CONNECTED', message: `Hepsiburada gonderimi tamamlandi. TrackingId: ${trackingId} | Durum: ${statusStr || 'PROCESSING'} | Basarili: ${successCount}` };
+        } catch {
+          return { ok: true, status: 'CONNECTED', message: `Hepsiburada dosya kabul edildi (trackingId: ${trackingId}), durum sorgulanamadi.` };
+        }
+      }
+
+      return { ok: true, status: 'CONNECTED', message: `Hepsiburada dosya kabul edildi. Yanit: ${responseText.slice(0, 300)}` };
     } catch (error) {
       return { ok: false, status: 'FAILED', message: `Hepsiburada urun gonderimi basarisiz: ${error instanceof Error ? error.message : String(error)}` };
     }
