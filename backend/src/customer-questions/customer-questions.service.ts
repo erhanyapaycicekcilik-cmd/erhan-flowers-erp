@@ -83,7 +83,7 @@ export class CustomerQuestionsService {
         'Content-Type': 'application/json',
       };
 
-      const url = `${apiUrl}/sellers/${supplierId}/questions?status=WAITING_FOR_ACTION&size=200&page=0`;
+      const url = `${apiUrl}/suppliers/${supplierId}/questions?status=WAITING_FOR_ACTION&size=200&page=0`;
       const res = await fetch(url, { headers });
       if (!res.ok) { this.logger.warn(`Trendyol soru cekme hatasi: ${res.status}`); return; }
 
@@ -255,7 +255,7 @@ export class CustomerQuestionsService {
       const supplierId = creds.SUPPLIER_ID;
       const apiUrl = (creds.API_URL || 'https://api.trendyol.com/sapigw').replace(/\/+$/, '');
       const auth = Buffer.from(`${creds.API_KEY}:${creds.API_SECRET}`).toString('base64');
-      await fetch(`${apiUrl}/sellers/${supplierId}/questions/${externalId}/answers`, {
+      await fetch(`${apiUrl}/suppliers/${supplierId}/questions/${externalId}/answers`, {
         method: 'POST',
         headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/json', 'User-Agent': `${supplierId} - SelfIntegration` },
         body: JSON.stringify({ text: answer }),
