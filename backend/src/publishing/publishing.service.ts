@@ -569,23 +569,9 @@ export class PublishingService {
     return urls;
   }
 
-  private namedImageUrl(url: string, slug: string) {
-    if (!url || !slug) return url;
-    try {
-      const parsed = new URL(url);
-      const ext = parsed.pathname.split('.').pop()?.toLowerCase() ?? 'jpg';
-      const safeName = slug.replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').slice(0, 80);
-      const filename = parsed.pathname.split('/').pop() ?? '';
-      // Eğer URL zaten ürün adını içeriyorsa değiştirme
-      if (filename.startsWith(safeName)) return url;
-      // /uploads/... yolunu /img/:slug/:filename olarak yeniden yapılandır
-      const base = `${parsed.protocol}//${parsed.host}`;
-      const filePart = filename || `${safeName}.${ext}`;
-      const namedFile = filePart.match(/^[0-9a-f-]{36}\.|^\d{13}/) ? `${safeName}.${ext}` : filePart;
-      return `${base}/img/${safeName}/${namedFile}`;
-    } catch {
-      return url;
-    }
+  private namedImageUrl(url: string, _slug: string) {
+    // /img/ paths are not served by the backend — return original /uploads/ URL as-is
+    return url;
   }
 
   private productNameSlug(name: string) {
