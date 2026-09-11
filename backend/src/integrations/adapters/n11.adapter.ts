@@ -41,15 +41,10 @@ export class N11Adapter extends HttpMarketplaceOrderAdapter {
       currencyType: 'TL',
       preparingDay,
       shipmentTemplateName: shipmentTemplate,
-      images: images.map((url: string) => ({ url })),
+      images: images.slice(0, 8).map((url: string) => ({ url })),
       quantity: Number(p.stockQuantity ?? 0),
       sellerStockCode: stockCode,
       ...(p.barcode ? { productMainId: p.barcode } : {}),
-      attributes: [
-        ...(p.color ? [{ name: 'Renk', value: p.color }] : []),
-        ...(p.flowerType ? [{ name: 'Çiçek Türü', value: p.flowerType }] : []),
-        ...(height ? [{ name: 'Yükseklik', value: height }] : []),
-      ],
     };
 
     const apiUrl = this.env('API_URL') || 'https://api.n11.com';

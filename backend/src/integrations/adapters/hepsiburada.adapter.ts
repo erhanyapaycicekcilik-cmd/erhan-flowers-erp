@@ -25,56 +25,53 @@ export class HepsiburadaAdapter extends HttpMarketplaceOrderAdapter {
 
     const p = payload as Record<string, any>;
     const images = this.extractImages(p.images);
-    const stockCode = p.modelCode || p.barcode || '';
-    // Hepsiburada yapay çiçekler: categoryId=60001290, productTypeId=3210 (şablondan)
-    const hbCategoryId = this.env('CATEGORY_ID') || p.hepsiburadaCategoryId || '60001290';
-    const hbProductTypeId = Number(this.env('PRODUCT_TYPE_ID') || 3210);
-    // Auth: merchantId:serviceKey (Basic Auth)
-    // Katalog urun yuklemesi mpop.hepsiburada.com'a gider (listing-external degil)
+    const stockCode = (p.modelCode || p.barcode || '').toUpperCase();
+    const hbCategoryId = Number(this.env('CATEGORY_ID') || p.hepsiburadaCategoryId || 60001290);
     const hbProductPath = this.env('PRODUCT_PATH') || '/product/api/products/import';
     const apiBaseUrl = this.env('PRODUCT_API_URL') || 'https://mpop.hepsiburada.com';
     const height = this.extractHeight(p.productName, p.description);
 
-    const hbPayload: Record<string, any> = {
+    // HB katalog ürün JSON: düz alan yapısı (array içinde), fiyat Türkçe virgüllü string
+    const salePrice = Number(p.salePrice || 0);
+    const priceStr = salePrice.toFixed(2).replace('.', ',');
+    const hbProduct: Record<string, any> = {
+      categoryId: hbCategoryId,
+      merchant: merchantId,
       merchantSku: stockCode,
-      VaryantGroupID: p.modelCode || stockCode,
-      Barcode: p.barcode || undefined,
+      VaryantGroupID: (p.modelCode || stockCode).toUpperCase(),
       UrunAdi: p.productName || '',
       UrunAciklamasi: p.description || p.productName || '',
       Marka: p.brand || 'Erhan Flowers',
-      categoryId: String(hbCategoryId),
-      productTypeId: hbProductTypeId,
-      Fiyat: Number(p.salePrice || 0),
-      Stok: Number(p.stockQuantity ?? 0),
-      KDV: Number(p.vatRate ?? 20),
-      Desi: Number(p.desi || 1),
-      dispatchTime: Number(this.env('PREPARING_DAY') || 2),
-      images: images.slice(0, 10),
-      attributes: [
-        { name: 'Renk', value: p.color || 'Çok Renkli' },
-        ...(p.flowerType ? [{ name: 'Çiçek Türü', value: p.flowerType }] : []),
-        ...(height ? [{ name: 'Boy', value: height }] : []),
-        { name: 'Materyal', value: 'Plastik' },
-        { name: 'Menşei', value: p.origin || 'TR' },
-      ],
+      GarantiSuresi: 0,
+      kg: String(p.desi || 1),
+      price: priceStr,
+      stock: String(Number(p.stockQuantity ?? 0)),
+      Renk: p.color || 'Çok Renkli',
+      ...(p.flowerType ? { 'Çiçek Türü': p.flowerType } : {}),
+      ...(height ? { Boy: height } : {}),
+      ...(p.barcode ? { Barcode: p.barcode } : {}),
     };
-
-    if (!p.barcode) delete hbPayload.Barcode;
+    // Görseller: Image1, Image2, ... şeklinde düz alanlar (HB katalog formatı)
+    images.slice(0, 8).forEach((url, i) => { hbProduct[`Image${i + 1}`] = url; });
 
     const url = new URL(hbProductPath.startsWith('/') ? hbProductPath : `/${hbProductPath}`, `${apiBaseUrl.replace(/\/+$/, '')}/`);
     url.searchParams.set('merchantId', merchantId);
     const auth = Buffer.from(`${merchantId}:${secretKey}`).toString('base64');
+
+    // HB API, ürünleri multipart/form-data ile .json dosyası olarak kabul eder
+    const jsonContent = JSON.stringify([hbProduct]);
+    const formData = new FormData();
+    formData.append('file', new Blob([jsonContent], { type: 'application/json' }), 'products.json');
 
     try {
       const response = await fetch(url, {
         method: 'POST',
         headers: {
           Accept: 'application/json',
-          'Content-Type': 'application/json',
           Authorization: `Basic ${auth}`,
           'User-Agent': userAgent || 'ErhanFlowersERP-HB',
         },
-        body: JSON.stringify([hbPayload]),
+        body: formData,
       });
 
       const responseText = await response.text().catch(() => '');
@@ -89,7 +86,7 @@ export class HepsiburadaAdapter extends HttpMarketplaceOrderAdapter {
       return {
         ok: false,
         status: response.status === 401 || response.status === 403 ? 'MISSING_CREDENTIALS' : 'FAILED',
-        message: `Hepsiburada urun gonderimi basarisiz. HTTP ${response.status}: ${responseText.slice(0, 300)}`,
+        message: `Hepsiburada urun gonderimi basarisiz. HTTP ${response.status}: ${responseText.slice(0, 500)}`,
       };
     } catch (error) {
       return { ok: false, status: 'FAILED', message: `Hepsiburada urun gonderimi basarisiz: ${error instanceof Error ? error.message : String(error)}` };
