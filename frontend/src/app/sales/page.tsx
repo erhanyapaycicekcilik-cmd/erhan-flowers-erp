@@ -116,7 +116,7 @@ const emptyPayment = {
 };
 
 const emptyDelivery = {
-  method: 'Kendi aracımızla teslim',
+  method: STORE_PICKUP,
   date: '',
   status: 'Bekliyor',
   staff: '',
@@ -218,6 +218,18 @@ function SalesCenterPageContent() {
       .catch((error) => setMessage(error instanceof Error ? error.message : 'QR barkodu aranirken hata olustu.'));
   }, [quickBarcode]);
 
+  // Canlı arama — 400ms debounce
+  useEffect(() => {
+    const q = query.trim();
+    if (q.length < 2) { setResults([]); return; }
+    const timer = setTimeout(() => {
+      api<SaleProduct[]>(`/sales/products/search?q=${encodeURIComponent(q)}`)
+        .then((data) => setResults(data))
+        .catch(() => {});
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [query]);
+
   async function loadSales() {
     try {
       setSales(await api<SaleListRow[]>('/sales'));
@@ -260,13 +272,18 @@ function SalesCenterPageContent() {
     setResults(data);
   }
 
-  function addItem(product: SaleProduct) {
+  function addItem(product: SaleProduct | SaleItem) {
     setItems((current) => {
       const existing = current.find((item) => item.id === product.id);
-      if (existing) {
+      if (existing && product.id > 0) {
         return current.map((item) => (item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item));
       }
-      return [...current, { ...product, quantity: 1, unitPrice: product.salePrice || product.trendyolSalePrice || 0, discount: 0 }];
+      const asItem = product as SaleItem;
+      if ('quantity' in asItem && asItem.id < 0) {
+        return [...current, asItem];
+      }
+      const p = product as SaleProduct;
+      return [...current, { ...p, quantity: 1, unitPrice: p.salePrice || p.trendyolSalePrice || 0, discount: 0 }];
     });
   }
 
@@ -1066,7 +1083,7 @@ function QuickSalePanel({
   setQuery: Dispatch<SetStateAction<string>>;
   searchProducts: (event: FormEvent) => Promise<void>;
   results: SaleProduct[];
-  addItem: (product: SaleProduct) => void;
+  addItem: (product: SaleProduct | SaleItem) => void;
   items: SaleItem[];
   updateItem: (id: number, data: Partial<SaleItem>) => void;
   removeItem: (id: number) => void;
@@ -1082,6 +1099,73 @@ function QuickSalePanel({
   sourceOptions: Array<{ id: number; code: string; name: string; isActive: boolean }>;
 }) {
   const isPickup = delivery.method === STORE_PICKUP;
+  const [manualName, setManualName] = useState('');
+  const [manualPrice, setManualPrice] = useState(0);
+  const [manualQty, setManualQty] = useState(1);
+  const cartRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  // Seçili ürün: adet+fiyat onayı için bekleyen ürün
+  const [pendingProduct, setPendingProduct] = useState<(SaleProduct & { pendingQty: number; pendingPrice: number }) | null>(null);
+
+  function selectProduct(product: SaleProduct) {
+    setPendingProduct({ ...product, pendingQty: 1, pendingPrice: product.salePrice || product.trendyolSalePrice || 0 });
+  }
+
+  function confirmPending(e: FormEvent) {
+    e.preventDefault();
+    if (!pendingProduct) return;
+    addItem({ ...pendingProduct, quantity: pendingProduct.pendingQty, unitPrice: pendingProduct.pendingPrice, discount: 0 } as unknown as SaleItem);
+    setPendingProduct(null);
+    setQuery('');
+    setTimeout(() => {
+      cartRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      searchInputRef.current?.focus();
+    }, 50);
+  }
+
+  function addAndClear(product: SaleProduct | SaleItem) {
+    addItem(product);
+    setQuery('');
+    // Küçük gecikme ile sepete kaydır ve arama kutusuna odaklan
+    setTimeout(() => {
+      cartRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      searchInputRef.current?.focus();
+    }, 50);
+  }
+
+  function addManualQuickItem(e: FormEvent) {
+    e.preventDefault();
+    if (!manualName.trim()) return;
+    const item: SaleItem = {
+      id: -Date.now(),
+      variantId: null,
+      barcode: '',
+      productName: manualName.trim(),
+      originalProductName: manualName.trim(),
+      currentModelCode: null,
+      proposedModelCode: null,
+      supplierStockCode: null,
+      categoryName: 'Manuel',
+      familyName: null,
+      size: null,
+      pot: null,
+      stockQuantity: 0,
+      stockCardId: null,
+      stockUnit: 'Adet',
+      salePrice: manualPrice,
+      trendyolSalePrice: manualPrice,
+      trendyolProductUrl: null,
+      imageUrl: null,
+      quantity: Math.max(1, manualQty),
+      unitPrice: manualPrice,
+      discount: 0,
+      stockFulfillmentType: 'NON_STOCK_SERVICE',
+    };
+    addAndClear(item);
+    setManualName('');
+    setManualPrice(0);
+    setManualQty(1);
+  }
 
   function selectDeliveryMode(pickup: boolean) {
     setDelivery((current) => ({ ...current, method: pickup ? STORE_PICKUP : (current.method === STORE_PICKUP ? 'Kargo' : current.method) }));
@@ -1101,7 +1185,7 @@ function QuickSalePanel({
   }
 
   const payment = payments[0] ?? emptyPayment;
-  const canComplete = items.length > 0 && customer.firstName.trim().length > 0 && customer.phone.trim().length > 0 && (isPickup || (address.city.trim() && address.district.trim() && address.fullAddress.trim()));
+  const canComplete = items.length > 0 && (isPickup || (customer.firstName.trim().length > 0 && customer.phone.trim().length > 0 && address.city.trim() && address.district.trim() && address.fullAddress.trim()));
 
   return (
     <section className="panel space-y-5 border-2 border-brand/20 bg-white p-6 shadow-sm">
@@ -1129,30 +1213,85 @@ function QuickSalePanel({
           Ürün Seç
         </div>
         <form onSubmit={searchProducts} className="mb-3 grid gap-2 md:grid-cols-[1fr_auto]">
-          <input className="field" placeholder="Barkod, model kodu veya ürün adı yaz" value={query} onChange={(e) => setQuery(e.target.value)} autoFocus />
+          <input ref={searchInputRef} className="field" placeholder="Ürün adı, barkod veya model kodu yaz" value={query} onChange={(e) => setQuery(e.target.value)} autoFocus />
           <button className="btn btn-primary" type="submit">
             <Search size={17} />
             Ara
           </button>
         </form>
-        {results.length > 0 && (
-          <div className="grid max-h-72 gap-2 overflow-y-auto rounded-md border border-line p-2">
+        {results.length > 0 && !pendingProduct && (
+          <div className="grid max-h-64 gap-1 overflow-y-auto rounded-md border border-line p-2">
             {results.map((product) => (
-              <button key={product.id} type="button" className="flex items-center gap-3 rounded-md border border-line bg-white p-2 text-left hover:border-brand" onClick={() => addItem(product)}>
-                {product.imageUrl ? <img src={apiFileUrl(product.imageUrl)} alt="" className="h-12 w-12 rounded object-cover" /> : <div className="h-12 w-12 rounded bg-slate-100" />}
+              <button key={product.id} type="button" className="flex items-center gap-3 rounded-md border border-transparent bg-white p-2 text-left hover:border-brand hover:bg-brand/5" onClick={() => selectProduct(product)}>
+                {product.imageUrl ? <img src={apiFileUrl(product.imageUrl)} alt="" className="h-10 w-10 flex-shrink-0 rounded object-cover" /> : <div className="h-10 w-10 flex-shrink-0 rounded bg-slate-100" />}
                 <div className="min-w-0 flex-1">
-                  <div className="truncate font-semibold text-ink">{product.productName}</div>
-                  <div className="text-xs text-slate-500">Stok: {product.stockQuantity} {product.stockUnit || 'Adet'} · Fiyat: {formatMoney(product.salePrice || product.trendyolSalePrice)}</div>
+                  <div className="truncate text-sm font-semibold text-ink">{product.productName}</div>
+                  <div className="text-xs text-slate-500">
+                    {product.categoryName ? <span className="mr-1 rounded bg-slate-100 px-1">{product.categoryName}</span> : null}
+                    Stok: {product.stockQuantity} {product.stockUnit || 'Adet'} · <span className="font-semibold text-brand">{formatMoney(product.salePrice || product.trendyolSalePrice)}</span>
+                  </div>
                 </div>
-                <Plus className="text-brand" size={20} />
+                <Plus className="text-brand flex-shrink-0" size={18} />
               </button>
             ))}
           </div>
         )}
+        {query.trim().length > 1 && results.length === 0 && !pendingProduct && (
+          <div className="text-sm text-slate-500">Sonuç bulunamadı.</div>
+        )}
+
+        {/* Seçili ürün: adet + fiyat onayla */}
+        {pendingProduct && (
+          <form onSubmit={confirmPending} className="rounded-md border-2 border-brand/30 bg-brand/5 p-3">
+            <div className="mb-2 flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <div className="font-semibold text-ink">{pendingProduct.productName}</div>
+                <div className="text-xs text-slate-500">
+                  Stok: {pendingProduct.stockQuantity} {pendingProduct.stockUnit || 'Adet'}
+                  {pendingProduct.categoryName ? ` · ${pendingProduct.categoryName}` : ''}
+                </div>
+              </div>
+              <button type="button" className="text-xs text-slate-400 hover:text-slate-700" onClick={() => setPendingProduct(null)}>✕ iptal</button>
+            </div>
+            <div className="grid grid-cols-[80px_1fr_auto] gap-2">
+              <div>
+                <label className="mb-1 block text-[10px] font-bold uppercase text-slate-400">Adet</label>
+                <input
+                  className="field"
+                  type="number"
+                  min="1"
+                  autoFocus
+                  value={pendingProduct.pendingQty}
+                  onChange={(e) => setPendingProduct((p) => p ? { ...p, pendingQty: Number(e.target.value) } : p)}
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-[10px] font-bold uppercase text-slate-400">Satış Fiyatı (₺)</label>
+                <input
+                  className="field"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={pendingProduct.pendingPrice}
+                  onChange={(e) => setPendingProduct((p) => p ? { ...p, pendingPrice: Number(e.target.value) } : p)}
+                />
+              </div>
+              <div className="flex items-end">
+                <button className="btn btn-primary h-10 justify-center px-4" type="submit">
+                  <Plus size={16} />
+                  Ekle
+                </button>
+              </div>
+            </div>
+            <div className="mt-2 text-right text-sm font-bold text-ink">
+              Tutar: {formatMoney(pendingProduct.pendingQty * pendingProduct.pendingPrice)}
+            </div>
+          </form>
+        )}
       </div>
 
-      <div>
-        <div className="mb-2 text-sm font-bold text-ink">Sepet</div>
+      <div ref={cartRef}>
+        <div className="mb-2 text-sm font-bold text-ink">Sepet {items.length > 0 && <span className="ml-1 rounded-full bg-brand px-2 py-0.5 text-xs text-white">{items.length}</span>}</div>
         <div className="space-y-2">
           {items.map((item) => (
             <div key={item.id} className="grid items-center gap-2 rounded-md border border-line p-3 sm:grid-cols-[1fr_90px_140px_44px]">
@@ -1179,14 +1318,14 @@ function QuickSalePanel({
 
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
-          <label className="mb-1 block text-xs font-bold uppercase text-slate-400">Ad Soyad *</label>
+          <label className="mb-1 block text-xs font-bold uppercase text-slate-400">Ad Soyad {isPickup ? '(isteğe bağlı)' : '*'}</label>
           <div className="grid grid-cols-2 gap-2">
             <input className="field" placeholder="Ad" value={customer.firstName} onChange={(e) => setCustomer({ ...customer, firstName: e.target.value })} />
             <input className="field" placeholder="Soyad" value={customer.lastName} onChange={(e) => setCustomer({ ...customer, lastName: e.target.value })} />
           </div>
         </div>
         <div>
-          <label className="mb-1 block text-xs font-bold uppercase text-slate-400">Telefon *</label>
+          <label className="mb-1 block text-xs font-bold uppercase text-slate-400">Telefon {isPickup ? '(isteğe bağlı)' : '*'}</label>
           <div className="grid grid-cols-[1fr_auto] gap-2">
             <input className="field" placeholder="05xx xxx xx xx" value={customer.phone} onChange={(e) => setCustomer({ ...customer, phone: e.target.value })} onBlur={() => findCustomerByPhone()} />
             <button className="btn btn-secondary justify-center" type="button" onClick={() => findCustomerByPhone()} title="Müşteri bul">
@@ -1195,6 +1334,24 @@ function QuickSalePanel({
           </div>
           {customerSummary && <div className="mt-1 text-xs font-semibold text-emerald-700">✓ {customerSummary.displayName} kayıtlı müşteri</div>}
         </div>
+        <div className="sm:col-span-2">
+          <label className="mb-1 block text-xs font-bold uppercase text-slate-400">E-posta (isteğe bağlı)</label>
+          <input className="field" placeholder="ornek@mail.com" value={customer.email} onChange={(e) => setCustomer({ ...customer, email: e.target.value })} />
+        </div>
+      </div>
+
+      {/* Manuel ürün ekleme */}
+      <div>
+        <div className="mb-2 text-sm font-bold text-ink">Stokta Olmayan / Manuel Ürün Ekle</div>
+        <form onSubmit={addManualQuickItem} className="grid gap-2 sm:grid-cols-[1fr_110px_80px_auto]">
+          <input className="field" placeholder="Ürün adı" value={manualName} onChange={(e) => setManualName(e.target.value)} />
+          <input className="field" type="number" min="0" placeholder="Fiyat" value={manualPrice || ''} onChange={(e) => setManualPrice(Number(e.target.value))} />
+          <input className="field" type="number" min="1" placeholder="Adet" value={manualQty} onChange={(e) => setManualQty(Number(e.target.value))} />
+          <button className="btn btn-secondary justify-center" type="submit" disabled={!manualName.trim()}>
+            <Plus size={17} />
+            Ekle
+          </button>
+        </form>
       </div>
 
       <div>

@@ -130,7 +130,58 @@ export class SalesService {
       };
     });
 
-    return [...variantResults, ...productResults].slice(0, 30);
+    // Stok kartlarını doğrudan ara — saksı/toprak/aksesuar gibi ürünler sadece burada olabilir
+    const usedStockCardIds = new Set([
+      ...variantResults.map((r) => r.stockCardId),
+      ...productResults.map((r) => r.stockCardId),
+    ].filter(Boolean) as number[]);
+
+    const directStockCards = await this.prisma.stockCard.findMany({
+      where: {
+        status: 'ACTIVE',
+        OR: [
+          { name: { contains: cleanQuery, mode: 'insensitive' } },
+          { sku: { contains: cleanQuery, mode: 'insensitive' } },
+          { barcode: { contains: cleanQuery, mode: 'insensitive' } },
+          { oldModelCode: { contains: cleanQuery, mode: 'insensitive' } },
+          { category: { contains: cleanQuery, mode: 'insensitive' } },
+          { productFamily: { contains: cleanQuery, mode: 'insensitive' } },
+        ],
+      },
+      select: {
+        id: true, name: true, sku: true, barcode: true, oldModelCode: true,
+        category: true, productFamily: true, size: true, potType: true,
+        stockQuantity: true, unit: true, salePrice: true, imagePath: true,
+      },
+      orderBy: { updatedAt: 'desc' },
+      take: 20,
+    });
+
+    const stockCardResults = directStockCards
+      .filter((card) => !usedStockCardIds.has(card.id))
+      .map((card) => ({
+        id: -(card.id + 1_000_000), // negatif ve büyük alan — product ID'leriyle çakışmasın
+        variantId: null,
+        barcode: card.barcode ?? card.sku ?? '',
+        productName: card.name,
+        originalProductName: card.name,
+        currentModelCode: card.sku ?? card.oldModelCode ?? null,
+        proposedModelCode: card.sku ?? null,
+        supplierStockCode: null,
+        categoryName: card.category ?? card.productFamily ?? null,
+        familyName: card.productFamily ?? null,
+        size: card.size ?? null,
+        pot: card.potType ?? null,
+        stockQuantity: Number(card.stockQuantity ?? 0),
+        stockUnit: card.unit ?? 'Adet',
+        stockCardId: card.id,
+        salePrice: Number(card.salePrice ?? 0),
+        trendyolSalePrice: Number(card.salePrice ?? 0),
+        trendyolProductUrl: null,
+        imageUrl: card.imagePath ?? null,
+      }));
+
+    return [...variantResults, ...productResults, ...stockCardResults].slice(0, 40);
   }
 
   async searchCustomers(query: string) {
