@@ -1,11 +1,16 @@
-import { Controller, Get, NotFoundException, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Post, Query, UseGuards } from '@nestjs/common';
+
 import { AuthGuard } from '../auth/auth.guard';
 import { PublicCatalogService } from './public-catalog.service';
+import { TrendyolProductSyncService } from './trendyol-product-sync.service';
 
 // AuthGuard YOK — herkese açık müşteri kataloğu
 @Controller('public/catalog')
 export class PublicCatalogController {
-  constructor(private readonly catalog: PublicCatalogService) {}
+  constructor(
+    private readonly catalog: PublicCatalogService,
+    private readonly trendyolSync: TrendyolProductSyncService,
+  ) {}
 
   @Get('categories')
   listCategories() {
@@ -43,6 +48,14 @@ export class PublicCatalogController {
     return product;
   }
 
+  // Fotoğrafla fiyat sorgulama — Gemini görsel tanıma ile ürün ara (şifresiz, mobil kullanımı)
+  @Post('price-lookup')
+  async priceLookup(@Body() body: { imageBase64?: string; mimeType?: string }) {
+    if (!body.imageBase64) throw new BadRequestException('imageBase64 gerekli.');
+    const mimeType = body.mimeType || 'image/jpeg';
+    return this.catalog.lookupByImage(body.imageBase64, mimeType);
+  }
+
   // Dükkan barkod okutma — sadece shopPrice döner
   @Get('shop-price/:barcode')
   async getShopPrice(@Param('barcode') barcode: string) {
@@ -56,5 +69,16 @@ export class PublicCatalogController {
   @UseGuards(AuthGuard)
   syncSitePrices() {
     return this.catalog.bulkSyncSitePriceFromTrendyol();
+  }
+
+  // Admin: Trendyol ürünlerini anında çek
+  // REVALIDATE_SECRET ile korunur — JWT gerekmez, florayapay admin panelinden çağrılabilir
+  @Post('admin/trendyol-sync')
+  runTrendyolSync(@Query('secret') secret?: string) {
+    const expected = process.env.REVALIDATE_SECRET || 'dev-secret-local';
+    if (secret !== expected) {
+      return { error: 'Unauthorized' };
+    }
+    return this.trendyolSync.syncNow();
   }
 }

@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 
 // Müşteriye güvenli gösterilebilecek alanlar.
@@ -47,7 +48,88 @@ function productSlug(name: string, modelCode: string) {
 
 @Injectable()
 export class PublicCatalogService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly config: ConfigService,
+  ) {}
+
+  async lookupByImage(imageBase64: string, mimeType: string) {
+    const apiKey = this.config.get<string>('GEMINI_API_KEY')?.trim();
+    let searchTerm = '';
+
+    if (apiKey) {
+      try {
+        const body = {
+          contents: [{
+            parts: [
+              { text: 'Bu görseldeki yapay çiçek veya dekoratif ürünün adını Türkçe olarak yaz. Sadece kısa ürün adını yaz, başka bir şey yazma. Örnek: "Yapay Bambu Ağaç 180 cm" veya "Yapay Gül Buketi Kırmızı"' },
+              { inline_data: { mime_type: mimeType, data: imageBase64 } },
+            ],
+          }],
+          generationConfig: { maxOutputTokens: 60, temperature: 0.1 },
+        };
+        const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        if (resp.ok) {
+          const data = await resp.json() as any;
+          searchTerm = (data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '').trim().slice(0, 100);
+        }
+      } catch { /* Gemini hatası — metin aramasına düş */ }
+    }
+
+    if (!searchTerm) return { searchTerm: '', products: [] };
+
+    // Ürün adından anahtar kelimeler çıkar ve DB'de ara
+    const words = searchTerm.split(/\s+/).filter((w) => w.length > 2).slice(0, 4);
+    const products = await this.prisma.product.findMany({
+      where: {
+        AND: words.map((w) => ({ productName: { contains: w, mode: 'insensitive' as const } })),
+        status: 'ACTIVE',
+      },
+      select: {
+        id: true,
+        productName: true,
+        modelCode: true,
+        barcode: true,
+        shopPrice: true,
+        sitePrice: true,
+        marketPrice: true,
+        imageUrls: true,
+        category: { select: { name: true } },
+      },
+      take: 5,
+      orderBy: { shopPrice: 'desc' },
+    });
+
+    // Sonuç yoksa ilk kelimeyle tekrar dene
+    if (products.length === 0 && words.length > 1) {
+      const fallback = await this.prisma.product.findMany({
+        where: {
+          productName: { contains: words[0], mode: 'insensitive' },
+          status: 'ACTIVE',
+        },
+        select: {
+          id: true,
+          productName: true,
+          modelCode: true,
+          barcode: true,
+          shopPrice: true,
+          sitePrice: true,
+          marketPrice: true,
+          imageUrls: true,
+          category: { select: { name: true } },
+        },
+        take: 5,
+        orderBy: { shopPrice: 'desc' },
+      });
+      return { searchTerm, products: fallback };
+    }
+
+    return { searchTerm, products };
+  }
 
   async listCategories() {
     const categories = await this.prisma.category.findMany({
