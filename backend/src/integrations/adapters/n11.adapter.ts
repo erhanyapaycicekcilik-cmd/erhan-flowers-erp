@@ -114,9 +114,15 @@ export class N11Adapter extends HttpMarketplaceOrderAdapter {
           const skus: any[] = detailJson?.skus?.content || [];
           const failed = skus.filter((s: any) => s.status === 'FAIL');
           const succeeded = skus.filter((s: any) => s.status === 'SUCCESS');
+
+          // IN_QUEUE = N11 gorevi kabul etti, isleniyor → basarili say
+          if (detailStatus === 'IN_QUEUE' || taskStatus === 'IN_QUEUE') {
+            return { ok: true, status: 'CONNECTED', message: `N11 urun N11 kuyruguna alindi (isleniyor). Task ${taskId}`, batchRequestId: String(taskId) };
+          }
+
           if (failed.length > 0) {
             const errs = failed.map((s: any) => (s.reasons || []).join(', ')).join(' | ');
-            // "mevcuttur" = ürün zaten N11'de mevcut, productMainId=modelCode doğru → başarılı say
+            // "mevcuttur" = ürün zaten N11'de mevcut → başarılı say
             if (errs.includes('mevcuttur') || errs.includes('kullanılmaktadır') || errs.includes('already exists')) {
               return { ok: true, status: 'CONNECTED', message: `N11 urun zaten mevcut (guncelleme yapilmadi). StokKodu: ${modelCode}` };
             }
