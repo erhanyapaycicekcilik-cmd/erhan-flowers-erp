@@ -2,9 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { RefreshCw, Package, Clock, ExternalLink, Camera, Printer, ChevronDown, ChevronUp, Phone, MapPin, CheckCircle } from 'lucide-react';
-import { apiBaseUrl } from '@/lib/api';
 import { AdminShell } from '@/components/AdminShell';
-import { api, apiFileUrl } from '@/lib/api';
+import { api, apiFileUrl, apiBaseUrl } from '@/lib/api';
 
 type OrderItem = {
   id?: number;
@@ -240,21 +239,24 @@ function OrderCard({ order, onStatusChange }: { order: OrderRow; onStatusChange:
     if (!file) return;
     setUploading(true);
     try {
-      const token = typeof window !== 'undefined' ? (localStorage.getItem(`auth_token_${window.location.hostname}_${window.location.port || 'default'}`) ?? localStorage.getItem('auth_token')) : null;
+      // Upload photo
       const form = new FormData();
       form.append('file', file);
+      const token = typeof window !== 'undefined'
+        ? (localStorage.getItem(`auth_token_${window.location.hostname}_${window.location.port || 'default'}`) ?? localStorage.getItem('auth_token'))
+        : null;
       await fetch(`${apiBaseUrl}/media/upload`, {
         method: 'POST',
         headers: token ? { Authorization: `Bearer ${token}` } : {},
         body: form,
       });
-      await fetch(`${apiBaseUrl}/sales/${order.id}/status`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-        body: JSON.stringify({ status: 'READY', note: 'Ürün hazırlandı, fotoğraf yüklendi.' }),
-      });
+      // Update status to READY
+      await api(`/sales/${order.id}/status`, { method: 'POST', json: { status: 'READY', note: 'Ürün hazırlandı, fotoğraf yüklendi.' } });
       setDone(true);
       onStatusChange(order.id, 'READY');
+    } catch (err) {
+      console.error('Hazır yapma hatası:', err);
+      alert('İşlem başarısız, tekrar deneyin.');
     } finally {
       setUploading(false);
     }
