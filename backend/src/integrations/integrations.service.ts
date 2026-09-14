@@ -492,7 +492,7 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
               'quantity', i.quantity,
               'unitPrice', i.unit_price,
               'lineTotal', i.line_total,
-              'imagePath', COALESCE(sc.image_path, sc.external_image_url, i.external_image_url),
+              'imagePath', COALESCE(sc.image_path, sc.external_image_url, i.external_image_url, tpv.images->>0),
               'color', sc.color,
               'trendyolUrl', tpv.trendyol_product_url
             )
