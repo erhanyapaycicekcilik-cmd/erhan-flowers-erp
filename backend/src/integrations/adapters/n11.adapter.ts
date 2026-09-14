@@ -116,6 +116,10 @@ export class N11Adapter extends HttpMarketplaceOrderAdapter {
           const succeeded = skus.filter((s: any) => s.status === 'SUCCESS');
           if (failed.length > 0) {
             const errs = failed.map((s: any) => (s.reasons || []).join(', ')).join(' | ');
+            // "mevcuttur" = ürün zaten N11'de mevcut, productMainId=modelCode doğru → başarılı say
+            if (errs.includes('mevcuttur') || errs.includes('kullanılmaktadır') || errs.includes('already exists')) {
+              return { ok: true, status: 'CONNECTED', message: `N11 urun zaten mevcut (guncelleme yapilmadi). StokKodu: ${modelCode}` };
+            }
             return { ok: false, status: 'FAILED', message: `N11 urun hatali. Task ${taskId} | Durum: ${detailStatus} | Hatalar: ${errs}` };
           }
           return { ok: true, status: 'CONNECTED', message: `N11 urun gonderimi basarili. Task ${taskId} | Durum: ${detailStatus} | Basarili: ${succeeded.length || reasons.join(', ')}`, batchRequestId: String(taskId) };
