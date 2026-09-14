@@ -13,6 +13,7 @@ import {
   Factory,
   FileImage,
   Home,
+  Edit3,
   LayoutGrid,
   ListChecks,
   LogOut,
@@ -83,6 +84,7 @@ const navGroups: { section: string; icon: LucideIcon; items: NavItem[] }[] = [
       { href: '/eft-yonetim', label: 'EFT Ödemeleri', icon: Landmark, roles: OWNER_MANAGER },
       { href: '/musteri-sorulari', label: 'Müşteri Soruları', icon: MessageSquare, roles: OWNER_MANAGER },
       { href: '/kategoriler', label: 'Kategoriler', icon: LayoutGrid, roles: OWNER_MANAGER },
+      { href: '/urun-duzenle', label: 'Ürün Düzenle', icon: Edit3, roles: OWNER_MANAGER },
     ],
   },
   {
