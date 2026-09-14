@@ -22,7 +22,10 @@ export class N11Adapter extends HttpMarketplaceOrderAdapter {
 
     const p = payload as Record<string, any>;
     const images = this.extractImages(p.images);
-    const stockCode = p.modelCode || p.barcode || '';
+    // modelCode: tüm platformlarda aynı (SD-XXXX, YC-XXXX formatı)
+    // stockCode (N11 seller stock code): barkod kullan — benzersiz, başka satıcıyla çakışmaz
+    const modelCode = (p.modelCode || p.barcode || '').toUpperCase();
+    const stockCode = p.barcode || p.modelCode || '';
     // N11 yapay çiçek kategorisi: 1000675 (şablondan alındı)
     const n11CategoryId = Number(this.env('CATEGORY_ID') || p.n11CategoryId || 1000675);
     const preparingDay = Number(this.env('PREPARING_DAY') || 2);
@@ -45,7 +48,7 @@ export class N11Adapter extends HttpMarketplaceOrderAdapter {
       description: safeDesc,
       categoryId: n11CategoryId,
       currencyType: 'TL',
-      productMainId: (p.modelCode || stockCode).toUpperCase(),
+      productMainId: modelCode,
       preparingDay,
       shipmentTemplate,
       stockCode,
