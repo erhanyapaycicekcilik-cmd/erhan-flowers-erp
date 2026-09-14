@@ -40,36 +40,35 @@ export class N11Adapter extends HttpMarketplaceOrderAdapter {
     const quantity = Number(p.stockQuantity ?? 0);
     const brand = (p.brand || 'Erhan Flowers').slice(0, 100).trim();
 
-    const imageList = images.slice(0, 8).map((url: string, i: number) => ({
-      order: i + 1,
-      url,
-    }));
+    const imageList = images.slice(0, 8).map((url: string) => ({ url }));
 
-    const body = {
+    // N11 REST API productList formatı
+    const product = {
       productSellerCode: modelCode,
       title,
       subtitle: title,
       description: safeDesc,
       category: { id: n11CategoryId },
       price: salePrice,
-      listingPrice: effectiveListPrice,
-      currencyType: 'TL',
+      listPrice: effectiveListPrice,
+      currencyType: 1,
       images: imageList,
-      approvalStatus: 'WaitingForApproval',
+      approvalStatus: 1,
       preparingDay,
       attributes: [{ name: 'Marka', value: brand }],
-      skuList: [
+      stockItems: [
         {
           sellerStockCode: modelCode,
           quantity,
           salePrice: salePrice,
           listPrice: effectiveListPrice,
-          // productMainId = modelCode → N11 REST katalogla eşleştirme yapmaz
+          // productMainId = modelCode → N11 gerçek barkod ile katalog eşleştirme yapmaz
           productMainId: modelCode,
-          images: imageList,
         },
       ],
     };
+
+    const body = { productList: [product] };
 
     try {
       const apiUrl = this.env('API_URL') || 'https://api.n11.com';
