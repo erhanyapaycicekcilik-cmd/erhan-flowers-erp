@@ -1,7 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { RefreshCw, Package, Clock, ExternalLink } from 'lucide-react';
+import { RefreshCw, Package, Clock, ExternalLink, Camera, Printer, ChevronDown, ChevronUp, Phone, MapPin, CheckCircle } from 'lucide-react';
+import { apiBaseUrl } from '@/lib/api';
 import { AdminShell } from '@/components/AdminShell';
 import { api, apiFileUrl } from '@/lib/api';
 
@@ -23,8 +24,10 @@ type OrderRow = {
   platform: string;
   status: string;
   customerName: string;
+  phone?: string | null;
   city?: string | null;
   district?: string | null;
+  fullAddress?: string | null;
   quantity?: number | string | null;
   orderDate?: string | null;
   deliveryDueAt?: string | null;
@@ -109,6 +112,10 @@ export default function StaffOrdersPage() {
   const [category, setCategory] = useState('all');
   const [search, setSearch] = useState('');
 
+  function handleStatusChange(id: number, status: string) {
+    setOrders(prev => prev.map(o => o.id === id ? { ...o, status } : o));
+  }
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -190,7 +197,7 @@ export default function StaffOrdersPage() {
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {filtered.map((order) => (
-              <OrderCard key={order.id} order={order} />
+              <OrderCard key={order.id} order={order} onStatusChange={handleStatusChange} />
             ))}
             {!filtered.length && (
               <div className="col-span-full text-center text-slate-400 py-12">Sipariş bulunamadı</div>
@@ -207,28 +214,85 @@ function itemImageSrc(item: OrderItem): string | null {
   return item.imagePath.startsWith('http') ? item.imagePath : apiFileUrl(item.imagePath);
 }
 
-function OrderCard({ order }: { order: OrderRow }) {
+function OrderCard({ order, onStatusChange }: { order: OrderRow; onStatusChange: (id: number, status: string) => void }) {
   const countdown = useCountdown(order.deliveryDueAt, order.status);
   const isLate = countdown?.isLate ?? false;
   const isUrgent = countdown?.isUrgent ?? false;
   const [activeIdx, setActiveIdx] = useState(0);
+  const [showDetails, setShowDetails] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [done, setDone] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const itemsWithImg = order.items.filter((i) => i.imagePath);
   const activeItem = itemsWithImg[activeIdx] ?? order.items[activeIdx] ?? order.items[0];
   const activeSrc = itemsWithImg.length > 0 ? itemImageSrc(itemsWithImg[activeIdx] ?? itemsWithImg[0]) : null;
 
-  // Trendyol URL: prefer stored url, fall back to search by barcode
   const trendyolUrl =
     activeItem?.trendyolUrl ??
     order.items.find((i) => i.trendyolUrl)?.trendyolUrl ??
-    (activeItem?.barcode
-      ? `https://www.trendyol.com/sr?q=${encodeURIComponent(activeItem.barcode)}`
-      : order.items[0]?.barcode
-        ? `https://www.trendyol.com/sr?q=${encodeURIComponent(order.items[0].barcode)}`
-        : null);
+    (activeItem?.barcode ? `https://www.trendyol.com/sr?q=${encodeURIComponent(activeItem.barcode)}` :
+      order.items[0]?.barcode ? `https://www.trendyol.com/sr?q=${encodeURIComponent(order.items[0].barcode ?? '')}` : null);
+
+  const isReady = order.status === 'READY' || order.status === 'Kargoya Hazır' || done;
+
+  async function handlePhoto(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const token = typeof window !== 'undefined' ? (localStorage.getItem(`auth_token_${window.location.hostname}_${window.location.port || 'default'}`) ?? localStorage.getItem('auth_token')) : null;
+      const form = new FormData();
+      form.append('file', file);
+      await fetch(`${apiBaseUrl}/media/upload`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: form,
+      });
+      await fetch(`${apiBaseUrl}/sales/${order.id}/status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ status: 'READY', note: 'Ürün hazırlandı, fotoğraf yüklendi.' }),
+      });
+      setDone(true);
+      onStatusChange(order.id, 'READY');
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  function handlePrint() {
+    const win = window.open('', '_blank', 'width=420,height=600');
+    if (!win) return;
+    const itemsHtml = order.items.map(item => `
+      <div style="margin-bottom:6px">
+        <b>${item.productName ?? ''}</b>
+        ${item.color ? `<span style="color:#666"> · ${item.color}</span>` : ''}
+        ${item.variationText ? `<span style="color:#666"> · ${item.variationText}</span>` : ''}
+        ${Number(item.quantity) > 1 ? `<b> ×${item.quantity}</b>` : ''}
+      </div>`).join('');
+    win.document.write(`<html><head><title>${order.saleNumber}</title>
+      <style>body{font-family:sans-serif;padding:24px;font-size:14px}h2{margin:0 0 8px}hr{margin:12px 0}p{margin:4px 0}</style>
+      </head><body>
+      <h2>${order.saleNumber}</h2>
+      <p><b>Müşteri:</b> ${order.customerName}</p>
+      ${order.phone ? `<p><b>Tel:</b> ${order.phone}</p>` : ''}
+      ${order.fullAddress ? `<p><b>Adres:</b> ${order.fullAddress}</p>` : ''}
+      ${[order.city, order.district].filter(Boolean).length ? `<p>${[order.city, order.district].filter(Boolean).join(' / ')}</p>` : ''}
+      <hr/>
+      <p><b>Ürünler:</b></p>
+      ${itemsHtml}
+      <hr/>
+      <p><b>Sipariş:</b> ${order.orderDate ? new Date(order.orderDate).toLocaleDateString('tr-TR') : '-'}</p>
+      ${order.deliveryDueAt ? `<p><b>Son çıkış:</b> ${new Date(order.deliveryDueAt).toLocaleDateString('tr-TR')}</p>` : ''}
+      ${order.cargoProvider ? `<p><b>Kargo:</b> ${order.cargoProvider}</p>` : ''}
+      <script>window.onload=()=>window.print()</script>
+      </body></html>`);
+    win.document.close();
+  }
 
   return (
-    <div className={`panel overflow-hidden flex flex-col ${isLate ? 'border-red-400 border-2' : isUrgent ? 'border-orange-400 border-2' : ''}`}>
+    <div className={`panel overflow-hidden flex flex-col ${isLate ? 'border-red-400 border-2' : isUrgent ? 'border-orange-400 border-2' : isReady ? 'border-green-400 border-2' : ''}`}>
 
       {/* Ana görsel */}
       <div className="relative bg-slate-100" style={{ aspectRatio: '1/1' }}>
@@ -239,38 +303,30 @@ function OrderCard({ order }: { order: OrderRow }) {
             <Package size={56} />
           </div>
         )}
-        {/* Durum badge */}
         <span className={`absolute top-2 left-2 text-xs font-bold px-2 py-1 rounded-full ${
-          order.status === 'Yeni' ? 'bg-blue-500 text-white' :
-          order.status === 'İşleme Alındı' ? 'bg-amber-500 text-white' :
-          order.status === 'Kargoya Hazır' ? 'bg-green-500 text-white' :
+          isReady ? 'bg-green-500 text-white' :
+          order.status === 'CONFIRMED' ? 'bg-blue-500 text-white' :
+          order.status === 'PREPARING' ? 'bg-amber-500 text-white' :
           'bg-slate-500 text-white'
-        }`}>{order.status}</span>
-        {/* Trendyol link */}
+        }`}>{isReady ? 'Hazır' : order.status}</span>
+
         {order.platform === 'TRENDYOL' && trendyolUrl && (
-          <a
-            href={trendyolUrl}
-            target="_blank"
-            rel="noopener noreferrer"
+          <a href={trendyolUrl} target="_blank" rel="noopener noreferrer"
             className="absolute top-2 right-2 bg-orange-500 text-white rounded-full p-1.5 shadow hover:bg-orange-600 transition"
-            title="Trendyol'da görüntüle"
-          >
+            title="Trendyol'da görüntüle">
             <ExternalLink size={14} />
           </a>
         )}
       </div>
 
-      {/* Tüm ürün görselleri — tıklanabilir küçük galeri */}
+      {/* Çoklu ürün galerisi */}
       {itemsWithImg.length > 1 && (
         <div className="flex gap-1 px-2 pt-2 flex-wrap">
           {itemsWithImg.map((item, i) => {
             const src = itemImageSrc(item);
             return src ? (
-              <button
-                key={i}
-                onClick={() => setActiveIdx(i)}
-                className={`w-12 h-12 rounded border-2 overflow-hidden shrink-0 ${i === activeIdx ? 'border-indigo-500' : 'border-transparent'}`}
-              >
+              <button key={i} onClick={() => setActiveIdx(i)}
+                className={`w-12 h-12 rounded border-2 overflow-hidden shrink-0 ${i === activeIdx ? 'border-indigo-500' : 'border-transparent'}`}>
                 <img src={src} alt="" className="w-full h-full object-cover" />
               </button>
             ) : null;
@@ -284,19 +340,16 @@ function OrderCard({ order }: { order: OrderRow }) {
           isLate ? 'bg-red-100 text-red-700' : isUrgent ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-slate-600'
         }`}>
           <Clock size={14} className="shrink-0" />
-          <span className="font-mono font-bold text-sm tracking-wider flex-1">
-            {countdown.text}
-          </span>
+          <span className="font-mono font-bold text-sm tracking-wider flex-1">{countdown.text}</span>
           {isLate && <span className="text-xs font-bold text-red-700">GECİKMELİ</span>}
           {!isLate && isUrgent && <span className="text-xs font-bold text-orange-700">ACİL</span>}
         </div>
       )}
 
-      {/* Sipariş bilgisi */}
+      {/* Ürünler */}
       <div className="p-3 flex-1 space-y-1">
         <div className="font-black text-base">{order.saleNumber}</div>
 
-        {/* Tüm ürün isimleri */}
         {order.items.map((item, i) => (
           <div key={i} className="text-sm font-semibold text-ink leading-snug">
             {item.productName ?? 'Ürün bilgisi yok'}
@@ -308,28 +361,76 @@ function OrderCard({ order }: { order: OrderRow }) {
             {Number(item.quantity) > 1 && (
               <span className="text-xs font-bold text-indigo-600 ml-1">×{item.quantity}</span>
             )}
-            {/* Per-item Trendyol link */}
             {order.platform === 'TRENDYOL' && (item.trendyolUrl || item.barcode) && (
-              <a
-                href={item.trendyolUrl ?? `https://www.trendyol.com/sr?q=${encodeURIComponent(item.barcode ?? '')}`}
-                target="_blank"
-                rel="noopener noreferrer"
+              <a href={item.trendyolUrl ?? `https://www.trendyol.com/sr?q=${encodeURIComponent(item.barcode ?? '')}`}
+                target="_blank" rel="noopener noreferrer"
                 className="inline-flex items-center gap-0.5 ml-1 text-orange-500 hover:text-orange-700 text-xs"
-                title="Trendyol'da gör"
-              >
+                title="Trendyol'da gör">
                 <ExternalLink size={11} />
               </a>
             )}
           </div>
         ))}
 
-        <div className="border-t border-line pt-2 mt-2 space-y-0.5 text-xs text-slate-500">
-          <div><span className="font-medium text-ink">{order.customerName}</span> · {[order.city, order.district].filter(Boolean).join('/')}</div>
-          <div>Sipariş: {date(order.orderDate)}</div>
-          {order.deliveryDueAt && (
-            <div className="text-slate-400">Son çıkış: {date(order.deliveryDueAt)}</div>
-          )}
+        {/* Özet müşteri bilgisi */}
+        <div className="border-t border-line pt-2 mt-2 text-xs text-slate-500 space-y-0.5">
+          <div><span className="font-medium text-ink">{order.customerName}</span>
+            {order.phone && <span className="ml-1 text-slate-400">· {order.phone}</span>}
+          </div>
+          <div>{[order.city, order.district].filter(Boolean).join(' / ')}</div>
+          {order.orderDate && <div>Sipariş: {date(order.orderDate)}</div>}
+          {order.deliveryDueAt && <div className="text-slate-400">Son çıkış: {date(order.deliveryDueAt)}</div>}
           {order.cargoProvider && <div>Kargo: {order.cargoProvider}</div>}
+        </div>
+
+        {/* Genişletilebilir detay */}
+        <button onClick={() => setShowDetails(v => !v)}
+          className="flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800 mt-1">
+          {showDetails ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+          {showDetails ? 'Gizle' : 'Adres & Detay'}
+        </button>
+        {showDetails && (
+          <div className="bg-slate-50 rounded-lg p-3 text-xs space-y-1.5 text-slate-700">
+            {order.phone && (
+              <div className="flex items-start gap-1.5">
+                <Phone size={12} className="mt-0.5 shrink-0 text-slate-400" />
+                <a href={`tel:${order.phone}`} className="text-blue-600 underline">{order.phone}</a>
+              </div>
+            )}
+            {order.fullAddress && (
+              <div className="flex items-start gap-1.5">
+                <MapPin size={12} className="mt-0.5 shrink-0 text-slate-400" />
+                <span>{order.fullAddress}</span>
+              </div>
+            )}
+            {order.items.map((item, i) => (
+              item.barcode ? (
+                <div key={i} className="text-slate-400">Barkod: {item.barcode}</div>
+              ) : null
+            ))}
+          </div>
+        )}
+
+        {/* Alt butonlar */}
+        <div className="flex gap-2 pt-2">
+          <button onClick={handlePrint}
+            className="flex-1 flex items-center justify-center gap-1 text-xs px-2 py-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 transition">
+            <Printer size={13} /> Yazdır
+          </button>
+
+          {isReady ? (
+            <div className="flex-1 flex items-center justify-center gap-1 text-xs px-2 py-2 rounded-lg bg-green-100 text-green-700 font-bold">
+              <CheckCircle size={13} /> Hazır
+            </div>
+          ) : (
+            <>
+              <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handlePhoto} />
+              <button onClick={() => fileRef.current?.click()} disabled={uploading}
+                className="flex-1 flex items-center justify-center gap-1 text-xs px-2 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition disabled:opacity-60 font-semibold">
+                <Camera size={13} /> {uploading ? 'Yükleniyor...' : 'Fotoğraf → Hazır'}
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>
