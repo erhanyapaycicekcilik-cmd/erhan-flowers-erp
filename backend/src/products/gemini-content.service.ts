@@ -8,11 +8,18 @@ type GeminiContentPayload = {
   potType?: string;
   potSize?: string;
   fillerMaterial?: string;
+  stemCount?: string;
+  leafCount?: string;
+  comesInTwoParts?: boolean;
+  comesWith?: string;
+  cleaningTip?: string;
+  extraNotes?: string;
 };
 
 type GeminiContentResult = {
   productName: string;
   description: string;
+  hashtags?: string[];
 };
 
 type GeminiReferenceSearchPayload = {
@@ -93,6 +100,12 @@ export class GeminiContentService {
       potType: this.text(body.potType),
       potSize: this.text(body.potSize),
       fillerMaterial: this.text(body.fillerMaterial),
+      stemCount: this.text(body.stemCount),
+      leafCount: this.text(body.leafCount),
+      comesInTwoParts: body.comesInTwoParts === true || body.comesInTwoParts === 'true',
+      comesWith: this.text(body.comesWith),
+      cleaningTip: this.text(body.cleaningTip),
+      extraNotes: this.text(body.extraNotes),
     };
   }
 
@@ -107,13 +120,14 @@ export class GeminiContentService {
   }
 
   private prompt(data: GeminiContentPayload) {
-    return [
+    const lines = [
       'Erhan Flowers ERP için Türkçe e-ticaret ürün içeriği üret.',
       'Yalnızca geçerli JSON döndür. Markdown, açıklama veya kod bloğu kullanma.',
-      'JSON şeması: {"productName":"...","description":"..."}',
-      'Ürün adı SEO uyumlu, doğal, aranabilir ve pazaryeri formatına uygun olsun.',
-      'Açıklama zengin, satış odaklı ve ürün detaylarını içeren düz metin olsun.',
-      'Açıklamada saksı ölçüsü, saksı tipi/modeli ve dolgu malzemesi bilgilerini doğal şekilde kullan.',
+      'JSON şeması: {"productName":"...","description":"...","hashtags":["#etiket1","#etiket2"]}',
+      'productName: SEO uyumlu, doğal, aranabilir ve Trendyol/N11/HB pazaryeri formatına uygun olsun.',
+      'description: Zengin, satış odaklı, soruları yanıtlayan düz metin. Teknik detayları doğal şekilde yaz.',
+      'Açıklamada saksı ölçüsü, boy, gövde/yaprak sayısı, montaj bilgisi ve aksesuar detaylarını doğal dilde kullan.',
+      'hashtags: 8-12 adet Türkçe Instagram/TikTok hashtag listesi. # işareti ile başlasın.',
       `Açıklamanın sonunda bu bakım paragrafını aynen dahil et: ${careInstructions}`,
       '',
       `Ürün adı: ${data.productName ?? '-'}`,
@@ -121,7 +135,14 @@ export class GeminiContentService {
       `Saksı tipi/modeli: ${data.potType ?? '-'}`,
       `Saksı ölçüsü: ${data.potSize ?? '-'}`,
       `Saksı içi dolgu malzemesi: ${data.fillerMaterial ?? '-'}`,
-    ].join('\n');
+    ];
+    if (data.stemCount) lines.push(`Gövde sayısı: ${data.stemCount}`);
+    if (data.leafCount) lines.push(`Yaprak sayısı: ${data.leafCount}`);
+    if (data.comesInTwoParts) lines.push('Montaj: Ürün iki parça halinde gönderilir, kolay monte edilir.');
+    if (data.comesWith) lines.push(`Birlikte geldiği aksesuarlar: ${data.comesWith}`);
+    if (data.cleaningTip) lines.push(`Temizlik notu: ${data.cleaningTip}`);
+    if (data.extraNotes) lines.push(`Ek notlar: ${data.extraNotes}`);
+    return lines.join('\n');
   }
 
   private referenceSearchPrompt(data: GeminiReferenceSearchPayload) {
@@ -174,15 +195,17 @@ export class GeminiContentService {
   private parseResponse(text: string, fallbackName: string): GeminiContentResult {
     const cleaned = text.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```$/i, '').trim();
     try {
-      const parsed = JSON.parse(cleaned) as Partial<GeminiContentResult>;
+      const parsed = JSON.parse(cleaned) as Partial<GeminiContentResult & { hashtags?: unknown[] }>;
       return {
         productName: this.text(parsed.productName) ?? fallbackName,
         description: this.ensureCareInstructions(this.text(parsed.description) ?? ''),
+        hashtags: Array.isArray(parsed.hashtags) ? parsed.hashtags.map(String) : [],
       };
     } catch {
       return {
         productName: fallbackName,
         description: this.ensureCareInstructions(cleaned),
+        hashtags: [],
       };
     }
   }
