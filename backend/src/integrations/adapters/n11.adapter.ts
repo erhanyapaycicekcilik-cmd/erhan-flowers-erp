@@ -24,10 +24,12 @@ export class N11Adapter extends HttpMarketplaceOrderAdapter {
     const images = this.extractImages(p.images);
 
     // modelCode: tüm platformlarda aynı (SD-XXXX, YC-XXXX)
-    // productMainId = modelCode → katalog eşleştirme olmaz (gerçek barkod değil)
+    // productMainId = modelCode → N11 gerçek barkodla katalog eşleştirme yapmaz
+    // stockCode = modelCode → satıcı stok kodu olarak model kodu
     const modelCode = (p.modelCode || p.barcode || '').toUpperCase();
     const n11CategoryId = Number(this.env('CATEGORY_ID') || p.n11CategoryId || 1000675);
     const preparingDay = Number(this.env('PREPARING_DAY') || 2);
+    const shipmentTemplate = this.env('DELIVERY_TEMPLATE_NAME') || 'Sürat Kargo';
 
     const salePrice = Number(p.salePrice || 0);
     const listPrice = Math.max(Number(p.listPrice || p.salePrice || 0), salePrice);
@@ -35,73 +37,100 @@ export class N11Adapter extends HttpMarketplaceOrderAdapter {
 
     const rawTitle = (p.productName || '').slice(0, 150).trim();
     const title = rawTitle.length >= 10 ? rawTitle : `${rawTitle} ${modelCode}`.slice(0, 150).trim();
-    const cleanDesc = (p.description || p.productName || '').replace(/[\r\n]+/g, ' ').trim().slice(0, 3000);
-    const safeDesc = cleanDesc.length >= 10 ? cleanDesc : `${title} - dekoratif yapay cicek urunu.`;
-    const quantity = Number(p.stockQuantity ?? 0);
-    const brand = (p.brand || 'Erhan Flowers').slice(0, 100).trim();
+    const cleanDesc = (p.description || p.productName || '').replace(/[\r\n]+/g, ' ').trim().slice(0, 2000);
+    const safeDesc = cleanDesc.length >= 10 ? cleanDesc : `${title} - dekoratif yapay çiçek ürünü.`;
 
-    const imageList = images.slice(0, 8).map((url: string) => ({ url }));
-
-    // N11 REST API productList formatı
-    const product = {
-      productSellerCode: modelCode,
+    // N11 REST API: payload.skus wrapper, attribute ID'leri ile
+    // Kategori 1000675 (Yapay Çiçek & Kuru Çiçek) attribute ID'leri:
+    // 429=Renk, 1275=Çiçek Türü, 1=Marka (hepsi customValue=true)
+    const n11Sku: Record<string, any> = {
       title,
-      subtitle: title,
       description: safeDesc,
-      category: { id: n11CategoryId },
-      price: salePrice,
-      listPrice: effectiveListPrice,
-      currencyType: 1,
-      images: imageList,
-      approvalStatus: 1,
+      categoryId: n11CategoryId,
+      currencyType: 'TL',
+      productMainId: modelCode,
       preparingDay,
-      attributes: [{ name: 'Marka', value: brand }],
-      stockItems: [
-        {
-          sellerStockCode: modelCode,
-          quantity,
-          salePrice: salePrice,
-          listPrice: effectiveListPrice,
-          // productMainId = modelCode → N11 gerçek barkod ile katalog eşleştirme yapmaz
-          productMainId: modelCode,
-        },
+      shipmentTemplate,
+      stockCode: modelCode,
+      quantity: Number(p.stockQuantity ?? 0),
+      salePrice,
+      listPrice: effectiveListPrice,
+      vatRate: 10,
+      images: images.slice(0, 8).map((url: string, i: number) => ({ url, order: i + 1 })),
+      attributes: [
+        { id: 429, customValue: p.color || 'Çok Renkli' },
+        { id: 1275, customValue: p.flowerType || 'Yapay Çiçek' },
+        { id: 1, customValue: p.brand || 'Erhan Flowers' },
       ],
     };
 
-    const body = { productList: [product] };
+    const n11Payload = {
+      payload: {
+        integrator: 'Erhan Flowers ERP',
+        skus: [n11Sku],
+      },
+    };
+
+    const apiUrl = this.env('API_URL') || 'https://api.n11.com';
 
     try {
-      const apiUrl = this.env('API_URL') || 'https://api.n11.com';
-      const response = await fetch(`${apiUrl}/ms/product/tasks/product-create`, {
+      const response = await fetch(new URL('/ms/product/tasks/product-create', apiUrl), {
         method: 'POST',
         headers: {
+          Accept: 'application/json',
           'Content-Type': 'application/json',
           appkey: appKey,
           appsecret: appSecret,
           'User-Agent': 'ErhanFlowersERP-N11',
         },
-        body: JSON.stringify(body),
+        body: JSON.stringify(n11Payload),
       });
 
       const responseText = await response.text().catch(() => '');
-      let json: any = null;
-      try { json = JSON.parse(responseText); } catch { /* ignore */ }
+      let responseJson: any;
+      try { responseJson = JSON.parse(responseText); } catch { responseJson = { raw: responseText }; }
 
-      // Başarı: HTTP 200/201 ve taskId var
-      if ((response.ok || response.status === 201) && (json?.taskId || json?.data?.taskId)) {
-        const taskId = json?.taskId || json?.data?.taskId;
-        return { ok: true, status: 'CONNECTED', message: `N11 urun goreve alindi. TaskId: ${taskId} StokKodu: ${modelCode}` };
+      if (response.ok || response.status === 201 || response.status === 202) {
+        const taskId: number | null = responseJson?.id ?? null;
+        const taskStatus: string = responseJson?.status || '';
+        const reasons: string[] = responseJson?.reasons || [];
+
+        if (!taskId) {
+          return { ok: true, status: 'CONNECTED', message: `N11 urun gonderimi tamamlandi. Yanit: ${responseText.slice(0, 200)}` };
+        }
+
+        // Task durumunu sorgula
+        await new Promise((r) => setTimeout(r, 5000));
+        try {
+          const detailResp = await fetch(new URL('/ms/product/task-details/page-query', apiUrl), {
+            method: 'POST',
+            headers: { Accept: 'application/json', 'Content-Type': 'application/json', appkey: appKey, appsecret: appSecret },
+            body: JSON.stringify({ taskId, pageable: { page: 0, size: 100 } }),
+          });
+          const detailText = await detailResp.text().catch(() => '');
+          let detailJson: any;
+          try { detailJson = JSON.parse(detailText); } catch { detailJson = null; }
+          const detailStatus: string = detailJson?.status || taskStatus;
+          const skus: any[] = detailJson?.skus?.content || [];
+          const failed = skus.filter((s: any) => s.status === 'FAIL');
+          const succeeded = skus.filter((s: any) => s.status === 'SUCCESS');
+          if (failed.length > 0) {
+            const errs = failed.map((s: any) => (s.reasons || []).join(', ')).join(' | ');
+            return { ok: false, status: 'FAILED', message: `N11 urun hatali. Task ${taskId} | Durum: ${detailStatus} | Hatalar: ${errs}` };
+          }
+          return { ok: true, status: 'CONNECTED', message: `N11 urun gonderimi basarili. Task ${taskId} | Durum: ${detailStatus} | Basarili: ${succeeded.length || reasons.join(', ')}`, batchRequestId: String(taskId) };
+        } catch {
+          return { ok: true, status: 'CONNECTED', message: `N11 urun kuyruga alindi. Task ID: ${taskId} | ${reasons.join(', ')}`, batchRequestId: String(taskId) };
+        }
       }
 
-      // Zaten var
-      if (responseText.includes('zaten mevcut') || responseText.includes('already exists') || responseText.includes('kullanılmaktadır')) {
-        return { ok: true, status: 'CONNECTED', message: `N11 urun zaten mevcut. StokKodu: ${modelCode}` };
-      }
-
-      const errMsg = json?.message || json?.error || responseText.slice(0, 400);
-      return { ok: false, status: 'FAILED', message: `N11 REST hata (${response.status}): ${errMsg}` };
+      return {
+        ok: false,
+        status: response.status === 401 || response.status === 403 ? 'MISSING_CREDENTIALS' : 'FAILED',
+        message: `N11 urun gonderimi basarisiz. HTTP ${response.status}: ${responseText.slice(0, 600)}`,
+      };
     } catch (error) {
-      return { ok: false, status: 'FAILED', message: `N11 baglanti hatasi: ${error instanceof Error ? error.message : String(error)}` };
+      return { ok: false, status: 'FAILED', message: `N11 urun gonderimi basarisiz: ${error instanceof Error ? error.message : String(error)}` };
     }
   }
 
