@@ -22,103 +22,88 @@ export class N11Adapter extends HttpMarketplaceOrderAdapter {
 
     const p = payload as Record<string, any>;
     const images = this.extractImages(p.images);
+
     // modelCode: tüm platformlarda aynı (SD-XXXX, YC-XXXX)
-    // SOAP stockCode = modelCode (seller stock code, benzersiz olması yeterli)
+    // productMainId = modelCode → katalog eşleştirme olmaz (gerçek barkod değil)
     const modelCode = (p.modelCode || p.barcode || '').toUpperCase();
-    const stockCode = modelCode;
     const n11CategoryId = Number(this.env('CATEGORY_ID') || p.n11CategoryId || 1000675);
     const preparingDay = Number(this.env('PREPARING_DAY') || 2);
-    const shipmentTemplate = this.env('DELIVERY_TEMPLATE_NAME') || 'Sürat Kargo';
 
     const salePrice = Number(p.salePrice || 0);
     const listPrice = Math.max(Number(p.listPrice || p.salePrice || 0), salePrice);
     const effectiveListPrice = listPrice > salePrice ? listPrice : Math.ceil(salePrice * 1.1);
-    const cleanDesc = (p.description || p.productName || '').replace(/[<>&"']/g, ' ').replace(/[\r\n]+/g, ' ').trim().slice(0, 2000);
-    const rawTitle = (p.productName || '').replace(/[<>&"']/g, ' ').slice(0, 150).trim();
-    const title = rawTitle.length >= 10 ? rawTitle : `${rawTitle} ${stockCode}`.slice(0, 150).trim();
+
+    const rawTitle = (p.productName || '').slice(0, 150).trim();
+    const title = rawTitle.length >= 10 ? rawTitle : `${rawTitle} ${modelCode}`.slice(0, 150).trim();
+    const cleanDesc = (p.description || p.productName || '').replace(/[\r\n]+/g, ' ').trim().slice(0, 3000);
     const safeDesc = cleanDesc.length >= 10 ? cleanDesc : `${title} - dekoratif yapay cicek urunu.`;
     const quantity = Number(p.stockQuantity ?? 0);
+    const brand = (p.brand || 'Erhan Flowers').slice(0, 100).trim();
 
-    // Görseller: SOAP max 8, sadece geçerli URL
-    const imageXml = images.slice(0, 8).map((url: string, i: number) =>
-      `<image><order>${i + 1}</order><url>${url}</url></image>`
-    ).join('');
+    const imageList = images.slice(0, 8).map((url: string, i: number) => ({
+      order: i + 1,
+      url,
+    }));
 
-    const brandName = (p.brand || 'Erhan Flowers').replace(/[<>&"']/g, ' ').trim();
-
-    const soapBody = `<?xml version="1.0" encoding="utf-8"?>
-<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:sch="http://www.n11.com/ws/schemas">
-  <soapenv:Header/>
-  <soapenv:Body>
-    <sch:SaveProductRequest>
-      <auth><appKey>${appKey}</appKey><appSecret>${appSecret}</appSecret></auth>
-      <product>
-        <productSellerCode>${stockCode}</productSellerCode>
-        <title>${title}</title>
-        <subtitle>${title}</subtitle>
-        <description>${safeDesc}</description>
-        <category><id>${n11CategoryId}</id></category>
-        <price>${salePrice.toFixed(2)}</price>
-        <currencyType>1</currencyType>
-        <images>${imageXml}</images>
-        <approvalStatus>1</approvalStatus>
-        <preparingDay>${preparingDay}</preparingDay>
-        <shipmentTemplate>${shipmentTemplate}</shipmentTemplate>
-        <attributes>
-          <attribute>
-            <name>Marka</name>
-            <value>${brandName}</value>
-          </attribute>
-        </attributes>
-        <stockItems>
-          <stockItem>
-            <bundle>false</bundle>
-            <mpn>${modelCode}</mpn>
-            <gtin>${p.barcode || stockCode}</gtin>
-            <oem>${brandName}</oem>
-            <quantity>${quantity}</quantity>
-            <sellerStockCode>${stockCode}</sellerStockCode>
-            <optionPrice>${salePrice.toFixed(2)}</optionPrice>
-          </stockItem>
-        </stockItems>
-      </product>
-    </sch:SaveProductRequest>
-  </soapenv:Body>
-</soapenv:Envelope>`;
+    const body = {
+      productSellerCode: modelCode,
+      title,
+      subtitle: title,
+      description: safeDesc,
+      category: { id: n11CategoryId },
+      price: salePrice,
+      listingPrice: effectiveListPrice,
+      currencyType: 'TL',
+      images: imageList,
+      approvalStatus: 'WaitingForApproval',
+      preparingDay,
+      attributes: [{ name: 'Marka', value: brand }],
+      skuList: [
+        {
+          sellerStockCode: modelCode,
+          quantity,
+          salePrice: salePrice,
+          listPrice: effectiveListPrice,
+          // productMainId = modelCode → N11 REST katalogla eşleştirme yapmaz
+          productMainId: modelCode,
+          images: imageList,
+        },
+      ],
+    };
 
     try {
-      const response = await fetch('https://api.n11.com/ws/ProductService/', {
+      const apiUrl = this.env('API_URL') || 'https://api.n11.com';
+      const response = await fetch(`${apiUrl}/ms/product/tasks/product-create`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'text/xml; charset=utf-8',
-          SOAPAction: '"SaveProduct"',
+          'Content-Type': 'application/json',
+          appkey: appKey,
+          appsecret: appSecret,
           'User-Agent': 'ErhanFlowersERP-N11',
         },
-        body: soapBody,
+        body: JSON.stringify(body),
       });
 
       const responseText = await response.text().catch(() => '');
+      let json: any = null;
+      try { json = JSON.parse(responseText); } catch { /* ignore */ }
 
-      if (responseText.includes('<status>success</status>')) {
-        return { ok: true, status: 'CONNECTED', message: `N11 SOAP urun eklendi. StokKodu: ${stockCode}` };
+      // Başarı: HTTP 200/201 ve taskId var
+      if ((response.ok || response.status === 201) && (json?.taskId || json?.data?.taskId)) {
+        const taskId = json?.taskId || json?.data?.taskId;
+        return { ok: true, status: 'CONNECTED', message: `N11 urun goreve alindi. TaskId: ${taskId} StokKodu: ${modelCode}` };
       }
 
-      // Zaten var → güncelleme olarak say (başarılı)
-      if (responseText.includes('already exists') || responseText.includes('zaten mevcut') || responseText.includes('kullanılmaktadır')) {
-        return { ok: true, status: 'CONNECTED', message: `N11 urun zaten mevcut, guncellendi. StokKodu: ${stockCode}` };
+      // Zaten var
+      if (responseText.includes('zaten mevcut') || responseText.includes('already exists') || responseText.includes('kullanılmaktadır')) {
+        return { ok: true, status: 'CONNECTED', message: `N11 urun zaten mevcut. StokKodu: ${modelCode}` };
       }
 
-      const errMatch = responseText.match(/<errorMessage>(.*?)<\/errorMessage>/s);
-      const errMsg = errMatch ? errMatch[1].trim().slice(0, 300) : responseText.slice(0, 300);
-      return { ok: false, status: 'FAILED', message: `N11 SOAP hata: ${errMsg}` };
+      const errMsg = json?.message || json?.error || responseText.slice(0, 400);
+      return { ok: false, status: 'FAILED', message: `N11 REST hata (${response.status}): ${errMsg}` };
     } catch (error) {
-      return { ok: false, status: 'FAILED', message: `N11 SOAP baglanti hatasi: ${error instanceof Error ? error.message : String(error)}` };
+      return { ok: false, status: 'FAILED', message: `N11 baglanti hatasi: ${error instanceof Error ? error.message : String(error)}` };
     }
-  }
-
-  private extractHeight(...values: unknown[]): string {
-    const text = values.map((v) => String(v ?? '')).join(' ');
-    return text.match(/\b\d{2,3}\s*cm\b/i)?.[0] ?? '';
   }
 
   private extractImages(images: unknown): string[] {
@@ -140,7 +125,6 @@ export class N11Adapter extends HttpMarketplaceOrderAdapter {
     url.searchParams.set('page', '0');
     url.searchParams.set('size', '1');
 
-    // N11 REST API: sadece appkey/appsecret header yeterli, Basic Auth gönderme
     const response = await fetch(url, {
       method: 'GET',
       headers: {
