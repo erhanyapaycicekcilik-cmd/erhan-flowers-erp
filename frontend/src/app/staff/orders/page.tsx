@@ -220,7 +220,6 @@ function OrderCard({ order, onStatusChange }: { order: OrderRow; onStatusChange:
   const [activeIdx, setActiveIdx] = useState(0);
   const [showDetails, setShowDetails] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [done, setDone] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const itemsWithImg = order.items.filter((i) => i.imagePath);
@@ -232,14 +231,27 @@ function OrderCard({ order, onStatusChange }: { order: OrderRow; onStatusChange:
     order.items.find((i) => i.trendyolUrl)?.trendyolUrl ??
     null;
 
-  const isReady = order.status === 'READY' || order.status === 'Kargoya Hazır' || done;
+  const isReady = order.status === 'READY' || order.status === 'Kargoya Hazır';
+
+  async function markReady() {
+    if (!confirm('Bu sipariş hazır olarak işaretlensin mi?')) return;
+    setUploading(true);
+    try {
+      await api(`/sales/${order.id}/status`, { method: 'POST', json: { status: 'READY', note: 'Ürün hazırlandı.' } });
+      onStatusChange(order.id, 'READY');
+    } catch (err) {
+      console.error('Hazır yapma hatası:', err);
+      alert('İşlem başarısız, tekrar deneyin.');
+    } finally {
+      setUploading(false);
+    }
+  }
 
   async function handlePhoto(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
     setUploading(true);
     try {
-      // Upload photo
       const form = new FormData();
       form.append('file', file);
       const token = typeof window !== 'undefined'
@@ -250,13 +262,8 @@ function OrderCard({ order, onStatusChange }: { order: OrderRow; onStatusChange:
         headers: token ? { Authorization: `Bearer ${token}` } : {},
         body: form,
       });
-      // Update status to READY
-      await api(`/sales/${order.id}/status`, { method: 'POST', json: { status: 'READY', note: 'Ürün hazırlandı, fotoğraf yüklendi.' } });
-      setDone(true);
-      onStatusChange(order.id, 'READY');
-    } catch (err) {
-      console.error('Hazır yapma hatası:', err);
-      alert('İşlem başarısız, tekrar deneyin.');
+    } catch {
+      // foto yükleme opsiyonel, devam et
     } finally {
       setUploading(false);
     }
@@ -421,14 +428,19 @@ function OrderCard({ order, onStatusChange }: { order: OrderRow; onStatusChange:
 
           {isReady ? (
             <div className="flex-1 flex items-center justify-center gap-1 text-xs px-2 py-2 rounded-lg bg-green-100 text-green-700 font-bold">
-              <CheckCircle size={13} /> Hazır
+              <CheckCircle size={13} /> Kargoya Hazır
             </div>
           ) : (
             <>
               <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handlePhoto} />
               <button onClick={() => fileRef.current?.click()} disabled={uploading}
-                className="flex-1 flex items-center justify-center gap-1 text-xs px-2 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition disabled:opacity-60 font-semibold">
-                <Camera size={13} /> {uploading ? 'Yükleniyor...' : 'Fotoğraf → Hazır'}
+                title="Fotoğraf çek (opsiyonel)"
+                className="flex items-center justify-center p-2 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-100 transition">
+                <Camera size={15} />
+              </button>
+              <button onClick={() => void markReady()} disabled={uploading}
+                className="flex-1 flex items-center justify-center gap-1 text-sm px-3 py-2 rounded-lg bg-green-600 text-white hover:bg-green-700 transition disabled:opacity-60 font-bold">
+                <CheckCircle size={14} /> {uploading ? '...' : 'Hazır Yap'}
               </button>
             </>
           )}
