@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { RefreshCw, Package, Clock } from 'lucide-react';
+import { RefreshCw, Package, Clock, ExternalLink } from 'lucide-react';
 import { AdminShell } from '@/components/AdminShell';
 import { api, apiFileUrl } from '@/lib/api';
 
@@ -14,6 +14,7 @@ type OrderItem = {
   quantity?: number | string | null;
   imagePath?: string | null;
   color?: string | null;
+  trendyolUrl?: string | null;
 };
 
 type OrderRow = {
@@ -201,78 +202,126 @@ export default function StaffOrdersPage() {
   );
 }
 
+function itemImageSrc(item: OrderItem): string | null {
+  if (!item.imagePath) return null;
+  return item.imagePath.startsWith('http') ? item.imagePath : apiFileUrl(item.imagePath);
+}
+
 function OrderCard({ order }: { order: OrderRow }) {
   const countdown = useCountdown(order.deliveryDueAt, order.status);
   const isLate = countdown?.isLate ?? false;
   const isUrgent = countdown?.isUrgent ?? false;
+  const [activeIdx, setActiveIdx] = useState(0);
 
-  const firstImage = order.items.find((i) => i.imagePath)?.imagePath;
-  const imgSrc = firstImage
-    ? firstImage.startsWith('http') ? firstImage : apiFileUrl(firstImage)
-    : null;
+  const itemsWithImg = order.items.filter((i) => i.imagePath);
+  const activeItem = itemsWithImg[activeIdx] ?? order.items[activeIdx] ?? order.items[0];
+  const activeSrc = itemsWithImg.length > 0 ? itemImageSrc(itemsWithImg[activeIdx] ?? itemsWithImg[0]) : null;
+
+  // Trendyol URL: prefer stored url, fall back to search by barcode
+  const trendyolUrl =
+    activeItem?.trendyolUrl ??
+    order.items.find((i) => i.trendyolUrl)?.trendyolUrl ??
+    (activeItem?.barcode
+      ? `https://www.trendyol.com/sr?q=${encodeURIComponent(activeItem.barcode)}`
+      : order.items[0]?.barcode
+        ? `https://www.trendyol.com/sr?q=${encodeURIComponent(order.items[0].barcode)}`
+        : null);
 
   return (
     <div className={`panel overflow-hidden flex flex-col ${isLate ? 'border-red-400 border-2' : isUrgent ? 'border-orange-400 border-2' : ''}`}>
-      {/* Ürün görseli — büyük */}
-      <div className="relative bg-slate-100" style={{ aspectRatio: '4/3' }}>
-        {imgSrc ? (
-          <img src={imgSrc} alt="" className="w-full h-full object-cover" />
+
+      {/* Ana görsel */}
+      <div className="relative bg-slate-100" style={{ aspectRatio: '1/1' }}>
+        {activeSrc ? (
+          <img src={activeSrc} alt="" className="w-full h-full object-cover" />
         ) : (
           <div className="w-full h-full flex items-center justify-center text-slate-300">
-            <Package size={48} />
+            <Package size={56} />
           </div>
         )}
         {/* Durum badge */}
-        <span className={`absolute top-2 right-2 text-xs font-bold px-2 py-1 rounded-full ${
+        <span className={`absolute top-2 left-2 text-xs font-bold px-2 py-1 rounded-full ${
           order.status === 'Yeni' ? 'bg-blue-500 text-white' :
           order.status === 'İşleme Alındı' ? 'bg-amber-500 text-white' :
           order.status === 'Kargoya Hazır' ? 'bg-green-500 text-white' :
           'bg-slate-500 text-white'
         }`}>{order.status}</span>
+        {/* Trendyol link */}
+        {order.platform === 'TRENDYOL' && trendyolUrl && (
+          <a
+            href={trendyolUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="absolute top-2 right-2 bg-orange-500 text-white rounded-full p-1.5 shadow hover:bg-orange-600 transition"
+            title="Trendyol'da görüntüle"
+          >
+            <ExternalLink size={14} />
+          </a>
+        )}
       </div>
 
-      {/* Birden fazla ürün varsa küçük resimler */}
-      {order.items.length > 1 && (
-        <div className="flex gap-1 px-3 pt-2">
-          {order.items.slice(0, 4).map((item, i) => (
-            item.imagePath ? (
-              <img
+      {/* Tüm ürün görselleri — tıklanabilir küçük galeri */}
+      {itemsWithImg.length > 1 && (
+        <div className="flex gap-1 px-2 pt-2 flex-wrap">
+          {itemsWithImg.map((item, i) => {
+            const src = itemImageSrc(item);
+            return src ? (
+              <button
                 key={i}
-                src={apiFileUrl(item.imagePath)}
-                alt=""
-                className="w-10 h-10 rounded border border-line object-cover"
-              />
-            ) : null
-          ))}
+                onClick={() => setActiveIdx(i)}
+                className={`w-12 h-12 rounded border-2 overflow-hidden shrink-0 ${i === activeIdx ? 'border-indigo-500' : 'border-transparent'}`}
+              >
+                <img src={src} alt="" className="w-full h-full object-cover" />
+              </button>
+            ) : null;
+          })}
         </div>
       )}
 
-      {/* Canlı sayaç — öne çıkar */}
+      {/* Canlı sayaç */}
       {countdown && (
-        <div className={`mx-3 mt-2 rounded-lg px-3 py-2 flex items-center gap-2 ${
+        <div className={`mx-2 mt-2 rounded-lg px-3 py-2 flex items-center gap-2 ${
           isLate ? 'bg-red-100 text-red-700' : isUrgent ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-slate-600'
         }`}>
           <Clock size={14} className="shrink-0" />
-          <span className="font-mono font-bold text-sm tracking-wider">
-            {isLate ? 'GECİKME: +' : ''}{countdown.text}
+          <span className="font-mono font-bold text-sm tracking-wider flex-1">
+            {countdown.text}
           </span>
-          {isLate && <span className="text-xs ml-auto font-semibold">GECİKMELİ</span>}
-          {!isLate && isUrgent && <span className="text-xs ml-auto font-semibold">ACİL</span>}
+          {isLate && <span className="text-xs font-bold text-red-700">GECİKMELİ</span>}
+          {!isLate && isUrgent && <span className="text-xs font-bold text-orange-700">ACİL</span>}
         </div>
       )}
 
       {/* Sipariş bilgisi */}
       <div className="p-3 flex-1 space-y-1">
         <div className="font-black text-base">{order.saleNumber}</div>
-        <div className="text-sm font-semibold text-ink truncate">
-          {order.items[0]?.productName ?? 'Ürün bilgisi yok'}
-        </div>
-        {order.items.length > 1 && (
-          <div className="text-xs text-slate-500">+{order.items.length - 1} ürün daha</div>
-        )}
-        {order.items[0]?.color && (
-          <div className="text-xs text-slate-500">{order.items[0].color}</div>
-        )}
+
+        {/* Tüm ürün isimleri */}
+        {order.items.map((item, i) => (
+          <div key={i} className="text-sm font-semibold text-ink leading-snug">
+            {item.productName ?? 'Ürün bilgisi yok'}
+            {(item.color || item.variationText) && (
+              <span className="text-xs font-normal text-slate-500 ml-1">
+                {[item.color, item.variationText].filter(Boolean).join(' · ')}
+              </span>
+            )}
+            {Number(item.quantity) > 1 && (
+              <span className="text-xs font-bold text-indigo-600 ml-1">×{item.quantity}</span>
+            )}
+            {/* Per-item Trendyol link */}
+            {order.platform === 'TRENDYOL' && (item.trendyolUrl || item.barcode) && (
+              <a
+                href={item.trendyolUrl ?? `https://www.trendyol.com/sr?q=${encodeURIComponent(item.barcode ?? '')}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-0.5 ml-1 text-orange-500 hover:text-orange-700 text-xs"
+                title="Trendyol'da gör"
+              >
+                <ExternalLink size={11} />
+              </a>
+            )}
+          </div>
+        ))}
 
         <div className="border-t border-line pt-2 mt-2 space-y-0.5 text-xs text-slate-500">
           <div><span className="font-medium text-ink">{order.customerName}</span> · {[order.city, order.district].filter(Boolean).join('/')}</div>
