@@ -231,8 +231,7 @@ function OrderCard({ order, onStatusChange }: { order: OrderRow; onStatusChange:
   const trendyolUrl =
     activeItem?.trendyolUrl ??
     order.items.find((i) => i.trendyolUrl)?.trendyolUrl ??
-    (activeItem?.barcode ? `https://www.trendyol.com/sr?q=${encodeURIComponent(activeItem.barcode)}` :
-      order.items[0]?.barcode ? `https://www.trendyol.com/sr?q=${encodeURIComponent(order.items[0].barcode ?? '')}` : null);
+    null;
 
   const isReady = order.status === 'READY' || order.status === 'Kargoya Hazır' || done;
 
@@ -361,8 +360,8 @@ function OrderCard({ order, onStatusChange }: { order: OrderRow; onStatusChange:
             {Number(item.quantity) > 1 && (
               <span className="text-xs font-bold text-indigo-600 ml-1">×{item.quantity}</span>
             )}
-            {order.platform === 'TRENDYOL' && (item.trendyolUrl || item.barcode) && (
-              <a href={item.trendyolUrl ?? `https://www.trendyol.com/sr?q=${encodeURIComponent(item.barcode ?? '')}`}
+            {order.platform === 'TRENDYOL' && item.trendyolUrl && (
+              <a href={item.trendyolUrl}
                 target="_blank" rel="noopener noreferrer"
                 className="inline-flex items-center gap-0.5 ml-1 text-orange-500 hover:text-orange-700 text-xs"
                 title="Trendyol'da gör">
