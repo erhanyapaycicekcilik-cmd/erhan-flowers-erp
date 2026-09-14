@@ -407,6 +407,10 @@ model Category {
   startCode          Int                @map("start_code")
   currentCode        Int                @map("current_code")
   trendyolCategoryId Int?               @map("trendyol_category_id")
+  platforms          String[]           @default([])
+  hasBanner          Boolean            @default(false) @map("has_banner")
+  sortOrder          Int                @default(0) @map("sort_order")
+  description        String?
   status             RecordStatus       @default(ACTIVE)
   createdAt          DateTime           @default(now()) @map("created_at")
   updatedAt          DateTime           @updatedAt @map("updated_at")

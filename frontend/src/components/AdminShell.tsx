@@ -13,6 +13,7 @@ import {
   Factory,
   FileImage,
   Home,
+  LayoutGrid,
   ListChecks,
   LogOut,
   Megaphone,
@@ -81,6 +82,7 @@ const navGroups: { section: string; icon: LucideIcon; items: NavItem[] }[] = [
       { href: '/crm', label: 'CRM', icon: Users, roles: OWNER_MANAGER },
       { href: '/eft-yonetim', label: 'EFT Ödemeleri', icon: Landmark, roles: OWNER_MANAGER },
       { href: '/musteri-sorulari', label: 'Müşteri Soruları', icon: MessageSquare, roles: OWNER_MANAGER },
+      { href: '/kategoriler', label: 'Kategoriler', icon: LayoutGrid, roles: OWNER_MANAGER },
     ],
   },
   {

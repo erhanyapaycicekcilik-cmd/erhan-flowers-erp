@@ -6,14 +6,10 @@ import { PrismaService } from '../prisma/prisma.service';
 export class CategoriesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async update(id: number, data: { trendyolCategoryId?: number | null }) {
-    return this.prisma.category.update({ where: { id }, data });
-  }
-
   async list() {
     const categories = await this.prisma.category.findMany({
       where: { status: 'ACTIVE' },
-      orderBy: { startCode: 'asc' },
+      orderBy: [{ sortOrder: 'asc' }, { startCode: 'asc' }],
     });
 
     if (categories.length > 0) return cleanMojibakeDeep(categories);
@@ -29,7 +25,50 @@ export class CategoriesService {
 
     return cleanMojibakeDeep(await this.prisma.category.findMany({
       where: { status: 'ACTIVE' },
-      orderBy: { startCode: 'asc' },
+      orderBy: [{ sortOrder: 'asc' }, { startCode: 'asc' }],
     }));
+  }
+
+  async create(data: {
+    name: string;
+    codePrefix: string;
+    startCode: number;
+    description?: string;
+    platforms?: string[];
+    hasBanner?: boolean;
+    sortOrder?: number;
+  }) {
+    return this.prisma.category.create({
+      data: {
+        name: data.name,
+        codePrefix: data.codePrefix.toUpperCase(),
+        startCode: data.startCode,
+        currentCode: data.startCode - 1,
+        description: data.description,
+        platforms: data.platforms ?? [],
+        hasBanner: data.hasBanner ?? false,
+        sortOrder: data.sortOrder ?? 0,
+      },
+    });
+  }
+
+  async update(
+    id: number,
+    data: {
+      trendyolCategoryId?: number | null;
+      platforms?: string[];
+      hasBanner?: boolean;
+      sortOrder?: number;
+      description?: string;
+    },
+  ) {
+    return this.prisma.category.update({ where: { id }, data });
+  }
+
+  async remove(id: number) {
+    return this.prisma.category.update({
+      where: { id },
+      data: { status: 'PASSIVE' },
+    });
   }
 }
