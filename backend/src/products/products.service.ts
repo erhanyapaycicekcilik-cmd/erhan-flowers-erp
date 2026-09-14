@@ -98,37 +98,49 @@ export class ProductsService {
   }
 
   async update(id: number, payload: unknown) {
+    const body = (payload ?? {}) as Record<string, unknown>;
+    const hasKey = (k: string) => Object.prototype.hasOwnProperty.call(body, k);
+
+    // Only normalize and update fields that were actually sent in the payload
     const data = this.normalize(payload);
+    const patch: Record<string, unknown> = {};
+    if (hasKey('productName') || hasKey('product_name')) patch['productName'] = data.productName;
+    if (hasKey('modelCode') || hasKey('model_code')) patch['modelCode'] = data.modelCode;
+    if (hasKey('barcode')) patch['barcode'] = data.barcode;
+    if (hasKey('categoryId') || hasKey('category_id')) patch['categoryId'] = data.categoryId;
+    if (hasKey('stockQuantity') || hasKey('stock_quantity')) patch['stockQuantity'] = data.stockQuantity;
+    if (hasKey('criticalStockLevel') || hasKey('critical_stock_level')) patch['criticalStockLevel'] = data.criticalStockLevel;
+    if (hasKey('costPrice') || hasKey('cost_price')) patch['costPrice'] = data.costPrice;
+    if (hasKey('desi')) patch['desi'] = data.desi;
+    if (hasKey('shippingCost') || hasKey('shipping_cost')) patch['shippingCost'] = data.shippingCost;
+    if (hasKey('shopPrice') || hasKey('shop_price')) patch['shopPrice'] = data.shopPrice;
+    if (hasKey('sitePrice') || hasKey('site_price')) patch['sitePrice'] = data.sitePrice;
+    if (hasKey('marketPrice') || hasKey('market_price')) patch['marketPrice'] = data.marketPrice;
+    if (hasKey('listPrice') || hasKey('list_price')) patch['listPrice'] = data.listPrice;
+    if (hasKey('imageUrls') || hasKey('image_urls')) patch['imageUrls'] = data.imageUrls;
+    if (hasKey('brand')) patch['brand'] = data.brand;
+    if (hasKey('vatRate') || hasKey('vat_rate')) patch['vatRate'] = data.vatRate;
+    if (hasKey('origin')) patch['origin'] = data.origin;
+    if (hasKey('colorVariant') || hasKey('color_variant')) patch['colorVariant'] = data.colorVariant;
+    if (hasKey('material')) patch['material'] = data.material;
+    if (hasKey('packageDimensions') || hasKey('package_dimensions')) patch['packageDimensions'] = data.packageDimensions;
+    if (hasKey('warrantyMonths') || hasKey('warranty_months')) patch['warrantyMonths'] = data.warrantyMonths;
+    if (hasKey('warrantyType') || hasKey('warranty_type')) patch['warrantyType'] = data.warrantyType;
+    if (hasKey('status')) patch['status'] = data.status;
+    if (hasKey('description')) patch['description'] = data.description;
+
+    const partialData: ProductPayload = {
+      ...(patch['productName'] !== undefined ? { productName: patch['productName'] as string } : {}),
+      ...(patch['modelCode'] !== undefined ? { modelCode: patch['modelCode'] as string } : {}),
+      ...(patch['barcode'] !== undefined ? { barcode: patch['barcode'] as string } : {}),
+      ...(patch['categoryId'] !== undefined ? { categoryId: patch['categoryId'] as number } : {}),
+    };
+
     try {
-      await this.ensureUniqueProductIdentity(data, id);
+      await this.ensureUniqueProductIdentity(partialData, id);
       return await this.prisma.product.update({
         where: { id },
-        data: {
-          productName: data.productName,
-          modelCode: data.modelCode,
-          barcode: data.barcode,
-          categoryId: data.categoryId,
-          stockQuantity: data.stockQuantity,
-          criticalStockLevel: data.criticalStockLevel,
-          costPrice: data.costPrice,
-          desi: data.desi,
-          shippingCost: data.shippingCost,
-          shopPrice: data.shopPrice,
-          sitePrice: data.sitePrice,
-          marketPrice: data.marketPrice,
-          listPrice: data.listPrice,
-          imageUrls: data.imageUrls,
-          brand: data.brand,
-          vatRate: data.vatRate,
-          origin: data.origin,
-          colorVariant: data.colorVariant,
-          material: data.material,
-          packageDimensions: data.packageDimensions,
-          warrantyMonths: data.warrantyMonths,
-          warrantyType: data.warrantyType,
-          status: data.status,
-          description: data.description,
-        },
+        data: patch as Prisma.ProductUpdateInput,
         include: { category: true },
       });
     } catch (error) {
