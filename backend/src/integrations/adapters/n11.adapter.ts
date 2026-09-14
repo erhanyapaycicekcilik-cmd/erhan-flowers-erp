@@ -44,6 +44,8 @@ export class N11Adapter extends HttpMarketplaceOrderAdapter {
       `<image><order>${i + 1}</order><url>${url}</url></image>`
     ).join('');
 
+    const brandName = (p.brand || 'Erhan Flowers').replace(/[<>&"']/g, ' ').trim();
+
     const soapBody = `<?xml version="1.0" encoding="utf-8"?>
 <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:sch="http://www.n11.com/ws/schemas">
   <soapenv:Header/>
@@ -62,12 +64,18 @@ export class N11Adapter extends HttpMarketplaceOrderAdapter {
         <approvalStatus>1</approvalStatus>
         <preparingDay>${preparingDay}</preparingDay>
         <shipmentTemplate>${shipmentTemplate}</shipmentTemplate>
+        <attributes>
+          <attribute>
+            <name>Marka</name>
+            <value>${brandName}</value>
+          </attribute>
+        </attributes>
         <stockItems>
           <stockItem>
             <bundle>false</bundle>
             <mpn>${modelCode}</mpn>
             <gtin>${p.barcode || stockCode}</gtin>
-            <oem>${p.brand || 'Erhan Flowers'}</oem>
+            <oem>${brandName}</oem>
             <quantity>${quantity}</quantity>
             <sellerStockCode>${stockCode}</sellerStockCode>
             <optionPrice>${salePrice.toFixed(2)}</optionPrice>
