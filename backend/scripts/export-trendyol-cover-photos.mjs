@@ -95,9 +95,11 @@ async function main() {
       continue;
     }
 
-    // Dosyayı kopyala — barkod_modelkod_orijinalisim.jpg formatında
+    // Dosyayı kopyala — modelkod_barkod.jpg formatında
     const ext = path.extname(sourceFile);
-    const safeName = (v.currentModelCode || v.barcode).replace(/[^a-zA-Z0-9_-]/g, '_');
+    const modelPart = (v.currentModelCode || '').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const barcodePart = v.barcode.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const safeName = modelPart ? `${modelPart}_${barcodePart}` : barcodePart;
     const destName = `${safeName}${ext}`;
     const destFile = path.join(OUTPUT_DIR, destName);
     fs.copyFileSync(sourceFile, destFile);
