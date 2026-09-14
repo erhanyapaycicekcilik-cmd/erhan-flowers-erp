@@ -57,7 +57,7 @@ export default function KategorilerPage() {
   const load = async () => {
     setLoading(true);
     try {
-      const data = await api('/categories');
+      const data = await api('/categories') as Category[];
       setCategories(data);
     } finally {
       setLoading(false);
