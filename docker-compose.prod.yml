@@ -3,6 +3,8 @@ services:
     image: postgres:16-alpine
     container_name: erhan-flowers-postgres-prod
     restart: unless-stopped
+    networks:
+      - erp_net
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-erhanflowers}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -14,6 +16,8 @@ services:
     build: ./backend
     container_name: erhan-flowers-backend-prod
     restart: unless-stopped
+    networks:
+      - erp_net
     env_file:
       - ./backend/.env.production
     depends_on:
@@ -26,20 +30,31 @@ services:
       - backend_uploads:/app/uploads
       - /data/urun-gorseller:/data/urun-gorseller
       - /data/stok-gorseller:/data/stok-gorseller
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/auth/health", "||", "exit", "0"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   frontend:
     build: ./frontend
     container_name: erhan-flowers-frontend-prod
     restart: unless-stopped
+    networks:
+      - erp_net
     env_file:
       - ./frontend/.env.production
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
 
   florayapay:
     build: ./florayapay
     container_name: erhan-flowers-florayapay-prod
     restart: unless-stopped
+    networks:
+      - erp_net
     env_file:
       - ./florayapay/.env.production
     depends_on:
@@ -49,6 +64,8 @@ services:
     image: caddy:2-alpine
     container_name: erhan-flowers-caddy-prod
     restart: unless-stopped
+    networks:
+      - erp_net
     ports:
       - "80:80"
       - "443:443"
@@ -60,6 +77,10 @@ services:
       - backend
       - frontend
       - florayapay
+
+networks:
+  erp_net:
+    name: erp_net
 
 volumes:
   postgres_prod_data:
