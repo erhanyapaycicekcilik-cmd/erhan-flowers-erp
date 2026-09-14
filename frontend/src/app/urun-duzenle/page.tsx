@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { AdminShell } from '@/components/AdminShell';
 import { api } from '@/lib/api';
-import { Check, ChevronDown, Edit3, Image, Loader2, Search, Sparkles, Trash2, Upload, X } from 'lucide-react';
+import { Check, ChevronDown, ChevronUp, Edit3, Image, Loader2, Search, Sparkles, Trash2, Upload, X } from 'lucide-react';
 
 type Category = {
   id: number;
@@ -74,7 +74,8 @@ export default function UrunDuzenlePage() {
   const [savedId, setSavedId] = useState<number | null>(null);
   const [catOpen, setCatOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [aiProduct, setAiProduct] = useState<Product | null>(null);
+  // AI bölümü — düzenleme paneli içinde
+  const [aiOpen, setAiOpen] = useState(false);
   const [aiForm, setAiForm] = useState<AiForm>(emptyAiForm());
   const [aiLoading, setAiLoading] = useState(false);
   const [aiResult, setAiResult] = useState<{ productName: string; description: string; hashtags: string[] } | null>(null);
@@ -116,6 +117,16 @@ export default function UrunDuzenlePage() {
     const urls = Array.isArray(p.imageUrls) ? p.imageUrls : [];
     setEditState({ productName: p.productName, description: p.description ?? '', categoryId: p.categoryId, imageUrls: urls });
     setCatOpen(false);
+    setAiOpen(false);
+    setAiForm(emptyAiForm());
+    setAiResult(null);
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setCatOpen(false);
+    setAiOpen(false);
+    setAiResult(null);
   };
 
   const uploadPhoto = async (p: Product, file: File) => {
@@ -132,9 +143,7 @@ export default function UrunDuzenlePage() {
       if (!res.ok) throw new Error('Upload failed');
       const data = await res.json();
       const newUrl: string = data.filePath ?? data.url ?? '';
-      if (newUrl) {
-        setEditState(s => ({ ...s, imageUrls: [...s.imageUrls, newUrl] }));
-      }
+      if (newUrl) setEditState(s => ({ ...s, imageUrls: [...s.imageUrls, newUrl] }));
     } catch {
       alert('Fotoğraf yüklenemedi');
     } finally {
@@ -146,20 +155,13 @@ export default function UrunDuzenlePage() {
     setEditState(s => ({ ...s, imageUrls: s.imageUrls.filter(u => u !== url) }));
   };
 
-  const openAiModal = (p: Product) => {
-    setAiProduct(p);
-    setAiForm(emptyAiForm());
-    setAiResult(null);
-  };
-
   const generateAi = async () => {
-    if (!aiProduct) return;
     setAiLoading(true);
     setAiResult(null);
     try {
       const result = await api('/products/gemini-seo', {
         method: 'POST',
-        body: JSON.stringify({ productName: aiProduct.productName, ...aiForm }),
+        body: JSON.stringify({ productName: editState.productName, ...aiForm }),
       }) as { productName: string; description: string; hashtags?: string[] };
       setAiResult({ productName: result.productName, description: result.description, hashtags: result.hashtags ?? [] });
     } catch {
@@ -170,20 +172,12 @@ export default function UrunDuzenlePage() {
   };
 
   const applyAiResult = () => {
-    if (!aiResult || !aiProduct) return;
+    if (!aiResult) return;
     const hashtagLine = aiResult.hashtags.length ? '\n\n' + aiResult.hashtags.join(' ') : '';
-    const fullDesc = aiResult.description + hashtagLine;
-    setProducts(prev => prev.map(p => p.id === aiProduct.id ? { ...p, productName: aiResult.productName } : p));
-    if (editingId === aiProduct.id) {
-      setEditState(s => ({ ...s, productName: aiResult.productName, description: fullDesc }));
-    } else {
-      startEdit({ ...aiProduct, productName: aiResult.productName, description: fullDesc } as Product);
-      setEditState(s => ({ ...s, productName: aiResult.productName, description: fullDesc }));
-    }
-    setAiProduct(null);
+    setEditState(s => ({ ...s, productName: aiResult.productName, description: aiResult.description + hashtagLine }));
+    setAiOpen(false);
+    setAiResult(null);
   };
-
-  const cancelEdit = () => { setEditingId(null); setCatOpen(false); };
 
   const save = async (p: Product) => {
     if (!editState.productName.trim()) return;
@@ -312,12 +306,117 @@ export default function UrunDuzenlePage() {
                       <div>
                         <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Açıklama</label>
                         <textarea
-                          rows={3}
+                          rows={7}
                           value={editState.description}
                           onChange={e => setEditState(s => ({ ...s, description: e.target.value }))}
-                          className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                          className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y"
                           placeholder="Ürün açıklaması…"
                         />
+                      </div>
+
+                      {/* ✦ AI Açıklama Asistanı — genişleyen bölüm */}
+                      <div className="border border-purple-200 dark:border-purple-800 rounded-xl overflow-hidden">
+                        <button
+                          type="button"
+                          onClick={() => { setAiOpen(o => !o); setAiResult(null); }}
+                          className="w-full flex items-center justify-between px-4 py-3 bg-purple-50 dark:bg-purple-900/20 hover:bg-purple-100 dark:hover:bg-purple-900/30 transition-colors"
+                        >
+                          <span className="flex items-center gap-2 text-sm font-semibold text-purple-700 dark:text-purple-300">
+                            <Sparkles className="w-4 h-4" /> AI ile Açıklama &amp; Ürün Adı Üret
+                          </span>
+                          {aiOpen ? <ChevronUp className="w-4 h-4 text-purple-400" /> : <ChevronDown className="w-4 h-4 text-purple-400" />}
+                        </button>
+
+                        {aiOpen && (
+                          <div className="px-4 pb-4 pt-3 space-y-3 bg-white dark:bg-gray-800">
+                            <p className="text-xs text-gray-500 dark:text-gray-400">Alanları doldurun → Üret → Sonucu Uygula ile ürün adı ve açıklama otomatik değişir.</p>
+                            <div className="grid grid-cols-2 gap-3">
+                              {([
+                                ['productHeight', 'Boy', '180 cm'],
+                                ['potType', 'Saksı tipi', 'Kare Saksı'],
+                                ['potSize', 'Saksı ölçüsü', '28x28 cm'],
+                                ['fillerMaterial', 'Dolgu malzemesi', 'Çakıl taşı'],
+                                ['stemCount', 'Gövde sayısı', '3'],
+                                ['leafCount', 'Yaprak sayısı', '120'],
+                                ['comesWith', 'Birlikte gelir', 'Taş, dekoratif toprak'],
+                                ['cleaningTip', 'Temizlik notu', 'Nemli bezle silin'],
+                              ] as [keyof AiForm, string, string][]).map(([key, label, ph]) => (
+                                <div key={key}>
+                                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{label}</label>
+                                  <input
+                                    type="text"
+                                    value={aiForm[key] as string}
+                                    onChange={e => setAiForm(f => ({ ...f, [key]: e.target.value }))}
+                                    placeholder={ph}
+                                    className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                  />
+                                </div>
+                              ))}
+                            </div>
+
+                            {/* İki parça toggle */}
+                            <button
+                              type="button"
+                              onClick={() => setAiForm(f => ({ ...f, comesInTwoParts: !f.comesInTwoParts }))}
+                              className="flex items-center gap-3"
+                            >
+                              <div className={`w-9 h-5 rounded-full transition-colors flex items-center px-0.5 ${aiForm.comesInTwoParts ? 'bg-purple-500' : 'bg-gray-300 dark:bg-gray-600'}`}>
+                                <div className={`w-4 h-4 bg-white rounded-full shadow transition-transform ${aiForm.comesInTwoParts ? 'translate-x-4' : 'translate-x-0'}`} />
+                              </div>
+                              <span className="text-xs text-gray-600 dark:text-gray-300">Ürün iki parça halinde gönderilir</span>
+                            </button>
+
+                            {/* Ek notlar */}
+                            <div>
+                              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Ek notlar / özellikler</label>
+                              <textarea
+                                rows={2}
+                                value={aiForm.extraNotes}
+                                onChange={e => setAiForm(f => ({ ...f, extraNotes: e.target.value }))}
+                                placeholder="Örn: UV dayanımlı yapraklar, renk seçeneği mevcut…"
+                                className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-2.5 py-1.5 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none"
+                              />
+                            </div>
+
+                            {/* Üret butonu */}
+                            <button
+                              onClick={generateAi}
+                              disabled={aiLoading}
+                              className="w-full flex items-center justify-center gap-2 py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-60 text-white rounded-lg text-sm font-medium transition-colors"
+                            >
+                              {aiLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                              {aiLoading ? 'Gemini yazıyor…' : 'Üret'}
+                            </button>
+
+                            {/* Sonuç */}
+                            {aiResult && (
+                              <div className="bg-purple-50 dark:bg-purple-900/20 rounded-xl p-3 space-y-2.5 border border-purple-200 dark:border-purple-700">
+                                <div>
+                                  <p className="text-xs font-medium text-purple-600 dark:text-purple-400 mb-0.5">SEO Ürün Adı</p>
+                                  <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{aiResult.productName}</p>
+                                </div>
+                                <div>
+                                  <p className="text-xs font-medium text-purple-600 dark:text-purple-400 mb-0.5">Açıklama</p>
+                                  <p className="text-xs text-gray-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed max-h-52 overflow-y-auto">{aiResult.description}</p>
+                                </div>
+                                {aiResult.hashtags.length > 0 && (
+                                  <div>
+                                    <p className="text-xs font-medium text-purple-600 dark:text-purple-400 mb-0.5">Hashtagler</p>
+                                    <p className="text-xs text-purple-700 dark:text-purple-300 flex flex-wrap gap-1">
+                                      {aiResult.hashtags.map((h, i) => <span key={i}>{h}</span>)}
+                                    </p>
+                                  </div>
+                                )}
+                                <button
+                                  onClick={applyAiResult}
+                                  className="w-full flex items-center justify-center gap-1.5 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-medium transition-colors"
+                                >
+                                  <Check className="w-3.5 h-3.5" /> Açıklama & Adı Uygula
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
 
                       {/* Fotoğraflar */}
@@ -423,22 +522,13 @@ export default function UrunDuzenlePage() {
                           <p className="text-xs text-gray-400 mt-1 line-clamp-2">{p.description}</p>
                         )}
                       </div>
-                      <div className="flex items-center gap-1 flex-shrink-0">
-                        <button
-                          onClick={() => openAiModal(p)}
-                          className="p-1.5 text-gray-400 hover:text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-lg transition-colors"
-                          title="AI Açıklama Asistanı"
-                        >
-                          <Sparkles className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => startEdit(p)}
-                          className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
-                          title="Düzenle"
-                        >
-                          <Edit3 className="w-4 h-4" />
-                        </button>
-                      </div>
+                      <button
+                        onClick={() => startEdit(p)}
+                        className="flex-shrink-0 p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                        title="Düzenle"
+                      >
+                        <Edit3 className="w-4 h-4" />
+                      </button>
                     </div>
                   )}
                 </div>
@@ -453,114 +543,6 @@ export default function UrunDuzenlePage() {
           </div>
         )}
       </div>
-      {/* AI Açıklama Asistanı Modalı */}
-      {aiProduct && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            {/* Modal Başlık */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-900 rounded-t-2xl">
-              <div className="flex items-center gap-2">
-                <Sparkles className="w-5 h-5 text-purple-500" />
-                <div>
-                  <h2 className="font-semibold text-gray-900 dark:text-gray-100 text-sm">AI Açıklama Asistanı</h2>
-                  <p className="text-xs text-gray-400 truncate max-w-xs">{aiProduct.productName}</p>
-                </div>
-              </div>
-              <button onClick={() => setAiProduct(null)} className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="px-6 py-5 space-y-4">
-              {/* Form alanları */}
-              <div className="grid grid-cols-2 gap-3">
-                {([
-                  ['productHeight', 'Boy (örn: 180 cm)'],
-                  ['potType', 'Saksı tipi (örn: Kare Saksı)'],
-                  ['potSize', 'Saksı ölçüsü (örn: 28x28 cm)'],
-                  ['fillerMaterial', 'Dolgu malzemesi (örn: Çakıl taşı)'],
-                  ['stemCount', 'Gövde sayısı (örn: 3)'],
-                  ['leafCount', 'Yaprak sayısı (örn: 120)'],
-                  ['comesWith', 'Birlikte gelir (örn: Taş, dekoratif toprak)'],
-                  ['cleaningTip', 'Temizlik notu (opsiyonel)'],
-                ] as [keyof AiForm, string][]).map(([key, label]) => (
-                  <div key={key}>
-                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{label}</label>
-                    <input
-                      type="text"
-                      value={aiForm[key] as string}
-                      onChange={e => setAiForm(f => ({ ...f, [key]: e.target.value }))}
-                      placeholder={label.split('(')[1]?.replace(')', '').replace('örn: ', '') ?? ''}
-                      className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500"
-                    />
-                  </div>
-                ))}
-              </div>
-
-              {/* İki parça toggle */}
-              <label className="flex items-center gap-3 cursor-pointer">
-                <div
-                  onClick={() => setAiForm(f => ({ ...f, comesInTwoParts: !f.comesInTwoParts }))}
-                  className={`w-10 h-6 rounded-full transition-colors flex items-center px-0.5 ${aiForm.comesInTwoParts ? 'bg-purple-500' : 'bg-gray-300 dark:bg-gray-600'}`}
-                >
-                  <div className={`w-5 h-5 bg-white rounded-full shadow transition-transform ${aiForm.comesInTwoParts ? 'translate-x-4' : 'translate-x-0'}`} />
-                </div>
-                <span className="text-sm text-gray-700 dark:text-gray-300">Ürün iki parça halinde gönderilir (kolayca monte edilir)</span>
-              </label>
-
-              {/* Ek notlar */}
-              <div>
-                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Ek notlar / özellikler</label>
-                <textarea
-                  rows={2}
-                  value={aiForm.extraNotes}
-                  onChange={e => setAiForm(f => ({ ...f, extraNotes: e.target.value }))}
-                  placeholder="Örn: UV dayanımlı yapraklar, saksı renk seçeneği mevcut..."
-                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none"
-                />
-              </div>
-
-              {/* Üret butonu */}
-              <button
-                onClick={generateAi}
-                disabled={aiLoading}
-                className="w-full flex items-center justify-center gap-2 py-2.5 bg-purple-600 hover:bg-purple-700 disabled:opacity-60 text-white rounded-xl text-sm font-medium transition-colors"
-              >
-                {aiLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-                {aiLoading ? 'Gemini yazıyor…' : 'SEO Açıklama Üret'}
-              </button>
-
-              {/* Sonuç */}
-              {aiResult && (
-                <div className="bg-purple-50 dark:bg-purple-900/20 rounded-xl p-4 space-y-3 border border-purple-200 dark:border-purple-700">
-                  <div>
-                    <p className="text-xs font-medium text-purple-600 dark:text-purple-400 mb-1">SEO Ürün Adı</p>
-                    <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{aiResult.productName}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs font-medium text-purple-600 dark:text-purple-400 mb-1">Açıklama</p>
-                    <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed">{aiResult.description}</p>
-                  </div>
-                  {aiResult.hashtags.length > 0 && (
-                    <div>
-                      <p className="text-xs font-medium text-purple-600 dark:text-purple-400 mb-1">Hashtagler</p>
-                      <p className="text-sm text-purple-700 dark:text-purple-300 flex flex-wrap gap-1">
-                        {aiResult.hashtags.map((h, i) => <span key={i}>{h}</span>)}
-                      </p>
-                    </div>
-                  )}
-                  <button
-                    onClick={applyAiResult}
-                    className="w-full flex items-center justify-center gap-2 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-medium transition-colors"
-                  >
-                    <Check className="w-4 h-4" /> Ürüne Uygula & Kayıt Ekranına Geç
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
     </AdminShell>
   );
 }
