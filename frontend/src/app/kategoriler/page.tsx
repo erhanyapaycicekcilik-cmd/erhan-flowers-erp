@@ -133,7 +133,7 @@ export default function KategorilerPage() {
   };
 
   return (
-    <AdminShell>
+    <AdminShell title="Kategori Yönetimi">
       <div className="p-6 max-w-5xl mx-auto">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
