@@ -1,7 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
-import { RefreshCw, Package } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { RefreshCw, Package, Clock } from 'lucide-react';
 import { AdminShell } from '@/components/AdminShell';
 import { api, apiFileUrl } from '@/lib/api';
 
@@ -70,6 +70,35 @@ function remainingDays(due?: string | null, status?: string) {
   if (!due || status === 'Teslim Edildi' || status === 'İptal Edildi') return null;
   const diff = Math.ceil((new Date(due).getTime() - Date.now()) / 86400000);
   return diff;
+}
+
+function useCountdown(due?: string | null, status?: string) {
+  const [tick, setTick] = useState(0);
+  const ref = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    if (!due || status === 'Teslim Edildi' || status === 'İptal Edildi') return;
+    ref.current = setInterval(() => setTick((t) => t + 1), 1000);
+    return () => { if (ref.current) clearInterval(ref.current); };
+  }, [due, status]);
+
+  if (!due || status === 'Teslim Edildi' || status === 'İptal Edildi') return null;
+
+  const diffMs = new Date(due).getTime() - Date.now();
+  const isLate = diffMs < 0;
+  const abs = Math.abs(diffMs);
+  const totalSecs = Math.floor(abs / 1000);
+  const days = Math.floor(totalSecs / 86400);
+  const hours = Math.floor((totalSecs % 86400) / 3600);
+  const mins = Math.floor((totalSecs % 3600) / 60);
+  const secs = totalSecs % 60;
+
+  const pad = (n: number) => String(n).padStart(2, '0');
+
+  if (days > 0) {
+    return { text: `${isLate ? '+' : ''}${days}g ${pad(hours)}s ${pad(mins)}d`, isLate, isUrgent: !isLate && days <= 1 };
+  }
+  return { text: `${isLate ? '+' : ''}${pad(hours)}:${pad(mins)}:${pad(secs)}`, isLate, isUrgent: !isLate };
 }
 
 export default function StaffOrdersPage() {
@@ -173,9 +202,9 @@ export default function StaffOrdersPage() {
 }
 
 function OrderCard({ order }: { order: OrderRow }) {
-  const days = remainingDays(order.deliveryDueAt, order.status);
-  const isUrgent = days !== null && days <= 1;
-  const isLate = days !== null && days < 0;
+  const countdown = useCountdown(order.deliveryDueAt, order.status);
+  const isLate = countdown?.isLate ?? false;
+  const isUrgent = countdown?.isUrgent ?? false;
 
   const firstImage = order.items.find((i) => i.imagePath)?.imagePath;
   const imgSrc = firstImage
@@ -183,15 +212,11 @@ function OrderCard({ order }: { order: OrderRow }) {
     : null;
 
   return (
-    <div className={`panel overflow-hidden flex flex-col ${isLate ? 'border-red-400' : isUrgent ? 'border-orange-400' : ''}`}>
+    <div className={`panel overflow-hidden flex flex-col ${isLate ? 'border-red-400 border-2' : isUrgent ? 'border-orange-400 border-2' : ''}`}>
       {/* Ürün görseli — büyük */}
       <div className="relative bg-slate-100" style={{ aspectRatio: '4/3' }}>
         {imgSrc ? (
-          <img
-            src={imgSrc}
-            alt=""
-            className="w-full h-full object-cover"
-          />
+          <img src={imgSrc} alt="" className="w-full h-full object-cover" />
         ) : (
           <div className="w-full h-full flex items-center justify-center text-slate-300">
             <Package size={48} />
@@ -222,6 +247,20 @@ function OrderCard({ order }: { order: OrderRow }) {
         </div>
       )}
 
+      {/* Canlı sayaç — öne çıkar */}
+      {countdown && (
+        <div className={`mx-3 mt-2 rounded-lg px-3 py-2 flex items-center gap-2 ${
+          isLate ? 'bg-red-100 text-red-700' : isUrgent ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-slate-600'
+        }`}>
+          <Clock size={14} className="shrink-0" />
+          <span className="font-mono font-bold text-sm tracking-wider">
+            {isLate ? 'GECİKME: +' : ''}{countdown.text}
+          </span>
+          {isLate && <span className="text-xs ml-auto font-semibold">GECİKMELİ</span>}
+          {!isLate && isUrgent && <span className="text-xs ml-auto font-semibold">ACİL</span>}
+        </div>
+      )}
+
       {/* Sipariş bilgisi */}
       <div className="p-3 flex-1 space-y-1">
         <div className="font-black text-base">{order.saleNumber}</div>
@@ -239,10 +278,7 @@ function OrderCard({ order }: { order: OrderRow }) {
           <div><span className="font-medium text-ink">{order.customerName}</span> · {[order.city, order.district].filter(Boolean).join('/')}</div>
           <div>Sipariş: {date(order.orderDate)}</div>
           {order.deliveryDueAt && (
-            <div className={`font-semibold ${isLate ? 'text-red-600' : isUrgent ? 'text-orange-600' : 'text-slate-500'}`}>
-              Son çıkış: {date(order.deliveryDueAt)}
-              {days !== null && ` (${isLate ? `${Math.abs(days)} gün gecikmeli` : days === 0 ? 'bugün' : `${days} gün kaldı`})`}
-            </div>
+            <div className="text-slate-400">Son çıkış: {date(order.deliveryDueAt)}</div>
           )}
           {order.cargoProvider && <div>Kargo: {order.cargoProvider}</div>}
         </div>
