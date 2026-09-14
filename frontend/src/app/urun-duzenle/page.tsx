@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { AdminShell } from '@/components/AdminShell';
 import { api } from '@/lib/api';
-import { Check, ChevronDown, Edit3, Loader2, Search, X } from 'lucide-react';
+import { Check, ChevronDown, Edit3, Image, Loader2, Search, Trash2, Upload, X } from 'lucide-react';
 
 type Category = {
   id: number;
@@ -20,13 +20,22 @@ type Product = {
   categoryName: string | null;
   description: string | null;
   status: string;
+  imageUrls: string[];
 };
 
 type EditState = {
   productName: string;
   description: string;
   categoryId: number | null;
+  imageUrls: string[];
 };
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
+
+function imgSrc(url: string) {
+  if (url.startsWith('http')) return url;
+  return `${API_BASE}${url}`;
+}
 
 export default function UrunDuzenlePage() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -34,23 +43,25 @@ export default function UrunDuzenlePage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [editState, setEditState] = useState<EditState>({ productName: '', description: '', categoryId: null });
+  const [editState, setEditState] = useState<EditState>({ productName: '', description: '', categoryId: null, imageUrls: [] });
   const [saving, setSaving] = useState(false);
   const [savedId, setSavedId] = useState<number | null>(null);
   const [catOpen, setCatOpen] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const catRef = useRef<HTMLDivElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     Promise.all([
       api('/products?limit=500') as Promise<any>,
       api('/categories') as Promise<Category[]>,
     ]).then(([prodData, catData]) => {
-      const list: Product[] = Array.isArray(prodData)
+      const raw: Product[] = Array.isArray(prodData)
         ? prodData
         : Array.isArray(prodData?.items)
         ? prodData.items
         : [];
-      setProducts(list);
+      setProducts(raw.filter(p => p.status === 'ACTIVE'));
       setCategories(catData);
     }).finally(() => setLoading(false));
   }, []);
@@ -72,8 +83,37 @@ export default function UrunDuzenlePage() {
 
   const startEdit = (p: Product) => {
     setEditingId(p.id);
-    setEditState({ productName: p.productName, description: p.description ?? '', categoryId: p.categoryId });
+    const urls = Array.isArray(p.imageUrls) ? p.imageUrls : [];
+    setEditState({ productName: p.productName, description: p.description ?? '', categoryId: p.categoryId, imageUrls: urls });
     setCatOpen(false);
+  };
+
+  const uploadPhoto = async (p: Product, file: File) => {
+    setUploading(true);
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      form.append('productId', String(p.id));
+      const res = await fetch(`${API_BASE}/media/upload`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${typeof window !== 'undefined' ? localStorage.getItem('token') ?? '' : ''}` },
+        body: form,
+      });
+      if (!res.ok) throw new Error('Upload failed');
+      const data = await res.json();
+      const newUrl: string = data.filePath ?? data.url ?? '';
+      if (newUrl) {
+        setEditState(s => ({ ...s, imageUrls: [...s.imageUrls, newUrl] }));
+      }
+    } catch {
+      alert('Fotoğraf yüklenemedi');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const removePhoto = (url: string) => {
+    setEditState(s => ({ ...s, imageUrls: s.imageUrls.filter(u => u !== url) }));
   };
 
   const cancelEdit = () => { setEditingId(null); setCatOpen(false); };
@@ -88,6 +128,7 @@ export default function UrunDuzenlePage() {
           productName: editState.productName,
           description: editState.description || null,
           categoryId: editState.categoryId,
+          imageUrls: editState.imageUrls,
         }),
       }) as Product;
       setProducts(prev => prev.map(x => x.id === p.id ? {
@@ -96,6 +137,7 @@ export default function UrunDuzenlePage() {
         description: updated.description ?? editState.description,
         categoryId: editState.categoryId,
         categoryName: categories.find(c => c.id === editState.categoryId)?.name ?? x.categoryName,
+        imageUrls: editState.imageUrls,
       } : x));
       setSavedId(p.id);
       setTimeout(() => setSavedId(null), 2000);
@@ -119,7 +161,7 @@ export default function UrunDuzenlePage() {
           </div>
           <div>
             <h1 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Ürün Düzenle</h1>
-            <p className="text-sm text-gray-500 dark:text-gray-400">Ad, açıklama ve kategori değiştirin</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Satışta olan ürünler — ad, açıklama, kategori ve fotoğraf değiştirin</p>
           </div>
         </div>
 
@@ -211,6 +253,54 @@ export default function UrunDuzenlePage() {
                         />
                       </div>
 
+                      {/* Fotoğraflar */}
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5 flex items-center gap-1">
+                          <Image className="w-3.5 h-3.5" /> Fotoğraflar
+                        </label>
+                        <div className="flex flex-wrap gap-2">
+                          {editState.imageUrls.map((url, i) => (
+                            <div key={i} className="relative group w-20 h-20">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                src={imgSrc(url)}
+                                alt=""
+                                className="w-20 h-20 object-cover rounded-lg border border-gray-200 dark:border-gray-600"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => removePhoto(url)}
+                                className="absolute top-0.5 right-0.5 opacity-0 group-hover:opacity-100 p-0.5 bg-red-500 hover:bg-red-600 text-white rounded-md transition-opacity"
+                                title="Kaldır"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            </div>
+                          ))}
+                          <button
+                            type="button"
+                            onClick={() => fileRef.current?.click()}
+                            disabled={uploading}
+                            className="w-20 h-20 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg flex flex-col items-center justify-center text-gray-400 hover:border-blue-400 hover:text-blue-500 transition-colors disabled:opacity-50"
+                            title="Fotoğraf ekle"
+                          >
+                            {uploading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Upload className="w-5 h-5" />}
+                            <span className="text-xs mt-1">{uploading ? '' : 'Ekle'}</span>
+                          </button>
+                          <input
+                            ref={fileRef}
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={e => {
+                              const f = e.target.files?.[0];
+                              if (f) uploadPhoto(p, f);
+                              e.target.value = '';
+                            }}
+                          />
+                        </div>
+                      </div>
+
                       {/* Butonlar */}
                       <div className="flex items-center gap-2">
                         <button
@@ -232,6 +322,14 @@ export default function UrunDuzenlePage() {
                   ) : (
                     /* Görüntüleme modu */
                     <div className="flex items-start justify-between gap-3">
+                      {p.imageUrls?.length > 0 && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={imgSrc(p.imageUrls[0])}
+                          alt=""
+                          className="w-12 h-12 object-cover rounded-lg border border-gray-200 dark:border-gray-600 flex-shrink-0"
+                        />
+                      )}
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-medium text-gray-900 dark:text-gray-100 text-sm">{p.productName}</span>
