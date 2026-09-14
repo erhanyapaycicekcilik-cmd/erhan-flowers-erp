@@ -1,4 +1,8 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, Req, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import { extname, join } from 'path';
+import * as fs from 'fs';
 import { Request } from 'express';
 import { AuthGuard } from '../auth/auth.guard';
 import { SalesService } from './sales.service';
@@ -123,6 +127,30 @@ export class SalesController {
   @Post(':id/status')
   updateStatus(@Param('id') id: string, @Body() body: unknown, @Req() request: AuthenticatedRequest) {
     return this.sales.updateStatus(Number(id), body, request.user!.id);
+  }
+
+  @Post(':id/proof-photo')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: diskStorage({
+        destination: (_req, _file, cb) => {
+          const dest = join(process.cwd(), 'uploads', 'proof-photos');
+          fs.mkdirSync(dest, { recursive: true });
+          cb(null, dest);
+        },
+        filename: (_req, file, cb) => {
+          cb(null, `${Date.now()}-${Math.round(Math.random() * 1e9)}${extname(file.originalname)}`);
+        },
+      }),
+      limits: { fileSize: 15 * 1024 * 1024 },
+    }),
+  )
+  uploadProofPhoto(
+    @Param('id') id: string,
+    @UploadedFile() file: Express.Multer.File,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.sales.saveProofPhotoAndMarkReady(Number(id), file, request.user!.id);
   }
 
   @Post(':id/payments')

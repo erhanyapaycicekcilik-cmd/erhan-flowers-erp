@@ -396,6 +396,7 @@ model User {
   retailPrintLogs       RetailPrintLog[]          @relation("RetailPrintLogPrintedBy")
   retailStatusChanges   RetailSaleStatusHistory[] @relation("RetailStatusHistoryChangedBy")
   stockMovementsCreated StockMovement[]           @relation("StockMovementCreatedBy")
+  proofPhotosTaken      RetailSaleProofPhoto[]    @relation("ProofPhotoTakenBy")
 
   @@map("users")
 }
@@ -1343,6 +1344,7 @@ model RetailSale {
   invoiceStatus         RetailInvoiceStatus       @default(WAITING) @map("invoice_status")
   invoiceNote           String?                   @map("invoice_note")
   eftRequests           EftPaymentRequest[]
+  proofPhotos           RetailSaleProofPhoto[]
 
   @@index([createdAt])
   @@index([customerId])
@@ -1466,6 +1468,19 @@ model RetailDelivery {
   deliveredBy    User?                  @relation("RetailDeliveryDeliveredBy", fields: [deliveredById], references: [id])
 
   @@map("retail_deliveries")
+}
+
+model RetailSaleProofPhoto {
+  id        Int        @id @default(autoincrement())
+  saleId    Int        @map("sale_id")
+  imagePath String     @map("image_path")
+  takenAt   DateTime   @default(now()) @map("taken_at")
+  expiresAt DateTime   @map("expires_at")
+  takenById Int?       @map("taken_by_id")
+  sale      RetailSale @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  takenBy   User?      @relation("ProofPhotoTakenBy", fields: [takenById], references: [id])
+
+  @@map("retail_sale_proof_photos")
 }
 
 model RetailPrintLog {

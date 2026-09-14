@@ -635,6 +635,16 @@ export class SalesService {
     });
   }
 
+  async saveProofPhotoAndMarkReady(id: number, file: { filename: string }, userId: number) {
+    const imagePath = `uploads/proof-photos/${file.filename}`;
+    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 gün
+    await this.prisma.$executeRaw`
+      INSERT INTO retail_sale_proof_photos (sale_id, image_path, expires_at, taken_by_id)
+      VALUES (${id}, ${imagePath}, ${expiresAt}, ${userId})
+    `;
+    return this.updateStatus(id, { status: 'READY', note: 'Ürün hazırlandı, kanıt fotoğrafı kaydedildi.' }, userId);
+  }
+
   async cancelSale(id: number, reason: string, userId: number) {
     return this.prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM retail_sales WHERE id = ${id} FOR UPDATE`;

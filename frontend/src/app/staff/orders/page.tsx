@@ -252,18 +252,23 @@ function OrderCard({ order, onStatusChange }: { order: OrderRow; onStatusChange:
     if (!file) return;
     setUploading(true);
     try {
-      const form = new FormData();
-      form.append('file', file);
       const token = typeof window !== 'undefined'
         ? (localStorage.getItem(`auth_token_${window.location.hostname}_${window.location.port || 'default'}`) ?? localStorage.getItem('auth_token'))
         : null;
-      await fetch(`${apiBaseUrl}/media/upload`, {
+      const form = new FormData();
+      form.append('file', file);
+      const res = await fetch(`${apiBaseUrl}/sales/${order.id}/proof-photo`, {
         method: 'POST',
         headers: token ? { Authorization: `Bearer ${token}` } : {},
         body: form,
       });
+      if (res.ok) {
+        onStatusChange(order.id, 'READY');
+      } else {
+        alert('Fotoğraf yüklenemedi, "Hazır Yap" butonunu kullanın.');
+      }
     } catch {
-      // foto yükleme opsiyonel, devam et
+      alert('Fotoğraf yüklenemedi, "Hazır Yap" butonunu kullanın.');
     } finally {
       setUploading(false);
     }
