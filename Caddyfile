@@ -29,7 +29,7 @@ api.florayapaycicek.com {
         respond "" 204
     }
 
-    reverse_proxy backend:8000
+    reverse_proxy backend:8001
 
     request_body {
         max_size 50MB
