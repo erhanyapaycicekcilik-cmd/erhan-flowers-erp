@@ -49,21 +49,10 @@ services:
       backend:
         condition: service_healthy
 
-  florayapay:
-    build: ./florayapay
-    container_name: erhan-flowers-florayapay-prod
-    restart: unless-stopped
-    networks:
-      - erp_net
-    env_file:
-      - ./florayapay/.env.production
-    depends_on:
-      - backend
-
   caddy:
     image: caddy:2-alpine
     container_name: erhan-flowers-caddy-prod
-    restart: unless-stopped
+    restart: always
     networks:
       - erp_net
     ports:
@@ -76,7 +65,6 @@ services:
     depends_on:
       - backend
       - frontend
-      - florayapay
 
 networks:
   erp_net:
@@ -87,4 +75,3 @@ volumes:
   backend_uploads:
   caddy_data:
   caddy_config:
-  florayapay_next_cache:
