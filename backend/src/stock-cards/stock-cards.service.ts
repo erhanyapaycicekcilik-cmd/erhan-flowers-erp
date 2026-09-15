@@ -645,6 +645,17 @@ export class StockCardsService {
       images,
     };
 
+    // Barkod veya model kodu kaydedilmemişse veritabanına yaz
+    if (!stockCard.barcode || !stockCard.model) {
+      await this.prisma.stockCard.update({
+        where: { id },
+        data: {
+          ...(stockCard.barcode ? {} : { barcode }),
+          ...(stockCard.model ? {} : { model: payload.modelCode }),
+        },
+      });
+    }
+
     const credentials = await this.integrationCenter.runtimeCredentials('TRENDYOL');
     const adapter = new TrendyolAdapter(credentials);
     return adapter.pushProduct(payload);

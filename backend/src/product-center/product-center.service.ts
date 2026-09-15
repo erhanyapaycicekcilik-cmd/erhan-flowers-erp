@@ -1109,6 +1109,20 @@ export class ProductCenterService {
       images,
     };
 
+    const modelCode = payload.modelCode;
+
+    // Barkod veya model kodu kaydedilmemişse veritabanına yaz
+    const needsUpdate = !entry.barcode || !entry.modelCode;
+    if (needsUpdate) {
+      await this.prisma.trendyolProductVariant.update({
+        where: { id: variantId },
+        data: {
+          ...(entry.barcode ? {} : { barcode }),
+          ...(entry.modelCode ? {} : { modelCode }),
+        },
+      });
+    }
+
     const credentials = await this.integrationCenter.runtimeCredentials('TRENDYOL');
     const adapter = new TrendyolAdapter(credentials);
     return adapter.pushProduct(payload);
