@@ -618,7 +618,7 @@ export class StockCardsService {
     const stockCard = await this.ensureStockCard(id);
     const data = (body ?? {}) as Record<string, unknown>;
 
-    const barcode = String(stockCard.barcode ?? data.barcode ?? '').trim();
+    const barcode = String(data.barcode ?? stockCard.barcode ?? '').trim();
     if (!barcode) throw new BadRequestException('Trendyol gönderimi için barkod zorunludur.');
 
     const categoryId = Number(data.categoryId);
