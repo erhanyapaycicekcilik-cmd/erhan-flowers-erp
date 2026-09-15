@@ -1548,8 +1548,8 @@ export default function ProductsPage() {
       flowerType: '',
       vatRate: '20',
       desi: '1',
-      barcode: entry.barcode ?? '',
-      modelCode: entry.modelCode ?? '',
+      barcode: entry.barcode || `EF${String(entry.variantId).padStart(8, '0')}`,
+      modelCode: entry.modelCode || `EF-${String(entry.variantId).padStart(6, '0')}`,
     });
   }
 

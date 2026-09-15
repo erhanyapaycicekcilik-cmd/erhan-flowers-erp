@@ -619,8 +619,8 @@ export default function StockCardsPage() {
       flowerType: stockCard.leafFlowerType ?? '',
       vatRate: '20',
       desi: '1',
-      barcode: stockCard.barcode ?? '',
-      modelCode: stockCard.model ?? stockCard.sku ?? '',
+      barcode: stockCard.barcode || `EF${String(stockCard.id).padStart(8, '0')}`,
+      modelCode: stockCard.model || stockCard.sku || `EF-${String(stockCard.id).padStart(6, '0')}`,
     });
     setPanelMode('trendyol');
   }
