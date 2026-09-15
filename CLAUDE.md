@@ -37,3 +37,27 @@ docker compose -f docker-compose.prod.yml up -d --build
 - erhan-flowers-frontend-prod
 - erhan-flowers-caddy-prod
 - erhan-flowers-postgres-prod
+
+## Admin Şifre Sıfırlama
+Hetzner konsolunda çalıştır (alt çizgi/boru yok, Hetzner uyumlu):
+```
+docker exec erhan-flowers-backend-prod node -e "const b=require('bcryptjs');const{PrismaClient:P}=require('@prisma/client');const p=new P();b.hash('YENI_SIFRE',10).then(h=>p.user.upsert({where:{email:'owner@erhanflowers.com'},update:{passwordHash:h},create:{email:'owner@erhanflowers.com',passwordHash:h,role:'OWNER',name:'Erhan'}})).then(u=>{console.log('OK',u.email);p.\$disconnect()})"
+```
+`YENI_SIFRE` yerine istediğin şifreyi yaz.
+
+## Hetzner Konsol Sorunları
+- Alt çizgi `_` → tire `-` olarak yazılıyor
+- Boru `|` karakteri çalışmıyor
+- `docker cp container:/path` kolon syntax'ı parse edilemiyor
+- Çözüm: `docker exec -i container tee /tmp/dosya < /host/dosya` kullan
+- Veya inline node -e ile JavaScript çalıştır
+
+## Giriş Bilgileri
+- Email: owner@erhanflowers.com
+- Şifre: (şifre sıfırlama komutuyla belirlenir)
+
+## SSH Bağlantısı (PowerShell'den)
+```powershell
+ssh -i "C:\Users\Erhan Flowers\.ssh\github_actions" root@77.42.122.169
+```
+NOT: SSH key sunucudaki authorized_keys ile eşleşmeli. Çalışmıyorsa Hetzner konsolunu kullan.
