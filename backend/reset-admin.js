@@ -1,5 +1,5 @@
 const bcrypt = require('bcryptjs');
-const { PrismaClient } = require('@prisma/client');
+const { PrismaClient } = require('./src/generated/prisma-client');
 
 const prisma = new PrismaClient();
 const newPassword = process.argv[2] || 'ChangeMe123!';
