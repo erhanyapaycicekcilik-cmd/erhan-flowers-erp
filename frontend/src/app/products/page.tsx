@@ -1533,8 +1533,9 @@ export default function ProductsPage() {
   function openProductTrendyol(entry: Entry) {
     const name = entry.productName?.toLowerCase() ?? '';
     const isTree = /ağaç|agac|ficus|palm|schef|yuca|dracena|monstera|benjam/.test(name);
-    const autoDesc = entry.description ?? '';
-    const descWithHint = isTree && autoDesc && !autoDesc.toLowerCase().includes('saksısız')
+    const existingDesc = entry.description ?? '';
+    const autoDesc = existingDesc || buildLocalSeoContent({ productName: entry.productName ?? '' }).description;
+    const descWithHint = isTree && !autoDesc.toLowerCase().includes('saksısız')
       ? autoDesc + '\n\nNot: Ürün saksısız gönderilmektedir.'
       : autoDesc;
     setProductTrendyolEntry(entry);

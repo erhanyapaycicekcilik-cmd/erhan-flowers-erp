@@ -606,8 +606,9 @@ export default function StockCardsPage() {
     setTrendyolResult(null);
     const name = stockCard.name?.toLowerCase() ?? '';
     const isTree = /ağaç|agac|ficus|palm|schef|yuca|dracena|monstera|benjam/.test(name);
-    const autoDesc = stockCard.description ?? stockCard.shortDescription ?? '';
-    const descWithHint = isTree && autoDesc && !autoDesc.toLowerCase().includes('saksısız')
+    const existingDesc = stockCard.description ?? stockCard.shortDescription ?? '';
+    const autoDesc = existingDesc || buildStockAutoDescription(stockCard.name ?? '');
+    const descWithHint = isTree && !autoDesc.toLowerCase().includes('saksısız')
       ? autoDesc + '\n\nNot: Ürün saksısız gönderilmektedir.'
       : autoDesc;
     setTrendyolForm({
@@ -1835,4 +1836,13 @@ function stockSearchText(item: StockCard) {
 function isTestStockCard(item: StockCard) {
   const text = normalize(`${item.name} ${item.sku ?? ''} ${item.category ?? ''} ${item.description ?? ''}`);
   return text.includes('test') || text.includes('deneme');
+}
+
+function buildStockAutoDescription(name: string): string {
+  const productName = name.trim() || "Erhan Flowers Yapay Çiçek";
+  return [
+    `${productName}, Erhan Flowers kalitesiyle hazırlanan dekoratif yapay çiçek ve bitki ürünüdür. Ev, ofis, mağaza ve otel dekorasyonlarında doğal görünümlü tamamlayıcı ürün olarak kullanılabilir.`,
+    "Bakım gerektirmeyen yapısı sayesinde canlı bitki görünümünü pratik kullanım avantajıyla birleştirir. İç mekan dekorasyonunda giriş alanı, salon, vitrin, masa çevresi ve kurumsal alanlarda şık bir atmosfer oluşturur.",
+    "Yapay çiçek ve ağaç ürünlerinde temizlik için nemli ve yumuşak bir bez kullanınız. Kimyasal temizleyici, çamaşır suyu ve aşındırıcı malzemeler kullanmayınız. Ürünü doğrudan yoğun güneş ışığına, aşırı neme ve yüksek ısıya uzun süre maruz bırakmayınız.",
+  ].join("\n\n");
 }
