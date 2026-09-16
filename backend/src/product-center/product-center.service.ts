@@ -1085,7 +1085,7 @@ export class ProductCenterService {
     const categoryId = Number(data.categoryId);
     if (!categoryId) throw new BadRequestException('Trendyol kategori ID zorunludur.');
 
-    const salePrice = Number(data.salePrice ?? entry.salePrice ?? 0);
+    const salePrice = Number(data.salePrice ?? 0);
     if (!salePrice) throw new BadRequestException('Satış fiyatı sıfır olamaz.');
 
     const baseUrl = (process.env.PUBLIC_BASE_URL ?? 'https://api.florayapaycicek.com').replace(/\/+$/, '');
@@ -1093,15 +1093,17 @@ export class ProductCenterService {
       .sort((a, b) => Number(b.isMain) - Number(a.isMain))
       .map((img) => img.filePath.startsWith('http') ? img.filePath : `${baseUrl}/uploads/${img.filePath.replace(/^\//, '')}`);
 
+    const modelCode = String(data.modelCode ?? entry.currentModelCode ?? barcode).trim();
+
     const payload = {
       barcode,
       productName: String(data.productName ?? entry.productName ?? '').trim(),
-      modelCode: String(data.modelCode ?? entry.modelCode ?? barcode).trim(),
+      modelCode,
       categoryId,
       stockQuantity: Number(entry.stockQuantity ?? 0),
       salePrice,
       listPrice: Number(data.listPrice ?? salePrice),
-      description: String(data.description ?? entry.description ?? '').trim(),
+      description: String(data.description ?? entry.productDescription ?? '').trim(),
       color: String(data.color ?? 'Çok Renkli').trim(),
       flowerType: String(data.flowerType ?? '').trim(),
       vatRate: Number(data.vatRate ?? 20),
@@ -1109,16 +1111,14 @@ export class ProductCenterService {
       images,
     };
 
-    const modelCode = payload.modelCode;
-
     // Barkod veya model kodu kaydedilmemişse veritabanına yaz
-    const needsUpdate = !entry.barcode || !entry.modelCode;
+    const needsUpdate = !entry.barcode || !entry.currentModelCode;
     if (needsUpdate) {
       await this.prisma.trendyolProductVariant.update({
         where: { id: variantId },
         data: {
           ...(entry.barcode ? {} : { barcode }),
-          ...(entry.modelCode ? {} : { modelCode }),
+          ...(entry.currentModelCode ? {} : { currentModelCode: modelCode }),
         },
       });
     }
