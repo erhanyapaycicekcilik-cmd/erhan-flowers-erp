@@ -204,6 +204,54 @@ export class ProductsService {
     );
   }
 
+  // Tüm aktif ürünleri tüm bağlı platformlara toplu yayınlar.
+  // Her ürün arasında kısa bekleme ile rate-limit aşımı önlenir.
+  async broadcastAll(): Promise<{ total: number; sent: number; skipped: number; errors: number }> {
+    const products = await this.prisma.product.findMany({
+      where: { status: 'ACTIVE' },
+      select: { id: true, barcode: true, modelCode: true, marketPrice: true, listPrice: true, shopPrice: true, stockQuantity: true },
+    });
+
+    const connections = await this.prisma.$queryRaw<Array<{ platform: string }>>`
+      SELECT platform FROM integration_connections
+      WHERE status = 'CONNECTED' AND platform IN ('TRENDYOL', 'N11', 'HEPSIBURADA')
+    `.catch(() => [] as Array<{ platform: string }>);
+
+    if (connections.length === 0) return { total: products.length, sent: 0, skipped: products.length, errors: 0 };
+
+    let sent = 0; let skipped = 0; let errors = 0;
+
+    for (const product of products) {
+      if (!product.barcode && !product.modelCode) { skipped++; continue; }
+      const salePrice = Number(product.marketPrice ?? product.shopPrice ?? 0);
+      if (!salePrice) { skipped++; continue; }
+
+      const payload = {
+        barcode: product.barcode ?? product.modelCode ?? '',
+        modelCode: product.modelCode ?? product.barcode ?? '',
+        salePrice,
+        listPrice: Number(product.listPrice ?? product.marketPrice ?? 0),
+        stockQuantity: Number(product.stockQuantity ?? 0),
+      };
+
+      const results = await Promise.allSettled(
+        connections.map(({ platform }) => this.integrations.pushPrice(platform, payload)),
+      );
+
+      let anyOk = false;
+      for (const r of results) {
+        if (r.status === 'fulfilled' && r.value.ok) anyOk = true;
+        else errors++;
+      }
+      if (anyOk) sent++;
+
+      // Rate-limit koruması: platformlara hızlı istek atmamak için
+      await new Promise((res) => setTimeout(res, 300));
+    }
+
+    return { total: products.length, sent, skipped, errors };
+  }
+
   passive(id: number) {
     return this.prisma.product.update({
       where: { id },

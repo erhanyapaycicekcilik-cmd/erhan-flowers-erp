@@ -317,6 +317,8 @@ const productImageAutomationDisabled = true;
 export default function ProductsPage() {
   const [entries, setEntries] = useState<Entry[]>([]);
   const [importingExcel, setImportingExcel] = useState(false);
+  const [broadcastingAll, setBroadcastingAll] = useState(false);
+  const [broadcastResult, setBroadcastResult] = useState<{ total: number; sent: number; skipped: number; errors: number } | null>(null);
   const [openingTrendyolPanel, setOpeningTrendyolPanel] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
   const [families, setFamilies] = useState<Family[]>([]);
@@ -1585,9 +1587,35 @@ export default function ProductsPage() {
             <Upload size={17} /> {importingExcel ? 'Yükleniyor...' : 'Excel ile Toplu Yükle'}
             <input type="file" accept=".xlsx,.xls" className="hidden" disabled={importingExcel} onChange={(event) => { const file = event.target.files?.[0]; if (file) importExcelFile(file); event.target.value = ''; }} />
           </label>
+          <button
+            className="btn btn-secondary"
+            disabled={broadcastingAll}
+            onClick={async () => {
+              if (!confirm('Tüm aktif ürünlerin fiyat ve stoğu Trendyol, N11 ve Hepsiburada\'ya gönderilecek. Devam edilsin mi?')) return;
+              setBroadcastingAll(true);
+              setBroadcastResult(null);
+              try {
+                const result = await api<{ total: number; sent: number; skipped: number; errors: number }>('/products/broadcast-all', { method: 'POST' });
+                setBroadcastResult(result);
+              } catch {
+                alert('Toplu yayın sırasında hata oluştu.');
+              } finally {
+                setBroadcastingAll(false);
+              }
+            }}
+          >
+            {broadcastingAll ? <RefreshCw size={17} className="animate-spin" /> : <Send size={17} />}
+            {broadcastingAll ? 'Platformlara Gönderiliyor...' : 'Tüm Ürünleri Platformlara Gönder'}
+          </button>
           <button className="btn btn-secondary" onClick={() => load()}><RefreshCw size={17} /> Yenile</button>
         </div>
       </div>
+      {broadcastResult && (
+        <div className="mb-4 rounded-md bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-800">
+          Toplu yayın tamamlandı — Toplam: {broadcastResult.total} | Gönderildi: {broadcastResult.sent} | Atlandı: {broadcastResult.skipped} | Hata: {broadcastResult.errors}
+          <button className="ml-3 text-blue-500 hover:underline" onClick={() => setBroadcastResult(null)}>×</button>
+        </div>
+      )}
       {message && <div className="mb-4 rounded-md bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800">{message}</div>}
 
       <div className="mb-4 flex flex-wrap gap-2 rounded-md border border-line bg-white p-3">
