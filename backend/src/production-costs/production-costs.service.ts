@@ -5,6 +5,7 @@ import { BambuLeafRoundingMode, Prisma, ProductionCostGroup, StockUsageEventType
 import * as XLSX from 'xlsx';
 import { PrismaService } from '../prisma/prisma.service';
 import { PublishingService } from '../publishing/publishing.service';
+import { IntegrationsService } from '../integrations/integrations.service';
 import { IntegrationPlatform } from '../integrations/adapters/integration-adapter.interface';
 
 type TrendyolCatalogProduct = {
@@ -42,6 +43,7 @@ export class ProductionCostsService {
     private readonly prisma: PrismaService,
     private readonly publishing: PublishingService,
     private readonly config: ConfigService,
+    private readonly integrations: IntegrationsService,
   ) {}
 
   // Gunde bir kez Trendyol katalogunu ceker; satici panelinden silinen/pasife
@@ -777,6 +779,14 @@ export class ProductionCostsService {
               stockQuantity: variant.stockQuantity,
             },
           });
+          // Maliyet onaylanınca tüm platformlara fiyat/stok yayını
+          this.broadcastApprovedCost({
+            barcode: product.barcode,
+            modelCode: product.modelCode,
+            salePrice,
+            listPrice: salePrice,
+            stockQuantity: Number(variant.stockQuantity ?? 0),
+          }).catch((err) => this.logger.warn(`Maliyet onay yayın hatası: ${String(err)}`));
         }
       }
 
@@ -790,6 +800,30 @@ export class ProductionCostsService {
     });
 
     return { ok: true, costDraft: this.serializeCostDraft(draft) };
+  }
+
+  private async broadcastApprovedCost(product: { barcode?: string | null; modelCode?: string | null; salePrice: number; listPrice: number; stockQuantity: number }): Promise<void> {
+    if (!product.barcode && !product.modelCode) return;
+    if (!product.salePrice) return;
+    const payload = {
+      barcode: product.barcode ?? product.modelCode ?? '',
+      modelCode: product.modelCode ?? product.barcode ?? '',
+      salePrice: product.salePrice,
+      listPrice: product.listPrice,
+      stockQuantity: product.stockQuantity,
+    };
+    const connections = await this.prisma.$queryRaw<Array<{ platform: string }>>`
+      SELECT platform FROM integration_connections
+      WHERE status = 'CONNECTED' AND platform IN ('TRENDYOL', 'N11', 'HEPSIBURADA')
+    `.catch(() => [] as Array<{ platform: string }>);
+    await Promise.allSettled(
+      connections.map(({ platform }) =>
+        this.integrations.pushPrice(platform, payload).then((r) => {
+          if (!r.ok) this.logger.warn(`${platform} maliyet yayını başarısız: ${r.message}`);
+          else this.logger.log(`${platform} maliyet yayını tamam: ${payload.barcode || payload.modelCode}`);
+        }),
+      ),
+    );
   }
 
   async startVariantCostDraftFromTemplate(variantId: number, userRole = 'STAFF', userId = 1) {
