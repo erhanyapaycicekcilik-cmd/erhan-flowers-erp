@@ -284,7 +284,7 @@ export default function StockCardsPage() {
 
   useEffect(() => {
     api<Array<{ id: number; name: string; parentId: number | null; leaf: boolean }>>('/stock-cards/trendyol-categories')
-      .then(setTrendyolCategories)
+      .then((data) => { if (Array.isArray(data)) setTrendyolCategories(data); })
       .catch(() => {});
   }, []);
 
