@@ -81,4 +81,10 @@ export class ProductCenterController {
   shopCard(@Param('id') id: string) {
     return this.productCenter.generateShopCard(Number(id));
   }
+
+  @Post('entries/:id/trendyol-publish')
+  @UseGuards(OwnerGuard)
+  trendyolPublish(@Param('id') id: string, @Body() body: unknown) {
+    return this.productCenter.trendyolPublish(Number(id), body);
+  }
 }

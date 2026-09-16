@@ -52,7 +52,7 @@ services:
   caddy:
     image: caddy:2-alpine
     container_name: erhan-flowers-caddy-prod
-    restart: unless-stopped
+    restart: always
     networks:
       - erp_net
     ports:

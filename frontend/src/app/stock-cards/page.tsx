@@ -273,6 +273,8 @@ export default function StockCardsPage() {
     flowerType: '',
     vatRate: '20',
     desi: '1',
+    barcode: '',
+    modelCode: '',
   });
   const [trendyolResult, setTrendyolResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [trendyolSending, setTrendyolSending] = useState(false);
@@ -602,15 +604,24 @@ export default function StockCardsPage() {
   function openTrendyol(stockCard: StockCard) {
     setSelected(stockCard);
     setTrendyolResult(null);
+    const name = stockCard.name?.toLowerCase() ?? '';
+    const isTree = /ağaç|agac|ficus|palm|schef|yuca|dracena|monstera|benjam/.test(name);
+    const existingDesc = stockCard.description ?? stockCard.shortDescription ?? '';
+    const autoDesc = existingDesc || buildStockAutoDescription(stockCard.name ?? '');
+    const descWithHint = isTree && !autoDesc.toLowerCase().includes('saksısız')
+      ? autoDesc + '\n\nNot: Ürün saksısız gönderilmektedir.'
+      : autoDesc;
     setTrendyolForm({
       categoryId: '',
       salePrice: String(stockCard.salePrice ?? ''),
       listPrice: String(stockCard.salePrice ?? ''),
-      description: stockCard.description ?? stockCard.shortDescription ?? '',
+      description: descWithHint,
       color: stockCard.color ?? '',
       flowerType: stockCard.leafFlowerType ?? '',
       vatRate: '20',
       desi: '1',
+      barcode: stockCard.barcode || `EF${String(stockCard.id).padStart(8, '0')}`,
+      modelCode: stockCard.model || stockCard.sku || `EF-${String(stockCard.id).padStart(6, '0')}`,
     });
     setPanelMode('trendyol');
   }
@@ -632,6 +643,8 @@ export default function StockCardsPage() {
           flowerType: trendyolForm.flowerType,
           vatRate: Number(trendyolForm.vatRate),
           desi: Number(trendyolForm.desi),
+          barcode: trendyolForm.barcode || undefined,
+          modelCode: trendyolForm.modelCode || undefined,
         },
       });
       setTrendyolResult({ ok: result.ok, message: result.message });
@@ -1003,11 +1016,36 @@ export default function StockCardsPage() {
                     </div>
                   </div>
 
-                  <div className="rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-600">
-                    <div><strong>Barkod:</strong> {selected.barcode || 'Stok kartında barkod yok'}</div>
-                    <div><strong>Stok miktarı:</strong> {Number(selected.stockQuantity ?? 0).toLocaleString('tr-TR')} {selected.unit}</div>
-                    <div><strong>Model kodu:</strong> {selected.model || selected.sku || '-'}</div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="mb-1 block text-xs font-semibold text-slate-600">Barkod</label>
+                      <input
+                        className="field"
+                        placeholder="Barkod"
+                        value={trendyolForm.barcode}
+                        onChange={(e) => setTrendyolForm({ ...trendyolForm, barcode: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-semibold text-slate-600">Model Kodu</label>
+                      <input
+                        className="field"
+                        placeholder="Model kodu"
+                        value={trendyolForm.modelCode}
+                        onChange={(e) => setTrendyolForm({ ...trendyolForm, modelCode: e.target.value })}
+                      />
+                    </div>
                   </div>
+
+                  <div className="rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                    <div><strong>Stok miktarı:</strong> {Number(selected.stockQuantity ?? 0).toLocaleString('tr-TR')} {selected.unit}</div>
+                  </div>
+
+                  {/ağaç|agac|ficus|palm|schef|yuca|dracena|monstera|benjam/.test((selected.name ?? '').toLowerCase()) && (
+                    <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+                      ⚠️ Ağaç ürünü — açıklamada &quot;saksısız gönderilmektedir&quot; bilgisi mutlaka yer almalıdır.
+                    </div>
+                  )}
                 </div>
 
                 {trendyolResult && (
@@ -1798,4 +1836,13 @@ function stockSearchText(item: StockCard) {
 function isTestStockCard(item: StockCard) {
   const text = normalize(`${item.name} ${item.sku ?? ''} ${item.category ?? ''} ${item.description ?? ''}`);
   return text.includes('test') || text.includes('deneme');
+}
+
+function buildStockAutoDescription(name: string): string {
+  const productName = name.trim() || "Erhan Flowers Yapay Çiçek";
+  return [
+    `${productName}, Erhan Flowers kalitesiyle hazırlanan dekoratif yapay çiçek ve bitki ürünüdür. Ev, ofis, mağaza ve otel dekorasyonlarında doğal görünümlü tamamlayıcı ürün olarak kullanılabilir.`,
+    "Bakım gerektirmeyen yapısı sayesinde canlı bitki görünümünü pratik kullanım avantajıyla birleştirir. İç mekan dekorasyonunda giriş alanı, salon, vitrin, masa çevresi ve kurumsal alanlarda şık bir atmosfer oluşturur.",
+    "Yapay çiçek ve ağaç ürünlerinde temizlik için nemli ve yumuşak bir bez kullanınız. Kimyasal temizleyici, çamaşır suyu ve aşındırıcı malzemeler kullanmayınız. Ürünü doğrudan yoğun güneş ışığına, aşırı neme ve yüksek ısıya uzun süre maruz bırakmayınız.",
+  ].join("\n\n");
 }

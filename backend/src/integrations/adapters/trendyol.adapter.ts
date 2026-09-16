@@ -4,10 +4,15 @@ import { AdapterConnectionResult, ExternalOrder, ExternalOrderSummary, Integrati
 
 // "Yapay & Kuru Çiçek" (2995) kategorisinin zorunlu öznitelikleri. Trendyol'un
 // GET /product/product-categories/2995/attributes cevabından alınmıştır.
-const TRENDYOL_FLOWER_TYPE_ATTRIBUTE_ID = 1095;
+const TRENDYOL_FLOWER_TYPE_ATTRIBUTE_ID = 1095;  // Türü (Ağaç, Gül vb.)
 const TRENDYOL_COLOR_ATTRIBUTE_ID = 47;
 const TRENDYOL_WEB_COLOR_ATTRIBUTE_ID = 348;
 const TRENDYOL_ORIGIN_ATTRIBUTE_ID = 1192;
+
+// "Tipi" özniteliği (Bitki / Çiçek) — Trendyol aksiyon bekleyen ürünlerde zorunlu
+const TRENDYOL_PRODUCT_TYPE_ATTRIBUTE_ID = 1094;
+const TRENDYOL_PRODUCT_TYPE_BITKI_ID = 10616683;   // Bitki
+const TRENDYOL_PRODUCT_TYPE_CICEK_ID = 10616684;   // Çiçek
 
 const TRENDYOL_FLOWER_TYPE_VALUES: Record<string, number> = {
   Gül: 10618191,
@@ -544,6 +549,16 @@ export class TrendyolAdapter extends BaseIntegrationAdapter {
       const flowerType = this.text(data.flowerType);
       const flowerTypeValueId = TRENDYOL_FLOWER_TYPE_VALUES[flowerType] ?? TRENDYOL_FLOWER_TYPE_VALUES['Ağaç'];
       attributes.push({ attributeId: TRENDYOL_FLOWER_TYPE_ATTRIBUTE_ID, attributeValueId: flowerTypeValueId });
+
+      // "Tipi" (Bitki / Çiçek) — aksiyon bekleyen ürünlerde zorunlu alan
+      const productNameLower = this.text(data.productName).toLowerCase();
+      const flowerTypeLower = flowerType.toLowerCase();
+      const isBitki = /ağaç|agac|bitki|ficus|palm|schef|yuca|dracena|monstera|benjam|sarmaşık|yaprak/.test(productNameLower)
+        || flowerTypeLower === 'ağaç' || flowerTypeLower === 'yaprak' || flowerTypeLower === 'sarmaşık';
+      attributes.push({
+        attributeId: TRENDYOL_PRODUCT_TYPE_ATTRIBUTE_ID,
+        attributeValueId: isBitki ? TRENDYOL_PRODUCT_TYPE_BITKI_ID : TRENDYOL_PRODUCT_TYPE_CICEK_ID,
+      });
     }
 
     return attributes;

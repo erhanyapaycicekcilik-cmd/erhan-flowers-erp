@@ -618,7 +618,7 @@ export class StockCardsService {
     const stockCard = await this.ensureStockCard(id);
     const data = (body ?? {}) as Record<string, unknown>;
 
-    const barcode = String(stockCard.barcode ?? data.barcode ?? '').trim();
+    const barcode = String(data.barcode ?? stockCard.barcode ?? '').trim();
     if (!barcode) throw new BadRequestException('Trendyol gönderimi için barkod zorunludur.');
 
     const categoryId = Number(data.categoryId);
@@ -644,6 +644,18 @@ export class StockCardsService {
       desi: Number(data.desi ?? 1),
       images,
     };
+
+    // Barkod veya model kodu kaydedilmemişse veritabanına yaz
+    if (!stockCard.barcode || !stockCard.model) {
+      await this.prisma.stockCard.update({
+        where: { id },
+        data: {
+          ...(stockCard.barcode ? {} : { barcode }),
+          ...(stockCard.model ? {} : { model: payload.modelCode }),
+        },
+      });
+    }
+
 
     const credentials = await this.integrationCenter.runtimeCredentials('TRENDYOL');
     const adapter = new TrendyolAdapter(credentials);
