@@ -1128,6 +1128,12 @@ export class ProductCenterService {
     return adapter.pushProduct(payload);
   }
 
+  async trendyolCategories() {
+    const credentials = await this.integrationCenter.runtimeCredentials('TRENDYOL');
+    const adapter = new TrendyolAdapter(credentials);
+    return adapter.fetchCategories();
+  }
+
   async checkTrendyolBatch(batchId: string) {
     const credentials = await this.integrationCenter.runtimeCredentials('TRENDYOL');
     const adapter = new TrendyolAdapter(credentials);

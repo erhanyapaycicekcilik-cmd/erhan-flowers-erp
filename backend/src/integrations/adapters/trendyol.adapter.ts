@@ -241,6 +241,33 @@ export class TrendyolAdapter extends BaseIntegrationAdapter {
   // Ürün/fiyat gönderimi asenkron işlendiği için "kuyruğa alındı" cevabı gerçek
   // sonucu göstermez. Bu metod, verilen batchRequestId'nin Trendyol tarafında
   // gerçekten işlenip işlenmediğini ve varsa hata sebebini sorgular.
+  async fetchCategories(): Promise<Array<{ id: number; name: string; parentId: number | null; leaf: boolean }>> {
+    const supplierId = this.env('SUPPLIER_ID');
+    const apiBaseUrl = this.env('API_URL').replace(/\/+$/, '');
+    const url = `${apiBaseUrl}/product-categories`;
+    const response = await fetch(url, {
+      headers: {
+        Authorization: `Basic ${Buffer.from(`${this.env('API_KEY')}:${this.env('API_SECRET')}`).toString('base64')}`,
+        'User-Agent': `${supplierId} - SelfIntegration`,
+        Accept: 'application/json',
+      },
+    });
+    if (!response.ok) return [];
+    const body = (await response.json().catch(() => ({}))) as { categories?: Array<Record<string, unknown>> };
+    const flat: Array<{ id: number; name: string; parentId: number | null; leaf: boolean }> = [];
+    const walk = (items: Array<Record<string, unknown>>, parentId: number | null) => {
+      for (const item of items) {
+        const id = Number(item.id);
+        const name = String(item.name ?? '');
+        const sub = Array.isArray(item.subCategories) ? item.subCategories as Array<Record<string, unknown>> : [];
+        flat.push({ id, name, parentId, leaf: sub.length === 0 });
+        if (sub.length > 0) walk(sub, id);
+      }
+    };
+    walk(body.categories ?? [], null);
+    return flat;
+  }
+
   async checkBatchStatus(batchRequestId: string): Promise<AdapterConnectionResult & { batchStatus?: string; failedItemCount?: number }> {
     const missing = this.missingKeys();
     if (missing.length) return this.missing(missing);

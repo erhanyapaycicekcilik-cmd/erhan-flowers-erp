@@ -93,4 +93,10 @@ export class ProductCenterController {
   trendyolBatchStatus(@Param('batchId') batchId: string) {
     return this.productCenter.checkTrendyolBatch(batchId);
   }
+
+  @Get('trendyol-categories')
+  @UseGuards(OwnerGuard)
+  trendyolCategories() {
+    return this.productCenter.trendyolCategories();
+  }
 }

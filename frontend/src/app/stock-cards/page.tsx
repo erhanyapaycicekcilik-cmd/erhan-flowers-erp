@@ -278,6 +278,19 @@ export default function StockCardsPage() {
   });
   const [trendyolResult, setTrendyolResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [trendyolSending, setTrendyolSending] = useState(false);
+  const [trendyolCategories, setTrendyolCategories] = useState<Array<{ id: number; name: string; parentId: number | null; leaf: boolean }>>([]);
+  const [categorySearch, setCategorySearch] = useState('');
+  const [categorySearchFocus, setCategorySearchFocus] = useState(false);
+
+  useEffect(() => {
+    api<Array<{ id: number; name: string; parentId: number | null; leaf: boolean }>>('/product-center/trendyol-categories')
+      .then(setTrendyolCategories)
+      .catch(() => {});
+  }, []);
+
+  const filteredCategories = categorySearch.length >= 2
+    ? trendyolCategories.filter((c) => c.leaf && c.name.toLowerCase().includes(categorySearch.toLowerCase())).slice(0, 20)
+    : [];
 
   async function load() {
     setStockCards(await api<StockCard[]>('/stock-cards'));
@@ -928,17 +941,47 @@ export default function StockCardsPage() {
                 </div>
 
                 <div className="space-y-3">
-                  <div>
-                    <label className="mb-1 block text-xs font-semibold text-slate-600">Trendyol Kategori ID <span className="text-red-500">*</span></label>
+                  <div className="relative">
+                    <label className="mb-1 block text-xs font-semibold text-slate-600">Trendyol Kategori <span className="text-red-500">*</span></label>
                     <input
                       className="field"
-                      type="number"
-                      placeholder="Ör: 2995"
-                      required
-                      value={trendyolForm.categoryId}
-                      onChange={(e) => setTrendyolForm({ ...trendyolForm, categoryId: e.target.value })}
+                      placeholder="Kategori ara (en az 2 harf)"
+                      value={categorySearch}
+                      onFocus={() => setCategorySearchFocus(true)}
+                      onBlur={() => setTimeout(() => setCategorySearchFocus(false), 200)}
+                      onChange={(e) => {
+                        setCategorySearch(e.target.value);
+                        if (!e.target.value) setTrendyolForm({ ...trendyolForm, categoryId: '' });
+                      }}
                     />
-                    <div className="mt-1 text-xs text-slate-400">Yapay &amp; Kuru Çiçek: 2995 · Saksı: 2615</div>
+                    {trendyolForm.categoryId && (
+                      <div className="mt-1 text-xs font-semibold text-emerald-600">Seçili ID: {trendyolForm.categoryId}</div>
+                    )}
+                    {categorySearchFocus && filteredCategories.length > 0 && (
+                      <div className="absolute left-0 right-0 z-50 mt-1 max-h-52 overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-lg">
+                        {filteredCategories.map((cat) => (
+                          <button
+                            key={cat.id}
+                            type="button"
+                            className="w-full px-3 py-2 text-left text-sm hover:bg-slate-50"
+                            onClick={() => {
+                              setTrendyolForm({ ...trendyolForm, categoryId: String(cat.id) });
+                              setCategorySearch(cat.name);
+                              setCategorySearchFocus(false);
+                            }}
+                          >
+                            <span className="font-medium">{cat.name}</span>
+                            <span className="ml-2 text-xs text-slate-400">#{cat.id}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {categorySearchFocus && categorySearch.length >= 2 && filteredCategories.length === 0 && (
+                      <div className="absolute left-0 right-0 z-50 mt-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-400 shadow-lg">
+                        Kategori bulunamadı
+                      </div>
+                    )}
+                    <input type="hidden" required value={trendyolForm.categoryId} />
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
