@@ -48,10 +48,32 @@ type IdentityCheckPayload = {
 export class ProductsService {
   private readonly logger = new Logger(ProductsService.name);
 
+  // Bağlı platform listesi 5 dakika cache'lenir — her ürün kaydında DB sorgusu atmamak için
+  private connectedPlatformsCache: { platforms: string[]; expiresAt: number } | null = null;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly integrations: IntegrationsService,
   ) {}
+
+  private async getConnectedPlatforms(): Promise<string[]> {
+    const now = Date.now();
+    if (this.connectedPlatformsCache && this.connectedPlatformsCache.expiresAt > now) {
+      return this.connectedPlatformsCache.platforms;
+    }
+    const rows = await this.prisma.$queryRaw<Array<{ platform: string }>>`
+      SELECT platform FROM integration_connections
+      WHERE status = 'CONNECTED' AND platform IN ('TRENDYOL', 'N11', 'HEPSIBURADA')
+    `.catch(() => [] as Array<{ platform: string }>);
+    const platforms = rows.map((r) => r.platform);
+    this.connectedPlatformsCache = { platforms, expiresAt: now + 5 * 60 * 1000 };
+    return platforms;
+  }
+
+  // Bağlantı değiştiğinde cache'i temizle (bağlantı ekle/sil işlemlerinde çağrılabilir)
+  invalidatePlatformCache() {
+    this.connectedPlatformsCache = null;
+  }
 
   async list() {
     const products = await this.prisma.product.findMany({
@@ -178,27 +200,31 @@ export class ProductsService {
   }): Promise<void> {
     if (!product.barcode && !product.modelCode) return;
 
+    // Tüm platformlara aynı fiyat gider (kullanıcı tercihi: tek fiyat politikası)
+    // marketPrice = platform satış fiyatı, listPrice = KDV dahil liste fiyatı
+    const salePrice = Number(product.marketPrice ?? product.shopPrice ?? 0);
+    if (!salePrice) return;
+    const rawListPrice = Number(product.listPrice ?? product.marketPrice ?? 0);
+    // listPrice her zaman salePrice'dan büyük olmalı (platform kuralı)
+    const listPrice = rawListPrice > salePrice ? rawListPrice : Math.ceil(salePrice * 1.1);
+
     const payload = {
       barcode: product.barcode ?? product.modelCode ?? '',
       modelCode: product.modelCode ?? product.barcode ?? '',
-      salePrice: Number(product.marketPrice ?? product.shopPrice ?? 0),
-      listPrice: Number(product.listPrice ?? product.marketPrice ?? 0),
+      salePrice,
+      listPrice,
       stockQuantity: Number(product.stockQuantity ?? 0),
     };
-    if (!payload.salePrice) return;
 
-    // Aktif platform bağlantılarını çek
-    const connections = await this.prisma.$queryRaw<Array<{ platform: string }>>`
-      SELECT platform FROM integration_connections
-      WHERE status = 'CONNECTED'
-        AND platform IN ('TRENDYOL', 'N11', 'HEPSIBURADA')
-    `.catch(() => [] as Array<{ platform: string }>);
+    // Cache'den bağlı platformları al (5dk TTL, DB sorgusu atmaz)
+    const platforms = await this.getConnectedPlatforms();
+    if (!platforms.length) return;
 
     await Promise.allSettled(
-      connections.map(({ platform }) =>
+      platforms.map((platform) =>
         this.integrations.pushPrice(platform, payload).then((result) => {
           if (!result.ok) this.logger.warn(`${platform} fiyat/stok yayını başarısız: ${result.message}`);
-          else this.logger.log(`${platform} fiyat/stok yayını tamam: ${product.barcode}`);
+          else this.logger.log(`${platform} fiyat/stok yayını tamam: ${payload.barcode || payload.modelCode}`);
         }),
       ),
     );
@@ -212,10 +238,9 @@ export class ProductsService {
       select: { id: true, barcode: true, modelCode: true, marketPrice: true, listPrice: true, shopPrice: true, stockQuantity: true },
     });
 
-    const connections = await this.prisma.$queryRaw<Array<{ platform: string }>>`
-      SELECT platform FROM integration_connections
-      WHERE status = 'CONNECTED' AND platform IN ('TRENDYOL', 'N11', 'HEPSIBURADA')
-    `.catch(() => [] as Array<{ platform: string }>);
+    this.invalidatePlatformCache(); // toplu gönderimde her zaman taze bağlantı listesi al
+    const platformNames = await this.getConnectedPlatforms();
+    const connections = platformNames.map((platform) => ({ platform }));
 
     if (connections.length === 0) return { total: products.length, sent: 0, skipped: products.length, errors: 0 };
 
