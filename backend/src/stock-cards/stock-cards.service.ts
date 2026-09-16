@@ -656,6 +656,7 @@ export class StockCardsService {
       });
     }
 
+
     const credentials = await this.integrationCenter.runtimeCredentials('TRENDYOL');
     const adapter = new TrendyolAdapter(credentials);
     return adapter.pushProduct(payload);
