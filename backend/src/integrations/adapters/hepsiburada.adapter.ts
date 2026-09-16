@@ -1,6 +1,6 @@
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import { HttpMarketplaceOrderAdapter } from './http-marketplace-order.adapter';
-import { AdapterConnectionResult } from './integration-adapter.interface';
+import { AdapterConnectionResult, ExternalOrder } from './integration-adapter.interface';
 
 const HB_ORDERS_URL = 'https://oms-external.hepsiburada.com';
 
@@ -15,6 +15,146 @@ export class HepsiburadaAdapter extends HttpMarketplaceOrderAdapter {
       defaultProductPath: '',
       runtimeCredentials,
     });
+  }
+
+  // Hepsiburada sipariş API'si tarih filtresi desteklemiyor ve
+  // offset/limit kullanıyor — genel adapter'ın startDate/endDate
+  // parametreleri HB tarafından reddedildiği için override gerekli.
+  override async fetchOrders(): Promise<ExternalOrder[]> {
+    const merchantId = this.env('MERCHANT_ID');
+    const username = this.env('USERNAME') || this.env('API_KEY') || merchantId;
+    const password = this.env('PASSWORD') || this.env('API_SECRET');
+    if (!merchantId || !username || !password) return [];
+
+    const auth = Buffer.from(`${username}:${password}`).toString('base64');
+    const userAgent = this.env('USER_AGENT') || 'ErhanFlowersERP-HB';
+    const headers = {
+      Accept: 'application/json',
+      Authorization: `Basic ${auth}`,
+      'User-Agent': userAgent,
+    };
+
+    const apiBase = (this.env('API_URL') || HB_ORDERS_URL).replace(/\/+$/, '');
+    // HB open orders endpoint — aktif siparişleri döndürür
+    const basePath = `/orders/merchantid/${encodeURIComponent(merchantId)}/openorders`;
+
+    const allOrders: ExternalOrder[] = [];
+    const pageSize = 50;
+    const maxPages = 10;
+    let offset = 0;
+
+    for (let page = 0; page < maxPages; page++) {
+      const url = new URL(basePath, `${apiBase}/`);
+      url.searchParams.set('offset', String(offset));
+      url.searchParams.set('limit', String(pageSize));
+
+      const response = await fetch(url.toString(), { method: 'GET', headers });
+      if (!response.ok) break;
+
+      const json = await response.json().catch(() => ({})) as Record<string, unknown>;
+
+      // HB yanıt formatı: { TotalCount, TotalPage, pageSize, pageIndex, data: [...] }
+      const items = Array.isArray(json.data) ? json.data as Record<string, unknown>[]
+        : Array.isArray(json.items) ? json.items as Record<string, unknown>[]
+        : Array.isArray(json.orders) ? json.orders as Record<string, unknown>[]
+        : [];
+
+      if (!items.length) break;
+
+      for (const order of items) {
+        const mapped = this.mapHepsiburadaOrder(order);
+        if (mapped) allOrders.push(mapped);
+      }
+
+      const totalCount = Number(json.TotalCount ?? json.totalCount ?? 0);
+      offset += pageSize;
+      if (totalCount > 0 && offset >= totalCount) break;
+      if (items.length < pageSize) break;
+    }
+
+    // Tekrarlananları kaldır
+    return Array.from(new Map(allOrders.map((o) => [o.externalOrderId, o])).values());
+  }
+
+  private mapHepsiburadaOrder(order: Record<string, unknown>): ExternalOrder | null {
+    // HB sipariş alanları: id, orderNumber, packageNumber, status, customerName,
+    // orderLineList: [{ id, productName, merchantSku, quantity, price, barcode? }]
+    const orderId = String(order.id ?? order.packageNumber ?? order.orderNumber ?? '');
+    const orderNumber = String(order.orderNumber ?? order.id ?? '');
+    if (!orderId) return null;
+
+    const statusRaw = String(order.status ?? order.packageStatus ?? '').toUpperCase();
+    const status = this.mapHbStatus(statusRaw);
+
+    const shipAddr = (order.shippingAddress ?? order.deliveryAddress ?? {}) as Record<string, unknown>;
+    const customerName = String(
+      order.customerName ?? order.buyerName ??
+      shipAddr.fullName ?? [shipAddr.firstName, shipAddr.lastName].filter(Boolean).join(' ') ?? ''
+    );
+    const phone = String(order.customerPhone ?? order.phone ?? shipAddr.phone ?? '');
+
+    const lines = Array.isArray(order.orderLineList) ? order.orderLineList as Record<string, unknown>[]
+      : Array.isArray(order.lines) ? order.lines as Record<string, unknown>[]
+      : Array.isArray(order.items) ? order.items as Record<string, unknown>[]
+      : [];
+
+    return {
+      externalOrderId: orderId,
+      platformOrderNumber: orderNumber || orderId,
+      platform: 'HEPSIBURADA',
+      status: status.saleStatus,
+      invoiceStatus: status.invoiceStatus,
+      externalStatus: statusRaw || undefined,
+      unknownStatus: status.unknown,
+      customerName,
+      phone,
+      addressText: String(shipAddr.fullAddress ?? shipAddr.address ?? shipAddr.address1 ?? '') || undefined,
+      city: String(shipAddr.city ?? '') || undefined,
+      district: String(shipAddr.district ?? shipAddr.town ?? '') || undefined,
+      totalAmount: this.hbPrice(order.totalPrice ?? order.amount ?? 0),
+      paidAmount: this.hbPrice(order.totalPrice ?? order.amount ?? 0),
+      deliveryFee: this.hbPrice(order.cargoPrice ?? order.deliveryFee ?? 0),
+      paymentStatus: 'PAID',
+      cargoProvider: String(order.cargoCompany ?? order.cargoProviderName ?? '') || undefined,
+      cargoTrackingNumber: String(order.trackingNumber ?? order.cargoTrackingNumber ?? '') || undefined,
+      orderDate: order.orderDate ? new Date(String(order.orderDate)) : undefined,
+      items: lines.map((line) => {
+        const merchantSku = String(line.merchantSku ?? line.merchantSKU ?? line.supplierStockCode ?? line.sku ?? '');
+        // merchantSku hem barcode hem modelCode olarak set ediliyor — hangisi eşleşirse stok düşülsün
+        return {
+          externalLineId: String(line.id ?? line.lineId ?? '') || undefined,
+          externalVariantId: String(line.hepsiburadaSku ?? line.listingId ?? merchantSku) || undefined,
+          productName: String(line.productName ?? line.name ?? 'Hepsiburada Ürünü'),
+          sku: merchantSku || undefined,
+          barcode: String(line.barcode ?? line.ean ?? merchantSku) || undefined,
+          modelCode: merchantSku || undefined,
+          imageUrl: String(line.imageUrl ?? line.productImageUrlFormat ?? '') || undefined,
+          quantity: Number(line.quantity ?? line.qty ?? 1),
+          unitPrice: this.hbPrice(line.price ?? line.unitPrice ?? line.salePrice ?? 0),
+        };
+      }),
+    };
+  }
+
+  private mapHbStatus(status: string): { saleStatus?: ExternalOrder['status']; invoiceStatus?: ExternalOrder['invoiceStatus']; unknown: boolean } {
+    if (['OPEN', 'NEW', 'CREATED', 'WAITING_FOR_APPROVAL', 'APPROVED', 'WAITING_IN_MERCHANT'].includes(status)) return { saleStatus: 'CONFIRMED', unknown: false };
+    if (['PACKING', 'PICKING', 'PREPARING', 'INVOICED', 'WAITING_FOR_SHIPMENT'].includes(status)) return { saleStatus: 'PREPARING', unknown: false };
+    if (['SHIPPED', 'CARGO', 'IN_TRANSIT', 'ON_THE_WAY'].includes(status)) return { saleStatus: 'OUT_FOR_DELIVERY', unknown: false };
+    if (['DELIVERED', 'COMPLETED'].includes(status)) return { saleStatus: 'DELIVERED', unknown: false };
+    if (['CANCELLED', 'CANCELED', 'REJECTED'].includes(status)) return { saleStatus: 'CANCELLED', invoiceStatus: 'CANCELLED', unknown: false };
+    if (['RETURNED', 'RETURNING'].includes(status)) return { saleStatus: 'COMPLETED', invoiceStatus: 'RETURNED', unknown: false };
+    // HB bazen boş status gönderebilir — OPEN kabul et
+    if (!status) return { saleStatus: 'CONFIRMED', unknown: false };
+    return { unknown: true };
+  }
+
+  private hbPrice(value: unknown): number {
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      const obj = value as Record<string, unknown>;
+      const amount = obj.amount ?? obj.value ?? obj.price;
+      if (amount != null) return Number(amount) || 0;
+    }
+    return Number(value) || 0;
   }
 
   override async pushProduct(payload: unknown): Promise<AdapterConnectionResult> {
