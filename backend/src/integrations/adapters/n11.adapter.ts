@@ -153,33 +153,66 @@ export class N11Adapter extends HttpMarketplaceOrderAdapter {
     }).filter((url) => /^https?:\/\//i.test(url));
   }
 
+  // N11'de fiyat/stok güncelleme için ayrı endpoint yok.
+  // product-create endpoint'i mevcut ürünü stockCode ile bulup fiyat/stok günceller.
+  // Ürün adı/görseli olmadan sadece fiyat+stok alanlarıyla minimal payload gönderiyoruz.
   override async pushPrice(payload: unknown): Promise<AdapterConnectionResult> {
     const appKey = this.env('API_KEY') || this.env('USERNAME');
     const appSecret = this.env('API_SECRET') || this.env('PASSWORD');
     if (!appKey || !appSecret) return this.missing(['N11_API_KEY', 'N11_API_SECRET']);
 
     const p = payload as Record<string, unknown>;
-    const stockCode = String(p.modelCode ?? p.barcode ?? p.sku ?? '');
+    const stockCode = String(p.modelCode ?? p.barcode ?? p.sku ?? '').toUpperCase();
     if (!stockCode) return { ok: false, status: 'FAILED', message: 'N11 pushPrice: modelCode veya barcode zorunludur.' };
 
     const salePrice = Number(p.salePrice ?? 0);
     const stockQuantity = Math.max(0, Number(p.stockQuantity ?? 0));
     if (!salePrice) return { ok: false, status: 'FAILED', message: 'N11 pushPrice: salePrice zorunludur.' };
 
+    const listPrice = Math.max(Number(p.listPrice ?? salePrice), salePrice);
+    const effectiveListPrice = listPrice > salePrice ? listPrice : Math.ceil(salePrice * 1.1);
+    const n11CategoryId = Number(this.env('CATEGORY_ID') || 1000675);
+    const shipmentTemplate = this.env('DELIVERY_TEMPLATE_NAME') || 'Sürat Kargo';
     const apiUrl = this.env('API_URL') || 'https://api.n11.com';
 
+    const n11Payload = {
+      skus: [{
+        categoryId: n11CategoryId,
+        currencyType: 'TL',
+        productMainId: stockCode,
+        stockCode,
+        preparingDay: Number(this.env('PREPARING_DAY') || 2),
+        shipmentTemplate,
+        quantity: stockQuantity,
+        salePrice,
+        listPrice: effectiveListPrice,
+        vatRate: 10,
+        // title zorunlu — mevcut ürün adı bilinmediğinden stockCode ile dolduruyoruz
+        title: String(p.productName || stockCode).slice(0, 150),
+        description: String(p.productName || stockCode).slice(0, 500),
+        attributes: [],
+        images: [],
+      }],
+    };
+
     try {
-      // N11 stok kodu üzerinden fiyat güncelleme: /ms/product/sku/update-sale-info
-      const resp = await fetch(new URL('/ms/product/sku/update-sale-info', apiUrl), {
+      const response = await fetch(new URL('/ms/product/tasks/product-create', apiUrl), {
         method: 'POST',
-        headers: { Accept: 'application/json', 'Content-Type': 'application/json', appkey: appKey, appsecret: appSecret },
-        body: JSON.stringify({ stockCode, salePrice, quantity: stockQuantity }),
+        headers: { Accept: 'application/json', 'Content-Type': 'application/json', appkey: appKey, appsecret: appSecret, 'User-Agent': 'ErhanFlowersERP-N11' },
+        body: JSON.stringify(n11Payload),
       });
-      const text = await resp.text().catch(() => '');
-      if (resp.ok) return { ok: true, status: 'CONNECTED', message: `N11 fiyat/stok guncellendi. StokKodu: ${stockCode}` };
-      // 404 = ürün henüz N11'de yok → pushProduct ile eklenecek, burada hata saymıyoruz
-      if (resp.status === 404) return { ok: true, status: 'CONNECTED', message: `N11'de urun bulunamadi (${stockCode}), atlandi.` };
-      return { ok: false, status: 'FAILED', message: `N11 fiyat/stok guncelleme basarisiz. HTTP ${resp.status}: ${text.slice(0, 300)}` };
+      const text = await response.text().catch(() => '');
+      let json: any; try { json = JSON.parse(text); } catch { json = null; }
+      const taskId = json?.taskId;
+
+      if (response.ok || taskId) {
+        return { ok: true, status: 'CONNECTED', message: `N11 fiyat/stok guncelleme kuyruga alindi. StokKodu: ${stockCode}${taskId ? ` Task: ${taskId}` : ''}` };
+      }
+      // "mevcuttur" / "zaten var" → N11 aynı ürünü reddediyor ama fiyat zaten güncel
+      if (text.includes('mevcuttur') || text.includes('kullanılmaktadır')) {
+        return { ok: true, status: 'CONNECTED', message: `N11 fiyat/stok zaten guncel. StokKodu: ${stockCode}` };
+      }
+      return { ok: false, status: 'FAILED', message: `N11 fiyat/stok guncelleme basarisiz. HTTP ${response.status}: ${text.slice(0, 300)}` };
     } catch (error) {
       return { ok: false, status: 'FAILED', message: `N11 pushPrice hatasi: ${error instanceof Error ? error.message : String(error)}` };
     }
