@@ -287,8 +287,8 @@ export class HepsiburadaAdapter extends HttpMarketplaceOrderAdapter {
     if (!merchantId || !username || !password) return this.missing(['HEPSIBURADA_MERCHANT_ID', 'HEPSIBURADA_SECRET_KEY']);
 
     const p = payload as Record<string, unknown>;
-    const hepsiburadaSku = String(p.hepsiburadaSku ?? p.barcode ?? p.sku ?? '');
-    if (!hepsiburadaSku) return { ok: false, status: 'FAILED', message: 'hepsiburadaSku veya barcode zorunludur.' };
+    const hepsiburadaSku = String(p.hepsiburadaSku ?? p.barcode ?? p.modelCode ?? p.sku ?? '');
+    if (!hepsiburadaSku) return { ok: false, status: 'FAILED', message: 'hepsiburadaSku, barcode veya modelCode zorunludur.' };
 
     const auth = Buffer.from(`${username}:${password}`).toString('base64');
     const userAgent = this.env('USER_AGENT') || 'ErhanFlowersERP-HB';

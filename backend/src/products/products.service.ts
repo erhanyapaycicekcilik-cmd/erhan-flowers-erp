@@ -170,15 +170,17 @@ export class ProductsService {
   // Arka planda çalışır — hata olursa ürün kaydını etkilemez.
   private async broadcastPriceStock(product: {
     barcode?: string | null;
+    modelCode?: string | null;
     marketPrice?: unknown;
     listPrice?: unknown;
     shopPrice?: unknown;
     stockQuantity?: unknown;
   }): Promise<void> {
-    if (!product.barcode) return;
+    if (!product.barcode && !product.modelCode) return;
 
     const payload = {
-      barcode: product.barcode,
+      barcode: product.barcode ?? product.modelCode ?? '',
+      modelCode: product.modelCode ?? product.barcode ?? '',
       salePrice: Number(product.marketPrice ?? product.shopPrice ?? 0),
       listPrice: Number(product.listPrice ?? product.marketPrice ?? 0),
       stockQuantity: Number(product.stockQuantity ?? 0),

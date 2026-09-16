@@ -153,6 +153,38 @@ export class N11Adapter extends HttpMarketplaceOrderAdapter {
     }).filter((url) => /^https?:\/\//i.test(url));
   }
 
+  override async pushPrice(payload: unknown): Promise<AdapterConnectionResult> {
+    const appKey = this.env('API_KEY') || this.env('USERNAME');
+    const appSecret = this.env('API_SECRET') || this.env('PASSWORD');
+    if (!appKey || !appSecret) return this.missing(['N11_API_KEY', 'N11_API_SECRET']);
+
+    const p = payload as Record<string, unknown>;
+    const stockCode = String(p.modelCode ?? p.barcode ?? p.sku ?? '');
+    if (!stockCode) return { ok: false, status: 'FAILED', message: 'N11 pushPrice: modelCode veya barcode zorunludur.' };
+
+    const salePrice = Number(p.salePrice ?? 0);
+    const stockQuantity = Math.max(0, Number(p.stockQuantity ?? 0));
+    if (!salePrice) return { ok: false, status: 'FAILED', message: 'N11 pushPrice: salePrice zorunludur.' };
+
+    const apiUrl = this.env('API_URL') || 'https://api.n11.com';
+
+    try {
+      // N11 stok kodu üzerinden fiyat güncelleme: /ms/product/sku/update-sale-info
+      const resp = await fetch(new URL('/ms/product/sku/update-sale-info', apiUrl), {
+        method: 'POST',
+        headers: { Accept: 'application/json', 'Content-Type': 'application/json', appkey: appKey, appsecret: appSecret },
+        body: JSON.stringify({ stockCode, salePrice, quantity: stockQuantity }),
+      });
+      const text = await resp.text().catch(() => '');
+      if (resp.ok) return { ok: true, status: 'CONNECTED', message: `N11 fiyat/stok guncellendi. StokKodu: ${stockCode}` };
+      // 404 = ürün henüz N11'de yok → pushProduct ile eklenecek, burada hata saymıyoruz
+      if (resp.status === 404) return { ok: true, status: 'CONNECTED', message: `N11'de urun bulunamadi (${stockCode}), atlandi.` };
+      return { ok: false, status: 'FAILED', message: `N11 fiyat/stok guncelleme basarisiz. HTTP ${resp.status}: ${text.slice(0, 300)}` };
+    } catch (error) {
+      return { ok: false, status: 'FAILED', message: `N11 pushPrice hatasi: ${error instanceof Error ? error.message : String(error)}` };
+    }
+  }
+
   async testConnection(): Promise<AdapterConnectionResult> {
     const appKey = this.env('API_KEY') || this.env('USERNAME');
     const appSecret = this.env('API_SECRET') || this.env('PASSWORD');
