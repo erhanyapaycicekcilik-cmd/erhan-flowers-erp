@@ -205,7 +205,7 @@ export class ProductsService {
   }
 
   // Tüm aktif ürünleri tüm bağlı platformlara toplu yayınlar.
-  // Her ürün arasında kısa bekleme ile rate-limit aşımı önlenir.
+  // 10'lu batch'ler halinde paralel gönderir — batch arası 500ms bekler.
   async broadcastAll(): Promise<{ total: number; sent: number; skipped: number; errors: number }> {
     const products = await this.prisma.product.findMany({
       where: { status: 'ACTIVE' },
@@ -219,34 +219,44 @@ export class ProductsService {
 
     if (connections.length === 0) return { total: products.length, sent: 0, skipped: products.length, errors: 0 };
 
-    let sent = 0; let skipped = 0; let errors = 0;
-
+    // Geçerli ürünleri payload'a çevir, fiyatsız/kodsuzları atla
+    type Payload = { barcode: string; modelCode: string; salePrice: number; listPrice: number; stockQuantity: number };
+    const payloads: Payload[] = [];
+    let skipped = 0;
     for (const product of products) {
       if (!product.barcode && !product.modelCode) { skipped++; continue; }
       const salePrice = Number(product.marketPrice ?? product.shopPrice ?? 0);
       if (!salePrice) { skipped++; continue; }
-
-      const payload = {
+      payloads.push({
         barcode: product.barcode ?? product.modelCode ?? '',
         modelCode: product.modelCode ?? product.barcode ?? '',
         salePrice,
         listPrice: Number(product.listPrice ?? product.marketPrice ?? 0),
         stockQuantity: Number(product.stockQuantity ?? 0),
-      };
+      });
+    }
 
-      const results = await Promise.allSettled(
-        connections.map(({ platform }) => this.integrations.pushPrice(platform, payload)),
+    let sent = 0; let errors = 0;
+    const BATCH = 10;
+
+    for (let i = 0; i < payloads.length; i += BATCH) {
+      const batch = payloads.slice(i, i + BATCH);
+      const batchResults = await Promise.allSettled(
+        batch.flatMap((payload) =>
+          connections.map(({ platform }) => this.integrations.pushPrice(platform, payload)),
+        ),
       );
 
-      let anyOk = false;
-      for (const r of results) {
-        if (r.status === 'fulfilled' && r.value.ok) anyOk = true;
-        else errors++;
+      for (let j = 0; j < batch.length; j++) {
+        const platformResults = batchResults.slice(j * connections.length, (j + 1) * connections.length);
+        const anyOk = platformResults.some((r) => r.status === 'fulfilled' && r.value.ok);
+        const failCount = platformResults.filter((r) => r.status === 'rejected' || (r.status === 'fulfilled' && !r.value.ok)).length;
+        if (anyOk) sent++;
+        errors += failCount;
       }
-      if (anyOk) sent++;
 
-      // Rate-limit koruması: platformlara hızlı istek atmamak için
-      await new Promise((res) => setTimeout(res, 300));
+      // Batch arası rate-limit koruması
+      if (i + BATCH < payloads.length) await new Promise((res) => setTimeout(res, 500));
     }
 
     return { total: products.length, sent, skipped, errors };
