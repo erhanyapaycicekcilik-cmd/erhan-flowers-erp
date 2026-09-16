@@ -210,6 +210,11 @@ export class OrderSyncService {
             stockDeductions++;
           }
         }
+
+        // Also deduct Product.stockQuantity by barcode
+        if (barcode) {
+          await this.deductProductStock(barcode, qty, `TRENDYOL_ORDER_${savedOrder.id}`, `Trendyol siparis: ${orderNumber}`);
+        }
       }
 
       // Mark order as stock deducted
@@ -466,6 +471,11 @@ export class OrderSyncService {
             stockDeductions++;
           }
         }
+
+        // Also deduct Product.stockQuantity by barcode
+        if (barcode) {
+          await this.deductProductStock(barcode, qty, `N11_ORDER_${savedOrder.id}`, `N11 siparis: ${savedOrder.orderNumber}`);
+        }
       }
       await this.prisma.marketplaceOrder.update({ where: { id: savedOrder.id }, data: { stockDeducted: true } });
     }
@@ -641,6 +651,36 @@ export class OrderSyncService {
       errors,
       message: `${matched} SKU eşleştirildi, ${skipped} satır atlandı${errors.length ? `, ${errors.length} hata` : ''}.`,
     };
+  }
+
+  private async deductProductStock(barcode: string, qty: number, orderPrefix: string, note: string): Promise<void> {
+    const product = await this.prisma.product.findFirst({
+      where: { barcode },
+      select: { id: true, stockQuantity: true },
+    });
+    if (!product) return;
+    const eventKey = `${orderPrefix}_PRODUCT_${product.id}`;
+    const exists = await this.prisma.stockMovement.findUnique({ where: { eventKey } });
+    if (exists) return;
+    const prev = Number(product.stockQuantity);
+    const next = Math.max(0, prev - qty);
+    await this.prisma.$transaction([
+      this.prisma.product.update({ where: { id: product.id }, data: { stockQuantity: next } }),
+      this.prisma.stockMovement.create({
+        data: {
+          productId: product.id,
+          type: 'OUT',
+          quantity: -(prev - next),
+          unit: 'ADET',
+          previousStock: prev,
+          nextStock: next,
+          note,
+          referenceType: 'MARKETPLACE_ORDER',
+          referenceId: orderPrefix,
+          eventKey,
+        },
+      }),
+    ]);
   }
 
   private text(value: unknown): string {
