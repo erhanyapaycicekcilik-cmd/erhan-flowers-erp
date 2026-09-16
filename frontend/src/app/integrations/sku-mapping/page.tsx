@@ -29,7 +29,7 @@ interface StockCard {
   stockQuantity: number;
 }
 
-const PLATFORMS = [{ code: 'TRENDYOL', label: 'Trendyol' }, { code: 'N11', label: 'N11' }];
+const PLATFORMS = [{ code: 'TRENDYOL', label: 'Trendyol' }, { code: 'N11', label: 'N11' }, { code: 'HEPSIBURADA', label: 'Hepsiburada' }];
 
 export default function SkuMappingPage() {
   const [platform, setPlatform] = useState('TRENDYOL');
@@ -108,7 +108,7 @@ export default function SkuMappingPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-lg font-bold">SKU Eşleştirme</h1>
-          <p className="text-sm text-slate-500">Trendyol/N11 ürünlerini ERP bileşenleriyle eşleştir — sipariş gelince stok otomatik düşer</p>
+          <p className="text-sm text-slate-500">Trendyol/N11/Hepsiburada ürünlerini ERP stok kartlarıyla eşleştir — sipariş gelince stok otomatik düşer</p>
         </div>
         <div className="flex items-center gap-2">
           {PLATFORMS.map(p => (

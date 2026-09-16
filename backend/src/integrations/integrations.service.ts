@@ -931,7 +931,20 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
       ORDER BY updated_at DESC
       LIMIT 1
     `;
-    // 2) channel_product_mappings üzerinden eşleştirme (Hepsiburada merchantSku vb.)
+    // 2) marketplace_sku_mappings üzerinden eşleştirme (SKU eşleştirme ekranından girilmiş)
+    if (!stockCards[0] && (barcode || modelCode)) {
+      const externalSku = barcode || modelCode || '';
+      stockCards = await tx.$queryRaw<Array<Record<string, unknown>>>`
+        SELECT sc.id, sc.automatic_unit_cost AS "automaticUnitCost", sc.manual_unit_cost AS "manualUnitCost", sc.manual_unit_cost_enabled AS "manualUnitCostEnabled"
+        FROM marketplace_sku_mappings msm
+        JOIN stock_cards sc ON sc.id = msm.stock_card_id
+        WHERE msm.external_sku = ${externalSku}
+           OR msm.external_barcode = ${externalSku}
+        ORDER BY sc.updated_at DESC
+        LIMIT 1
+      `.catch(() => []);
+    }
+    // 3) channel_product_mappings üzerinden eşleştirme (kanal bazlı haritalama)
     if (!stockCards[0] && (barcode || modelCode)) {
       const externalSku = barcode || modelCode || '';
       stockCards = await tx.$queryRaw<Array<Record<string, unknown>>>`
