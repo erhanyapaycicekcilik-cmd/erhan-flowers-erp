@@ -1,7 +1,8 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { cleanMojibakeDeep } from '../common/mojibake';
 import { Prisma } from '../generated/prisma-client';
 import { PrismaService } from '../prisma/prisma.service';
+import { IntegrationsService } from '../integrations/integrations.service';
 
 type ProductPayload = {
   productName?: string;
@@ -45,7 +46,12 @@ type IdentityCheckPayload = {
 
 @Injectable()
 export class ProductsService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(ProductsService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly integrations: IntegrationsService,
+  ) {}
 
   async list() {
     const products = await this.prisma.product.findMany({
@@ -63,7 +69,7 @@ export class ProductsService {
 
     try {
       await this.ensureUniqueProductIdentity(data);
-      return await this.prisma.product.create({
+      const product = await this.prisma.product.create({
         data: {
           productName: data.productName,
           modelCode: data.modelCode,
@@ -92,6 +98,10 @@ export class ProductsService {
         },
         include: { category: true },
       });
+      this.broadcastPriceStock(product).catch((err) =>
+        this.logger.warn(`Platform yayını hatası (create): ${String(err)}`),
+      );
+      return product;
     } catch (error) {
       this.handleUniqueError(error);
     }
@@ -138,14 +148,58 @@ export class ProductsService {
 
     try {
       await this.ensureUniqueProductIdentity(partialData, id);
-      return await this.prisma.product.update({
+      const product = await this.prisma.product.update({
         where: { id },
         data: patch as Prisma.ProductUpdateInput,
         include: { category: true },
       });
+      // Fiyat veya stok değiştiyse tüm platformlara yayınla
+      const priceOrStockChanged = ['salePrice', 'marketPrice', 'shopPrice', 'sitePrice', 'listPrice', 'stockQuantity'].some((k) => patch[k] !== undefined);
+      if (priceOrStockChanged) {
+        this.broadcastPriceStock(product).catch((err) =>
+          this.logger.warn(`Platform yayını hatası (update): ${String(err)}`),
+        );
+      }
+      return product;
     } catch (error) {
       this.handleUniqueError(error);
     }
+  }
+
+  // Ürün kaydedilince tüm aktif platform entegrasyonlarına fiyat/stok gönderir.
+  // Arka planda çalışır — hata olursa ürün kaydını etkilemez.
+  private async broadcastPriceStock(product: {
+    barcode?: string | null;
+    marketPrice?: unknown;
+    listPrice?: unknown;
+    shopPrice?: unknown;
+    stockQuantity?: unknown;
+  }): Promise<void> {
+    if (!product.barcode) return;
+
+    const payload = {
+      barcode: product.barcode,
+      salePrice: Number(product.marketPrice ?? product.shopPrice ?? 0),
+      listPrice: Number(product.listPrice ?? product.marketPrice ?? 0),
+      stockQuantity: Number(product.stockQuantity ?? 0),
+    };
+    if (!payload.salePrice) return;
+
+    // Aktif platform bağlantılarını çek
+    const connections = await this.prisma.$queryRaw<Array<{ platform: string }>>`
+      SELECT platform FROM integration_connections
+      WHERE status = 'CONNECTED'
+        AND platform IN ('TRENDYOL', 'N11', 'HEPSIBURADA')
+    `.catch(() => [] as Array<{ platform: string }>);
+
+    await Promise.allSettled(
+      connections.map(({ platform }) =>
+        this.integrations.pushPrice(platform, payload).then((result) => {
+          if (!result.ok) this.logger.warn(`${platform} fiyat/stok yayını başarısız: ${result.message}`);
+          else this.logger.log(`${platform} fiyat/stok yayını tamam: ${product.barcode}`);
+        }),
+      ),
+    );
   }
 
   passive(id: number) {

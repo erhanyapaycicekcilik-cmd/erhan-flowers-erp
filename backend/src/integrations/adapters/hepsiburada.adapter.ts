@@ -279,6 +279,48 @@ export class HepsiburadaAdapter extends HttpMarketplaceOrderAdapter {
     }
   }
 
+  // Tek ürün için fiyat + stok güncelleme
+  override async pushPrice(payload: unknown): Promise<AdapterConnectionResult> {
+    const merchantId = this.env('MERCHANT_ID');
+    const username = this.env('USERNAME') || this.env('API_KEY') || merchantId;
+    const password = this.env('PASSWORD') || this.env('API_SECRET');
+    if (!merchantId || !username || !password) return this.missing(['HEPSIBURADA_MERCHANT_ID', 'HEPSIBURADA_SECRET_KEY']);
+
+    const p = payload as Record<string, unknown>;
+    const hepsiburadaSku = String(p.hepsiburadaSku ?? p.barcode ?? p.sku ?? '');
+    if (!hepsiburadaSku) return { ok: false, status: 'FAILED', message: 'hepsiburadaSku veya barcode zorunludur.' };
+
+    const auth = Buffer.from(`${username}:${password}`).toString('base64');
+    const userAgent = this.env('USER_AGENT') || 'ErhanFlowersERP-HB';
+    const headers = { Accept: 'application/json', 'Content-Type': 'application/json', Authorization: `Basic ${auth}`, 'User-Agent': userAgent };
+    const listingBase = 'https://listing-external.hepsiburada.com';
+
+    const results: string[] = [];
+
+    // Stok güncelleme
+    if (p.stockQuantity !== undefined) {
+      const stockRes = await fetch(`${listingBase}/listings/merchantid/${merchantId}/inventory-uploads`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify([{ hepsiburadaSku, availableStock: Math.max(0, Number(p.stockQuantity)) }]),
+      });
+      results.push(`Stok: HTTP ${stockRes.status}`);
+    }
+
+    // Fiyat güncelleme
+    if (p.salePrice !== undefined) {
+      const price = Number(p.salePrice).toFixed(2);
+      const priceRes = await fetch(`${listingBase}/listings/merchantid/${merchantId}/price-uploads`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify([{ hepsiburadaSku, price }]),
+      });
+      results.push(`Fiyat: HTTP ${priceRes.status}`);
+    }
+
+    return { ok: true, status: 'CONNECTED', message: `Hepsiburada güncellendi. ${results.join(', ')}` };
+  }
+
   private extractHeight(...values: unknown[]): string {
     const text = values.map((v) => String(v ?? '')).join(' ');
     return text.match(/\b\d{2,3}\s*cm\b/i)?.[0] ?? '';
