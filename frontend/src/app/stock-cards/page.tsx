@@ -632,7 +632,7 @@ export default function StockCardsPage() {
     setTrendyolSending(true);
     setTrendyolResult(null);
     try {
-      const result = await api<{ ok: boolean; message: string; status: string }>(`/stock-cards/${selected.id}/trendyol-publish`, {
+      const result = await api<{ ok: boolean; message: string; status: string; batchRequestId?: string }>(`/stock-cards/${selected.id}/trendyol-publish`, {
         method: 'POST',
         json: {
           categoryId: Number(trendyolForm.categoryId),
@@ -647,7 +647,18 @@ export default function StockCardsPage() {
           modelCode: trendyolForm.modelCode || undefined,
         },
       });
-      setTrendyolResult({ ok: result.ok, message: result.message });
+      if (result.ok && result.batchRequestId) {
+        setTrendyolResult({ ok: true, message: 'Trendyol kuyruğa alındı, sonuç bekleniyor...' });
+        await new Promise(r => setTimeout(r, 4000));
+        try {
+          const batchResult = await api<{ ok: boolean; message: string; batchStatus?: string }>(`/product-center/trendyol-batch/${result.batchRequestId}`);
+          setTrendyolResult({ ok: batchResult.ok, message: batchResult.message });
+        } catch {
+          setTrendyolResult({ ok: result.ok, message: result.message });
+        }
+      } else {
+        setTrendyolResult({ ok: result.ok, message: result.message });
+      }
     } catch (error) {
       setTrendyolResult({ ok: false, message: error instanceof Error ? error.message : 'Trendyol gönderimi başarısız.' });
     } finally {

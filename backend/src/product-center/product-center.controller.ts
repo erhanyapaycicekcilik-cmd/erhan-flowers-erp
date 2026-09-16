@@ -87,4 +87,10 @@ export class ProductCenterController {
   trendyolPublish(@Param('id') id: string, @Body() body: unknown) {
     return this.productCenter.trendyolPublish(Number(id), body);
   }
+
+  @Get('trendyol-batch/:batchId')
+  @UseGuards(OwnerGuard)
+  trendyolBatchStatus(@Param('batchId') batchId: string) {
+    return this.productCenter.checkTrendyolBatch(batchId);
+  }
 }

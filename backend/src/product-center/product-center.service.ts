@@ -1128,6 +1128,12 @@ export class ProductCenterService {
     return adapter.pushProduct(payload);
   }
 
+  async checkTrendyolBatch(batchId: string) {
+    const credentials = await this.integrationCenter.runtimeCredentials('TRENDYOL');
+    const adapter = new TrendyolAdapter(credentials);
+    return adapter.checkBatchStatus(batchId);
+  }
+
   private localUploadPath(value?: string) {
     if (!value || /^https?:\/\//i.test(value)) return null;
     const relative = value.replace(/^\/?uploads[\\/]/, '').replace(/\\/g, path.sep);
