@@ -614,6 +614,12 @@ export class StockCardsService {
     }));
   }
 
+  async trendyolCategories() {
+    const credentials = await this.integrationCenter.runtimeCredentials('TRENDYOL');
+    const adapter = new TrendyolAdapter(credentials);
+    return adapter.fetchCategories();
+  }
+
   async trendyolPublish(id: number, body: unknown) {
     const stockCard = await this.ensureStockCard(id);
     const data = (body ?? {}) as Record<string, unknown>;

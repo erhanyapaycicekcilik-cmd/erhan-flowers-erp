@@ -283,7 +283,7 @@ export default function StockCardsPage() {
   const [categorySearchFocus, setCategorySearchFocus] = useState(false);
 
   useEffect(() => {
-    api<Array<{ id: number; name: string; parentId: number | null; leaf: boolean }>>('/product-center/trendyol-categories')
+    api<Array<{ id: number; name: string; parentId: number | null; leaf: boolean }>>('/stock-cards/trendyol-categories')
       .then(setTrendyolCategories)
       .catch(() => {});
   }, []);
