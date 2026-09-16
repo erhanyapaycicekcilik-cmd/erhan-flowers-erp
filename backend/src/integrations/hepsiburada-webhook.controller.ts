@@ -1,4 +1,4 @@
-import { Body, Controller, HttpCode, Logger, Post } from '@nestjs/common';
+import { Body, Controller, ForbiddenException, Headers, HttpCode, Logger, Post } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 interface HbWebhookItem {
@@ -30,7 +30,16 @@ export class HepsiburadaWebhookController {
 
   @Post('orders')
   @HttpCode(201)
-  async receiveOrder(@Body() payload: HbWebhookPayload) {
+  async receiveOrder(
+    @Body() payload: HbWebhookPayload,
+    @Headers('x-hb-webhook-secret') secret?: string,
+  ) {
+    const expected = process.env.HB_WEBHOOK_SECRET;
+    // Secret tanımlıysa doğrula; tanımlı değilse geç (eski davranış korunur)
+    if (expected && secret !== expected) {
+      this.logger.warn(`Hepsiburada webhook: geçersiz secret — istek reddedildi`);
+      throw new ForbiddenException('Geçersiz webhook secret');
+    }
     const items = payload?.items ?? [];
     if (!items.length) return { received: true };
 
