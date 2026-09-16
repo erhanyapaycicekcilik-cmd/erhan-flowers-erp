@@ -1,4 +1,4 @@
-import { Controller, Get, Req, UseGuards } from '@nestjs/common';
+import { Controller, Get, Query, Req, UseGuards } from '@nestjs/common';
 import { Request } from 'express';
 import { AuthGuard } from '../auth/auth.guard';
 import { DashboardService } from './dashboard.service';
@@ -23,5 +23,10 @@ export class DashboardController {
   @Get('company-revenue')
   companyRevenue() {
     return this.dashboard.dailySalesByCompany();
+  }
+
+  @Get('daily-report')
+  dailyReport(@Query('date') date?: string) {
+    return this.dashboard.dailyReport(date);
   }
 }
