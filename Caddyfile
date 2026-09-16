@@ -46,22 +46,3 @@ api.florayapaycicek.com {
         format json
     }
 }
-
-# B2C Müşteri Sitesi — FloraYapayCiçek.com
-florayapaycicek.com, www.florayapaycicek.com {
-    reverse_proxy florayapay:3200
-
-    header {
-        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
-        X-Frame-Options "SAMEORIGIN"
-        X-Content-Type-Options "nosniff"
-        X-XSS-Protection "1; mode=block"
-        Referrer-Policy "strict-origin-when-cross-origin"
-        Permissions-Policy "geolocation=(self), microphone=(), camera=()"
-    }
-
-    log {
-        output file /var/log/caddy/site-access.log
-        format json
-    }
-}
