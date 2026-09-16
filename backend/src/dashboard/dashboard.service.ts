@@ -97,6 +97,77 @@ export class DashboardService {
     return { orderCount: orders.length, revenue: Math.round(revenue * 100) / 100, platforms };
   }
 
+  async dailyReport(dateStr?: string) {
+    const date = dateStr ? new Date(dateStr) : new Date();
+    const dayStart = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const dayEnd = new Date(dayStart.getTime() + 86400000);
+
+    const [marketplaceOrders, retailSales, stockMovements] = await Promise.all([
+      this.prisma.marketplaceOrder.findMany({
+        where: { orderDate: { gte: dayStart, lt: dayEnd }, status: { not: 'Cancelled' } },
+        select: { platform: true, totalAmount: true, cargoAmount: true, orderNumber: true, customerName: true },
+      }),
+      this.prisma.retailSale.findMany({
+        where: { createdAt: { gte: dayStart, lt: dayEnd }, status: { not: 'CANCELLED' } },
+        select: { grandTotal: true, channel: true, saleNumber: true },
+      }),
+      this.prisma.stockMovement.findMany({
+        where: { createdAt: { gte: dayStart, lt: dayEnd }, type: 'OUT' },
+        include: { stockCard: { select: { name: true, purchasePrice: true, unit: true } } },
+      }),
+    ]);
+
+    // Ciro hesapla
+    const marketplaceRevenue = marketplaceOrders.reduce((s, o) => s + Number(o.totalAmount), 0);
+    const retailRevenue = retailSales.reduce((s, o) => s + Number(o.grandTotal), 0);
+    const totalRevenue = marketplaceRevenue + retailRevenue;
+
+    // Platform bazında satışlar
+    const byPlatform: Record<string, { orders: number; revenue: number }> = {};
+    for (const o of marketplaceOrders) {
+      if (!byPlatform[o.platform]) byPlatform[o.platform] = { orders: 0, revenue: 0 };
+      byPlatform[o.platform].orders++;
+      byPlatform[o.platform].revenue += Number(o.totalAmount);
+    }
+    if (retailSales.length > 0) {
+      byPlatform['Mağaza'] = { orders: retailSales.length, revenue: retailRevenue };
+    }
+
+    // Stok çıkışları ve maliyet
+    const stockOut = stockMovements.map((m) => ({
+      name: m.stockCard?.name ?? 'Bilinmiyor',
+      quantity: Number(m.quantity),
+      unit: m.unit,
+      unitCost: Number(m.stockCard?.purchasePrice ?? 0),
+      totalCost: Number(m.quantity) * Number(m.stockCard?.purchasePrice ?? 0),
+      reason: m.reason ?? '',
+    }));
+    const totalCost = stockOut.reduce((s, m) => s + m.totalCost, 0);
+    const estimatedProfit = totalRevenue - totalCost;
+
+    // En çok satan ürünler (marketplace)
+    const topProducts: Record<string, number> = {};
+    for (const m of stockMovements) {
+      const name = m.stockCard?.name ?? 'Bilinmiyor';
+      topProducts[name] = (topProducts[name] ?? 0) + Number(m.quantity);
+    }
+    const topProductsList = Object.entries(topProducts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10)
+      .map(([name, quantity]) => ({ name, quantity }));
+
+    return {
+      date: dayStart.toISOString().split('T')[0],
+      revenue: { total: Math.round(totalRevenue * 100) / 100, marketplace: Math.round(marketplaceRevenue * 100) / 100, retail: Math.round(retailRevenue * 100) / 100 },
+      orders: { total: marketplaceOrders.length + retailSales.length, marketplace: marketplaceOrders.length, retail: retailSales.length },
+      byPlatform,
+      stockOut,
+      cost: Math.round(totalCost * 100) / 100,
+      estimatedProfit: Math.round(estimatedProfit * 100) / 100,
+      topProducts: topProductsList,
+    };
+  }
+
   async dailySalesByCompany() {
     const rows = await this.prisma.$queryRaw<Array<{ companyCode: string; companyName: string; todayRevenue: number; todayOrders: number; monthRevenue: number; monthOrders: number }>>`
       SELECT
