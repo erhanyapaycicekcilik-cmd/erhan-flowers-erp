@@ -525,7 +525,7 @@ export class TrendyolAdapter extends BaseIntegrationAdapter {
       headers: this.productHeaders(supplierId),
       body: JSON.stringify({
         items: [{
-          barcode: this.text(data.barcode),
+          barcode: this.text(data.barcode) || this.text(data.modelCode),
           quantity: Number(data.stockQuantity ?? 0),
           salePrice: Number(data.salePrice ?? data.marketPrice ?? 0),
           listPrice: Number(data.listPrice ?? data.salePrice ?? data.marketPrice ?? 0),

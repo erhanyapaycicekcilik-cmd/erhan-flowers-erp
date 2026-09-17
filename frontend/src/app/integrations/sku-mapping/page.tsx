@@ -29,7 +29,7 @@ interface StockCard {
   stockQuantity: number;
 }
 
-const PLATFORMS = [{ code: 'TRENDYOL', label: 'Trendyol' }, { code: 'N11', label: 'N11' }];
+const PLATFORMS = [{ code: 'TRENDYOL', label: 'Trendyol' }, { code: 'N11', label: 'N11' }, { code: 'HEPSIBURADA', label: 'Hepsiburada' }];
 
 export default function SkuMappingPage() {
   const [platform, setPlatform] = useState('TRENDYOL');
@@ -41,6 +41,8 @@ export default function SkuMappingPage() {
   const [syncResult, setSyncResult] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<string | null>(null);
+  const [rowSearch, setRowSearch] = useState('');
+  const [showFilter, setShowFilter] = useState<'all' | 'matched' | 'unmatched'>('all');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
@@ -99,6 +101,13 @@ export default function SkuMappingPage() {
     }
   }
 
+  const searchLower = rowSearch.toLowerCase();
+  const filteredRows = rows.filter(r => {
+    if (showFilter === 'matched' && r.components.length === 0 && !r.singleMapping) return false;
+    if (showFilter === 'unmatched' && (r.components.length > 0 || r.singleMapping)) return false;
+    if (searchLower) return r.sku.toLowerCase().includes(searchLower) || (r.barcode ?? '').toLowerCase().includes(searchLower);
+    return true;
+  });
   const matched = rows.filter(r => r.components.length > 0 || r.singleMapping);
   const unmatched = rows.filter(r => r.components.length === 0 && !r.singleMapping);
 
@@ -108,7 +117,7 @@ export default function SkuMappingPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-lg font-bold">SKU Eşleştirme</h1>
-          <p className="text-sm text-slate-500">Trendyol/N11 ürünlerini ERP bileşenleriyle eşleştir — sipariş gelince stok otomatik düşer</p>
+          <p className="text-sm text-slate-500">Trendyol/N11/Hepsiburada ürünlerini ERP stok kartlarıyla eşleştir — sipariş gelince stok otomatik düşer</p>
         </div>
         <div className="flex items-center gap-2">
           {PLATFORMS.map(p => (
@@ -127,6 +136,23 @@ export default function SkuMappingPage() {
             {syncing ? 'Çekiliyor...' : 'Sipariş Çek'}
           </button>
         </div>
+      </div>
+
+      {/* Arama + Filtre */}
+      <div className="flex flex-wrap gap-2 items-center">
+        <input
+          type="text"
+          placeholder="SKU veya barkod ara..."
+          value={rowSearch}
+          onChange={e => setRowSearch(e.target.value)}
+          className="border border-slate-200 rounded px-3 py-1.5 text-sm w-64 focus:outline-none focus:ring-2 focus:ring-brand/30"
+        />
+        {(['all', 'matched', 'unmatched'] as const).map(f => (
+          <button key={f} onClick={() => setShowFilter(f)}
+            className={`px-3 py-1.5 rounded text-sm font-medium transition ${showFilter === f ? 'bg-brand text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+            {f === 'all' ? `Tümü (${rows.length})` : f === 'matched' ? `Eşleşti (${matched.length})` : `Eşleşmedi (${unmatched.length})`}
+          </button>
+        ))}
       </div>
 
       {syncResult && (
@@ -160,7 +186,8 @@ export default function SkuMappingPage() {
         <div className="panel p-8 text-center text-slate-400 text-sm">Yükleniyor...</div>
       ) : (
         <div className="panel overflow-hidden divide-y divide-line">
-          {rows.map(row => (
+          {filteredRows.length === 0 && <div className="p-6 text-center text-sm text-slate-400">Sonuç bulunamadı</div>}
+          {filteredRows.map(row => (
             <SkuRow
               key={row.sku}
               row={row}

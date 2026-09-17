@@ -22,6 +22,6 @@ import { HepsiburadaWebhookController } from './hepsiburada-webhook.controller';
   imports: [PrismaModule, AuthModule, StaffTasksModule],
   controllers: [IntegrationsController, GmailController, HepsiburadaWebhookController],
   providers: [IntegrationsService, IntegrationCenterService, CredentialVaultService, OrderSyncService, GmailOrderService, HepsiburadaSyncService, FloraSyncService, TrendyolAdapter, HepsiburadaAdapter, N11Adapter, TicimaxAdapter, MockMarketplaceAdapter],
-  exports: [IntegrationCenterService, TrendyolAdapter, HepsiburadaAdapter, N11Adapter, TicimaxAdapter, OrderSyncService, GmailOrderService, HepsiburadaSyncService, FloraSyncService],
+  exports: [IntegrationsService, IntegrationCenterService, TrendyolAdapter, HepsiburadaAdapter, N11Adapter, TicimaxAdapter, OrderSyncService, GmailOrderService, HepsiburadaSyncService, FloraSyncService],
 })
 export class IntegrationsModule {}

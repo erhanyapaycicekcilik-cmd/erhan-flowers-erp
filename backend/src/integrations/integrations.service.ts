@@ -921,7 +921,9 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
       LIMIT 1
     `;
     const variant = variants[0];
-    const stockCards = await tx.$queryRaw<Array<Record<string, unknown>>>`
+
+    // 1) Doğrudan barcode/sku eşleştirmesi
+    let stockCards = await tx.$queryRaw<Array<Record<string, unknown>>>`
       SELECT id, automatic_unit_cost AS "automaticUnitCost", manual_unit_cost AS "manualUnitCost", manual_unit_cost_enabled AS "manualUnitCostEnabled"
       FROM stock_cards
       WHERE (${barcode ?? ''} <> '' AND barcode = ${barcode ?? ''})
@@ -929,6 +931,31 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
       ORDER BY updated_at DESC
       LIMIT 1
     `;
+    // 2) marketplace_sku_mappings üzerinden eşleştirme (SKU eşleştirme ekranından girilmiş)
+    if (!stockCards[0] && (barcode || modelCode)) {
+      const externalSku = barcode || modelCode || '';
+      stockCards = await tx.$queryRaw<Array<Record<string, unknown>>>`
+        SELECT sc.id, sc.automatic_unit_cost AS "automaticUnitCost", sc.manual_unit_cost AS "manualUnitCost", sc.manual_unit_cost_enabled AS "manualUnitCostEnabled"
+        FROM marketplace_sku_mappings msm
+        JOIN stock_cards sc ON sc.id = msm.stock_card_id
+        WHERE msm.external_sku = ${externalSku}
+           OR msm.external_barcode = ${externalSku}
+        ORDER BY sc.updated_at DESC
+        LIMIT 1
+      `.catch(() => []);
+    }
+    // 3) channel_product_mappings üzerinden eşleştirme (kanal bazlı haritalama)
+    if (!stockCards[0] && (barcode || modelCode)) {
+      const externalSku = barcode || modelCode || '';
+      stockCards = await tx.$queryRaw<Array<Record<string, unknown>>>`
+        SELECT sc.id, sc.automatic_unit_cost AS "automaticUnitCost", sc.manual_unit_cost AS "manualUnitCost", sc.manual_unit_cost_enabled AS "manualUnitCostEnabled"
+        FROM channel_product_mappings cpm
+        JOIN stock_cards sc ON sc.id = cpm.stock_card_id
+        WHERE cpm.external_sku = ${externalSku}
+        ORDER BY sc.updated_at DESC
+        LIMIT 1
+      `.catch(() => []);
+    }
     const stockCard = stockCards[0];
 
     let productId = variant?.productId ? Number(variant.productId) : null;

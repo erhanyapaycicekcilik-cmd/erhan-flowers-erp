@@ -1,63 +1,125 @@
-# Erhan Flowers ERP - Proje Notları
+# Erhan Flowers ERP — Claude Bağlam Dosyası
+
+Bu dosya her yeni Claude oturumunda otomatik okunur. Sunucu, deploy ve proje bilgilerini içerir.
 
 ## Sunucu Bilgileri
-- **Hetzner sunucu IP:** 77.42.122.169
+
+- **Hosting:** Hetzner Cloud (Helsinki DC Park 1)
+- **IP:** 77.42.122.169
 - **Kullanıcı:** root
 - **Proje dizini:** /opt/erp
 - **SSH key:** ~/.ssh/github_actions (kullanıcının Windows makinesinde)
+- **Hetzner Console:** console.hetzner.cloud → sunucuya tıkla → >_ Console (şifresiz giriş)
 
-## Deploy
+## Deploy Komutu
+
+Sunucuda (`/opt/erp` dizininde):
+
 ```bash
-# Sunucuda (Hetzner konsol veya SSH):
 cd /opt/erp
 git pull origin main
 docker compose -f docker-compose.prod.yml up -d --build
 ```
 
-## Önemli Bilgiler
-- Docker compose dosyası: `docker-compose.prod.yml` (NOT: docker-compose.yml sadece postgres içeriyor)
-- Backend port: 8001 (NestJS)
-- Frontend port: 3000 (Next.js)
-- Caddy reverse proxy: 80/443
-- Veritabanı adı: `erhan_flowers_panel`
-- DB kullanıcı: `erhanflowers`
-- Hetzner konsolu alt çizgi (_) yerine tire (-) yazıyor — komutları dikkatli yaz
+## GitHub Actions Deploy (Otomatik)
 
-## GitHub Actions
-- Workflow: `.github/workflows/deploy.yml`
-- Secret gerekli: `SSH_PRIVATE_KEY` (kullanıcının oluşturduğu github_actions private key)
-- Her main push'ta otomatik deploy olur
+PR main'e merge edilince otomatik deploy olur.
 
-## URL'ler
-- Frontend: https://erp.florayapaycicek.com
-- Backend API: https://api.florayapaycicek.com
+**Gerekli Secrets** (github.com/erhanyapaycicekcilik-cmd/erhan-flowers-erp/settings/secrets/actions):
+- `SSH_HOST` = `77.42.122.169`
+- `SSH_PASSWORD` = sunucu root şifresi
+- `GH_TOKEN` = GitHub Personal Access Token (repo yetkili)
+
+## Proje Yapısı
+
+```
+erhan-flowers-erp/
+├── backend/          NestJS API (port 8001)
+├── frontend/         Next.js 14 App Router (port 3000)
+├── docker-compose.prod.yml   Production deploy
+├── docker-compose.yml        Sadece PostgreSQL (local)
+├── Caddyfile         Reverse proxy + SSL
+└── docs/             Proje dokümanları
+```
+
+## Domain & URL'ler
+
+- **Frontend:** https://erp.florayapaycicek.com
+- **Backend API:** https://api.florayapaycicek.com
 
 ## Container İsimleri
+
 - erhan-flowers-backend-prod
 - erhan-flowers-frontend-prod
 - erhan-flowers-caddy-prod
 - erhan-flowers-postgres-prod
 
-## Admin Şifre Sıfırlama
-Hetzner konsolunda çalıştır (alt çizgi/boru yok, Hetzner uyumlu):
-```
-docker exec erhan-flowers-backend-prod node -e "const b=require('bcryptjs');const{PrismaClient:P}=require('@prisma/client');const p=new P();b.hash('YENI_SIFRE',10).then(h=>p.user.upsert({where:{email:'owner@erhanflowers.com'},update:{passwordHash:h},create:{email:'owner@erhanflowers.com',passwordHash:h,role:'OWNER',name:'Erhan'}})).then(u=>{console.log('OK',u.email);p.\$disconnect()})"
-```
-`YENI_SIFRE` yerine istediğin şifreyi yaz.
+## Platform Entegrasyonları
 
-## Hetzner Konsol Sorunları
-- Alt çizgi `_` → tire `-` olarak yazılıyor
-- Boru `|` karakteri çalışmıyor
-- `docker cp container:/path` kolon syntax'ı parse edilemiyor
-- Çözüm: `docker exec -i container tee /tmp/dosya < /host/dosya` kullan
-- Veya inline node -e ile JavaScript çalıştır
+| Platform | Durum | Notlar |
+|---|---|---|
+| Trendyol | Aktif | pushPrice: barcode veya modelCode |
+| N11 | Aktif | pushPrice: product-create endpoint'i kullanır |
+| Hepsiburada | Aktif | pushPrice: hepsiburadaSku = barcode ?? modelCode |
+
+## Fiyat/Stok Senkronizasyonu
+
+- Ürün kaydedilince → tüm platformlara otomatik yayın (`broadcastPriceStock`)
+- Maliyet onaylanınca → tüm platformlara otomatik yayın (`broadcastApprovedCost`)
+- Toplu gönderim → `/products/broadcast-all` (ürünler sayfasında buton var)
+- Eşleştirme: `barcode` yoksa `modelCode` kullanılır
+- Platform bağlantı listesi 5dk TTL cache ile tutulur
+
+## Veritabanı
+
+- **PostgreSQL 16** Docker container'da (`erhan-flowers-postgres-prod`)
+- Veritabanı adı: `erhan_flowers_panel`
+- DB kullanıcı: `erhanflowers`
+- Migration: deploy sırasında `prisma migrate deploy` otomatik çalışır
 
 ## Giriş Bilgileri
+
 - Email: owner@erhanflowers.com
-- Şifre: (şifre sıfırlama komutuyla belirlenir)
+- Şifre sıfırlama:
+```bash
+docker exec erhan-flowers-backend-prod node -e "const b=require('bcryptjs');const{PrismaClient:P}=require('@prisma/client');const p=new P();b.hash('YENI_SIFRE',10).then(h=>p.user.upsert({where:{email:'owner@erhanflowers.com'},update:{passwordHash:h},create:{email:'owner@erhanflowers.com',passwordHash:h,role:'OWNER',name:'Erhan'}})).then(u=>{console.log('OK',u.email);p.\$disconnect()})"
+```
+
+## Hetzner Konsol Sorunları
+
+- Alt çizgi `_` → tire `-` olarak yazılıyor olabilir
+- Boru `|` karakteri çalışmayabilir
+- Çözüm: inline node -e ile JavaScript çalıştır
 
 ## SSH Bağlantısı (PowerShell'den)
+
 ```powershell
 ssh -i "C:\Users\Erhan Flowers\.ssh\github_actions" root@77.42.122.169
 ```
-NOT: SSH key sunucudaki authorized_keys ile eşleşmeli. Çalışmıyorsa Hetzner konsolunu kullan.
+
+## Önemli Dosyalar
+
+| Dosya | Açıklama |
+|---|---|
+| `backend/src/products/products.service.ts` | broadcastPriceStock, broadcastAll |
+| `backend/src/integrations/adapters/trendyol.adapter.ts` | Trendyol pushPrice |
+| `backend/src/integrations/adapters/n11.adapter.ts` | N11 pushPrice |
+| `backend/src/integrations/adapters/hepsiburada.adapter.ts` | HB pushPrice |
+| `backend/src/production-costs/production-costs.service.ts` | Maliyet onay + broadcast |
+| `frontend/src/app/products/page.tsx` | Ürünler sayfası + toplu gönderim butonu |
+| `frontend/src/app/integrations/sku-mapping/page.tsx` | SKU eşleştirme |
+
+## Yapılacaklar Listesi
+
+- [x] GitHub Actions deploy kuruldu
+- [ ] SSH_HOST secret'ını 77.42.122.169 olarak güncelle
+- [ ] PR #7 merge et → otomatik deploy başlar
+- [ ] Her platformdan Excel indir → SKU Mapping yükle
+- [ ] "Tüm Ürünleri Platformlara Gönder" butonuna bas → ilk senkronizasyon
+
+## Teknoloji Stack
+
+- **Backend:** NestJS, Prisma ORM, PostgreSQL
+- **Frontend:** Next.js 14 (App Router), TailwindCSS
+- **Deploy:** Docker Compose, Caddy (reverse proxy + SSL)
+- **Hosting:** Hetzner Cloud

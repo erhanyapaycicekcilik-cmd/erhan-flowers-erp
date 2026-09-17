@@ -41,6 +41,11 @@ export class ProductsController {
     return this.products.checkIdentity(body);
   }
 
+  @Post('broadcast-all')
+  broadcastAll() {
+    return this.products.broadcastAll();
+  }
+
   @Patch(':id')
   update(@Param('id') id: string, @Body() body: unknown) {
     return this.products.update(Number(id), body);

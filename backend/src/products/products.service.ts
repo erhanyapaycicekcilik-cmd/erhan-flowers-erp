@@ -1,7 +1,8 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { cleanMojibakeDeep } from '../common/mojibake';
 import { Prisma } from '../generated/prisma-client';
 import { PrismaService } from '../prisma/prisma.service';
+import { IntegrationsService } from '../integrations/integrations.service';
 
 type ProductPayload = {
   productName?: string;
@@ -45,7 +46,34 @@ type IdentityCheckPayload = {
 
 @Injectable()
 export class ProductsService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(ProductsService.name);
+
+  // Bağlı platform listesi 5 dakika cache'lenir — her ürün kaydında DB sorgusu atmamak için
+  private connectedPlatformsCache: { platforms: string[]; expiresAt: number } | null = null;
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly integrations: IntegrationsService,
+  ) {}
+
+  private async getConnectedPlatforms(): Promise<string[]> {
+    const now = Date.now();
+    if (this.connectedPlatformsCache && this.connectedPlatformsCache.expiresAt > now) {
+      return this.connectedPlatformsCache.platforms;
+    }
+    const rows = await this.prisma.$queryRaw<Array<{ platform: string }>>`
+      SELECT platform FROM integration_connections
+      WHERE status = 'CONNECTED' AND platform IN ('TRENDYOL', 'N11', 'HEPSIBURADA')
+    `.catch(() => [] as Array<{ platform: string }>);
+    const platforms = rows.map((r) => r.platform);
+    this.connectedPlatformsCache = { platforms, expiresAt: now + 5 * 60 * 1000 };
+    return platforms;
+  }
+
+  // Bağlantı değiştiğinde cache'i temizle (bağlantı ekle/sil işlemlerinde çağrılabilir)
+  invalidatePlatformCache() {
+    this.connectedPlatformsCache = null;
+  }
 
   async list() {
     const products = await this.prisma.product.findMany({
@@ -63,7 +91,7 @@ export class ProductsService {
 
     try {
       await this.ensureUniqueProductIdentity(data);
-      return await this.prisma.product.create({
+      const product = await this.prisma.product.create({
         data: {
           productName: data.productName,
           modelCode: data.modelCode,
@@ -92,48 +120,171 @@ export class ProductsService {
         },
         include: { category: true },
       });
+      this.broadcastPriceStock(product).catch((err) =>
+        this.logger.warn(`Platform yayını hatası (create): ${String(err)}`),
+      );
+      return product;
     } catch (error) {
       this.handleUniqueError(error);
     }
   }
 
   async update(id: number, payload: unknown) {
+    const body = (payload ?? {}) as Record<string, unknown>;
+    const hasKey = (k: string) => Object.prototype.hasOwnProperty.call(body, k);
+
+    // Only normalize and update fields that were actually sent in the payload
     const data = this.normalize(payload);
+    const patch: Record<string, unknown> = {};
+    if (hasKey('productName') || hasKey('product_name')) patch['productName'] = data.productName;
+    if (hasKey('modelCode') || hasKey('model_code')) patch['modelCode'] = data.modelCode;
+    if (hasKey('barcode')) patch['barcode'] = data.barcode;
+    if (hasKey('categoryId') || hasKey('category_id')) patch['categoryId'] = data.categoryId;
+    if (hasKey('stockQuantity') || hasKey('stock_quantity')) patch['stockQuantity'] = data.stockQuantity;
+    if (hasKey('criticalStockLevel') || hasKey('critical_stock_level')) patch['criticalStockLevel'] = data.criticalStockLevel;
+    if (hasKey('costPrice') || hasKey('cost_price')) patch['costPrice'] = data.costPrice;
+    if (hasKey('desi')) patch['desi'] = data.desi;
+    if (hasKey('shippingCost') || hasKey('shipping_cost')) patch['shippingCost'] = data.shippingCost;
+    if (hasKey('shopPrice') || hasKey('shop_price')) patch['shopPrice'] = data.shopPrice;
+    if (hasKey('sitePrice') || hasKey('site_price')) patch['sitePrice'] = data.sitePrice;
+    if (hasKey('marketPrice') || hasKey('market_price')) patch['marketPrice'] = data.marketPrice;
+    if (hasKey('listPrice') || hasKey('list_price')) patch['listPrice'] = data.listPrice;
+    if (hasKey('imageUrls') || hasKey('image_urls')) patch['imageUrls'] = data.imageUrls;
+    if (hasKey('brand')) patch['brand'] = data.brand;
+    if (hasKey('vatRate') || hasKey('vat_rate')) patch['vatRate'] = data.vatRate;
+    if (hasKey('origin')) patch['origin'] = data.origin;
+    if (hasKey('colorVariant') || hasKey('color_variant')) patch['colorVariant'] = data.colorVariant;
+    if (hasKey('material')) patch['material'] = data.material;
+    if (hasKey('packageDimensions') || hasKey('package_dimensions')) patch['packageDimensions'] = data.packageDimensions;
+    if (hasKey('warrantyMonths') || hasKey('warranty_months')) patch['warrantyMonths'] = data.warrantyMonths;
+    if (hasKey('warrantyType') || hasKey('warranty_type')) patch['warrantyType'] = data.warrantyType;
+    if (hasKey('status')) patch['status'] = data.status;
+    if (hasKey('description')) patch['description'] = data.description;
+
+    const partialData: ProductPayload = {
+      ...(patch['productName'] !== undefined ? { productName: patch['productName'] as string } : {}),
+      ...(patch['modelCode'] !== undefined ? { modelCode: patch['modelCode'] as string } : {}),
+      ...(patch['barcode'] !== undefined ? { barcode: patch['barcode'] as string } : {}),
+      ...(patch['categoryId'] !== undefined ? { categoryId: patch['categoryId'] as number } : {}),
+    };
+
     try {
-      await this.ensureUniqueProductIdentity(data, id);
-      return await this.prisma.product.update({
+      await this.ensureUniqueProductIdentity(partialData, id);
+      const product = await this.prisma.product.update({
         where: { id },
-        data: {
-          productName: data.productName,
-          modelCode: data.modelCode,
-          barcode: data.barcode,
-          categoryId: data.categoryId,
-          stockQuantity: data.stockQuantity,
-          criticalStockLevel: data.criticalStockLevel,
-          costPrice: data.costPrice,
-          desi: data.desi,
-          shippingCost: data.shippingCost,
-          shopPrice: data.shopPrice,
-          sitePrice: data.sitePrice,
-          marketPrice: data.marketPrice,
-          listPrice: data.listPrice,
-          imageUrls: data.imageUrls,
-          brand: data.brand,
-          vatRate: data.vatRate,
-          origin: data.origin,
-          colorVariant: data.colorVariant,
-          material: data.material,
-          packageDimensions: data.packageDimensions,
-          warrantyMonths: data.warrantyMonths,
-          warrantyType: data.warrantyType,
-          status: data.status,
-          description: data.description,
-        },
+        data: patch as Prisma.ProductUpdateInput,
         include: { category: true },
       });
+      // Fiyat veya stok değiştiyse tüm platformlara yayınla
+      const priceOrStockChanged = ['salePrice', 'marketPrice', 'shopPrice', 'sitePrice', 'listPrice', 'stockQuantity'].some((k) => patch[k] !== undefined);
+      if (priceOrStockChanged) {
+        this.broadcastPriceStock(product).catch((err) =>
+          this.logger.warn(`Platform yayını hatası (update): ${String(err)}`),
+        );
+      }
+      return product;
     } catch (error) {
       this.handleUniqueError(error);
     }
+  }
+
+  // Ürün kaydedilince tüm aktif platform entegrasyonlarına fiyat/stok gönderir.
+  // Arka planda çalışır — hata olursa ürün kaydını etkilemez.
+  private async broadcastPriceStock(product: {
+    barcode?: string | null;
+    modelCode?: string | null;
+    marketPrice?: unknown;
+    listPrice?: unknown;
+    shopPrice?: unknown;
+    stockQuantity?: unknown;
+  }): Promise<void> {
+    if (!product.barcode && !product.modelCode) return;
+
+    // Tüm platformlara aynı fiyat gider (kullanıcı tercihi: tek fiyat politikası)
+    // marketPrice = platform satış fiyatı, listPrice = KDV dahil liste fiyatı
+    const salePrice = Number(product.marketPrice ?? product.shopPrice ?? 0);
+    if (!salePrice) return;
+    const rawListPrice = Number(product.listPrice ?? product.marketPrice ?? 0);
+    // listPrice her zaman salePrice'dan büyük olmalı (platform kuralı)
+    const listPrice = rawListPrice > salePrice ? rawListPrice : Math.ceil(salePrice * 1.1);
+
+    const payload = {
+      barcode: product.barcode ?? product.modelCode ?? '',
+      modelCode: product.modelCode ?? product.barcode ?? '',
+      salePrice,
+      listPrice,
+      stockQuantity: Number(product.stockQuantity ?? 0),
+    };
+
+    // Cache'den bağlı platformları al (5dk TTL, DB sorgusu atmaz)
+    const platforms = await this.getConnectedPlatforms();
+    if (!platforms.length) return;
+
+    await Promise.allSettled(
+      platforms.map((platform) =>
+        this.integrations.pushPrice(platform, payload).then((result) => {
+          if (!result.ok) this.logger.warn(`${platform} fiyat/stok yayını başarısız: ${result.message}`);
+          else this.logger.log(`${platform} fiyat/stok yayını tamam: ${payload.barcode || payload.modelCode}`);
+        }),
+      ),
+    );
+  }
+
+  // Tüm aktif ürünleri tüm bağlı platformlara toplu yayınlar.
+  // 10'lu batch'ler halinde paralel gönderir — batch arası 500ms bekler.
+  async broadcastAll(): Promise<{ total: number; sent: number; skipped: number; errors: number }> {
+    const products = await this.prisma.product.findMany({
+      where: { status: 'ACTIVE' },
+      select: { id: true, barcode: true, modelCode: true, marketPrice: true, listPrice: true, shopPrice: true, stockQuantity: true },
+    });
+
+    this.invalidatePlatformCache(); // toplu gönderimde her zaman taze bağlantı listesi al
+    const platformNames = await this.getConnectedPlatforms();
+    const connections = platformNames.map((platform) => ({ platform }));
+
+    if (connections.length === 0) return { total: products.length, sent: 0, skipped: products.length, errors: 0 };
+
+    // Geçerli ürünleri payload'a çevir, fiyatsız/kodsuzları atla
+    type Payload = { barcode: string; modelCode: string; salePrice: number; listPrice: number; stockQuantity: number };
+    const payloads: Payload[] = [];
+    let skipped = 0;
+    for (const product of products) {
+      if (!product.barcode && !product.modelCode) { skipped++; continue; }
+      const salePrice = Number(product.marketPrice ?? product.shopPrice ?? 0);
+      if (!salePrice) { skipped++; continue; }
+      payloads.push({
+        barcode: product.barcode ?? product.modelCode ?? '',
+        modelCode: product.modelCode ?? product.barcode ?? '',
+        salePrice,
+        listPrice: Number(product.listPrice ?? product.marketPrice ?? 0),
+        stockQuantity: Number(product.stockQuantity ?? 0),
+      });
+    }
+
+    let sent = 0; let errors = 0;
+    const BATCH = 10;
+
+    for (let i = 0; i < payloads.length; i += BATCH) {
+      const batch = payloads.slice(i, i + BATCH);
+      const batchResults = await Promise.allSettled(
+        batch.flatMap((payload) =>
+          connections.map(({ platform }) => this.integrations.pushPrice(platform, payload)),
+        ),
+      );
+
+      for (let j = 0; j < batch.length; j++) {
+        const platformResults = batchResults.slice(j * connections.length, (j + 1) * connections.length);
+        const anyOk = platformResults.some((r) => r.status === 'fulfilled' && r.value.ok);
+        const failCount = platformResults.filter((r) => r.status === 'rejected' || (r.status === 'fulfilled' && !r.value.ok)).length;
+        if (anyOk) sent++;
+        errors += failCount;
+      }
+
+      // Batch arası rate-limit koruması
+      if (i + BATCH < payloads.length) await new Promise((res) => setTimeout(res, 500));
+    }
+
+    return { total: products.length, sent, skipped, errors };
   }
 
   passive(id: number) {
