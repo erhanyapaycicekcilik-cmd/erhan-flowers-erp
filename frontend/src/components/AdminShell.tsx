@@ -77,6 +77,7 @@ const navGroups: { section: string; icon: LucideIcon; items: NavItem[] }[] = [
     section: 'Satış',
     icon: ShoppingCart,
     items: [
+      { href: '/hizli-satis', label: 'Hızlı Dükkan Satışı', icon: ShoppingCart, roles: OWNER_MANAGER },
       { href: '/orders', label: 'Siparişler', icon: ShoppingCart, roles: OWNER_MANAGER },
       { href: '/staff/orders', label: 'Personel Sipariş', icon: ShoppingCart, roles: ALL },
       { href: '/sales', label: 'Satış Merkezi', icon: ShoppingCart, roles: OWNER_MANAGER, enabled: process.env.NEXT_PUBLIC_ENABLE_SALES_CENTER === 'true' },
