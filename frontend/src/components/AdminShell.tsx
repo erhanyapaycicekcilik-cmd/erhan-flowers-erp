@@ -27,6 +27,7 @@ import {
   Settings,
   ShoppingCart,
   Users,
+  Wallet,
   Warehouse,
   X,
   type LucideIcon,
@@ -100,6 +101,7 @@ const navGroups: { section: string; icon: LucideIcon; items: NavItem[] }[] = [
     section: 'Yönetim',
     icon: CircleDollarSign,
     items: [
+      { href: '/harcama', label: 'Günlük Harcama', icon: Wallet, roles: OWNER_MANAGER },
       { href: '/finance', label: 'Finans', icon: CircleDollarSign, roles: OWNER_ONLY },
       { href: '/borclar', label: 'Tedarikçi Borçları', icon: Warehouse, roles: OWNER_ONLY },
       { href: '/reports', label: 'Raporlar', icon: BarChart3, roles: OWNER_MANAGER },
