@@ -1474,6 +1474,7 @@ model RetailSaleProofPhoto {
   id        Int        @id @default(autoincrement())
   saleId    Int        @map("sale_id")
   imagePath String     @map("image_path")
+  photoType String     @default("BARCODE") @map("photo_type")
   takenAt   DateTime   @default(now()) @map("taken_at")
   expiresAt DateTime   @map("expires_at")
   takenById Int?       @map("taken_by_id")

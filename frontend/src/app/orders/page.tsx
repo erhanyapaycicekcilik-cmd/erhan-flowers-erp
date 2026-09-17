@@ -1,7 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 import {
+  Camera,
   CheckCircle2,
   ChevronDown,
   Download,
@@ -714,6 +716,7 @@ function OrderCard({
           <button className="btn btn-secondary min-h-9 px-3 text-xs" type="button" onClick={onPrint}><Printer size={15} /> A5 Çıktı</button>
           <button className="btn btn-primary min-h-9 px-3 text-xs" type="button" onClick={onProcessing} disabled={!canMoveTo(order.status, 'PREPARING') || busyAction === `${order.id}:PREPARING`}><FileText size={15} /> İşleme Al</button>
           <button className="btn btn-secondary min-h-9 px-3 text-xs" type="button" onClick={onReady} disabled={!canMoveTo(order.status, 'READY') || busyAction === `${order.id}:READY`}><PackageCheck size={15} /> Hazır Yap</button>
+          <Link href={`/urun-hazirla/${order.id}`} className="btn btn-secondary min-h-9 px-3 text-xs flex items-center gap-1"><Camera size={15} /> Fotoğraf Yükle</Link>
         </div>
       </Cell>
     </article>

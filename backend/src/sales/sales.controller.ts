@@ -149,8 +149,9 @@ export class SalesController {
     @Param('id') id: string,
     @UploadedFile() file: Express.Multer.File,
     @Req() request: AuthenticatedRequest,
+    @Query('photoType') photoType?: string,
   ) {
-    return this.sales.saveProofPhotoAndMarkReady(Number(id), file, request.user!.id);
+    return this.sales.saveProofPhotoAndMarkReady(Number(id), file, request.user!.id, photoType);
   }
 
   @Post(':id/payments')
