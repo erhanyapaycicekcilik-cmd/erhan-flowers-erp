@@ -65,6 +65,9 @@ export class TrendyolProductSyncService {
 
       // Kategori eşleşmesi için var olan kategorileri çek
       const allCategories = await this.prisma.category.findMany({ select: { id: true, name: true } });
+      // Genel kategori (zorunlu categoryId için fallback — eşleşme bulunamazsa buraya düşer)
+      const genelCategory = allCategories.find((c) => c.name === 'Genel');
+      const fallbackCategoryId = genelCategory?.id ?? allCategories[0]?.id ?? 1;
 
       for (const p of products) {
         try {
@@ -75,28 +78,26 @@ export class TrendyolProductSyncService {
           const images     = (p.images || []).map((img) => img.url).filter(Boolean);
           const brand      = p.brand || 'Erhan Flowers';
 
-          // Kategori bul (Trendyol'dan gelen categoryName'e göre eşleştir)
-          const categoryId = this.matchCategory(allCategories, p.categoryName);
+          // Kategori bul — eşleşme yoksa Genel kategorisine ata
+          const categoryId = this.matchCategory(allCategories, p.categoryName) ?? fallbackCategoryId;
 
           const existing = await this.prisma.product.findFirst({
             where: { modelCode },
             select: { id: true, sitePrice: true },
           });
 
+          // Site fiyatı = Trendyol fiyatı - komisyon (%21 sabit)
+          const sitePrice = Math.round(salePrice * 0.79);
+
           if (existing) {
-            // Sadece stok + fiyat + görselleri güncelle (kullanıcının manuel değiştirdiği sitePrice'ı korumak için
-            // sitePrice=0 olan ürünleri Trendyol fiyatıyla doldur, 0'dan büyük olanları dokunma)
             const updateData: Record<string, unknown> = {
               stockQuantity: stock,
               imageUrls: images,
               listPrice,
               marketPrice: salePrice,
+              shopPrice: salePrice,
+              sitePrice: sitePrice > 0 ? sitePrice : salePrice,
             };
-
-            if (existing.sitePrice === 0) {
-              updateData.sitePrice = salePrice;
-              updateData.shopPrice = salePrice;
-            }
 
             await this.prisma.product.update({
               where: { id: existing.id },
@@ -111,7 +112,7 @@ export class TrendyolProductSyncService {
                 modelCode,
                 barcode: p.barcode || modelCode,
                 brand,
-                sitePrice: salePrice,
+                sitePrice: sitePrice > 0 ? sitePrice : salePrice,
                 shopPrice: salePrice,
                 listPrice,
                 marketPrice: salePrice,
@@ -122,7 +123,7 @@ export class TrendyolProductSyncService {
                 origin: 'ÇİN',
                 vatRate: 20,
                 warrantyMonths: 0,
-                ...(categoryId ? { categoryId } : {}),
+                categoryId,
               } as any,
             });
             inserted++;

@@ -292,6 +292,7 @@ export class ProductCenterService {
         ? await tx.product.update({ where: { id: existing.productId }, data: productData })
         : await tx.product.create({ data: productData });
 
+      // Tüm kanallarda fiyat eşit olsun
       const variantData = {
         productId: product.id,
         barcode,
@@ -305,6 +306,8 @@ export class ProductCenterService {
         stockQuantity: Math.trunc(initialStockQuantity),
         images,
         trendyolSalePrice: new Prisma.Decimal(sitePrice),
+        n11SalePrice: new Prisma.Decimal(sitePrice),
+        hepsiburadaSalePrice: new Prisma.Decimal(sitePrice),
         commissionPercent: new Prisma.Decimal(20),
         status: 'ACTIVE' as const,
       };
@@ -312,6 +315,23 @@ export class ProductCenterService {
       const variant = existing.variantId
         ? await tx.trendyolProductVariant.update({ where: { id: existing.variantId }, data: variantData })
         : await tx.trendyolProductVariant.create({ data: variantData });
+
+      // Maliyet taslağı yoksa otomatik oluştur — "Maliyet Girilmedi" sorununu çözer
+      const existingDraft = await tx.productCostDraft.findUnique({ where: { variantId: variant.id } });
+      if (!existingDraft) {
+        await tx.productCostDraft.create({
+          data: {
+            variantId: variant.id,
+            profitMarginPercent: new Prisma.Decimal(45),
+            vatPercent: new Prisma.Decimal(20),
+            marketplaceMarkupPercent: new Prisma.Decimal(25),
+            campaignBufferPercent: new Prisma.Decimal(10),
+            shippingCost: new Prisma.Decimal(0),
+            desi: new Prisma.Decimal(1),
+            status: 'DRAFT',
+          },
+        });
+      }
 
       const fileName = this.fileNameFromPath(mainImageUrl);
       await tx.mediaFile.create({
