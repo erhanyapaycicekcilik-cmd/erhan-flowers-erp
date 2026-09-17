@@ -88,10 +88,21 @@ Platformlardaki ürünler ERP model kodlarıyla eşleşmiyor.
 | `frontend/src/app/products/page.tsx` | Ürünler sayfası + toplu gönderim butonu |
 | `frontend/src/app/integrations/sku-mapping/page.tsx` | SKU eşleştirme |
 
+## GitHub Actions Deploy (Otomatik)
+
+PR main'e merge edilince otomatik deploy olur. Bir kere kuruldu, tekrar kurma.
+
+**Gerekli Secrets** (github.com/erhanyapaycicekcilik-cmd/erhan-flowers-erp/settings/secrets/actions):
+- `SSH_HOST` = `78.46.123.45`
+- `SSH_PASSWORD` = sunucu root şifresi
+- `GH_TOKEN` = GitHub Personal Access Token (repo yetkili)
+
+**Token oluşturma:** github.com/settings/tokens → Generate new token (classic) → repo işaretle → Generate
+
 ## Yapılacaklar Listesi
 
-- [ ] Deploy: `git pull && docker compose -f docker-compose.prod.yml up -d --build`
-- [ ] PR #7 merge et
+- [ ] GitHub Secrets ekle (SSH_HOST, SSH_PASSWORD, GH_TOKEN)
+- [ ] PR #7 merge et → otomatik deploy başlar
 - [ ] Her platformdan Excel indir → SKU Mapping yükle
 - [ ] "Tüm Ürünleri Platformlara Gönder" butonuna bas → ilk senkronizasyon
 - [ ] İsteğe bağlı: `.env.production` dosyasına `HB_WEBHOOK_SECRET=...` ekle
