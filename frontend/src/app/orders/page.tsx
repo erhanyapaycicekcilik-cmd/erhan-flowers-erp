@@ -182,6 +182,7 @@ export default function OrdersPage() {
   const [pageSize, setPageSize] = useState(25);
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<number[]>([]);
+  const [printSort, setPrintSort] = useState<'number' | 'delivery'>('number');
   const [selectedOrderId, setSelectedOrderId] = useState<number | null>(null);
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [message, setMessage] = useState('');
@@ -368,7 +369,18 @@ export default function OrdersPage() {
       setMessage('Önce en az bir sipariş seçin.');
       return;
     }
-    window.location.assign(`/orders/${ids.join(',')}/print?type=${type}`);
+    const idSet = new Set(ids);
+    const rows = orders.filter((o) => idSet.has(o.id));
+    const sorted = [...rows].sort((a, b) => {
+      if (printSort === 'delivery') {
+        const da = a.deliveryDueAt ? new Date(a.deliveryDueAt).getTime() : 0;
+        const db = b.deliveryDueAt ? new Date(b.deliveryDueAt).getTime() : 0;
+        return da - db;
+      }
+      return (a.saleNumber ?? '').localeCompare(b.saleNumber ?? '', 'tr');
+    });
+    const sortedIds = sorted.map((o) => o.id);
+    window.location.assign(`/orders/${sortedIds.join(',')}/print?type=${type}`);
   }
 
   function exportExcel(rows = selectedOrders.length ? selectedOrders : tabOrders) {
@@ -438,7 +450,24 @@ export default function OrdersPage() {
             </div>
             <div className="text-sm font-semibold text-slate-600">{selected.length} sipariş seçildi</div>
           </div>
-          <div className="mt-4 flex flex-wrap gap-2">
+          <div className="mt-3 flex items-center gap-2 text-sm">
+            <span className="font-semibold text-slate-600">Çıktı Sıralaması:</span>
+            <button
+              type="button"
+              onClick={() => setPrintSort('number')}
+              className={`rounded-full px-3 py-1 text-xs font-bold border transition ${printSort === 'number' ? 'bg-brand text-white border-brand' : 'bg-white text-slate-600 border-slate-300 hover:border-brand'}`}
+            >
+              Sipariş Numarası
+            </button>
+            <button
+              type="button"
+              onClick={() => setPrintSort('delivery')}
+              className={`rounded-full px-3 py-1 text-xs font-bold border transition ${printSort === 'delivery' ? 'bg-brand text-white border-brand' : 'bg-white text-slate-600 border-slate-300 hover:border-brand'}`}
+            >
+              Kargoya Verme Saati
+            </button>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
             <button className="btn btn-primary" type="button" onClick={() => openPrint(selected, 'delivery')} disabled={!selected.length}>
               <Printer size={16} />
               Seçili A5 Çıktı
