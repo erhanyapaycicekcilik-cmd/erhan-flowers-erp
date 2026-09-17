@@ -310,6 +310,18 @@ const flowerVisualSlots = [
 ];
 const flowerVisualImageLimit = flowerVisualSlots.length;
 const flowerGeneratedImagePrefix = '/uploads/flower-standard/';
+
+const TRENDYOL_COLOR_OPTIONS = [
+  'Çok Renkli', 'Beyaz', 'Siyah', 'Kırmızı', 'Pembe', 'Mor', 'Mavi', 'Lacivert',
+  'Yeşil', 'Haki', 'Sarı', 'Turuncu', 'Bej', 'Krem', 'Ekru', 'Kahverengi',
+  'Gri', 'Gümüş', 'Altın', 'Bordo', 'Turkuaz', 'Şeffaf',
+];
+
+const TRENDYOL_FLOWER_TYPE_OPTIONS = [
+  'Gül', 'Papatya', 'Ayçiçeği', 'Lale', 'Lavanta', 'Sarmaşık',
+  'Ağaç', 'Manolya', 'Çiçek Buketi', 'Buket', 'Demet', 'Yaprak',
+  'Tek Dal', 'Saksı', 'Pamuk',
+];
 const treeVisualSourceReadyText = 'Bilgisayardan yüklenen ürün görseli seçildi. Bileşenden otomatik görsel hazırlama şimdilik kapalı.';
 const compositeGeneratedImagePrefix = '/uploads/composite-products/';
 const productImageAutomationDisabled = true;
@@ -320,6 +332,10 @@ export default function ProductsPage() {
   const [broadcastingAll, setBroadcastingAll] = useState(false);
   const [broadcastResult, setBroadcastResult] = useState<{ total: number; sent: number; skipped: number; errors: number } | null>(null);
   const [openingTrendyolPanel, setOpeningTrendyolPanel] = useState(false);
+  const [productTrendyolEntry, setProductTrendyolEntry] = useState<Entry | null>(null);
+  const [productTrendyolForm, setProductTrendyolForm] = useState({ categoryId: '', salePrice: '', listPrice: '', description: '', color: '', flowerType: '', vatRate: '20', desi: '1', barcode: '', modelCode: '' });
+  const [productTrendyolResult, setProductTrendyolResult] = useState<{ ok: boolean; message: string } | null>(null);
+  const [productTrendyolSending, setProductTrendyolSending] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
   const [families, setFamilies] = useState<Family[]>([]);
   const [mediaFiles, setMediaFiles] = useState<MediaFile[]>([]);
@@ -1516,6 +1532,59 @@ export default function ProductsPage() {
     }
   }
 
+  function openProductTrendyol(entry: Entry) {
+    const name = entry.productName?.toLowerCase() ?? '';
+    const isTree = /ağaç|agac|ficus|palm|schef|yuca|dracena|monstera|benjam/.test(name);
+    const existingDesc = entry.description ?? '';
+    const autoDesc = existingDesc || buildLocalSeoContent({ productName: entry.productName ?? '' }).description;
+    const descWithHint = isTree && !autoDesc.toLowerCase().includes('saksısız')
+      ? autoDesc + '\n\nNot: Ürün saksısız gönderilmektedir.'
+      : autoDesc;
+    setProductTrendyolEntry(entry);
+    setProductTrendyolResult(null);
+    setProductTrendyolForm({
+      categoryId: '',
+      salePrice: String(entry.salePrice ?? ''),
+      listPrice: String(entry.salePrice ?? ''),
+      description: descWithHint,
+      color: '',
+      flowerType: '',
+      vatRate: '20',
+      desi: '1',
+      barcode: entry.barcode || `EF${String(entry.variantId).padStart(8, '0')}`,
+      modelCode: entry.modelCode || `EF-${String(entry.variantId).padStart(6, '0')}`,
+    });
+  }
+
+  async function submitProductTrendyol(event: FormEvent) {
+    event.preventDefault();
+    if (!productTrendyolEntry) return;
+    setProductTrendyolSending(true);
+    setProductTrendyolResult(null);
+    try {
+      const result = await api<{ ok: boolean; message: string }>(`/product-center/entries/${productTrendyolEntry.variantId}/trendyol-publish`, {
+        method: 'POST',
+        json: {
+          categoryId: Number(productTrendyolForm.categoryId),
+          salePrice: Number(productTrendyolForm.salePrice),
+          listPrice: Number(productTrendyolForm.listPrice || productTrendyolForm.salePrice),
+          description: productTrendyolForm.description,
+          color: productTrendyolForm.color,
+          flowerType: productTrendyolForm.flowerType,
+          vatRate: Number(productTrendyolForm.vatRate),
+          desi: Number(productTrendyolForm.desi),
+          barcode: productTrendyolForm.barcode || undefined,
+          modelCode: productTrendyolForm.modelCode || undefined,
+        },
+      });
+      setProductTrendyolResult({ ok: result.ok, message: result.message });
+    } catch (error) {
+      setProductTrendyolResult({ ok: false, message: error instanceof Error ? error.message : 'Trendyol gönderimi başarısız.' });
+    } finally {
+      setProductTrendyolSending(false);
+    }
+  }
+
   async function openTrendyolPanel() {
     if (!form.barcode) {
       setSendMessage('Panel linki için önce barkod gerekli.');
@@ -1813,6 +1882,7 @@ export default function ProductsPage() {
                   {entry.status !== 'PASSIVE' && (
                     <button type="button" className="btn btn-danger min-h-9 px-3 text-xs" onClick={() => passiveEntry(entry)}><Trash2 size={14} /> Pasife al</button>
                   )}
+                  <button type="button" className="btn btn-secondary min-h-9 px-3 text-xs" onClick={() => openProductTrendyol(entry)}><Send size={14} /> Trendyol</button>
                 </div>
               </div>
             ))}
@@ -2504,6 +2574,171 @@ export default function ProductsPage() {
             ))}
           </div>
         </PickerModal>
+      )}
+
+      {productTrendyolEntry && (
+        <div className="fixed inset-0 z-50 flex items-start justify-end bg-black/40" onClick={() => { setProductTrendyolEntry(null); setProductTrendyolResult(null); }}>
+          <aside className="flex h-full w-full max-w-sm flex-col bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-line px-5 py-4">
+              <div className="font-bold">Trendyol&apos;a Satışa Aç</div>
+              <button type="button" className="text-slate-400 hover:text-slate-600" onClick={() => { setProductTrendyolEntry(null); setProductTrendyolResult(null); }}><X size={20} /></button>
+            </div>
+            <form className="flex-1 overflow-y-auto p-5" onSubmit={submitProductTrendyol}>
+              <div className="mb-3 rounded-md bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700">
+                Trendyol&apos;a göndermek için aşağıdaki alanları doldurun.
+              </div>
+
+              <div className="space-y-3">
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-slate-600">Trendyol Kategori ID <span className="text-red-500">*</span></label>
+                  <input
+                    className="field"
+                    type="number"
+                    placeholder="Ör: 2995"
+                    required
+                    value={productTrendyolForm.categoryId}
+                    onChange={(e) => setProductTrendyolForm({ ...productTrendyolForm, categoryId: e.target.value })}
+                  />
+                  <div className="mt-1 text-xs text-slate-400">Yapay &amp; Kuru Çiçek: 2995 · Saksı: 2615</div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-slate-600">Satış Fiyatı (₺) <span className="text-red-500">*</span></label>
+                    <input
+                      className="field"
+                      type="number"
+                      step="0.01"
+                      min="0.01"
+                      required
+                      value={productTrendyolForm.salePrice}
+                      onChange={(e) => setProductTrendyolForm({ ...productTrendyolForm, salePrice: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-slate-600">Liste Fiyatı (₺)</label>
+                    <input
+                      className="field"
+                      type="number"
+                      step="0.01"
+                      placeholder="Satış fiyatı ile aynı"
+                      value={productTrendyolForm.listPrice}
+                      onChange={(e) => setProductTrendyolForm({ ...productTrendyolForm, listPrice: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-slate-600">Ürün Açıklaması</label>
+                  <textarea
+                    className="field min-h-20 resize-y"
+                    placeholder="Ürün açıklaması..."
+                    value={productTrendyolForm.description}
+                    onChange={(e) => setProductTrendyolForm({ ...productTrendyolForm, description: e.target.value })}
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-slate-600">Renk</label>
+                    <select
+                      className="field"
+                      value={productTrendyolForm.color}
+                      onChange={(e) => setProductTrendyolForm({ ...productTrendyolForm, color: e.target.value })}
+                    >
+                      <option value="">Seçin</option>
+                      {TRENDYOL_COLOR_OPTIONS.map((c) => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-slate-600">Çiçek Tipi</label>
+                    <select
+                      className="field"
+                      value={productTrendyolForm.flowerType}
+                      onChange={(e) => setProductTrendyolForm({ ...productTrendyolForm, flowerType: e.target.value })}
+                    >
+                      <option value="">Seçin</option>
+                      {TRENDYOL_FLOWER_TYPE_OPTIONS.map((f) => <option key={f} value={f}>{f}</option>)}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-slate-600">KDV Oranı (%)</label>
+                    <select
+                      className="field"
+                      value={productTrendyolForm.vatRate}
+                      onChange={(e) => setProductTrendyolForm({ ...productTrendyolForm, vatRate: e.target.value })}
+                    >
+                      <option value="10">%10</option>
+                      <option value="20">%20</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-slate-600">Desi</label>
+                    <input
+                      className="field"
+                      type="number"
+                      step="0.1"
+                      min="0.1"
+                      value={productTrendyolForm.desi}
+                      onChange={(e) => setProductTrendyolForm({ ...productTrendyolForm, desi: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-slate-600">Barkod</label>
+                    <input
+                      className="field"
+                      placeholder="Barkod"
+                      value={productTrendyolForm.barcode}
+                      onChange={(e) => setProductTrendyolForm({ ...productTrendyolForm, barcode: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-slate-600">Model Kodu</label>
+                    <input
+                      className="field"
+                      placeholder="Model kodu"
+                      value={productTrendyolForm.modelCode}
+                      onChange={(e) => setProductTrendyolForm({ ...productTrendyolForm, modelCode: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                {/ağaç|agac|ficus|palm|schef|yuca|dracena|monstera|benjam/.test((productTrendyolEntry.productName ?? '').toLowerCase()) && (
+                  <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+                    ⚠️ Ağaç ürünü — açıklamada &quot;saksısız gönderilmektedir&quot; bilgisi mutlaka yer almalıdır.
+                  </div>
+                )}
+              </div>
+
+              {productTrendyolResult && (
+                <div className={`mt-4 rounded-md px-3 py-2 text-sm font-semibold ${productTrendyolResult.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
+                  {productTrendyolResult.message}
+                </div>
+              )}
+
+              <button className="btn btn-primary mt-5 w-full" disabled={productTrendyolSending}>
+                <Send size={17} />
+                {productTrendyolSending ? 'Gönderiliyor...' : 'Trendyol\'a Gönder'}
+              </button>
+
+              <a
+                href="https://partner.trendyol.com/product-list"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-3 flex items-center justify-center gap-2 text-xs font-semibold text-slate-500 hover:text-brand"
+              >
+                <ExternalLink size={13} />
+                Trendyol Satıcı Paneli&apos;nde kontrol et
+              </a>
+            </form>
+          </aside>
+        </div>
       )}
     </AdminShell>
   );

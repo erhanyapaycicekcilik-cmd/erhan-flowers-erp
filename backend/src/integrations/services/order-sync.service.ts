@@ -54,6 +54,9 @@ export class OrderSyncService {
     try { await this.runN11Sync(); } catch (err) {
       this.logger.error('N11 sync hatasi', err instanceof Error ? err.message : String(err));
     }
+    try { await this.runHepsiburadaSync(); } catch (err) {
+      this.logger.error('Hepsiburada sync hatasi', err instanceof Error ? err.message : String(err));
+    }
     try { await this.runFloraTrendyolSync(); } catch (err) {
       this.logger.error('FLORA Trendyol sync hatasi', err instanceof Error ? err.message : String(err));
     }
@@ -487,6 +490,122 @@ export class OrderSyncService {
     });
 
     this.logger.log(`N11 sync tamamlandi: ${newOrders} yeni siparis, ${stockDeductions} stok dusumu.`);
+    return { processed: allOrders.length, newOrders, stockDeductions };
+  }
+
+  async runHepsiburadaSync(): Promise<{ processed: number; newOrders: number; stockDeductions: number }> {
+    const merchantId = process.env.HEPSIBURADA_MERCHANT_ID ?? '';
+    const username = process.env.HEPSIBURADA_USERNAME ?? process.env.HEPSIBURADA_API_KEY ?? '';
+    const password = process.env.HEPSIBURADA_PASSWORD ?? process.env.HEPSIBURADA_API_SECRET ?? '';
+    if (!merchantId || !username || !password) {
+      this.logger.warn('Hepsiburada credentials bulunamadi, sync atlanıyor.');
+      return { processed: 0, newOrders: 0, stockDeductions: 0 };
+    }
+
+    const apiBase = (process.env.HEPSIBURADA_API_URL ?? 'https://oms-external.hepsiburada.com').replace(/\/+$/, '');
+    const auth = Buffer.from(`${username}:${password}`).toString('base64');
+    const headers = { Accept: 'application/json', Authorization: `Basic ${auth}`, 'User-Agent': 'ErhanFlowersERP-HB' };
+    const lookback = Date.now() - this.lookbackDays * 24 * 60 * 60 * 1000;
+
+    const allOrders: Array<Record<string, unknown>> = [];
+    let offset = 0;
+    while (offset < 500) {
+      const url = new URL(`/orders/merchantid/${encodeURIComponent(merchantId)}`, apiBase);
+      url.searchParams.set('offset', String(offset));
+      url.searchParams.set('limit', '50');
+      const res = await fetch(url.toString(), { method: 'GET', headers });
+      if (!res.ok) { this.logger.warn(`Hepsiburada orders API hatasi: HTTP ${res.status}`); break; }
+      const data = await res.json() as { data?: Array<Record<string, unknown>>; items?: Array<Record<string, unknown>> };
+      const items = data.data ?? data.items ?? [];
+      if (!Array.isArray(items) || items.length === 0) break;
+      allOrders.push(...items);
+      if (items.length < 50) break;
+      offset += 50;
+    }
+
+    this.logger.log(`Hepsiburada'dan ${allOrders.length} siparis cekildi.`);
+    let newOrders = 0; let stockDeductions = 0;
+
+    for (const order of allOrders) {
+      const externalOrderId = String(order.id ?? order.orderNumber ?? '');
+      if (!externalOrderId) continue;
+      const rawDate = order.orderDate ?? order.createdAt;
+      const orderDate = rawDate ? new Date(String(rawDate)) : null;
+      if (orderDate && orderDate.getTime() < lookback) continue;
+
+      const existing = await this.prisma.marketplaceOrder.findUnique({
+        where: { platform_externalOrderId: { platform: 'HEPSIBURADA', externalOrderId } },
+      });
+      if (existing) {
+        const newStatus = String(order.status ?? '');
+        if (newStatus && existing.status !== newStatus) {
+          await this.prisma.marketplaceOrder.update({ where: { id: existing.id }, data: { status: newStatus } });
+        }
+        continue;
+      }
+
+      const lines = Array.isArray(order.lines) ? order.lines as Array<Record<string, unknown>>
+        : Array.isArray(order.orderlines) ? order.orderlines as Array<Record<string, unknown>> : [];
+
+      const savedOrder = await this.prisma.marketplaceOrder.create({
+        data: {
+          platform: 'HEPSIBURADA',
+          externalOrderId,
+          orderNumber: String(order.orderNumber ?? externalOrderId),
+          status: String(order.status ?? 'Created'),
+          customerName: String((order.shippingAddress as Record<string,unknown>)?.fullName ?? order.buyerName ?? ''),
+          totalAmount: Number(order.totalPrice ?? order.amount ?? 0),
+          cargoAmount: Number(order.cargoPrice ?? order.shippingAmount ?? 0),
+          currency: 'TRY',
+          orderDate,
+          rawPayload: order as object,
+        },
+      });
+      newOrders++;
+
+      for (const line of lines) {
+        const sku = line.merchantSku ? String(line.merchantSku) : null;
+        const barcode = line.barcode ? String(line.barcode) : null;
+        const qty = Number(line.quantity ?? 1);
+        const unitPrice = Number(line.price ?? line.salePrice ?? 0);
+
+        let stockCard: { id: number; stockQuantity: unknown; unit: string } | null = null;
+        if (barcode) stockCard = await this.prisma.stockCard.findFirst({ where: { barcode, status: 'ACTIVE' }, select: { id: true, stockQuantity: true, unit: true } });
+        if (!stockCard && sku) stockCard = await this.prisma.stockCard.findFirst({ where: { sku, status: 'ACTIVE' }, select: { id: true, stockQuantity: true, unit: true } });
+        if (!stockCard && sku) {
+          const mapping = await this.prisma.$queryRaw<Array<{ stock_card_id: number }>>`SELECT stock_card_id FROM marketplace_sku_mappings WHERE platform = 'HEPSIBURADA' AND external_sku = ${sku} LIMIT 1`;
+          if (mapping.length > 0) stockCard = await this.prisma.stockCard.findFirst({ where: { id: mapping[0].stock_card_id, status: 'ACTIVE' }, select: { id: true, stockQuantity: true, unit: true } });
+        }
+
+        await this.prisma.marketplaceOrderItem.create({
+          data: { orderId: savedOrder.id, productName: String(line.productName ?? line.name ?? 'Bilinmeyen Urun'), sku, barcode, quantity: qty, unitPrice, totalPrice: qty * unitPrice, stockCardId: stockCard?.id ?? null },
+        });
+
+        if (stockCard && Number(stockCard.stockQuantity) > 0) {
+          const prev = Number(stockCard.stockQuantity);
+          const deduct = Math.min(qty, prev);
+          const next = prev - deduct;
+          const eventKey = `HB_ORDER_${savedOrder.id}_SC_${stockCard.id}`;
+          const exists = await this.prisma.stockMovement.findUnique({ where: { eventKey } });
+          if (!exists) {
+            await this.prisma.$transaction([
+              this.prisma.stockCard.update({ where: { id: stockCard.id }, data: { stockQuantity: next, lastMovementAt: new Date() } }),
+              this.prisma.stockMovement.create({ data: { stockCardId: stockCard.id, type: 'OUT', quantity: -deduct, unit: stockCard.unit, previousStock: prev, nextStock: next, note: `Hepsiburada siparis: ${savedOrder.orderNumber}`, referenceType: 'MARKETPLACE_ORDER', referenceId: String(savedOrder.id), eventKey } }),
+            ]);
+            stockDeductions++;
+          }
+        }
+      }
+      await this.prisma.marketplaceOrder.update({ where: { id: savedOrder.id }, data: { stockDeducted: true } });
+    }
+
+    await this.prisma.integrationConnection.upsert({
+      where: { platform: 'HEPSIBURADA' },
+      update: { lastSyncAt: new Date() },
+      create: { platform: 'HEPSIBURADA', displayName: 'Hepsiburada', status: 'CONNECTED', lastSyncAt: new Date() },
+    });
+
+    this.logger.log(`Hepsiburada sync tamamlandi: ${newOrders} yeni siparis, ${stockDeductions} stok dusumu.`);
     return { processed: allOrders.length, newOrders, stockDeductions };
   }
 

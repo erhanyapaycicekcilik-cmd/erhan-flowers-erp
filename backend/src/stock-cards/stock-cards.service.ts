@@ -7,6 +7,8 @@ import PDFDocument = require('pdfkit');
 import { cleanMojibakeDeep } from '../common/mojibake';
 import { PrismaService } from '../prisma/prisma.service';
 import { stockImageFallbackRoots, stockImageRoot } from '../stock-image-paths';
+import { IntegrationCenterService } from '../integrations/services/integration-center.service';
+import { TrendyolAdapter } from '../integrations/adapters/trendyol.adapter';
 
 type StockCardPayload = {
   name?: string;
@@ -118,7 +120,10 @@ const stockCardListSelect = {
 
 @Injectable()
 export class StockCardsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly integrationCenter: IntegrationCenterService,
+  ) {}
 
   async list(userRole?: string) {
     const stockCards = await this.prisma.stockCard.findMany({
@@ -607,6 +612,70 @@ export class StockCardsService {
       where: { id },
       data: { status: 'PASSIVE' },
     }));
+  }
+
+  async trendyolCategories() {
+    const credentials = await this.integrationCenter.runtimeCredentials('TRENDYOL');
+    const adapter = new TrendyolAdapter(credentials);
+    return adapter.fetchCategories();
+  }
+
+  async trendyolPublish(id: number, body: unknown) {
+    const stockCard = await this.ensureStockCard(id);
+    const data = (body ?? {}) as Record<string, unknown>;
+
+    const barcode = String(data.barcode ?? stockCard.barcode ?? '').trim();
+    if (!barcode) throw new BadRequestException('Trendyol gönderimi için barkod zorunludur.');
+
+    const categoryId = Number(data.categoryId);
+    if (!categoryId) throw new BadRequestException('Trendyol kategori ID zorunludur.');
+
+    const salePrice = Number(data.salePrice ?? stockCard.salePrice ?? 0);
+    if (!salePrice) throw new BadRequestException('Satış fiyatı sıfır olamaz.');
+
+    const images = this.buildPublicImageUrls(stockCard);
+
+    const payload = {
+      barcode,
+      productName: String(data.productName ?? stockCard.name ?? '').trim(),
+      modelCode: String(data.modelCode ?? stockCard.model ?? stockCard.sku ?? barcode).trim(),
+      categoryId,
+      stockQuantity: Number(stockCard.stockQuantity ?? 0),
+      salePrice,
+      listPrice: Number(data.listPrice ?? salePrice),
+      description: String(data.description ?? stockCard.description ?? stockCard.shortDescription ?? '').trim(),
+      color: String(data.color ?? stockCard.color ?? 'Çok Renkli').trim(),
+      flowerType: String(data.flowerType ?? stockCard.leafFlowerType ?? '').trim(),
+      vatRate: Number(data.vatRate ?? 20),
+      desi: Number(data.desi ?? 1),
+      images,
+    };
+
+    // Barkod veya model kodu kaydedilmemişse veritabanına yaz
+    if (!stockCard.barcode || !stockCard.model) {
+      await this.prisma.stockCard.update({
+        where: { id },
+        data: {
+          ...(stockCard.barcode ? {} : { barcode }),
+          ...(stockCard.model ? {} : { model: payload.modelCode }),
+        },
+      });
+    }
+
+
+    const credentials = await this.integrationCenter.runtimeCredentials('TRENDYOL');
+    const adapter = new TrendyolAdapter(credentials);
+    return adapter.pushProduct(payload);
+  }
+
+  private buildPublicImageUrls(stockCard: { images?: Array<{ filePath: string; isMain: boolean }> | null; imagePath?: string | null }): string[] {
+    const baseUrl = (process.env.PUBLIC_BASE_URL ?? process.env.NEXT_PUBLIC_API_BASE_URL ?? 'https://api.erhanflowers.com').replace(/\/+$/, '');
+    const images = [...(stockCard.images ?? [])].sort((a, b) => Number(b.isMain) - Number(a.isMain));
+    const paths: string[] = images.map((img) => img.filePath);
+    if (stockCard.imagePath && !paths.includes(stockCard.imagePath)) paths.unshift(stockCard.imagePath);
+    return paths
+      .filter(Boolean)
+      .map((p) => (p.startsWith('http') ? p : `${baseUrl}/uploads/${p.replace(/^\//, '')}`));
   }
 
   private normalize(payload: unknown): StockCardPayload {

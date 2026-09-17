@@ -4,10 +4,15 @@ import { AdapterConnectionResult, ExternalOrder, ExternalOrderSummary, Integrati
 
 // "Yapay & Kuru Çiçek" (2995) kategorisinin zorunlu öznitelikleri. Trendyol'un
 // GET /product/product-categories/2995/attributes cevabından alınmıştır.
-const TRENDYOL_FLOWER_TYPE_ATTRIBUTE_ID = 1095;
+const TRENDYOL_FLOWER_TYPE_ATTRIBUTE_ID = 1095;  // Türü (Ağaç, Gül vb.)
 const TRENDYOL_COLOR_ATTRIBUTE_ID = 47;
 const TRENDYOL_WEB_COLOR_ATTRIBUTE_ID = 348;
 const TRENDYOL_ORIGIN_ATTRIBUTE_ID = 1192;
+
+// "Tipi" özniteliği (Bitki / Çiçek) — Trendyol aksiyon bekleyen ürünlerde zorunlu
+const TRENDYOL_PRODUCT_TYPE_ATTRIBUTE_ID = 1094;
+const TRENDYOL_PRODUCT_TYPE_BITKI_ID = 10616683;   // Bitki
+const TRENDYOL_PRODUCT_TYPE_CICEK_ID = 10616684;   // Çiçek
 
 const TRENDYOL_FLOWER_TYPE_VALUES: Record<string, number> = {
   Gül: 10618191,
@@ -236,6 +241,33 @@ export class TrendyolAdapter extends BaseIntegrationAdapter {
   // Ürün/fiyat gönderimi asenkron işlendiği için "kuyruğa alındı" cevabı gerçek
   // sonucu göstermez. Bu metod, verilen batchRequestId'nin Trendyol tarafında
   // gerçekten işlenip işlenmediğini ve varsa hata sebebini sorgular.
+  async fetchCategories(): Promise<Array<{ id: number; name: string; parentId: number | null; leaf: boolean }>> {
+    const supplierId = this.env('SUPPLIER_ID');
+    const apiBaseUrl = this.env('API_URL').replace(/\/+$/, '');
+    const url = `${apiBaseUrl}/product-categories`;
+    const response = await fetch(url, {
+      headers: {
+        Authorization: `Basic ${Buffer.from(`${this.env('API_KEY')}:${this.env('API_SECRET')}`).toString('base64')}`,
+        'User-Agent': `${supplierId} - SelfIntegration`,
+        Accept: 'application/json',
+      },
+    });
+    if (!response.ok) return [];
+    const body = (await response.json().catch(() => ({}))) as { categories?: Array<Record<string, unknown>> };
+    const flat: Array<{ id: number; name: string; parentId: number | null; leaf: boolean }> = [];
+    const walk = (items: Array<Record<string, unknown>>, parentId: number | null) => {
+      for (const item of items) {
+        const id = Number(item.id);
+        const name = String(item.name ?? '');
+        const sub = Array.isArray(item.subCategories) ? item.subCategories as Array<Record<string, unknown>> : [];
+        flat.push({ id, name, parentId, leaf: sub.length === 0 });
+        if (sub.length > 0) walk(sub, id);
+      }
+    };
+    walk(body.categories ?? [], null);
+    return flat;
+  }
+
   async checkBatchStatus(batchRequestId: string): Promise<AdapterConnectionResult & { batchStatus?: string; failedItemCount?: number }> {
     const missing = this.missingKeys();
     if (missing.length) return this.missing(missing);
@@ -544,6 +576,16 @@ export class TrendyolAdapter extends BaseIntegrationAdapter {
       const flowerType = this.text(data.flowerType);
       const flowerTypeValueId = TRENDYOL_FLOWER_TYPE_VALUES[flowerType] ?? TRENDYOL_FLOWER_TYPE_VALUES['Ağaç'];
       attributes.push({ attributeId: TRENDYOL_FLOWER_TYPE_ATTRIBUTE_ID, attributeValueId: flowerTypeValueId });
+
+      // "Tipi" (Bitki / Çiçek) — aksiyon bekleyen ürünlerde zorunlu alan
+      const productNameLower = this.text(data.productName).toLowerCase();
+      const flowerTypeLower = flowerType.toLowerCase();
+      const isBitki = /ağaç|agac|bitki|ficus|palm|schef|yuca|dracena|monstera|benjam|sarmaşık|yaprak/.test(productNameLower)
+        || flowerTypeLower === 'ağaç' || flowerTypeLower === 'yaprak' || flowerTypeLower === 'sarmaşık';
+      attributes.push({
+        attributeId: TRENDYOL_PRODUCT_TYPE_ATTRIBUTE_ID,
+        attributeValueId: isBitki ? TRENDYOL_PRODUCT_TYPE_BITKI_ID : TRENDYOL_PRODUCT_TYPE_CICEK_ID,
+      });
     }
 
     return attributes;

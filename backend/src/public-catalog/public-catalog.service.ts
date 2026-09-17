@@ -212,16 +212,19 @@ export class PublicCatalogService {
   }
 
   async getProductBySlug(slug: string) {
-    // Slug = slugify(name)-modelCode → modelCode'u ayıkla
+    // Slug = slugify(name)-modelCode.toLowerCase()
+    // modelCode formatları: ERH.180.YPY.A (noktalı, tire yok) veya YC-1019 (tireli)
+    // Son 1-4 bölümü deneye kadar eşleşme ara
     const parts = slug.split('-');
-    // modelCode ERH-XXXX formatında, son iki parçayı al
-    const modelCode = parts.slice(-2).join('-').toUpperCase();
-
-    const product = await this.prisma.product.findFirst({
-      where: { modelCode, status: 'ACTIVE', sitePrice: { gt: 0 } },
-      select: SAFE_SELECT,
-    });
-    return product ? this.toPublicProduct(product) : null;
+    for (let take = 1; take <= 4; take++) {
+      const modelCode = parts.slice(-take).join('-').toUpperCase();
+      const product = await this.prisma.product.findFirst({
+        where: { modelCode, status: 'ACTIVE', sitePrice: { gt: 0 } },
+        select: SAFE_SELECT,
+      });
+      if (product) return this.toPublicProduct(product);
+    }
+    return null;
   }
 
   async getProductById(id: number) {

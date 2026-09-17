@@ -9,6 +9,8 @@ import { cleanMojibakeDeep } from '../common/mojibake';
 import { Prisma } from '../generated/prisma-client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProductionCostsService } from '../production-costs/production-costs.service';
+import { IntegrationCenterService } from '../integrations/services/integration-center.service';
+import { TrendyolAdapter } from '../integrations/adapters/trendyol.adapter';
 
 type EntryPayload = {
   variantId?: unknown;
@@ -53,6 +55,7 @@ export class ProductCenterService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly productionCosts: ProductionCostsService,
+    private readonly integrationCenter: IntegrationCenterService,
   ) {}
 
   async listEntries() {
@@ -289,6 +292,7 @@ export class ProductCenterService {
         ? await tx.product.update({ where: { id: existing.productId }, data: productData })
         : await tx.product.create({ data: productData });
 
+      // Tüm kanallarda fiyat eşit olsun
       const variantData = {
         productId: product.id,
         barcode,
@@ -302,6 +306,8 @@ export class ProductCenterService {
         stockQuantity: Math.trunc(initialStockQuantity),
         images,
         trendyolSalePrice: new Prisma.Decimal(sitePrice),
+        n11SalePrice: new Prisma.Decimal(sitePrice),
+        hepsiburadaSalePrice: new Prisma.Decimal(sitePrice),
         commissionPercent: new Prisma.Decimal(20),
         status: 'ACTIVE' as const,
       };
@@ -309,6 +315,23 @@ export class ProductCenterService {
       const variant = existing.variantId
         ? await tx.trendyolProductVariant.update({ where: { id: existing.variantId }, data: variantData })
         : await tx.trendyolProductVariant.create({ data: variantData });
+
+      // Maliyet taslağı yoksa otomatik oluştur — "Maliyet Girilmedi" sorununu çözer
+      const existingDraft = await tx.productCostDraft.findUnique({ where: { variantId: variant.id } });
+      if (!existingDraft) {
+        await tx.productCostDraft.create({
+          data: {
+            variantId: variant.id,
+            profitMarginPercent: new Prisma.Decimal(45),
+            vatPercent: new Prisma.Decimal(20),
+            marketplaceMarkupPercent: new Prisma.Decimal(25),
+            campaignBufferPercent: new Prisma.Decimal(10),
+            shippingCost: new Prisma.Decimal(0),
+            desi: new Prisma.Decimal(1),
+            status: 'DRAFT',
+          },
+        });
+      }
 
       const fileName = this.fileNameFromPath(mainImageUrl);
       await tx.mediaFile.create({
@@ -1068,6 +1091,73 @@ export class ProductCenterService {
 
       doc.end();
     });
+  }
+
+  async trendyolPublish(variantId: number, body: unknown) {
+    const entry = await this.prisma.trendyolProductVariant.findUnique({ where: { id: variantId } });
+    if (!entry) throw new NotFoundException('Ürün merkezi kaydı bulunamadı.');
+
+    const data = (body ?? {}) as Record<string, unknown>;
+
+    const barcode = String(data.barcode ?? entry.barcode ?? '').trim();
+    if (!barcode) throw new BadRequestException('Trendyol gönderimi için barkod zorunludur.');
+
+    const categoryId = Number(data.categoryId);
+    if (!categoryId) throw new BadRequestException('Trendyol kategori ID zorunludur.');
+
+    const salePrice = Number(data.salePrice ?? 0);
+    if (!salePrice) throw new BadRequestException('Satış fiyatı sıfır olamaz.');
+
+    const baseUrl = (process.env.PUBLIC_BASE_URL ?? 'https://api.florayapaycicek.com').replace(/\/+$/, '');
+    const images = (entry.images as Array<{ filePath: string; isMain: boolean }> ?? [])
+      .sort((a, b) => Number(b.isMain) - Number(a.isMain))
+      .map((img) => img.filePath.startsWith('http') ? img.filePath : `${baseUrl}/uploads/${img.filePath.replace(/^\//, '')}`);
+
+    const modelCode = String(data.modelCode ?? entry.currentModelCode ?? barcode).trim();
+
+    const payload = {
+      barcode,
+      productName: String(data.productName ?? entry.productName ?? '').trim(),
+      modelCode,
+      categoryId,
+      stockQuantity: Number(entry.stockQuantity ?? 0),
+      salePrice,
+      listPrice: Number(data.listPrice ?? salePrice),
+      description: String(data.description ?? entry.productDescription ?? '').trim(),
+      color: String(data.color ?? 'Çok Renkli').trim(),
+      flowerType: String(data.flowerType ?? '').trim(),
+      vatRate: Number(data.vatRate ?? 20),
+      desi: Number(data.desi ?? 1),
+      images,
+    };
+
+    // Barkod veya model kodu kaydedilmemişse veritabanına yaz
+    const needsUpdate = !entry.barcode || !entry.currentModelCode;
+    if (needsUpdate) {
+      await this.prisma.trendyolProductVariant.update({
+        where: { id: variantId },
+        data: {
+          ...(entry.barcode ? {} : { barcode }),
+          ...(entry.currentModelCode ? {} : { currentModelCode: modelCode }),
+        },
+      });
+    }
+
+    const credentials = await this.integrationCenter.runtimeCredentials('TRENDYOL');
+    const adapter = new TrendyolAdapter(credentials);
+    return adapter.pushProduct(payload);
+  }
+
+  async trendyolCategories() {
+    const credentials = await this.integrationCenter.runtimeCredentials('TRENDYOL');
+    const adapter = new TrendyolAdapter(credentials);
+    return adapter.fetchCategories();
+  }
+
+  async checkTrendyolBatch(batchId: string) {
+    const credentials = await this.integrationCenter.runtimeCredentials('TRENDYOL');
+    const adapter = new TrendyolAdapter(credentials);
+    return adapter.checkBatchStatus(batchId);
   }
 
   private localUploadPath(value?: string) {

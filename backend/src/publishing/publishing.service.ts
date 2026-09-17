@@ -89,13 +89,13 @@ export class PublishingService {
     for (const id of ids) {
       const variant = await this.getVariant(id);
       const payload = this.buildPayload(variant);
-      const missingFields = this.missingFields(variant, payload);
-      if (missingFields.length > 0 && !allowIncomplete) {
-        const log = await this.createLog(variant.id, userId, 'LIVE_SEND', 'BLOCKED', payload, null, missingFields, 'Eksik alanlar var.');
-        results.push({ id, ok: false, missingFields, logId: log.id });
-        continue;
-      }
       for (const platform of platforms) {
+        const missingFields = this.missingFields(variant, payload, platform);
+        if (missingFields.length > 0 && !allowIncomplete) {
+          const log = await this.createLog(variant.id, userId, 'LIVE_SEND', 'BLOCKED', payload, null, missingFields, 'Eksik alanlar var.');
+          results.push({ id, ok: false, missingFields, logId: log.id });
+          continue;
+        }
         const result = await this.sendToPlatform(platform, variant.id, userId, 'LIVE_SEND', payload, missingFields, allowIncomplete);
         results.push({ id, platform, ...result });
       }
@@ -511,13 +511,15 @@ export class PublishingService {
     return found ? found.charAt(0).toLocaleUpperCase('tr-TR') + found.slice(1) : 'Ağaç';
   }
 
-  private missingFields(variant: any, payload: Record<string, any>) {
+  private missingFields(variant: any, payload: Record<string, any>, platform?: IntegrationPlatform) {
     const missing: string[] = [];
     if (!payload.barcode) missing.push('Barkod');
     if (!payload.modelCode) missing.push('Model kodu');
     if (!payload.productName) missing.push('Ürün adı');
     if (!payload.description) missing.push('Uzun açıklama');
-    if (!payload.contentId) {
+    // Trendyol kategori ID'si sadece Trendyol için zorunlu
+    const isTrendyol = !platform || platform === 'TRENDYOL';
+    if (isTrendyol && !payload.contentId) {
       if (!payload.categoryName) missing.push('Trendyol kategori adı');
       if (!payload.categoryId) missing.push('Trendyol kategori eşlemesi (kategori ayarlarından Trendyol ID girilmeli)');
     }

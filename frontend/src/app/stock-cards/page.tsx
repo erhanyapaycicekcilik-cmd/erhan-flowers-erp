@@ -1,12 +1,12 @@
 'use client';
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { Edit3, FileText, History, ImagePlus, Minus, Plus, Printer, Save, Trash2, X } from 'lucide-react';
+import { Edit3, ExternalLink, FileText, History, ImagePlus, Minus, Plus, Printer, Save, Send, Trash2, X } from 'lucide-react';
 import { AdminShell } from '@/components/AdminShell';
 import { api, apiFileUrl } from '@/lib/api';
 import type { Category, CurrentUser, Status, StockCard } from '@/types';
 
-type PanelMode = 'create' | 'edit' | 'in' | 'out' | 'history' | null;
+type PanelMode = 'create' | 'edit' | 'in' | 'out' | 'history' | 'trendyol' | null;
 type Movement = {
   id: number;
   type: 'IN' | 'OUT' | string;
@@ -68,6 +68,18 @@ type StockFormState = {
   description: string;
   status: Status;
 };
+
+const TRENDYOL_COLOR_OPTIONS = [
+  'Çok Renkli', 'Beyaz', 'Siyah', 'Kırmızı', 'Pembe', 'Mor', 'Mavi', 'Lacivert',
+  'Yeşil', 'Haki', 'Sarı', 'Turuncu', 'Bej', 'Krem', 'Ekru', 'Kahverengi',
+  'Gri', 'Gümüş', 'Altın', 'Bordo', 'Turkuaz', 'Şeffaf',
+];
+
+const TRENDYOL_FLOWER_TYPE_OPTIONS = [
+  'Gül', 'Papatya', 'Ayçiçeği', 'Lale', 'Lavanta', 'Sarmaşık',
+  'Ağaç', 'Manolya', 'Çiçek Buketi', 'Buket', 'Demet', 'Yaprak',
+  'Tek Dal', 'Saksı', 'Pamuk',
+];
 
 const DEFAULT_STOCK_CATEGORIES = [
   'Ağaç Gövdeleri',
@@ -252,6 +264,33 @@ export default function StockCardsPage() {
     missingImage: false,
     outOfStock: false,
   });
+  const [trendyolForm, setTrendyolForm] = useState({
+    categoryId: '',
+    salePrice: '',
+    listPrice: '',
+    description: '',
+    color: '',
+    flowerType: '',
+    vatRate: '20',
+    desi: '1',
+    barcode: '',
+    modelCode: '',
+  });
+  const [trendyolResult, setTrendyolResult] = useState<{ ok: boolean; message: string } | null>(null);
+  const [trendyolSending, setTrendyolSending] = useState(false);
+  const [trendyolCategories, setTrendyolCategories] = useState<Array<{ id: number; name: string; parentId: number | null; leaf: boolean }>>([]);
+  const [categorySearch, setCategorySearch] = useState('');
+  const [categorySearchFocus, setCategorySearchFocus] = useState(false);
+
+  useEffect(() => {
+    api<Array<{ id: number; name: string; parentId: number | null; leaf: boolean }>>('/stock-cards/trendyol-categories')
+      .then((data) => { if (Array.isArray(data)) setTrendyolCategories(data); })
+      .catch(() => {});
+  }, []);
+
+  const filteredCategories = categorySearch.length >= 2
+    ? trendyolCategories.filter((c) => c.leaf && c.name.toLowerCase().includes(categorySearch.toLowerCase())).slice(0, 20)
+    : [];
 
   async function load() {
     setStockCards(await api<StockCard[]>('/stock-cards'));
@@ -575,6 +614,71 @@ export default function StockCardsPage() {
     setPanelMode(mode);
   }
 
+  function openTrendyol(stockCard: StockCard) {
+    setSelected(stockCard);
+    setTrendyolResult(null);
+    const name = stockCard.name?.toLowerCase() ?? '';
+    const isTree = /ağaç|agac|ficus|palm|schef|yuca|dracena|monstera|benjam/.test(name);
+    const existingDesc = stockCard.description ?? stockCard.shortDescription ?? '';
+    const autoDesc = existingDesc || buildStockAutoDescription(stockCard.name ?? '');
+    const descWithHint = isTree && !autoDesc.toLowerCase().includes('saksısız')
+      ? autoDesc + '\n\nNot: Ürün saksısız gönderilmektedir.'
+      : autoDesc;
+    setTrendyolForm({
+      categoryId: '',
+      salePrice: String(stockCard.salePrice ?? ''),
+      listPrice: String(stockCard.salePrice ?? ''),
+      description: descWithHint,
+      color: stockCard.color ?? '',
+      flowerType: stockCard.leafFlowerType ?? '',
+      vatRate: '20',
+      desi: '1',
+      barcode: stockCard.barcode || `EF${String(stockCard.id).padStart(8, '0')}`,
+      modelCode: stockCard.model || stockCard.sku || `EF-${String(stockCard.id).padStart(6, '0')}`,
+    });
+    setPanelMode('trendyol');
+  }
+
+  async function submitTrendyol(event: FormEvent) {
+    event.preventDefault();
+    if (!selected) return;
+    setTrendyolSending(true);
+    setTrendyolResult(null);
+    try {
+      const result = await api<{ ok: boolean; message: string; status: string; batchRequestId?: string }>(`/stock-cards/${selected.id}/trendyol-publish`, {
+        method: 'POST',
+        json: {
+          categoryId: Number(trendyolForm.categoryId),
+          salePrice: Number(trendyolForm.salePrice),
+          listPrice: Number(trendyolForm.listPrice || trendyolForm.salePrice),
+          description: trendyolForm.description,
+          color: trendyolForm.color,
+          flowerType: trendyolForm.flowerType,
+          vatRate: Number(trendyolForm.vatRate),
+          desi: Number(trendyolForm.desi),
+          barcode: trendyolForm.barcode || undefined,
+          modelCode: trendyolForm.modelCode || undefined,
+        },
+      });
+      if (result.ok && result.batchRequestId) {
+        setTrendyolResult({ ok: true, message: 'Trendyol kuyruğa alındı, sonuç bekleniyor...' });
+        await new Promise(r => setTimeout(r, 4000));
+        try {
+          const batchResult = await api<{ ok: boolean; message: string; batchStatus?: string }>(`/product-center/trendyol-batch/${result.batchRequestId}`);
+          setTrendyolResult({ ok: batchResult.ok, message: batchResult.message });
+        } catch {
+          setTrendyolResult({ ok: result.ok, message: result.message });
+        }
+      } else {
+        setTrendyolResult({ ok: result.ok, message: result.message });
+      }
+    } catch (error) {
+      setTrendyolResult({ ok: false, message: error instanceof Error ? error.message : 'Trendyol gönderimi başarısız.' });
+    } finally {
+      setTrendyolSending(false);
+    }
+  }
+
   function openMovement(mode: 'in' | 'out', stockCard: StockCard) {
     setSelected(stockCard);
     setMovementForm({
@@ -709,6 +813,7 @@ export default function StockCardsPage() {
                     onDeleteTest={() => deleteTestStock(item)}
                     onUpload={(files) => uploadImages(item, files)}
                     onSetMainImage={(imageId) => setMainImage(item, imageId)}
+                    onTrendyol={() => openTrendyol(item)}
                     isStaff={isStaff}
                   />
                 ))}
@@ -801,6 +906,223 @@ export default function StockCardsPage() {
                   ))}
                 </div>
               </div>
+            )}
+
+            {panelMode === 'trendyol' && selected && (
+              <form className="flex-1 overflow-y-auto p-5" onSubmit={submitTrendyol}>
+                <div className="mb-4 overflow-hidden rounded-md border border-line bg-slate-50">
+                  <StockImage item={selected} />
+                </div>
+
+                <label className="mb-4 flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-md border border-line bg-white px-3 py-2 text-sm font-semibold text-brand shadow-sm">
+                  <ImagePlus size={17} />
+                  {(selected.images?.length ?? 0) > 0 ? `${selected.images!.length} görsel var · Yeni ekle` : 'Görsel Ekle'}
+                  <input className="hidden" type="file" accept="image/*" multiple onChange={(event) => uploadImages(selected, event.target.files).then(load)} />
+                </label>
+
+                {(selected.images?.length ?? 0) > 0 && (
+                  <div className="mb-4 flex flex-wrap gap-2">
+                    {selected.images!.map((img) => (
+                      <div key={img.id} className="relative">
+                        <SafeStockImage
+                          className={`h-14 w-14 rounded-md border object-cover ${img.isMain ? 'border-brand ring-2 ring-brand/20' : 'border-line'}`}
+                          src={img.filePath}
+                          alt={img.fileName}
+                          compact
+                        />
+                        {img.isMain && <div className="mt-0.5 text-center text-[10px] font-bold text-brand">Ana</div>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="mb-3 rounded-md bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700">
+                  Trendyol'a göndermek için aşağıdaki alanları doldurun. Barkod ve stok miktarı stok kartından otomatik alınır.
+                </div>
+
+                <div className="space-y-3">
+                  <div className="relative">
+                    <label className="mb-1 block text-xs font-semibold text-slate-600">Trendyol Kategori <span className="text-red-500">*</span></label>
+                    <input
+                      className="field"
+                      placeholder="Kategori ara (en az 2 harf)"
+                      value={categorySearch}
+                      onFocus={() => setCategorySearchFocus(true)}
+                      onBlur={() => setTimeout(() => setCategorySearchFocus(false), 200)}
+                      onChange={(e) => {
+                        setCategorySearch(e.target.value);
+                        if (!e.target.value) setTrendyolForm({ ...trendyolForm, categoryId: '' });
+                      }}
+                    />
+                    {trendyolForm.categoryId && (
+                      <div className="mt-1 text-xs font-semibold text-emerald-600">Seçili ID: {trendyolForm.categoryId}</div>
+                    )}
+                    {categorySearchFocus && filteredCategories.length > 0 && (
+                      <div className="absolute left-0 right-0 z-50 mt-1 max-h-52 overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-lg">
+                        {filteredCategories.map((cat) => (
+                          <button
+                            key={cat.id}
+                            type="button"
+                            className="w-full px-3 py-2 text-left text-sm hover:bg-slate-50"
+                            onClick={() => {
+                              setTrendyolForm({ ...trendyolForm, categoryId: String(cat.id) });
+                              setCategorySearch(cat.name);
+                              setCategorySearchFocus(false);
+                            }}
+                          >
+                            <span className="font-medium">{cat.name}</span>
+                            <span className="ml-2 text-xs text-slate-400">#{cat.id}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {categorySearchFocus && categorySearch.length >= 2 && filteredCategories.length === 0 && (
+                      <div className="absolute left-0 right-0 z-50 mt-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-400 shadow-lg">
+                        Kategori bulunamadı
+                      </div>
+                    )}
+                    <input type="hidden" required value={trendyolForm.categoryId} />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="mb-1 block text-xs font-semibold text-slate-600">Satış Fiyatı (₺) <span className="text-red-500">*</span></label>
+                      <input
+                        className="field"
+                        type="number"
+                        step="0.01"
+                        min="0.01"
+                        required
+                        value={trendyolForm.salePrice}
+                        onChange={(e) => setTrendyolForm({ ...trendyolForm, salePrice: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-semibold text-slate-600">Liste Fiyatı (₺)</label>
+                      <input
+                        className="field"
+                        type="number"
+                        step="0.01"
+                        placeholder="Satış fiyatı ile aynı"
+                        value={trendyolForm.listPrice}
+                        onChange={(e) => setTrendyolForm({ ...trendyolForm, listPrice: e.target.value })}
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-slate-600">Ürün Açıklaması</label>
+                    <textarea
+                      className="field min-h-20 resize-y"
+                      placeholder="Ürün açıklaması..."
+                      value={trendyolForm.description}
+                      onChange={(e) => setTrendyolForm({ ...trendyolForm, description: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="mb-1 block text-xs font-semibold text-slate-600">Renk</label>
+                      <select
+                        className="field"
+                        value={trendyolForm.color}
+                        onChange={(e) => setTrendyolForm({ ...trendyolForm, color: e.target.value })}
+                      >
+                        <option value="">Seçin</option>
+                        {TRENDYOL_COLOR_OPTIONS.map((c) => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-semibold text-slate-600">Çiçek Tipi</label>
+                      <select
+                        className="field"
+                        value={trendyolForm.flowerType}
+                        onChange={(e) => setTrendyolForm({ ...trendyolForm, flowerType: e.target.value })}
+                      >
+                        <option value="">Seçin</option>
+                        {TRENDYOL_FLOWER_TYPE_OPTIONS.map((f) => <option key={f} value={f}>{f}</option>)}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="mb-1 block text-xs font-semibold text-slate-600">KDV Oranı (%)</label>
+                      <select
+                        className="field"
+                        value={trendyolForm.vatRate}
+                        onChange={(e) => setTrendyolForm({ ...trendyolForm, vatRate: e.target.value })}
+                      >
+                        <option value="10">%10</option>
+                        <option value="20">%20</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-semibold text-slate-600">Desi</label>
+                      <input
+                        className="field"
+                        type="number"
+                        step="0.1"
+                        min="0.1"
+                        value={trendyolForm.desi}
+                        onChange={(e) => setTrendyolForm({ ...trendyolForm, desi: e.target.value })}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="mb-1 block text-xs font-semibold text-slate-600">Barkod</label>
+                      <input
+                        className="field"
+                        placeholder="Barkod"
+                        value={trendyolForm.barcode}
+                        onChange={(e) => setTrendyolForm({ ...trendyolForm, barcode: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-semibold text-slate-600">Model Kodu</label>
+                      <input
+                        className="field"
+                        placeholder="Model kodu"
+                        value={trendyolForm.modelCode}
+                        onChange={(e) => setTrendyolForm({ ...trendyolForm, modelCode: e.target.value })}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                    <div><strong>Stok miktarı:</strong> {Number(selected.stockQuantity ?? 0).toLocaleString('tr-TR')} {selected.unit}</div>
+                  </div>
+
+                  {/ağaç|agac|ficus|palm|schef|yuca|dracena|monstera|benjam/.test((selected.name ?? '').toLowerCase()) && (
+                    <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+                      ⚠️ Ağaç ürünü — açıklamada &quot;saksısız gönderilmektedir&quot; bilgisi mutlaka yer almalıdır.
+                    </div>
+                  )}
+                </div>
+
+                {trendyolResult && (
+                  <div className={`mt-4 rounded-md px-3 py-2 text-sm font-semibold ${trendyolResult.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
+                    {trendyolResult.message}
+                  </div>
+                )}
+
+                <button className="btn btn-primary mt-5 w-full" disabled={trendyolSending}>
+                  <Send size={17} />
+                  {trendyolSending ? 'Gönderiliyor...' : 'Trendyol\'a Gönder'}
+                </button>
+
+                <a
+                  href="https://partner.trendyol.com/product-list"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-3 flex items-center justify-center gap-2 text-xs font-semibold text-slate-500 hover:text-brand"
+                >
+                  <ExternalLink size={13} />
+                  Trendyol Satıcı Paneli&apos;nde kontrol et
+                </a>
+              </form>
             )}
           </aside>
         </div>
@@ -989,6 +1311,7 @@ function StockVisualCard({
   onDeleteTest,
   onUpload,
   onSetMainImage,
+  onTrendyol,
   isStaff,
 }: {
   item: StockCard;
@@ -1000,6 +1323,7 @@ function StockVisualCard({
   onDeleteTest: () => void;
   onUpload: (files: FileList | null) => void;
   onSetMainImage: (imageId: number) => void;
+  onTrendyol: () => void;
   isStaff: boolean;
 }) {
   const criticalLevel = Number(item.criticalStockLevel ?? 0);
@@ -1074,6 +1398,11 @@ function StockVisualCard({
           {!isStaff && <button className="btn btn-secondary min-h-10" onClick={onStockOut}><Minus size={16} /> Stok Düş</button>}
           <button className="btn btn-secondary min-h-10" onClick={onEdit}><Edit3 size={16} /> Düzenle</button>
           {!isStaff && <button className="btn btn-secondary min-h-10" onClick={onHistory}><History size={16} /> Hareketler</button>}
+          {!isStaff && (
+            <button type="button" className="btn btn-secondary col-span-2 min-h-10 border-orange-300 text-orange-700 hover:bg-orange-50" onClick={onTrendyol}>
+              <Send size={16} /> Trendyol'a Satışa Aç
+            </button>
+          )}
           {!isStaff && <button className="btn btn-secondary min-h-10" onClick={() => window.print()}><FileText size={16} /> A5 Çıktı</button>}
           {!isStaff && <button type="button" className="btn btn-secondary min-h-10 text-red-700" onClick={onPassive}><Trash2 size={16} /> Pasife Al</button>}
           {!isStaff && isTestRecord && (
@@ -1488,6 +1817,7 @@ function panelTitle(mode: PanelMode) {
   if (mode === 'in') return 'Stok Ekle';
   if (mode === 'out') return 'Stok Düş';
   if (mode === 'history') return 'Stok Hareketleri';
+  if (mode === 'trendyol') return 'Trendyol\'a Satışa Aç';
   return '';
 }
 
@@ -1560,4 +1890,13 @@ function stockSearchText(item: StockCard) {
 function isTestStockCard(item: StockCard) {
   const text = normalize(`${item.name} ${item.sku ?? ''} ${item.category ?? ''} ${item.description ?? ''}`);
   return text.includes('test') || text.includes('deneme');
+}
+
+function buildStockAutoDescription(name: string): string {
+  const productName = name.trim() || "Erhan Flowers Yapay Çiçek";
+  return [
+    `${productName}, Erhan Flowers kalitesiyle hazırlanan dekoratif yapay çiçek ve bitki ürünüdür. Ev, ofis, mağaza ve otel dekorasyonlarında doğal görünümlü tamamlayıcı ürün olarak kullanılabilir.`,
+    "Bakım gerektirmeyen yapısı sayesinde canlı bitki görünümünü pratik kullanım avantajıyla birleştirir. İç mekan dekorasyonunda giriş alanı, salon, vitrin, masa çevresi ve kurumsal alanlarda şık bir atmosfer oluşturur.",
+    "Yapay çiçek ve ağaç ürünlerinde temizlik için nemli ve yumuşak bir bez kullanınız. Kimyasal temizleyici, çamaşır suyu ve aşındırıcı malzemeler kullanmayınız. Ürünü doğrudan yoğun güneş ışığına, aşırı neme ve yüksek ısıya uzun süre maruz bırakmayınız.",
+  ].join("\n\n");
 }

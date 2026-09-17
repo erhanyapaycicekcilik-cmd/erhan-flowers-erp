@@ -83,4 +83,14 @@ export class StockCardsController {
   remove(@Param('id') id: string, @Query('hard') hard?: string) {
     return this.stockCards.remove(Number(id), hard === 'true');
   }
+
+  @Get('trendyol-categories')
+  trendyolCategories() {
+    return this.stockCards.trendyolCategories();
+  }
+
+  @Post(':id/trendyol-publish')
+  trendyolPublish(@Param('id') id: string, @Body() body: unknown) {
+    return this.stockCards.trendyolPublish(Number(id), body);
+  }
 }

@@ -1,11 +1,6 @@
 # ERP Yönetim Paneli — Güvenli HTTPS
 erp.florayapaycicek.com {
-    reverse_proxy frontend:3000 {
-        lb_policy round_robin
-        health_uri /
-        health_interval 10s
-        health_timeout 5s
-    }
+    reverse_proxy frontend:3000
 
     header {
         Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
@@ -34,12 +29,7 @@ api.florayapaycicek.com {
         respond "" 204
     }
 
-    reverse_proxy backend:8001 {
-        lb_policy round_robin
-        health_uri /health
-        health_interval 10s
-        health_timeout 5s
-    }
+    reverse_proxy backend:8001
 
     request_body {
         max_size 50MB
@@ -53,25 +43,6 @@ api.florayapaycicek.com {
 
     log {
         output file /var/log/caddy/api-access.log
-        format json
-    }
-}
-
-# B2C Müşteri Sitesi — FloraYapayCiçek.com
-florayapaycicek.com, www.florayapaycicek.com {
-    reverse_proxy florayapay:3200
-
-    header {
-        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
-        X-Frame-Options "SAMEORIGIN"
-        X-Content-Type-Options "nosniff"
-        X-XSS-Protection "1; mode=block"
-        Referrer-Policy "strict-origin-when-cross-origin"
-        Permissions-Policy "geolocation=(self), microphone=(), camera=()"
-    }
-
-    log {
-        output file /var/log/caddy/site-access.log
         format json
     }
 }
