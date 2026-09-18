@@ -1068,6 +1068,43 @@ export class StockCardsService {
     return stockCard.id === 234 || (text.includes('agac govde') && text.includes('agac govdeleri'));
   }
 
+  async mergeStockCards(sourceId: number, targetId: number) {
+    if (sourceId === targetId) throw new BadRequestException('Kaynak ve hedef aynı olamaz.');
+    return this.prisma.$transaction(async (tx) => {
+      const [source, target] = await Promise.all([
+        tx.stockCard.findUnique({ where: { id: sourceId } }),
+        tx.stockCard.findUnique({ where: { id: targetId } }),
+      ]);
+      if (!source) throw new NotFoundException(`Kaynak stok kartı bulunamadı: ${sourceId}`);
+      if (!target) throw new NotFoundException(`Hedef stok kartı bulunamadı: ${targetId}`);
+
+      // Tüm referans tabloları kaynaktan hedefe taşı
+      await tx.$executeRaw`UPDATE recipe_items SET stock_card_id = ${targetId} WHERE stock_card_id = ${sourceId}`;
+      await tx.$executeRaw`UPDATE production_template_components SET stock_card_id = ${targetId} WHERE stock_card_id = ${sourceId}`;
+      await tx.$executeRaw`UPDATE production_pot_options SET stock_card_id = ${targetId} WHERE stock_card_id = ${sourceId}`;
+      await tx.$executeRaw`UPDATE stock_movements SET stock_card_id = ${targetId} WHERE stock_card_id = ${sourceId}`;
+      await tx.$executeRaw`UPDATE stock_usage_logs SET stock_card_id = ${targetId} WHERE stock_card_id = ${sourceId}`;
+      await tx.$executeRaw`UPDATE stock_count_items SET stock_card_id = ${targetId} WHERE stock_card_id = ${sourceId}`;
+      await tx.$executeRaw`UPDATE retail_sale_items SET stock_card_id = ${targetId} WHERE stock_card_id = ${sourceId}`;
+      await tx.$executeRaw`UPDATE product_cost_items SET stock_card_id = ${targetId} WHERE stock_card_id = ${sourceId}`;
+      await tx.$executeRaw`UPDATE stock_reservations SET stock_card_id = ${targetId} WHERE stock_card_id = ${sourceId}`;
+      await tx.$executeRaw`UPDATE bambu_cost_rules SET leaf_stock_card_id = ${targetId} WHERE leaf_stock_card_id = ${sourceId}`;
+      await tx.$executeRaw`UPDATE bambu_cost_rules SET trunk_stock_card_id = ${targetId} WHERE trunk_stock_card_id = ${sourceId}`;
+      await tx.$executeRaw`UPDATE trendyol_product_variants SET stock_card_id = ${targetId} WHERE stock_card_id = ${sourceId}` .catch(() => null);
+      await tx.$executeRaw`UPDATE production_orders SET stock_card_id = ${targetId} WHERE stock_card_id = ${sourceId}` .catch(() => null);
+
+      // Stok miktarlarını hedefte topla
+      const newQty = Number(target.stockQuantity) + Number(source.stockQuantity);
+      await tx.$executeRaw`UPDATE stock_cards SET stock_quantity = ${newQty}, updated_at = NOW() WHERE id = ${targetId}`;
+
+      // Kaynağın resimlerini sil, sonra kaynağı sil
+      await tx.$executeRaw`DELETE FROM stock_card_images WHERE stock_card_id = ${sourceId}`;
+      await tx.$executeRaw`DELETE FROM stock_cards WHERE id = ${sourceId}`;
+
+      return tx.stockCard.findUnique({ where: { id: targetId } });
+    });
+  }
+
   private handleUniqueError(error: unknown): never {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
       throw new BadRequestException('Bu stok kodu zaten kullanılıyor.');

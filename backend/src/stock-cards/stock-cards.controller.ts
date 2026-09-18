@@ -84,6 +84,11 @@ export class StockCardsController {
     return this.stockCards.remove(Number(id), hard === 'true');
   }
 
+  @Post('merge')
+  mergeStockCards(@Body() body: { sourceId: number; targetId: number }) {
+    return this.stockCards.mergeStockCards(Number(body.sourceId), Number(body.targetId));
+  }
+
   @Get('trendyol-categories')
   trendyolCategories() {
     return this.stockCards.trendyolCategories();
