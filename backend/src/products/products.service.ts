@@ -31,6 +31,8 @@ type ProductPayload = {
   potType?: string;
   potSize?: string;
   stemCount?: number;
+  branchCount?: number;
+  leavesPerBranch?: number;
   leafCount?: number;
   status?: 'ACTIVE' | 'PASSIVE';
   description?: string;
@@ -124,6 +126,8 @@ export class ProductsService {
           potType: data.potType,
           potSize: data.potSize,
           stemCount: data.stemCount,
+          branchCount: data.branchCount,
+          leavesPerBranch: data.leavesPerBranch,
           leafCount: data.leafCount,
           status: data.status ?? 'ACTIVE',
           description: data.description,
@@ -230,6 +234,8 @@ export class ProductsService {
     if (hasKey('potType') || hasKey('pot_type')) patch['potType'] = data.potType;
     if (hasKey('potSize') || hasKey('pot_size')) patch['potSize'] = data.potSize;
     if (hasKey('stemCount') || hasKey('stem_count')) patch['stemCount'] = data.stemCount;
+    if (hasKey('branchCount') || hasKey('branch_count')) patch['branchCount'] = data.branchCount;
+    if (hasKey('leavesPerBranch') || hasKey('leaves_per_branch')) patch['leavesPerBranch'] = data.leavesPerBranch;
     if (hasKey('leafCount') || hasKey('leaf_count')) patch['leafCount'] = data.leafCount;
     if (hasKey('status')) patch['status'] = data.status;
     if (hasKey('description')) patch['description'] = data.description;
@@ -558,6 +564,8 @@ export class ProductsService {
       potType: this.text(body.potType ?? body.pot_type),
       potSize: this.text(body.potSize ?? body.pot_size),
       stemCount: body.stemCount != null || body.stem_count != null ? this.toInt(body.stemCount ?? body.stem_count, 0) || undefined : undefined,
+      branchCount: body.branchCount != null || body.branch_count != null ? this.toInt(body.branchCount ?? body.branch_count, 0) || undefined : undefined,
+      leavesPerBranch: body.leavesPerBranch != null || body.leaves_per_branch != null ? this.toInt(body.leavesPerBranch ?? body.leaves_per_branch, 0) || undefined : undefined,
       leafCount: body.leafCount != null || body.leaf_count != null ? this.toInt(body.leafCount ?? body.leaf_count, 0) || undefined : undefined,
       status: body.status === 'PASSIVE' ? 'PASSIVE' : 'ACTIVE',
       description: body.description ? String(body.description) : undefined,
