@@ -36,7 +36,8 @@ Claude her zaman `mcp__github__merge_pull_request` ile merge yapabilir — kulla
 ```
 erhan-flowers-erp/
 ├── backend/          NestJS API (port 8001)
-├── frontend/         Next.js 14 App Router (port 3000)
+├── frontend/         Next.js 14 App Router (port 3000) — ERP yönetim paneli
+├── florayapay/       Next.js 14 App Router (port 3200) — E-ticaret müşteri sitesi
 ├── docker-compose.prod.yml   Production deploy
 ├── docker-compose.yml        Sadece PostgreSQL (local)
 ├── Caddyfile         Reverse proxy + SSL
@@ -45,8 +46,28 @@ erhan-flowers-erp/
 
 ## Domain & URL'ler
 
-- **Frontend:** https://erp.florayapaycicek.com
+- **ERP Panel:** https://erp.florayapaycicek.com
 - **Backend API:** https://api.florayapaycicek.com
+- **E-Ticaret Sitesi (canlı):** https://florayapaycicek.com
+- **E-Ticaret Sitesi (lokal geliştirme):** http://localhost:3200
+
+## Florayapay E-Ticaret Sitesi Geliştirme
+
+**Lokal başlatma:**
+```powershell
+cd "C:\Users\Erhan Flowers\Documents\Codex\2026-06-23\coding-phase-1-erhan-flowers-erp\florayapay"
+npm run dev
+```
+Sonra tarayıcıda: **http://localhost:3200**
+
+**Önemli notlar:**
+- `florayapay/` klasörü bağımsız Next.js projesi — ERP backend'e bağlı değil, kendi static/API'si var
+- Ürün verileri ERP backend'den değil, florayapay'ın kendi `src/lib/api/catalog.ts`'inden geliyor
+- Canlıya almak için: Hetzner konsolunda `docker compose -f docker-compose.prod.yml build florayapay && docker compose -f docker-compose.prod.yml up -d florayapay caddy`
+- Container adı: `erhan-flowers-florayapay-prod`
+
+**Bilinen sorunlar (düzeltilecek):**
+- Sayfa title çift yazıyor: "Erhan Flowers | Erhan Flowers"
 
 ## Container İsimleri
 

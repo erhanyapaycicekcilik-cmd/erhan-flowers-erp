@@ -42,19 +42,20 @@ export function Footer() {
             </ul>
           </div>
 
-          {/* Kurumsal */}
+          {/* Keşfet */}
           <div>
-            <h3 className="text-[#EAE6DC] font-medium mb-4 tracking-widest text-xs uppercase">Kurumsal</h3>
+            <h3 className="text-[#EAE6DC] font-medium mb-4 tracking-widest text-xs uppercase">Keşfet</h3>
             <ul className="space-y-2 text-sm">
               {[
-                { href: '/hakkimizda', label: 'Hakkımızda' },
-                { href: '/iletisim', label: 'İletişim' },
-                { href: '/kargo-ve-iade', label: 'Kargo & İade' },
-                { href: '/odeme-kosullari', label: 'Ödeme Koşulları' },
-                { href: '/gizlilik-politikasi', label: 'Gizlilik Politikası' },
-                { href: '/kullanim-kosullari', label: 'Kullanım Koşulları' },
-                { href: '/cerez-politikasi', label: 'Çerez Politikası' },
-                { href: '/mesafeli-satis-sozlesmesi', label: 'Mesafeli Satış Sözleşmesi' },
+                { href: '/dukkan-fotograflari', label: 'Mağazamız & Google Yorumlar' },
+                { href: '/projelerimiz', label: 'Projelerimiz' },
+                { href: '/referanslarimiz', label: 'Referanslarımız' },
+                { href: '/agac-boyut-rehberi', label: 'Boyut Rehberi' },
+                { href: '/yapay-cicek-bakimi', label: 'Bakım Rehberi' },
+                { href: '/mekaninizi-gonderin', label: 'Mekanınızı Gönderin' },
+                { href: '/oneri-istek', label: 'Öneri & İstek' },
+                { href: '/doviz-kurlari', label: 'Döviz Kurları' },
+                { href: '/sss', label: 'Sık Sorulan Sorular' },
               ].map((link) => (
                 <li key={link.href}>
                   <Link href={link.href} className="hover:text-[#8BAF8A] transition-colors">
