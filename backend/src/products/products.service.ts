@@ -246,6 +246,33 @@ export class ProductsService {
     }
   }
 
+  // Satış sonrası stok kartına bağlı ürün/varyantları platformlara gönderir.
+  async broadcastStockCardUpdate(stockCardIds: number[]): Promise<void> {
+    if (!stockCardIds.length) return;
+    const cards = await this.prisma.stockCard.findMany({
+      where: { id: { in: stockCardIds } },
+      select: { id: true, barcode: true, sku: true, oldModelCode: true, stockQuantity: true, salePrice: true, purchasePrice: true },
+    });
+    for (const card of cards) {
+      const lookupValues = [card.barcode, card.sku, card.oldModelCode].filter(Boolean) as string[];
+      if (!lookupValues.length) continue;
+      const variants = await this.prisma.trendyolProductVariant.findMany({
+        where: { OR: [{ barcode: { in: lookupValues } }, { currentModelCode: { in: lookupValues } }, { supplierStockCode: { in: lookupValues } }] },
+        include: { productCostDraft: true },
+        take: 5,
+      });
+      if (variants.length > 0) {
+        for (const variant of variants) {
+          const salePrice = Number(variant.productCostDraft?.salePrice ?? variant.trendyolSalePrice ?? 0);
+          await this.broadcastPriceStock({ barcode: variant.barcode, modelCode: variant.currentModelCode, marketPrice: salePrice, stockQuantity: Number(card.stockQuantity) }).catch(() => undefined);
+        }
+      } else {
+        const salePrice = Number(Number(card.salePrice) > 0 ? card.salePrice : card.purchasePrice ?? 0);
+        await this.broadcastPriceStock({ barcode: card.barcode, modelCode: card.sku ?? card.oldModelCode, marketPrice: salePrice, stockQuantity: Number(card.stockQuantity) }).catch(() => undefined);
+      }
+    }
+  }
+
   // Ürün kaydedilince tüm aktif platform entegrasyonlarına fiyat/stok gönderir.
   // Arka planda çalışır — hata olursa ürün kaydını etkilemez.
   private async broadcastPriceStock(product: {
