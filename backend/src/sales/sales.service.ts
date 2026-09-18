@@ -643,16 +643,15 @@ export class SalesService {
       INSERT INTO retail_sale_proof_photos (sale_id, image_path, photo_type, expires_at, taken_by_id)
       VALUES (${id}, ${imagePath}, ${safeType}, ${expiresAt}, ${userId})
     `;
-    // Her iki fotoğraf türü de yüklenince HAZIR durumuna geç
-    const photos = await this.prisma.$queryRaw<{ photo_type: string }[]>`
-      SELECT DISTINCT photo_type FROM retail_sale_proof_photos WHERE sale_id = ${id}
+    // Herhangi bir fotoğraf yüklenince HAZIR durumuna geç (tek fotoğraf yeterli)
+    const currentStatus = await this.prisma.$queryRaw<{ status: string }[]>`
+      SELECT status FROM retail_sales WHERE id = ${id}
     `;
-    const types = photos.map((p) => p.photo_type);
-    const bothUploaded = types.includes('BARCODE') && types.includes('PACKAGE');
-    if (bothUploaded) {
-      await this.updateStatus(id, { status: 'READY', note: 'Ürün hazırlandı — barkod ve paket fotoğrafları yüklendi.' }, userId);
+    const alreadyReady = currentStatus[0]?.status === 'READY' || currentStatus[0]?.status === 'COMPLETED';
+    if (!alreadyReady) {
+      await this.updateStatus(id, { status: 'READY', note: 'Ürün hazırlandı — fotoğraf yüklendi.' }, userId);
     }
-    return { uploaded: true, photoType: safeType, readyTriggered: bothUploaded };
+    return { uploaded: true, photoType: safeType, readyTriggered: !alreadyReady };
   }
 
   async cancelSale(id: number, reason: string, userId: number) {
