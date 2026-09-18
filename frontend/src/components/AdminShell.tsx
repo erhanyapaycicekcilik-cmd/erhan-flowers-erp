@@ -76,6 +76,7 @@ const navGroups: { section: string; icon: LucideIcon; items: NavItem[] }[] = [
       { href: '/hizli-satis', label: 'Hızlı Dükkan Satışı', icon: ShoppingCart, roles: OWNER_MANAGER },
       { href: '/orders', label: 'Siparişler', icon: ShoppingCart, roles: OWNER_MANAGER },
       { href: '/staff/orders', label: 'Personel Sipariş', icon: ShoppingCart, roles: ALL },
+      { href: '/staff/photo-archive', label: 'Fotoğraf Arşivi', icon: ShoppingCart, roles: ALL },
       { href: '/sales', label: 'Satış Merkezi', icon: ShoppingCart, roles: OWNER_MANAGER, enabled: process.env.NEXT_PUBLIC_ENABLE_SALES_CENTER === 'true' },
       { href: '/crm', label: 'CRM', icon: Users, roles: OWNER_MANAGER },
       { href: '/eft-yonetim', label: 'EFT Ödemeleri', icon: Landmark, roles: OWNER_MANAGER },
@@ -132,7 +133,7 @@ const roleAllowedPaths: Record<UserRole, string[]> = {
     '/hesap-makinesi', '/orders', '/staff/orders', '/sales', '/crm',
     '/integrations', '/market-analizi', '/reports', '/staff/tasks',
   ],
-  STAFF: ['/staff/orders', '/products'],
+  STAFF: ['/staff/orders', '/staff/photo-archive', '/products'],
 };
 
 const roleLabel: Record<UserRole, string> = {
