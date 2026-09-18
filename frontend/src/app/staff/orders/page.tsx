@@ -115,10 +115,26 @@ function useCountdown(due?: string | null, status?: string) {
 export default function StaffOrdersPage() {
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
+  const [syncMsg, setSyncMsg] = useState('');
   const [platform, setPlatform] = useState('all');
   const [statusTab, setStatusTab] = useState('all');
   const [category, setCategory] = useState('all');
   const [search, setSearch] = useState('');
+
+  async function syncHB() {
+    setSyncing(true);
+    setSyncMsg('');
+    try {
+      const result = await api<{ ok: boolean; imported: number; message?: string }>('/integrations/orders/HEPSIBURADA/sync', { method: 'POST' });
+      setSyncMsg(`Tamamlandı: ${result.imported ?? 0} sipariş güncellendi`);
+      await load();
+    } catch {
+      setSyncMsg('Hata oluştu');
+    } finally {
+      setSyncing(false);
+    }
+  }
 
   function handleStatusChange(id: number, status: string) {
     setOrders(prev => prev.map(o => o.id === id ? { ...o, status } : o));
@@ -162,11 +178,37 @@ export default function StaffOrdersPage() {
     <AdminShell title="Personel Siparişler">
       <div className="p-4 space-y-4 max-w-7xl mx-auto">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between flex-wrap gap-2">
           <h1 className="text-xl font-bold">Siparişler</h1>
-          <button onClick={() => void load()} className="btn btn-secondary text-sm">
-            <RefreshCw size={14} /> Yenile
-          </button>
+          <div className="flex gap-2 items-center flex-wrap">
+            {syncMsg && <span className="text-xs text-emerald-600 font-semibold">{syncMsg}</span>}
+            <button onClick={() => void syncHB()} disabled={syncing} className="btn btn-secondary text-sm">
+              <RefreshCw size={14} className={syncing ? 'animate-spin' : ''} /> {syncing ? 'Senkronize ediliyor...' : 'HB Senkronize Et'}
+            </button>
+            <button onClick={() => void load()} className="btn btn-secondary text-sm">
+              <RefreshCw size={14} /> Yenile
+            </button>
+          </div>
+        </div>
+
+        {/* Durum sekmeleri */}
+        <div className="flex gap-1 flex-wrap border-b border-line pb-3">
+          {STATUS_TABS.map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => setStatusTab(tab.key)}
+              className={`px-4 py-2 rounded-lg text-sm font-bold transition flex items-center gap-1.5 ${
+                statusTab === tab.key ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              {tab.label}
+              {statusCounts[tab.key] > 0 && (
+                <span className={`text-xs font-black px-1.5 py-0.5 rounded-full ${statusTab === tab.key ? 'bg-white/20' : 'bg-slate-200 text-slate-700'}`}>
+                  {statusCounts[tab.key]}
+                </span>
+              )}
+            </button>
+          ))}
         </div>
 
         {/* Durum sekmeleri */}
