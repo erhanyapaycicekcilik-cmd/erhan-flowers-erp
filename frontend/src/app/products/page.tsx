@@ -331,6 +331,8 @@ export default function ProductsPage() {
   const [importingExcel, setImportingExcel] = useState(false);
   const [broadcastingAll, setBroadcastingAll] = useState(false);
   const [broadcastResult, setBroadcastResult] = useState<{ total: number; sent: number; skipped: number; errors: number } | null>(null);
+  const [backfillingCosts, setBackfillingCosts] = useState(false);
+  const [backfillResult, setBackfillResult] = useState<{ checked: number; created: number; skipped: number } | null>(null);
   const [openingTrendyolPanel, setOpeningTrendyolPanel] = useState(false);
   const [productTrendyolEntry, setProductTrendyolEntry] = useState<Entry | null>(null);
   const [productTrendyolForm, setProductTrendyolForm] = useState({ categoryId: '', salePrice: '', listPrice: '', description: '', color: '', flowerType: '', vatRate: '20', desi: '1', barcode: '', modelCode: '' });
@@ -1676,9 +1678,35 @@ export default function ProductsPage() {
             {broadcastingAll ? <RefreshCw size={17} className="animate-spin" /> : <Send size={17} />}
             {broadcastingAll ? 'Platformlara Gönderiliyor...' : 'Tüm Ürünleri Platformlara Gönder'}
           </button>
+          <button
+            className="btn btn-secondary"
+            disabled={backfillingCosts}
+            onClick={async () => {
+              if (!confirm('Barkodu olan tüm ürünler için eksik maliyet taslakları oluşturulacak. Devam edilsin mi?')) return;
+              setBackfillingCosts(true);
+              setBackfillResult(null);
+              try {
+                const result = await api<{ checked: number; created: number; skipped: number }>('/products/backfill-cost-drafts', { method: 'POST' });
+                setBackfillResult(result);
+              } catch {
+                alert('Maliyet taslağı oluşturma sırasında hata oluştu.');
+              } finally {
+                setBackfillingCosts(false);
+              }
+            }}
+          >
+            {backfillingCosts ? <RefreshCw size={17} className="animate-spin" /> : <RefreshCw size={17} />}
+            {backfillingCosts ? 'Maliyet Taslakları Oluşturuluyor...' : 'Eksik Maliyet Taslakları Oluştur'}
+          </button>
           <button className="btn btn-secondary" onClick={() => load()}><RefreshCw size={17} /> Yenile</button>
         </div>
       </div>
+      {backfillResult && (
+        <div className="mb-4 rounded-md bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800">
+          Maliyet taslağı oluşturma tamamlandı — Kontrol edilen: {backfillResult.checked} | Oluşturulan: {backfillResult.created} | Atlandı: {backfillResult.skipped}
+          <button className="ml-3 text-amber-500 hover:underline" onClick={() => setBackfillResult(null)}>×</button>
+        </div>
+      )}
       {broadcastResult && (
         <div className="mb-4 rounded-md bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-800">
           Toplu yayın tamamlandı — Toplam: {broadcastResult.total} | Gönderildi: {broadcastResult.sent} | Atlandı: {broadcastResult.skipped} | Hata: {broadcastResult.errors}

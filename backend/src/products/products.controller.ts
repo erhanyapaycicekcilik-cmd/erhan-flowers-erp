@@ -46,6 +46,11 @@ export class ProductsController {
     return this.products.broadcastAll();
   }
 
+  @Post('backfill-cost-drafts')
+  backfillCostDrafts() {
+    return this.products.backfillCostDrafts();
+  }
+
   @Patch(':id')
   update(@Param('id') id: string, @Body() body: unknown) {
     return this.products.update(Number(id), body);
