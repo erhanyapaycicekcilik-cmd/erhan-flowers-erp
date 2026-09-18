@@ -348,22 +348,20 @@ function OrderCard({ order, onStatusChange, readySection }: { order: OrderRow; o
 
   const isReady = order.status === 'READY' || order.status === 'Kargoya Hazır';
 
-  async function markReadyWithPhoto(file: File) {
+  async function markReadyWithPhotos(files: FileList | File[]) {
     setUploading(true);
     try {
       const token = typeof window !== 'undefined'
         ? (localStorage.getItem(`auth_token_${window.location.hostname}_${window.location.port || 'default'}`) ?? localStorage.getItem('auth_token'))
         : null;
       const form = new FormData();
-      form.append('file', file);
-      const res = await fetch(`${apiBaseUrl}/sales/${order.id}/proof-photo?photoType=PACKAGE`, {
+      Array.from(files).forEach((f) => form.append('files', f));
+      const res = await fetch(`${apiBaseUrl}/sales/${order.id}/proof-photos?photoType=PACKAGE`, {
         method: 'POST',
         headers: token ? { Authorization: `Bearer ${token}` } : {},
         body: form,
       });
       if (res.ok) {
-        // Fotoğraf yüklendi, siparişi READY yap
-        await api(`/sales/${order.id}/status`, { method: 'POST', json: { status: 'READY', note: 'Ürün hazırlandı — fotoğraf yüklendi.' } });
         onStatusChange(order.id, 'READY');
       } else {
         alert('Fotoğraf yüklenemedi. Tekrar deneyin.');
@@ -389,9 +387,9 @@ function OrderCard({ order, onStatusChange, readySection }: { order: OrderRow; o
   }
 
   async function handlePhoto(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    await markReadyWithPhoto(file);
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    await markReadyWithPhotos(files);
   }
 
   function handlePrint() {
@@ -558,7 +556,7 @@ function OrderCard({ order, onStatusChange, readySection }: { order: OrderRow; o
             </div>
           ) : (
             <>
-              <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handlePhoto} />
+              <input ref={fileRef} type="file" accept="image/*" capture="environment" multiple className="hidden" onChange={handlePhoto} />
               <button onClick={() => void markReadyWithoutPhoto()} disabled={uploading}
                 title="Fotoğrafsız hazır yap"
                 className="flex items-center justify-center p-2 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-100 transition">
