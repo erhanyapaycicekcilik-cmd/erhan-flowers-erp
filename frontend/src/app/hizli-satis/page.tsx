@@ -107,8 +107,8 @@ export default function HizliSatisPage() {
       await api(`/sales/${sale.id}/complete`, { method: 'POST', json: { force: true } });
       setSuccess(`Satış tamamlandı! Toplam: ${total.toLocaleString('tr-TR', { style: 'currency', currency: 'TRY' })}`);
       setCart([]);
-    } catch {
-      setError('Satış kaydedilemedi. Tekrar dene.');
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Satış kaydedilemedi. Tekrar dene.');
     } finally {
       setSaving(false);
     }

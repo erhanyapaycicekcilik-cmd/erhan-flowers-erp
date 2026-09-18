@@ -1,6 +1,7 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { FinanceDirection, FinanceTransactionType, Prisma } from '../generated/prisma-client';
 import { PrismaService } from '../prisma/prisma.service';
+import { ProductsService } from '../products/products.service';
 
 type SaleCustomerPayload = Record<string, unknown>;
 type SaleAddressPayload = Record<string, unknown>;
@@ -10,7 +11,12 @@ type SaleDeliveryPayload = Record<string, unknown>;
 
 @Injectable()
 export class SalesService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(SalesService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly products: ProductsService,
+  ) {}
 
   async searchProducts(query: string) {
     const cleanQuery = query.trim();
@@ -586,7 +592,9 @@ export class SalesService {
   }
 
   async completeSale(id: number, userId: number, opts: { force?: boolean } = {}) {
-    return this.prisma.$transaction(async (tx) => {
+    const affectedStockCardIds: number[] = [];
+
+    const result = await this.prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM retail_sales WHERE id = ${id} FOR UPDATE`;
       const sale = await this.getSaleWithTx(tx, id);
       if (sale.status === 'COMPLETED') return sale;
@@ -594,6 +602,11 @@ export class SalesService {
 
       const items = sale.items as Array<Record<string, unknown>>;
       const payments = sale.payments as Array<Record<string, unknown>>;
+
+      for (const item of items) {
+        if (item.stock_card_id) affectedStockCardIds.push(Number(item.stock_card_id));
+      }
+
       await this.ensureReadyStock(tx, id, items, userId, opts.force);
       await this.deductRecipeStock(tx, id, items, userId);
       await this.createFinanceForPayments(tx, id, payments, userId);
@@ -607,6 +620,14 @@ export class SalesService {
 
       return this.getSaleWithTx(tx, id);
     });
+
+    if (affectedStockCardIds.length > 0) {
+      this.products.broadcastStockCardUpdate(affectedStockCardIds).catch((err) =>
+        this.logger.warn(`Satış sonrası platform stok yayını hatası: ${String(err)}`),
+      );
+    }
+
+    return result;
   }
 
   async updateStatus(id: number, payload: unknown, userId: number) {
