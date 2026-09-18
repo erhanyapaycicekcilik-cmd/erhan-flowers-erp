@@ -446,6 +446,11 @@ model Product {
   packageDimensions    String?                 @map("package_dimensions")
   warrantyMonths       Int                     @default(0) @map("warranty_months")
   warrantyType         String?                 @map("warranty_type")
+  productHeight        String?                 @map("product_height")
+  potType              String?                 @map("pot_type")
+  potSize              String?                 @map("pot_size")
+  stemCount            Int?                    @map("stem_count")
+  leafCount            Int?                    @map("leaf_count")
   status               RecordStatus            @default(ACTIVE)
   description          String?
   createdAt            DateTime                @default(now()) @map("created_at")
