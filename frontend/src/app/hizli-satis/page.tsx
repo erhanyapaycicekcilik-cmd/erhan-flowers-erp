@@ -79,7 +79,7 @@ export default function HizliSatisPage() {
     setError(null);
     setSuccess(null);
     try {
-      await api('/sales', {
+      const sale = await api<{ id: number }>('/sales', {
         method: 'POST',
         json: {
           clientRequestId: `hizli-satis-${Date.now()}-${Math.random().toString(36).slice(2)}`,
@@ -104,6 +104,7 @@ export default function HizliSatisPage() {
           grandTotal: total,
         },
       });
+      await api(`/sales/${sale.id}/complete`, { method: 'POST', json: { force: true } });
       setSuccess(`Satış tamamlandı! Toplam: ${total.toLocaleString('tr-TR', { style: 'currency', currency: 'TRY' })}`);
       setCart([]);
     } catch {

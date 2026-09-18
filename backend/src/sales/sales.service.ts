@@ -585,7 +585,7 @@ export class SalesService {
     return this.getSaleWithTx(this.prisma, id);
   }
 
-  async completeSale(id: number, userId: number) {
+  async completeSale(id: number, userId: number, opts: { force?: boolean } = {}) {
     return this.prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM retail_sales WHERE id = ${id} FOR UPDATE`;
       const sale = await this.getSaleWithTx(tx, id);
@@ -594,7 +594,7 @@ export class SalesService {
 
       const items = sale.items as Array<Record<string, unknown>>;
       const payments = sale.payments as Array<Record<string, unknown>>;
-      await this.ensureReadyStock(tx, id, items, userId);
+      await this.ensureReadyStock(tx, id, items, userId, opts.force);
       await this.deductRecipeStock(tx, id, items, userId);
       await this.createFinanceForPayments(tx, id, payments, userId);
 
@@ -919,7 +919,7 @@ export class SalesService {
     `;
   }
 
-  private async ensureReadyStock(tx: Prisma.TransactionClient, saleId: number, items: Array<Record<string, unknown>>, userId: number) {
+  private async ensureReadyStock(tx: Prisma.TransactionClient, saleId: number, items: Array<Record<string, unknown>>, userId: number, force = false) {
     for (const item of items) {
       if (item.stock_fulfillment_type !== 'READY_STOCK') continue;
       const quantity = Number(item.quantity);
@@ -930,7 +930,7 @@ export class SalesService {
         await tx.$queryRaw`SELECT id FROM stock_cards WHERE id = ${stockCardId} FOR UPDATE`;
         const cards = await tx.$queryRaw<Array<Record<string, unknown>>>`SELECT stock_quantity AS "stockQuantity", unit FROM stock_cards WHERE id = ${stockCardId}`;
         const previousStock = Number(cards[0]?.stockQuantity ?? 0);
-        if (previousStock < quantity) throw new BadRequestException(`${item.product_name_snapshot} için stok yetersiz. Eksik: ${quantity - previousStock}`);
+        if (!force && previousStock < quantity) throw new BadRequestException(`${item.product_name_snapshot} için stok yetersiz. Eksik: ${quantity - previousStock}`);
         const nextStock = previousStock - quantity;
         const reservations = await tx.$queryRaw<Array<Record<string, unknown>>>`
           SELECT id, quantity FROM stock_reservations
@@ -958,11 +958,11 @@ export class SalesService {
           ON CONFLICT (event_key) DO NOTHING
         `;
       } else if (variantId) {
-        throw new BadRequestException(
+        if (!force) throw new BadRequestException(
           `${item.product_name_snapshot} için hazır ürün stok kartı bağlantısı bulunamadı. Satış tamamlanmadan önce stok kartını eşleştirin.`,
         );
       } else {
-        throw new BadRequestException(`${item.product_name_snapshot} için stok bağlantısı bulunamadı.`);
+        if (!force) throw new BadRequestException(`${item.product_name_snapshot} için stok bağlantısı bulunamadı.`);
       }
     }
   }

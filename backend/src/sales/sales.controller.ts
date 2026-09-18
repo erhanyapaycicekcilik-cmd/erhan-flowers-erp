@@ -115,8 +115,8 @@ export class SalesController {
   }
 
   @Post(':id/complete')
-  completeSale(@Param('id') id: string, @Req() request: AuthenticatedRequest) {
-    return this.sales.completeSale(Number(id), request.user!.id);
+  completeSale(@Param('id') id: string, @Body() body: { force?: boolean }, @Req() request: AuthenticatedRequest) {
+    return this.sales.completeSale(Number(id), request.user!.id, { force: !!body?.force });
   }
 
   @Post(':id/cancel')
