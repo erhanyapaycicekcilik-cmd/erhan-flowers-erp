@@ -70,7 +70,7 @@ export class SalesService {
               status: 'ACTIVE',
               OR: [{ barcode: { in: lookupValues } }, { sku: { in: lookupValues } }, { oldModelCode: { in: lookupValues } }],
             },
-            select: { id: true, barcode: true, sku: true, oldModelCode: true, stockQuantity: true, unit: true },
+            select: { id: true, barcode: true, sku: true, oldModelCode: true, stockQuantity: true, unit: true, salePrice: true },
           })
         : [];
 
@@ -95,7 +95,7 @@ export class SalesService {
         stockQuantity: Number(stockCard?.stockQuantity ?? variant.stockQuantity ?? 0),
         stockUnit: stockCard?.unit ?? 'Adet',
         stockCardId: stockCard?.id ?? null,
-        salePrice: Number(variant.productCostDraft?.salePrice ?? variant.trendyolSalePrice ?? 0),
+        salePrice: Number(variant.productCostDraft?.salePrice ?? variant.trendyolSalePrice ?? stockCard?.salePrice ?? 0),
         trendyolSalePrice: Number(variant.trendyolSalePrice ?? 0),
         trendyolProductUrl: variant.trendyolProductUrl,
         imageUrl: this.firstImage(variant.images),
@@ -123,7 +123,7 @@ export class SalesService {
         stockQuantity: Number(stockCard?.stockQuantity ?? product.stockQuantity ?? 0),
         stockUnit: stockCard?.unit ?? 'Adet',
         stockCardId: stockCard?.id ?? null,
-        salePrice: Number(product.shopPrice ?? product.sitePrice ?? product.marketPrice ?? 0),
+        salePrice: Number(product.shopPrice ?? product.sitePrice ?? product.marketPrice ?? stockCard?.salePrice ?? 0),
         trendyolSalePrice: Number(product.marketPrice ?? product.shopPrice ?? 0),
         trendyolProductUrl: null,
         imageUrl: mediaPath ?? this.firstImage(product.imageUrls),
