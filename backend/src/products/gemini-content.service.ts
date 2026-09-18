@@ -7,8 +7,11 @@ type GeminiContentPayload = {
   productHeight?: string;
   potType?: string;
   potSize?: string;
+  potVolumeLitre?: string;
   fillerMaterial?: string;
   stemCount?: string;
+  branchCount?: string;
+  leavesPerBranch?: string;
   leafCount?: string;
   comesInTwoParts?: boolean;
   comesWith?: string;
@@ -101,7 +104,10 @@ export class GeminiContentService {
       potSize: this.text(body.potSize),
       fillerMaterial: this.text(body.fillerMaterial),
       stemCount: this.text(body.stemCount),
+      branchCount: this.text(body.branchCount),
+      leavesPerBranch: this.text(body.leavesPerBranch),
       leafCount: this.text(body.leafCount),
+      potVolumeLitre: this.text(body.potVolumeLitre),
       comesInTwoParts: body.comesInTwoParts === true || body.comesInTwoParts === 'true',
       comesWith: this.text(body.comesWith),
       cleaningTip: this.text(body.cleaningTip),
@@ -137,7 +143,15 @@ export class GeminiContentService {
       `Saksı içi dolgu malzemesi: ${data.fillerMaterial ?? '-'}`,
     ];
     if (data.stemCount) lines.push(`Gövde sayısı: ${data.stemCount}`);
-    if (data.leafCount) lines.push(`Yaprak sayısı: ${data.leafCount}`);
+    if (data.branchCount) lines.push(`Dal sayısı: ${data.branchCount}`);
+    if (data.leavesPerBranch) lines.push(`Dal başına yaprak: ${data.leavesPerBranch}`);
+    if (data.leafCount) {
+      const detail = data.branchCount && data.leavesPerBranch
+        ? ` (${data.branchCount} dal × ${data.leavesPerBranch} yaprak/dal)`
+        : '';
+      lines.push(`Toplam yaprak sayısı: ${data.leafCount}${detail}`);
+    }
+    if (data.potVolumeLitre) lines.push(`Saksı hacmi: ${data.potVolumeLitre} litre`);
     if (data.comesInTwoParts) lines.push('Montaj: Ürün iki parça halinde gönderilir, kolay monte edilir.');
     if (data.comesWith) lines.push(`Birlikte geldiği aksesuarlar: ${data.comesWith}`);
     if (data.cleaningTip) lines.push(`Temizlik notu: ${data.cleaningTip}`);
