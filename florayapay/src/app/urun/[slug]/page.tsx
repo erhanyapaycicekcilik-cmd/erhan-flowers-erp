@@ -26,7 +26,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const imageUrl = getImageUrl(product.mainImage)
 
   return {
-    title: `${product.name} | Erhan Flowers`,
+    title: product.name,
     description:
       product.description?.slice(0, 160) ||
       `${product.name} — Kaliteli yapay çiçek. ${product.category ? product.category + ' kategorisi.' : ''} Hızlı kargo, kolay iade.`,

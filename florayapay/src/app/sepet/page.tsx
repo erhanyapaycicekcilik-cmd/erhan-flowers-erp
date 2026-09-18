@@ -1,5 +1,6 @@
 'use client'
 
+import { useState, useEffect } from 'react'
 import { useCart } from '@/hooks/useCart'
 import { Header } from '@/components/layout/Header'
 import { Footer } from '@/components/layout/Footer'
@@ -14,6 +15,8 @@ function formatPrice(price: number) {
 
 export default function SepetPage() {
   const { items, itemCount, total, removeItem, updateQuantity } = useCart()
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
 
   return (
     <>
@@ -23,12 +26,14 @@ export default function SepetPage() {
           {/* Başlık */}
           <div className="mb-8">
             <h1 className="text-2xl font-bold text-gray-900 font-playfair">Sepetim</h1>
-            {itemCount > 0 && (
+            {mounted && itemCount > 0 && (
               <p className="text-gray-500 mt-1">{itemCount} ürün</p>
             )}
           </div>
 
-          {items.length === 0 ? (
+          {!mounted ? (
+            <div className="text-center py-20 text-gray-400">Yükleniyor...</div>
+          ) : items.length === 0 ? (
             <EmptyCart />
           ) : (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
