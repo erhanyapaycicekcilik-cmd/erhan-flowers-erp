@@ -82,6 +82,7 @@ export default function HizliSatisPage() {
       await api('/sales', {
         method: 'POST',
         json: {
+          clientRequestId: `hizli-satis-${Date.now()}-${Math.random().toString(36).slice(2)}`,
           channel: 'STORE',
           saleType: 'STORE_SALE',
           deliveryType: 'STORE_PICKUP',
