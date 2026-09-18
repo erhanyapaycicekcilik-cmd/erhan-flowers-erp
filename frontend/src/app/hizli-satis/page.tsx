@@ -35,7 +35,7 @@ export default function HizliSatisPage() {
     if (q.length < 2) { setResults([]); return; }
     setSearching(true);
     try {
-      const r = await api<Product[]>(`/sales/products?q=${encodeURIComponent(q)}&limit=10`);
+      const r = await api<Product[]>(`/sales/products/search?q=${encodeURIComponent(q)}&limit=10`);
       setResults(Array.isArray(r) ? r : []);
     } finally {
       setSearching(false);
