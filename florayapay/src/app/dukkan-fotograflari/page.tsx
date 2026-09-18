@@ -21,7 +21,7 @@ const photos = [
 
 const GOOGLE_MAPS_URL = 'https://www.google.com/maps/place/Erhan+Flowers+Yapay+%C3%87i%C3%A7ek+ve+Dekorasyon/@36.7997103,31.4212618,17z'
 const GOOGLE_MAPS_EMBED = 'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3133.8!2d31.4212618!3d36.7997103!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x14c359f611f5a7a9%3A0x6c7f89ab6f52f16d!2sErhan+Flowers+Yapay+%C3%87i%C3%A7ek+ve+Dekorasyon!5e0!3m2!1str!2str!4v1726666000000!5m2!1str!2str'
-const GOOGLE_REVIEW_URL = 'https://search.google.com/local/writereview?placeid=ChIJqaf1EfZZwxRt8VJvq4l_bA'
+const GOOGLE_REVIEW_URL = 'https://www.google.com/maps/place/Erhan+Flowers+Yapay+%C3%87i%C3%A7ek+ve+Dekorasyon/@36.7997103,31.4212618,17z/data=!4m8!3m7!1s0x14c359f611f5a7a9:0x6c7f89ab6f52f16d!8m2!3d36.7997103!4d31.4212618!9m1!1b1'
 
 export default function DukkanFotografPage() {
   return (
