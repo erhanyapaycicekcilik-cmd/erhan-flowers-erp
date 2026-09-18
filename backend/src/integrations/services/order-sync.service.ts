@@ -239,6 +239,9 @@ export class OrderSyncService {
       },
     });
 
+    const fetchedTyIds = orders.map((o) => this.text(o.shipmentPackageId ?? o.orderNumber ?? o.id)).filter(Boolean);
+    await this.markMissingAsDelivered('TRENDYOL', fetchedTyIds);
+
     this.logger.log(`Sync tamamlandi: ${newOrders} yeni siparis, ${stockDeductions} stok dusumu.`);
     return { processed: orders.length, newOrders, stockDeductions };
   }
@@ -489,6 +492,9 @@ export class OrderSyncService {
       create: { platform: 'N11', displayName: 'N11', status: 'CONNECTED', lastSyncAt: new Date() },
     });
 
+    const fetchedN11Ids = allOrders.map((o) => String(o.id ?? o.shipmentPackageId ?? '')).filter(Boolean);
+    await this.markMissingAsDelivered('N11', fetchedN11Ids);
+
     this.logger.log(`N11 sync tamamlandi: ${newOrders} yeni siparis, ${stockDeductions} stok dusumu.`);
     return { processed: allOrders.length, newOrders, stockDeductions };
   }
@@ -605,8 +611,29 @@ export class OrderSyncService {
       create: { platform: 'HEPSIBURADA', displayName: 'Hepsiburada', status: 'CONNECTED', lastSyncAt: new Date() },
     });
 
+    const fetchedHbIds = allOrders.map((o) => String(o.id ?? o.orderNumber ?? '')).filter(Boolean);
+    await this.markMissingAsDelivered('HEPSIBURADA', fetchedHbIds);
+
     this.logger.log(`Hepsiburada sync tamamlandi: ${newOrders} yeni siparis, ${stockDeductions} stok dusumu.`);
     return { processed: allOrders.length, newOrders, stockDeductions };
+  }
+
+  private async markMissingAsDelivered(platform: string, fetchedIds: string[]): Promise<void> {
+    if (fetchedIds.length === 0) return;
+    const transitSales = await this.prisma.$queryRaw<Array<{ id: number; external_order_id: string }>>`
+      SELECT id, external_order_id FROM retail_sales
+      WHERE channel = ${platform}::"RetailSaleChannel"
+        AND status = 'OUT_FOR_DELIVERY'::"RetailSaleStatus"
+        AND external_order_id IS NOT NULL
+    `;
+    for (const sale of transitSales) {
+      if (!fetchedIds.includes(sale.external_order_id)) {
+        await this.prisma.$executeRaw`
+          UPDATE retail_sales SET status = 'DELIVERED'::"RetailSaleStatus", updated_at = NOW() WHERE id = ${sale.id}
+        `;
+        this.logger.log(`[${platform}] Siparis #${sale.id} (${sale.external_order_id}) API'de gorünmuyor → DELIVERED olarak isaratlendi.`);
+      }
+    }
   }
 
   async listSkuComponents(platform: string, sku: string) {
