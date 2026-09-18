@@ -163,7 +163,13 @@ export default function HizliSatisPage() {
                 <button onClick={() => updateQty(item.id, -1)} className="w-7 h-7 rounded bg-slate-100 hover:bg-slate-200 flex items-center justify-center">
                   <Minus size={12} />
                 </button>
-                <span className="w-8 text-center text-sm font-semibold">{item.quantity}</span>
+                <input
+                  type="number"
+                  min="1"
+                  className="w-12 text-center text-sm font-semibold border border-slate-200 rounded px-1 py-0.5 focus:outline-none focus:ring-2 focus:ring-brand/30"
+                  value={item.quantity}
+                  onChange={e => setCart(prev => prev.map(i => i.id === item.id ? { ...i, quantity: Math.max(1, Number(e.target.value) || 1) } : i))}
+                />
                 <button onClick={() => updateQty(item.id, +1)} className="w-7 h-7 rounded bg-slate-100 hover:bg-slate-200 flex items-center justify-center">
                   <Plus size={12} />
                 </button>
