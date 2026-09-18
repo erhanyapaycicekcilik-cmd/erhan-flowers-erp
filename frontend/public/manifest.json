@@ -2,7 +2,7 @@
   "name": "Erhan Flowers ERP",
   "short_name": "ERP",
   "description": "Erhan Flowers yönetim sistemi",
-  "start_url": "/dashboard",
+  "start_url": "/staff/orders",
   "scope": "/",
   "display": "standalone",
   "background_color": "#f7f8f6",
@@ -20,6 +20,22 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Siparişler",
+      "short_name": "Siparişler",
+      "description": "Personel sipariş ekranı",
+      "url": "/staff/orders",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Dashboard",
+      "short_name": "Dashboard",
+      "description": "Ana panel",
+      "url": "/dashboard",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
     }
   ]
 }

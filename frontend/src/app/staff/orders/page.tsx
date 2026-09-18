@@ -45,8 +45,6 @@ const STATUS_TABS = [
   { key: 'all', label: 'Tümü', statuses: [] },
   { key: 'new', label: 'Yeni', statuses: ['CONFIRMED'] },
   { key: 'preparing', label: 'İşleme Alınan', statuses: ['PREPARING', 'IN_PRODUCTION'] },
-  { key: 'ready', label: 'Hazır', statuses: ['READY'] },
-  { key: 'shipped', label: 'Kargoda', statuses: ['OUT_FOR_DELIVERY'] },
 ];
 
 const CATEGORIES = [
@@ -143,7 +141,7 @@ export default function StaffOrdersPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await api<OrderRow[]>('/integrations/orders?limit=200&status=CONFIRMED,PREPARING,IN_PRODUCTION,READY,OUT_FOR_DELIVERY');
+      const data = await api<OrderRow[]>('/integrations/orders?limit=200&status=CONFIRMED,PREPARING,IN_PRODUCTION,READY');
       setOrders(Array.isArray(data) ? data : []);
     } finally {
       setLoading(false);
@@ -152,7 +150,10 @@ export default function StaffOrdersPage() {
 
   useEffect(() => { void load(); }, [load]);
 
-  const filtered = orders.filter((o) => {
+  const activeOrders = orders.filter((o) => o.status !== 'READY');
+  const readyOrders = orders.filter((o) => o.status === 'READY');
+
+  const filtered = activeOrders.filter((o) => {
     if (platform !== 'all' && o.platform !== platform) return false;
     if (statusTab !== 'all') {
       const tab = STATUS_TABS.find(t => t.key === statusTab);
@@ -167,16 +168,27 @@ export default function StaffOrdersPage() {
     return true;
   });
 
-  // Durum sekmesi sayaçları
+  const filteredReady = readyOrders.filter((o) => {
+    if (platform !== 'all' && o.platform !== platform) return false;
+    if (!matchCategory(o, category)) return false;
+    if (search) {
+      const q = search.toLowerCase();
+      const text = [o.saleNumber, o.customerName, o.phone ?? '', ...o.items.map((i) => i.productName ?? '')].join(' ').toLowerCase();
+      if (!text.includes(q)) return false;
+    }
+    return true;
+  });
+
+  // Durum sekmesi sayaçları (sadece aktif siparişler)
   const statusCounts = STATUS_TABS.reduce<Record<string, number>>((acc, tab) => {
-    if (tab.key === 'all') { acc[tab.key] = orders.length; return acc; }
-    acc[tab.key] = orders.filter(o => tab.statuses.includes(o.status)).length;
+    if (tab.key === 'all') { acc[tab.key] = activeOrders.length; return acc; }
+    acc[tab.key] = activeOrders.filter(o => tab.statuses.includes(o.status)).length;
     return acc;
   }, {});
 
   return (
     <AdminShell title="Personel Siparişler">
-      <div className="p-4 space-y-4 max-w-7xl mx-auto">
+      <div className="p-4 space-y-4 max-w-7xl mx-auto pb-20">
         {/* Header */}
         <div className="flex items-center justify-between flex-wrap gap-2">
           <h1 className="text-xl font-bold">Siparişler</h1>
@@ -189,26 +201,6 @@ export default function StaffOrdersPage() {
               <RefreshCw size={14} /> Yenile
             </button>
           </div>
-        </div>
-
-        {/* Durum sekmeleri */}
-        <div className="flex gap-1 flex-wrap border-b border-line pb-3">
-          {STATUS_TABS.map((tab) => (
-            <button
-              key={tab.key}
-              onClick={() => setStatusTab(tab.key)}
-              className={`px-4 py-2 rounded-lg text-sm font-bold transition flex items-center gap-1.5 ${
-                statusTab === tab.key ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-              }`}
-            >
-              {tab.label}
-              {statusCounts[tab.key] > 0 && (
-                <span className={`text-xs font-black px-1.5 py-0.5 rounded-full ${statusTab === tab.key ? 'bg-white/20' : 'bg-slate-200 text-slate-700'}`}>
-                  {statusCounts[tab.key]}
-                </span>
-              )}
-            </button>
-          ))}
         </div>
 
         {/* Durum sekmeleri */}
@@ -268,9 +260,9 @@ export default function StaffOrdersPage() {
         </div>
 
         {/* İstatistik */}
-        <div className="text-sm text-slate-500">{filtered.length} sipariş gösteriliyor</div>
+        <div className="text-sm text-slate-500">{filtered.length} aktif sipariş gösteriliyor</div>
 
-        {/* Sipariş kartları */}
+        {/* Aktif sipariş kartları */}
         {loading ? (
           <div className="text-center text-slate-400 py-12">Yükleniyor...</div>
         ) : (
@@ -283,6 +275,49 @@ export default function StaffOrdersPage() {
             )}
           </div>
         )}
+
+        {/* Hazır — Kargo Bekleniyor */}
+        {(filteredReady.length > 0 || readyOrders.length > 0) && (
+          <section className="mt-6">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="h-1 flex-1 bg-emerald-200 rounded-full" />
+              <h2 className="text-base font-bold text-emerald-700 flex items-center gap-2">
+                <CheckCircle size={18} className="text-emerald-600" />
+                Hazır — Kargo Bekleniyor
+                <span className="bg-emerald-100 text-emerald-800 text-xs font-black px-2 py-0.5 rounded-full">{filteredReady.length}</span>
+              </h2>
+              <div className="h-1 flex-1 bg-emerald-200 rounded-full" />
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {filteredReady.map((order) => (
+                <OrderCard key={order.id} order={order} onStatusChange={handleStatusChange} readySection />
+              ))}
+            </div>
+          </section>
+        )}
+      </div>
+
+      {/* Sticky alt özet bar — mobilde sabit kalır */}
+      <div className="fixed bottom-0 left-0 right-0 z-50 bg-white/95 backdrop-blur border-t border-slate-200 px-4 py-2 flex items-center justify-around shadow-lg safe-area-inset-bottom">
+        <div className="flex flex-col items-center">
+          <span className="text-lg font-black text-blue-600">{statusCounts['new'] ?? 0}</span>
+          <span className="text-[10px] text-slate-500 font-semibold">Yeni</span>
+        </div>
+        <div className="w-px h-8 bg-slate-200" />
+        <div className="flex flex-col items-center">
+          <span className="text-lg font-black text-amber-600">{statusCounts['preparing'] ?? 0}</span>
+          <span className="text-[10px] text-slate-500 font-semibold">İşlemde</span>
+        </div>
+        <div className="w-px h-8 bg-slate-200" />
+        <div className="flex flex-col items-center">
+          <span className="text-lg font-black text-emerald-600">{readyOrders.length}</span>
+          <span className="text-[10px] text-slate-500 font-semibold">Hazır</span>
+        </div>
+        <div className="w-px h-8 bg-slate-200" />
+        <button onClick={() => void load()} className="flex flex-col items-center text-slate-500 active:text-indigo-600">
+          <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
+          <span className="text-[10px] font-semibold">Yenile</span>
+        </button>
       </div>
     </AdminShell>
   );
@@ -293,7 +328,7 @@ function itemImageSrc(item: OrderItem): string | null {
   return item.imagePath.startsWith('http') ? item.imagePath : apiFileUrl(item.imagePath);
 }
 
-function OrderCard({ order, onStatusChange }: { order: OrderRow; onStatusChange: (id: number, status: string) => void }) {
+function OrderCard({ order, onStatusChange, readySection }: { order: OrderRow; onStatusChange: (id: number, status: string) => void; readySection?: boolean }) {
   const countdown = useCountdown(order.deliveryDueAt, order.status);
   const isLate = countdown?.isLate ?? false;
   const isUrgent = countdown?.isUrgent ?? false;
@@ -390,7 +425,7 @@ function OrderCard({ order, onStatusChange }: { order: OrderRow; onStatusChange:
   }
 
   return (
-    <div className={`panel overflow-hidden flex flex-col ${isLate ? 'border-red-400 border-2' : isUrgent ? 'border-orange-400 border-2' : isReady ? 'border-green-400 border-2' : ''}`}>
+    <div className={`panel overflow-hidden flex flex-col ${readySection ? 'border-emerald-400 border-2 bg-emerald-50/30' : isLate ? 'border-red-400 border-2' : isUrgent ? 'border-orange-400 border-2' : isReady ? 'border-green-400 border-2' : ''}`}>
 
       {/* Ana görsel */}
       <div className="relative bg-slate-100" style={{ aspectRatio: '1/1' }}>
@@ -402,11 +437,12 @@ function OrderCard({ order, onStatusChange }: { order: OrderRow; onStatusChange:
           </div>
         )}
         <span className={`absolute top-2 left-2 text-xs font-bold px-2 py-1 rounded-full ${
+          readySection ? 'bg-emerald-600 text-white' :
           isReady ? 'bg-green-500 text-white' :
           order.status === 'CONFIRMED' ? 'bg-blue-500 text-white' :
           order.status === 'PREPARING' ? 'bg-amber-500 text-white' :
           'bg-slate-500 text-white'
-        }`}>{isReady ? 'Hazır' : order.status}</span>
+        }`}>{readySection ? '📦 Kargo Bekleniyor' : isReady ? 'Hazır' : order.status}</span>
 
         {order.platform === 'TRENDYOL' && trendyolUrl && (
           <a href={trendyolUrl} target="_blank" rel="noopener noreferrer"
