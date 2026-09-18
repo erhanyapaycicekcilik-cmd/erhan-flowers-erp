@@ -157,7 +157,7 @@ export class InstagramService implements OnModuleInit, OnModuleDestroy {
     if (!apiKey) {
       return { summary: 'Gemini API anahtarı tanımlı değil, otomatik özet üretilemedi.', suggestions: [] as string[] };
     }
-    const model = this.config.get<string>('GEMINI_MODEL')?.trim() || 'gemini-3.6-flash';
+    const model = this.config.get<string>('GEMINI_MODEL')?.trim() || 'gemini-2.0-flash';
     try {
       const ai = new GoogleGenAI({ apiKey });
       const response = await ai.models.generateContent({
