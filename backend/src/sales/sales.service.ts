@@ -70,7 +70,7 @@ export class SalesService {
               status: 'ACTIVE',
               OR: [{ barcode: { in: lookupValues } }, { sku: { in: lookupValues } }, { oldModelCode: { in: lookupValues } }],
             },
-            select: { id: true, barcode: true, sku: true, oldModelCode: true, stockQuantity: true, unit: true, salePrice: true },
+            select: { id: true, barcode: true, sku: true, oldModelCode: true, stockQuantity: true, unit: true, salePrice: true, purchasePrice: true },
           })
         : [];
 
@@ -95,7 +95,7 @@ export class SalesService {
         stockQuantity: Number(stockCard?.stockQuantity ?? variant.stockQuantity ?? 0),
         stockUnit: stockCard?.unit ?? 'Adet',
         stockCardId: stockCard?.id ?? null,
-        salePrice: Number(variant.productCostDraft?.salePrice ?? variant.trendyolSalePrice ?? stockCard?.salePrice ?? 0),
+        salePrice: Number(variant.productCostDraft?.salePrice ?? (Number(variant.trendyolSalePrice) > 0 ? variant.trendyolSalePrice : null) ?? (Number(stockCard?.salePrice) > 0 ? stockCard?.salePrice : null) ?? stockCard?.purchasePrice ?? 0),
         trendyolSalePrice: Number(variant.trendyolSalePrice ?? 0),
         trendyolProductUrl: variant.trendyolProductUrl,
         imageUrl: this.firstImage(variant.images),
@@ -123,7 +123,7 @@ export class SalesService {
         stockQuantity: Number(stockCard?.stockQuantity ?? product.stockQuantity ?? 0),
         stockUnit: stockCard?.unit ?? 'Adet',
         stockCardId: stockCard?.id ?? null,
-        salePrice: Number(product.shopPrice ?? product.sitePrice ?? product.marketPrice ?? stockCard?.salePrice ?? 0),
+        salePrice: Number(product.shopPrice ?? product.sitePrice ?? product.marketPrice ?? (Number(stockCard?.salePrice) > 0 ? stockCard?.salePrice : null) ?? stockCard?.purchasePrice ?? 0),
         trendyolSalePrice: Number(product.marketPrice ?? product.shopPrice ?? 0),
         trendyolProductUrl: null,
         imageUrl: mediaPath ?? this.firstImage(product.imageUrls),
@@ -151,7 +151,7 @@ export class SalesService {
       select: {
         id: true, name: true, sku: true, barcode: true, oldModelCode: true,
         category: true, productFamily: true, size: true, potType: true,
-        stockQuantity: true, unit: true, salePrice: true, imagePath: true,
+        stockQuantity: true, unit: true, salePrice: true, purchasePrice: true, imagePath: true,
       },
       orderBy: { updatedAt: 'desc' },
       take: 20,
@@ -175,8 +175,8 @@ export class SalesService {
         stockQuantity: Number(card.stockQuantity ?? 0),
         stockUnit: card.unit ?? 'Adet',
         stockCardId: card.id,
-        salePrice: Number(card.salePrice ?? 0),
-        trendyolSalePrice: Number(card.salePrice ?? 0),
+        salePrice: Number(Number(card.salePrice) > 0 ? card.salePrice : card.purchasePrice ?? 0),
+        trendyolSalePrice: Number(Number(card.salePrice) > 0 ? card.salePrice : card.purchasePrice ?? 0),
         trendyolProductUrl: null,
         imageUrl: card.imagePath ?? null,
       }));
