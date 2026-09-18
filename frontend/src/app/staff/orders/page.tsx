@@ -41,6 +41,14 @@ const PLATFORMS = [
   { key: 'HEPSIBURADA', label: 'Hepsiburada' },
 ];
 
+const STATUS_TABS = [
+  { key: 'all', label: 'Tümü', statuses: [] },
+  { key: 'new', label: 'Yeni', statuses: ['CONFIRMED'] },
+  { key: 'preparing', label: 'İşleme Alınan', statuses: ['PREPARING', 'IN_PRODUCTION'] },
+  { key: 'ready', label: 'Hazır', statuses: ['READY'] },
+  { key: 'shipped', label: 'Kargoda', statuses: ['OUT_FOR_DELIVERY'] },
+];
+
 const CATEGORIES = [
   { key: 'all', label: 'Tüm Kategoriler' },
   { key: 'agac', label: 'Ağaç' },
@@ -108,6 +116,7 @@ export default function StaffOrdersPage() {
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [platform, setPlatform] = useState('all');
+  const [statusTab, setStatusTab] = useState('all');
   const [category, setCategory] = useState('all');
   const [search, setSearch] = useState('');
 
@@ -129,14 +138,25 @@ export default function StaffOrdersPage() {
 
   const filtered = orders.filter((o) => {
     if (platform !== 'all' && o.platform !== platform) return false;
+    if (statusTab !== 'all') {
+      const tab = STATUS_TABS.find(t => t.key === statusTab);
+      if (tab && tab.statuses.length > 0 && !tab.statuses.includes(o.status)) return false;
+    }
     if (!matchCategory(o, category)) return false;
     if (search) {
       const q = search.toLowerCase();
-      const text = [o.saleNumber, o.customerName, ...o.items.map((i) => i.productName ?? '')].join(' ').toLowerCase();
+      const text = [o.saleNumber, o.customerName, o.phone ?? '', ...o.items.map((i) => i.productName ?? '')].join(' ').toLowerCase();
       if (!text.includes(q)) return false;
     }
     return true;
   });
+
+  // Durum sekmesi sayaçları
+  const statusCounts = STATUS_TABS.reduce<Record<string, number>>((acc, tab) => {
+    if (tab.key === 'all') { acc[tab.key] = orders.length; return acc; }
+    acc[tab.key] = orders.filter(o => tab.statuses.includes(o.status)).length;
+    return acc;
+  }, {});
 
   return (
     <AdminShell title="Personel Siparişler">
@@ -149,14 +169,34 @@ export default function StaffOrdersPage() {
           </button>
         </div>
 
+        {/* Durum sekmeleri */}
+        <div className="flex gap-1 flex-wrap border-b border-line pb-3">
+          {STATUS_TABS.map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => setStatusTab(tab.key)}
+              className={`px-4 py-2 rounded-lg text-sm font-bold transition flex items-center gap-1.5 ${
+                statusTab === tab.key ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              {tab.label}
+              {statusCounts[tab.key] > 0 && (
+                <span className={`text-xs font-black px-1.5 py-0.5 rounded-full ${statusTab === tab.key ? 'bg-white/20' : 'bg-slate-200 text-slate-700'}`}>
+                  {statusCounts[tab.key]}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+
         {/* Platform filtreleri */}
-        <div className="flex gap-2 flex-wrap border-b border-line pb-3">
+        <div className="flex gap-2 flex-wrap">
           {PLATFORMS.map((p) => (
             <button
               key={p.key}
               onClick={() => setPlatform(p.key)}
-              className={`px-4 py-2 rounded-lg text-sm font-bold transition ${
-                platform === p.key ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition ${
+                platform === p.key ? 'bg-brand text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
               }`}
             >
               {p.label}
@@ -164,31 +204,29 @@ export default function StaffOrdersPage() {
           ))}
         </div>
 
-        {/* Kategori filtreleri */}
-        <div className="flex gap-2 flex-wrap">
+        {/* Kategori + Arama */}
+        <div className="flex gap-2 flex-wrap items-center">
           {CATEGORIES.map((c) => (
             <button
               key={c.key}
               onClick={() => setCategory(c.key)}
-              className={`px-4 py-2 rounded-lg text-sm font-semibold transition ${
-                category === c.key ? 'bg-brand text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition ${
+                category === c.key ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
               }`}
             >
               {c.label}
             </button>
           ))}
+          <input
+            className="field min-w-0 flex-1 max-w-xs"
+            placeholder="Müşteri adı, sipariş no, ürün..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
         </div>
 
-        {/* Arama */}
-        <input
-          className="field w-full max-w-sm"
-          placeholder="Sipariş no, müşteri veya ürün ara..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-
         {/* İstatistik */}
-        <div className="text-sm text-slate-500">{filtered.length} aktif sipariş</div>
+        <div className="text-sm text-slate-500">{filtered.length} sipariş gösteriliyor</div>
 
         {/* Sipariş kartları */}
         {loading ? (
@@ -233,14 +271,40 @@ function OrderCard({ order, onStatusChange }: { order: OrderRow; onStatusChange:
 
   const isReady = order.status === 'READY' || order.status === 'Kargoya Hazır';
 
-  async function markReady() {
-    if (!confirm('Bu sipariş hazır olarak işaretlensin mi?')) return;
+  async function markReadyWithPhoto(file: File) {
+    setUploading(true);
+    try {
+      const token = typeof window !== 'undefined'
+        ? (localStorage.getItem(`auth_token_${window.location.hostname}_${window.location.port || 'default'}`) ?? localStorage.getItem('auth_token'))
+        : null;
+      const form = new FormData();
+      form.append('file', file);
+      const res = await fetch(`${apiBaseUrl}/sales/${order.id}/proof-photo?photoType=PACKAGE`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: form,
+      });
+      if (res.ok) {
+        // Fotoğraf yüklendi, siparişi READY yap
+        await api(`/sales/${order.id}/status`, { method: 'POST', json: { status: 'READY', note: 'Ürün hazırlandı — fotoğraf yüklendi.' } });
+        onStatusChange(order.id, 'READY');
+      } else {
+        alert('Fotoğraf yüklenemedi. Tekrar deneyin.');
+      }
+    } catch {
+      alert('Fotoğraf yüklenemedi. Tekrar deneyin.');
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function markReadyWithoutPhoto() {
+    if (!confirm('Fotoğrafsız olarak hazır işaretlensin mi?')) return;
     setUploading(true);
     try {
       await api(`/sales/${order.id}/status`, { method: 'POST', json: { status: 'READY', note: 'Ürün hazırlandı.' } });
       onStatusChange(order.id, 'READY');
-    } catch (err) {
-      console.error('Hazır yapma hatası:', err);
+    } catch {
       alert('İşlem başarısız, tekrar deneyin.');
     } finally {
       setUploading(false);
@@ -250,28 +314,7 @@ function OrderCard({ order, onStatusChange }: { order: OrderRow; onStatusChange:
   async function handlePhoto(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    setUploading(true);
-    try {
-      const token = typeof window !== 'undefined'
-        ? (localStorage.getItem(`auth_token_${window.location.hostname}_${window.location.port || 'default'}`) ?? localStorage.getItem('auth_token'))
-        : null;
-      const form = new FormData();
-      form.append('file', file);
-      const res = await fetch(`${apiBaseUrl}/sales/${order.id}/proof-photo`, {
-        method: 'POST',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-        body: form,
-      });
-      if (res.ok) {
-        onStatusChange(order.id, 'READY');
-      } else {
-        alert('Fotoğraf yüklenemedi, "Hazır Yap" butonunu kullanın.');
-      }
-    } catch {
-      alert('Fotoğraf yüklenemedi, "Hazır Yap" butonunu kullanın.');
-    } finally {
-      setUploading(false);
-    }
+    await markReadyWithPhoto(file);
   }
 
   function handlePrint() {
@@ -438,14 +481,14 @@ function OrderCard({ order, onStatusChange }: { order: OrderRow; onStatusChange:
           ) : (
             <>
               <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handlePhoto} />
-              <button onClick={() => fileRef.current?.click()} disabled={uploading}
-                title="Fotoğraf çek (opsiyonel)"
+              <button onClick={() => void markReadyWithoutPhoto()} disabled={uploading}
+                title="Fotoğrafsız hazır yap"
                 className="flex items-center justify-center p-2 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-100 transition">
-                <Camera size={15} />
+                <CheckCircle size={15} />
               </button>
-              <button onClick={() => void markReady()} disabled={uploading}
+              <button onClick={() => fileRef.current?.click()} disabled={uploading}
                 className="flex-1 flex items-center justify-center gap-1 text-sm px-3 py-2 rounded-lg bg-green-600 text-white hover:bg-green-700 transition disabled:opacity-60 font-bold">
-                <CheckCircle size={14} /> {uploading ? '...' : 'Hazır Yap'}
+                <Camera size={14} /> {uploading ? 'Yükleniyor...' : 'Fotoğraf + Hazır Yap'}
               </button>
             </>
           )}
