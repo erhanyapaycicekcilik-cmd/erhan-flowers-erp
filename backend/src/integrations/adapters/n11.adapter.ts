@@ -176,23 +176,25 @@ export class N11Adapter extends HttpMarketplaceOrderAdapter {
     const apiUrl = this.env('API_URL') || 'https://api.n11.com';
 
     const n11Payload = {
-      skus: [{
-        categoryId: n11CategoryId,
-        currencyType: 'TL',
-        productMainId: stockCode,
-        stockCode,
-        preparingDay: Number(this.env('PREPARING_DAY') || 2),
-        shipmentTemplate,
-        quantity: stockQuantity,
-        salePrice,
-        listPrice: effectiveListPrice,
-        vatRate: 10,
-        // title zorunlu — mevcut ürün adı bilinmediğinden stockCode ile dolduruyoruz
-        title: String(p.productName || stockCode).slice(0, 150),
-        description: String(p.productName || stockCode).slice(0, 500),
-        attributes: [],
-        images: [],
-      }],
+      payload: {
+        integrator: 'Erhan Flowers ERP',
+        skus: [{
+          categoryId: n11CategoryId,
+          currencyType: 'TL',
+          productMainId: stockCode,
+          stockCode,
+          preparingDay: Number(this.env('PREPARING_DAY') || 2),
+          shipmentTemplate,
+          quantity: stockQuantity,
+          salePrice,
+          listPrice: effectiveListPrice,
+          vatRate: 10,
+          title: String(p.productName || stockCode).slice(0, 150),
+          description: String(p.productName || stockCode).slice(0, 500),
+          attributes: [],
+          images: [],
+        }],
+      },
     };
 
     try {
@@ -203,12 +205,11 @@ export class N11Adapter extends HttpMarketplaceOrderAdapter {
       });
       const text = await response.text().catch(() => '');
       let json: any; try { json = JSON.parse(text); } catch { json = null; }
-      const taskId = json?.taskId;
+      const taskId = json?.id ?? json?.taskId;
 
-      if (response.ok || taskId) {
+      if (response.ok || response.status === 201 || response.status === 202 || taskId) {
         return { ok: true, status: 'CONNECTED', message: `N11 fiyat/stok guncelleme kuyruga alindi. StokKodu: ${stockCode}${taskId ? ` Task: ${taskId}` : ''}` };
       }
-      // "mevcuttur" / "zaten var" → N11 aynı ürünü reddediyor ama fiyat zaten güncel
       if (text.includes('mevcuttur') || text.includes('kullanılmaktadır')) {
         return { ok: true, status: 'CONNECTED', message: `N11 fiyat/stok zaten guncel. StokKodu: ${stockCode}` };
       }
