@@ -221,12 +221,36 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
         });
       }
     }
+    // API'den gelmeyen OUT_FOR_DELIVERY siparişleri DELIVERED yap
+    // (platforma göre: açık siparişler listesinde olmayan = teslim edilmiş)
+    let autoDelivered = 0;
+    if (orders.length > 0) {
+      const fetchedExternalIds = orders.map((o) => o.externalOrderId).filter(Boolean);
+      const transitOrders = await this.prisma.$queryRaw<{ id: number; external_order_id: string }[]>`
+        SELECT id, external_order_id FROM retail_sales
+        WHERE channel = ${platform}::"RetailSaleChannel"
+          AND status = 'OUT_FOR_DELIVERY'
+          AND external_order_id IS NOT NULL
+      `;
+      for (const sale of transitOrders) {
+        if (!fetchedExternalIds.includes(sale.external_order_id)) {
+          try {
+            await this.prisma.$executeRaw`
+              UPDATE retail_sales SET status = 'DELIVERED'::"RetailSaleStatus", updated_at = NOW()
+              WHERE id = ${sale.id}
+            `;
+            autoDelivered += 1;
+          } catch { /* ignore */ }
+        }
+      }
+    }
+
     await this.prisma.$executeRaw`
       UPDATE integration_connections SET status = 'CONNECTED', last_sync_at = NOW(), last_error = NULL, updated_at = NOW()
       WHERE platform = ${platform}
     `;
-    await this.log(platform, 'FETCH_ORDERS', 'SUCCESS', `${imported} yeni, ${duplicated} mükerrer, ${unknownStatus} bilinmeyen durum işlendi.`, null, null, { imported, duplicated, unknownStatus });
-    return { ok: true, imported, duplicated, unknownStatus, failed };
+    await this.log(platform, 'FETCH_ORDERS', 'SUCCESS', `${imported} yeni, ${duplicated} mükerrer, ${unknownStatus} bilinmeyen durum, ${autoDelivered} otomatik teslim edildi.`, null, null, { imported, duplicated, unknownStatus, autoDelivered });
+    return { ok: true, imported, duplicated, unknownStatus, failed, autoDelivered };
   }
 
   // Siparişi pazaryerine "hazırlandı/kargolandı" olarak bildirir (paketleme adımı).
