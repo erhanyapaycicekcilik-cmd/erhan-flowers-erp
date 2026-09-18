@@ -174,4 +174,9 @@ export class SalesController {
     return this.sales.printData(Number(id), 'ORDER_FORM_A4', request.user!.id, { recordPrint: preview !== '1' });
   }
 
+  @Get('proof-photos/archive')
+  proofPhotoArchive(@Query() query: Record<string, string>) {
+    return this.sales.searchProofPhotoArchive(query);
+  }
+
 }

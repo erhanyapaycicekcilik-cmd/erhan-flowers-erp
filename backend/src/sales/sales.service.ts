@@ -637,7 +637,7 @@ export class SalesService {
 
   async saveProofPhotoAndMarkReady(id: number, file: { filename: string }, userId: number, photoType = 'BARCODE') {
     const imagePath = `uploads/proof-photos/${file.filename}`;
-    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 gün
+    const expiresAt = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000); // 90 gün
     const safeType = ['BARCODE', 'PACKAGE'].includes(photoType) ? photoType : 'BARCODE';
     await this.prisma.$executeRaw`
       INSERT INTO retail_sale_proof_photos (sale_id, image_path, photo_type, expires_at, taken_by_id)
@@ -1269,5 +1269,37 @@ export class SalesService {
 
   private quantityText(value: number) {
     return (Math.round(value * 1000) / 1000).toLocaleString('tr-TR', { maximumFractionDigits: 3 });
+  }
+
+  async searchProofPhotoArchive(query: { customerName?: string; saleNumber?: string; dateFrom?: string; dateTo?: string; limit?: number }) {
+    const limit = Math.min(Number(query.limit ?? 50), 200);
+    const nameFilter = query.customerName ? `%${query.customerName}%` : '%';
+    const saleFilter = query.saleNumber ? `%${query.saleNumber}%` : '%';
+    const dateFrom = query.dateFrom ? new Date(query.dateFrom) : new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+    const dateTo = query.dateTo ? new Date(query.dateTo) : new Date();
+
+    const rows = await this.prisma.$queryRaw<Array<{
+      sale_id: number;
+      sale_number: string;
+      customer_name: string;
+      channel: string;
+      image_path: string;
+      photo_type: string;
+      created_at: Date;
+      expires_at: Date;
+    }>>`
+      SELECT p.sale_id, rs.sale_number, rs.customer_name, rs.channel,
+             p.image_path, p.photo_type, p.created_at, p.expires_at
+      FROM retail_sale_proof_photos p
+      JOIN retail_sales rs ON rs.id = p.sale_id
+      WHERE p.expires_at > NOW()
+        AND rs.customer_name ILIKE ${nameFilter}
+        AND rs.sale_number ILIKE ${saleFilter}
+        AND p.created_at >= ${dateFrom}
+        AND p.created_at <= ${dateTo}
+      ORDER BY p.created_at DESC
+      LIMIT ${limit}
+    `;
+    return rows;
   }
 }
