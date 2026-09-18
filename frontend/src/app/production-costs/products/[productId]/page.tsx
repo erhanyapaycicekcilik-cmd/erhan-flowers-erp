@@ -28,6 +28,14 @@ type Variant = {
   seoProductName?: string | null;
   seoLongDescription?: string | null;
   seoKeywords?: string[] | null;
+  productCenterId?: number | null;
+  productHeight?: string | null;
+  potType?: string | null;
+  potSize?: string | null;
+  stemCount?: number | null;
+  branchCount?: number | null;
+  leavesPerBranch?: number | null;
+  leafCount?: number | null;
 };
 
 type VariantListItem = {
@@ -1192,6 +1200,19 @@ export default function ProductCostDetailPage() {
           </CompactPanel>
 
           {variant && (
+            <PhysicalSpecsPanel
+              productCenterId={variant.productCenterId}
+              productHeight={variant.productHeight}
+              potType={variant.potType}
+              potSize={variant.potSize}
+              stemCount={variant.stemCount}
+              branchCount={variant.branchCount}
+              leavesPerBranch={variant.leavesPerBranch}
+              leafCount={variant.leafCount}
+            />
+          )}
+
+          {variant && (
             <SeoPanel
               variantId={variant.id}
               productName={variant.productName}
@@ -1893,6 +1914,158 @@ function PriceLine({ label, value }: { label: string; value: number }) {
 
 function Warning({ text }: { text: string }) {
   return <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">{text}</div>;
+}
+
+function PhysicalSpecsPanel({ productCenterId, productHeight, potType, potSize, stemCount, branchCount, leavesPerBranch, leafCount }: {
+  productCenterId?: number | null;
+  productHeight?: string | null;
+  potType?: string | null;
+  potSize?: string | null;
+  stemCount?: number | null;
+  branchCount?: number | null;
+  leavesPerBranch?: number | null;
+  leafCount?: number | null;
+}) {
+  const [form, setForm] = useState({
+    productHeight: productHeight ?? '',
+    potType: potType ?? '',
+    potW: '',
+    potD: '',
+    potH: '',
+    potVolumeLitre: '',
+    stemCount: stemCount != null ? String(stemCount) : '',
+    branchCount: branchCount != null ? String(branchCount) : '',
+    leavesPerBranch: leavesPerBranch != null ? String(leavesPerBranch) : '',
+    leafCount: leafCount != null ? String(leafCount) : '',
+  });
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState('');
+
+  useEffect(() => {
+    const ps = potSize ?? '';
+    const nums = ps.match(/\d+(\.\d+)?/g)?.map(Number) ?? [];
+    const [w = 0, d = 0, h = 0] = nums;
+    setForm((f) => ({
+      ...f,
+      productHeight: productHeight ?? '',
+      potType: potType ?? '',
+      potW: w ? String(w) : '',
+      potD: d ? String(d) : '',
+      potH: h ? String(h) : '',
+      potVolumeLitre: w && d && h ? ((w * d * h) / 1000).toFixed(1) : '',
+      stemCount: stemCount != null ? String(stemCount) : '',
+      branchCount: branchCount != null ? String(branchCount) : '',
+      leavesPerBranch: leavesPerBranch != null ? String(leavesPerBranch) : '',
+      leafCount: leafCount != null ? String(leafCount) : '',
+    }));
+  }, [productCenterId, productHeight, potType, potSize, stemCount, branchCount, leavesPerBranch, leafCount]);
+
+  function calcLeafCount(bc: string, lpb: string) {
+    const b = parseInt(bc, 10);
+    const l = parseInt(lpb, 10);
+    return b > 0 && l > 0 ? String(b * l) : '';
+  }
+
+  function calcPotSize(w: string, d: string, h: string) {
+    const nw = parseFloat(w), nd = parseFloat(d), nh = parseFloat(h);
+    return [w, d, h].filter(Boolean).length === 3 ? `${w}×${d}×${h} cm` : '';
+  }
+
+  async function save() {
+    if (!productCenterId) { setMsg('Bu ürün henüz Ürün Merkezi ile eşleşmemiş.'); return; }
+    setSaving(true); setMsg('');
+    try {
+      const potSizeValue = calcPotSize(form.potW, form.potD, form.potH);
+      await api(`/products/${productCenterId}`, {
+        method: 'PATCH',
+        json: {
+          productHeight: form.productHeight || null,
+          potType: form.potType || null,
+          potSize: potSizeValue || null,
+          stemCount: form.stemCount ? Number(form.stemCount) : null,
+          branchCount: form.branchCount ? Number(form.branchCount) : null,
+          leavesPerBranch: form.leavesPerBranch ? Number(form.leavesPerBranch) : null,
+          leafCount: form.leafCount ? Number(form.leafCount) : null,
+        },
+      });
+      setMsg('Kaydedildi.');
+    } catch {
+      setMsg('Hata oluştu.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const leafFormula = form.branchCount && form.leavesPerBranch
+    ? `${form.branchCount}×${form.leavesPerBranch}=${parseInt(form.branchCount) * parseInt(form.leavesPerBranch)}`
+    : null;
+
+  return (
+    <CompactPanel title="Fiziksel Özellikler">
+      {!productCenterId && (
+        <p className="mb-2 text-xs text-amber-600">Bu ürün henüz Ürün Merkezi ile eşleşmemiş — özellikler kaydedilemez.</p>
+      )}
+      <div className="grid grid-cols-2 gap-2 text-sm">
+        <div>
+          <label className="block text-xs text-slate-500 mb-0.5">Ürün boyu</label>
+          <input className="w-full rounded border px-2 py-1 text-sm" placeholder="ör. 180 cm" value={form.productHeight}
+            onChange={(e) => setForm((f) => ({ ...f, productHeight: e.target.value }))} />
+        </div>
+        <div>
+          <label className="block text-xs text-slate-500 mb-0.5">Gövde sayısı</label>
+          <input className="w-full rounded border px-2 py-1 text-sm" type="number" min="0" placeholder="ör. 3" value={form.stemCount}
+            onChange={(e) => setForm((f) => ({ ...f, stemCount: e.target.value }))} />
+        </div>
+        <div>
+          <label className="block text-xs text-slate-500 mb-0.5">Dal sayısı</label>
+          <input className="w-full rounded border px-2 py-1 text-sm" type="number" min="0" placeholder="ör. 12" value={form.branchCount}
+            onChange={(e) => {
+              const bc = e.target.value;
+              setForm((f) => ({ ...f, branchCount: bc, leafCount: calcLeafCount(bc, f.leavesPerBranch) }));
+            }} />
+        </div>
+        <div>
+          <label className="block text-xs text-slate-500 mb-0.5">Dal başına yaprak</label>
+          <input className="w-full rounded border px-2 py-1 text-sm" type="number" min="0" placeholder="ör. 36" value={form.leavesPerBranch}
+            onChange={(e) => {
+              const lpb = e.target.value;
+              setForm((f) => ({ ...f, leavesPerBranch: lpb, leafCount: calcLeafCount(f.branchCount, lpb) }));
+            }} />
+        </div>
+        <div className="col-span-2">
+          <label className="block text-xs text-slate-500 mb-0.5">
+            Toplam yaprak{leafFormula ? ` (${leafFormula})` : ''}
+          </label>
+          <input className="w-full rounded border px-2 py-1 text-sm" type="number" min="0" placeholder="ör. 432" value={form.leafCount}
+            onChange={(e) => setForm((f) => ({ ...f, leafCount: e.target.value }))} />
+        </div>
+        <div>
+          <label className="block text-xs text-slate-500 mb-0.5">Saksı tipi</label>
+          <input className="w-full rounded border px-2 py-1 text-sm" placeholder="ör. Plastik" value={form.potType}
+            onChange={(e) => setForm((f) => ({ ...f, potType: e.target.value }))} />
+        </div>
+        <div>
+          <label className="block text-xs text-slate-500 mb-0.5">
+            Saksı ebatları (cm){form.potW && form.potD && form.potH ? ` — ${((parseFloat(form.potW) * parseFloat(form.potD) * parseFloat(form.potH)) / 1000).toFixed(1)} L` : ''}
+          </label>
+          <div className="flex gap-1">
+            <input className="w-full rounded border px-2 py-1 text-sm" type="number" min="0" placeholder="G" value={form.potW}
+              onChange={(e) => { const w = e.target.value; setForm((f) => ({ ...f, potW: w, potVolumeLitre: w && f.potD && f.potH ? ((parseFloat(w) * parseFloat(f.potD) * parseFloat(f.potH)) / 1000).toFixed(1) : '' })); }} />
+            <input className="w-full rounded border px-2 py-1 text-sm" type="number" min="0" placeholder="D" value={form.potD}
+              onChange={(e) => { const d = e.target.value; setForm((f) => ({ ...f, potD: d, potVolumeLitre: f.potW && d && f.potH ? ((parseFloat(f.potW) * parseFloat(d) * parseFloat(f.potH)) / 1000).toFixed(1) : '' })); }} />
+            <input className="w-full rounded border px-2 py-1 text-sm" type="number" min="0" placeholder="Y" value={form.potH}
+              onChange={(e) => { const h = e.target.value; setForm((f) => ({ ...f, potH: h, potVolumeLitre: f.potW && f.potD && h ? ((parseFloat(f.potW) * parseFloat(f.potD) * parseFloat(h)) / 1000).toFixed(1) : '' })); }} />
+          </div>
+        </div>
+      </div>
+      <div className="mt-2 flex items-center gap-2">
+        <button className="btn-primary py-1 px-3 text-xs" onClick={save} disabled={saving || !productCenterId}>
+          {saving ? 'Kaydediliyor…' : 'Kaydet'}
+        </button>
+        {msg && <span className="text-xs text-slate-500">{msg}</span>}
+      </div>
+    </CompactPanel>
+  );
 }
 
 function SeoPanel({ variantId, productName, detectedSize, seoProductName, seoLongDescription, seoKeywords, knowledgeResult, materials }: {

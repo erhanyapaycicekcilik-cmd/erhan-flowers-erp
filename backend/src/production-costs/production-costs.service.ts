@@ -501,43 +501,45 @@ export class ProductionCostsService {
     }));
   }
 
+  private variantWithProductSpecs(v: any) {
+    const p = v.product;
+    return {
+      ...v,
+      productCenterId: p?.id ?? null,
+      productHeight: p?.productHeight ?? null,
+      potType: p?.potType ?? null,
+      potSize: p?.potSize ?? null,
+      stemCount: p?.stemCount ?? null,
+      branchCount: p?.branchCount ?? null,
+      leavesPerBranch: p?.leavesPerBranch ?? null,
+      leafCount: p?.leafCount ?? null,
+    };
+  }
+
   async getVariantDetail(id: number) {
-    const variant = await this.prisma.trendyolProductVariant.findUnique({
-      where: { id },
-      include: {
-        family: true,
-        sizeOption: true,
-        potOption: true,
-        productCostDraft: {
-          include: {
-            items: { include: { stockCard: true }, orderBy: { id: 'asc' } },
-            pots: { include: { stockCard: true }, orderBy: { id: 'asc' } },
-          },
+    const includeOpts = {
+      family: true,
+      sizeOption: true,
+      potOption: true,
+      product: true,
+      productCostDraft: {
+        include: {
+          items: { include: { stockCard: true }, orderBy: { id: 'asc' } },
+          pots: { include: { stockCard: true }, orderBy: { id: 'asc' } },
         },
       },
-    });
+    } as const;
+
+    const variant = await this.prisma.trendyolProductVariant.findUnique({ where: { id }, include: includeOpts });
     if (!variant) throw new NotFoundException('Ürün bulunamadı.');
 
     if (variant.productCostDraft?.status === 'DRAFT') {
       await this.ensureDraftDefaultExpenses(variant, variant.productCostDraft.id);
-      const refreshed = await this.prisma.trendyolProductVariant.findUnique({
-        where: { id },
-        include: {
-          family: true,
-          sizeOption: true,
-          potOption: true,
-          productCostDraft: {
-            include: {
-              items: { include: { stockCard: true }, orderBy: { id: 'asc' } },
-              pots: { include: { stockCard: true }, orderBy: { id: 'asc' } },
-            },
-          },
-        },
-      });
+      const refreshed = await this.prisma.trendyolProductVariant.findUnique({ where: { id }, include: includeOpts });
       if (refreshed) {
         const neighbors = await this.variantNeighbors(id);
         return {
-          variant: refreshed,
+          variant: this.variantWithProductSpecs(refreshed),
           hasSavedCostDraft: Boolean(refreshed.productCostDraft),
           costDraft: refreshed.productCostDraft ? this.serializeCostDraft(refreshed.productCostDraft) : await this.defaultCostDraft(refreshed),
           progress: await this.costProgress(),
@@ -548,7 +550,7 @@ export class ProductionCostsService {
 
     const neighbors = await this.variantNeighbors(id);
     return {
-      variant,
+      variant: this.variantWithProductSpecs(variant),
       hasSavedCostDraft: Boolean(variant.productCostDraft),
       costDraft: variant.productCostDraft ? this.serializeCostDraft(variant.productCostDraft) : await this.defaultCostDraft(variant),
       progress: await this.costProgress(),
