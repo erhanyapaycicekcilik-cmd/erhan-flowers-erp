@@ -49,7 +49,7 @@ export class GeminiContentService {
       throw new ServiceUnavailableException('Gemini API anahtarı tanımlı değil. GEMINI_API_KEY değerini .env dosyasına ekleyin.');
     }
 
-    const model = this.config.get<string>('GEMINI_MODEL')?.trim() || 'gemini-3.6-flash';
+    const model = this.config.get<string>('GEMINI_MODEL')?.trim() || 'gemini-2.0-flash';
 
     try {
       const ai = new GoogleGenAI({ apiKey });
@@ -76,7 +76,7 @@ export class GeminiContentService {
       return this.referenceSearchResult(fallbackQuery, 'Gemini API anahtarı tanımlı değil; sistem kendi arama kelimesini hazırladı.');
     }
 
-    const model = this.config.get<string>('GEMINI_MODEL')?.trim() || 'gemini-3.6-flash';
+    const model = this.config.get<string>('GEMINI_MODEL')?.trim() || 'gemini-2.0-flash';
     try {
       const ai = new GoogleGenAI({ apiKey });
       const response = await ai.models.generateContent({

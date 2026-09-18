@@ -246,7 +246,7 @@ export class IntegrationCenterService {
       throw new ServiceUnavailableException('Gorselden okuma icin GEMINI_API_KEY tanimli degil.');
     }
 
-    const model = this.config.get<string>('GEMINI_VISION_MODEL')?.trim() || this.config.get<string>('GEMINI_MODEL')?.trim() || 'gemini-3.6-flash';
+    const model = this.config.get<string>('GEMINI_VISION_MODEL')?.trim() || this.config.get<string>('GEMINI_MODEL')?.trim() || 'gemini-2.0-flash';
     const ai = new GoogleGenAI({ apiKey });
     const response = await ai.models.generateContent({
       model,

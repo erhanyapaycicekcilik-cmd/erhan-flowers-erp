@@ -22,7 +22,7 @@ export class GeminiChatService {
       throw new ServiceUnavailableException('Gemini API anahtarı tanımlı değil. GEMINI_API_KEY değerini .env dosyasına ekleyin.');
     }
 
-    const model = this.config.get<string>('GEMINI_MODEL')?.trim() || 'gemini-3.6-flash';
+    const model = this.config.get<string>('GEMINI_MODEL')?.trim() || 'gemini-2.0-flash';
     const systemInstruction = await this.buildSystemPrompt();
 
     try {
