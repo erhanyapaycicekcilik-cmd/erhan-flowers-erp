@@ -70,7 +70,7 @@ export class SalesService {
               status: 'ACTIVE',
               OR: [{ barcode: { in: lookupValues } }, { sku: { in: lookupValues } }, { oldModelCode: { in: lookupValues } }],
             },
-            select: { id: true, barcode: true, sku: true, oldModelCode: true, stockQuantity: true, unit: true },
+            select: { id: true, barcode: true, sku: true, oldModelCode: true, stockQuantity: true, unit: true, salePrice: true, purchasePrice: true },
           })
         : [];
 
@@ -95,7 +95,7 @@ export class SalesService {
         stockQuantity: Number(stockCard?.stockQuantity ?? variant.stockQuantity ?? 0),
         stockUnit: stockCard?.unit ?? 'Adet',
         stockCardId: stockCard?.id ?? null,
-        salePrice: Number(variant.productCostDraft?.salePrice ?? variant.trendyolSalePrice ?? 0),
+        salePrice: Number(variant.productCostDraft?.salePrice ?? (Number(variant.trendyolSalePrice) > 0 ? variant.trendyolSalePrice : null) ?? (Number(stockCard?.salePrice) > 0 ? stockCard?.salePrice : null) ?? stockCard?.purchasePrice ?? 0),
         trendyolSalePrice: Number(variant.trendyolSalePrice ?? 0),
         trendyolProductUrl: variant.trendyolProductUrl,
         imageUrl: this.firstImage(variant.images),
@@ -123,7 +123,7 @@ export class SalesService {
         stockQuantity: Number(stockCard?.stockQuantity ?? product.stockQuantity ?? 0),
         stockUnit: stockCard?.unit ?? 'Adet',
         stockCardId: stockCard?.id ?? null,
-        salePrice: Number(product.shopPrice ?? product.sitePrice ?? product.marketPrice ?? 0),
+        salePrice: Number(product.shopPrice ?? product.sitePrice ?? product.marketPrice ?? (Number(stockCard?.salePrice) > 0 ? stockCard?.salePrice : null) ?? stockCard?.purchasePrice ?? 0),
         trendyolSalePrice: Number(product.marketPrice ?? product.shopPrice ?? 0),
         trendyolProductUrl: null,
         imageUrl: mediaPath ?? this.firstImage(product.imageUrls),
@@ -151,7 +151,7 @@ export class SalesService {
       select: {
         id: true, name: true, sku: true, barcode: true, oldModelCode: true,
         category: true, productFamily: true, size: true, potType: true,
-        stockQuantity: true, unit: true, salePrice: true, imagePath: true,
+        stockQuantity: true, unit: true, salePrice: true, purchasePrice: true, imagePath: true,
       },
       orderBy: { updatedAt: 'desc' },
       take: 20,
@@ -175,8 +175,8 @@ export class SalesService {
         stockQuantity: Number(card.stockQuantity ?? 0),
         stockUnit: card.unit ?? 'Adet',
         stockCardId: card.id,
-        salePrice: Number(card.salePrice ?? 0),
-        trendyolSalePrice: Number(card.salePrice ?? 0),
+        salePrice: Number(Number(card.salePrice) > 0 ? card.salePrice : card.purchasePrice ?? 0),
+        trendyolSalePrice: Number(Number(card.salePrice) > 0 ? card.salePrice : card.purchasePrice ?? 0),
         trendyolProductUrl: null,
         imageUrl: card.imagePath ?? null,
       }));
@@ -585,7 +585,7 @@ export class SalesService {
     return this.getSaleWithTx(this.prisma, id);
   }
 
-  async completeSale(id: number, userId: number) {
+  async completeSale(id: number, userId: number, opts: { force?: boolean } = {}) {
     return this.prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM retail_sales WHERE id = ${id} FOR UPDATE`;
       const sale = await this.getSaleWithTx(tx, id);
@@ -594,7 +594,7 @@ export class SalesService {
 
       const items = sale.items as Array<Record<string, unknown>>;
       const payments = sale.payments as Array<Record<string, unknown>>;
-      await this.ensureReadyStock(tx, id, items, userId);
+      await this.ensureReadyStock(tx, id, items, userId, opts.force);
       await this.deductRecipeStock(tx, id, items, userId);
       await this.createFinanceForPayments(tx, id, payments, userId);
 
@@ -919,7 +919,7 @@ export class SalesService {
     `;
   }
 
-  private async ensureReadyStock(tx: Prisma.TransactionClient, saleId: number, items: Array<Record<string, unknown>>, userId: number) {
+  private async ensureReadyStock(tx: Prisma.TransactionClient, saleId: number, items: Array<Record<string, unknown>>, userId: number, force = false) {
     for (const item of items) {
       if (item.stock_fulfillment_type !== 'READY_STOCK') continue;
       const quantity = Number(item.quantity);
@@ -930,7 +930,7 @@ export class SalesService {
         await tx.$queryRaw`SELECT id FROM stock_cards WHERE id = ${stockCardId} FOR UPDATE`;
         const cards = await tx.$queryRaw<Array<Record<string, unknown>>>`SELECT stock_quantity AS "stockQuantity", unit FROM stock_cards WHERE id = ${stockCardId}`;
         const previousStock = Number(cards[0]?.stockQuantity ?? 0);
-        if (previousStock < quantity) throw new BadRequestException(`${item.product_name_snapshot} için stok yetersiz. Eksik: ${quantity - previousStock}`);
+        if (!force && previousStock < quantity) throw new BadRequestException(`${item.product_name_snapshot} için stok yetersiz. Eksik: ${quantity - previousStock}`);
         const nextStock = previousStock - quantity;
         const reservations = await tx.$queryRaw<Array<Record<string, unknown>>>`
           SELECT id, quantity FROM stock_reservations
@@ -958,11 +958,11 @@ export class SalesService {
           ON CONFLICT (event_key) DO NOTHING
         `;
       } else if (variantId) {
-        throw new BadRequestException(
+        if (!force) throw new BadRequestException(
           `${item.product_name_snapshot} için hazır ürün stok kartı bağlantısı bulunamadı. Satış tamamlanmadan önce stok kartını eşleştirin.`,
         );
       } else {
-        throw new BadRequestException(`${item.product_name_snapshot} için stok bağlantısı bulunamadı.`);
+        if (!force) throw new BadRequestException(`${item.product_name_snapshot} için stok bağlantısı bulunamadı.`);
       }
     }
   }
