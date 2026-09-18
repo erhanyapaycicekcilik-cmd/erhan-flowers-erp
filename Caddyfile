@@ -1,3 +1,19 @@
+# Flora E-Ticaret Sitesi
+florayapaycicek.com, www.florayapaycicek.com {
+    reverse_proxy florayapay:3200
+
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        X-Frame-Options "SAMEORIGIN"
+        X-Content-Type-Options "nosniff"
+    }
+
+    log {
+        output file /var/log/caddy/flora-access.log
+        format json
+    }
+}
+
 # ERP Yönetim Paneli — Güvenli HTTPS
 erp.florayapaycicek.com {
     reverse_proxy frontend:3000

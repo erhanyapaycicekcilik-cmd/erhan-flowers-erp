@@ -49,6 +49,13 @@ services:
       backend:
         condition: service_healthy
 
+  florayapay:
+    build: ./florayapay
+    container_name: erhan-flowers-florayapay-prod
+    restart: unless-stopped
+    networks:
+      - erp_net
+
   caddy:
     image: caddy:2-alpine
     container_name: erhan-flowers-caddy-prod
@@ -65,6 +72,7 @@ services:
     depends_on:
       - backend
       - frontend
+      - florayapay
 
 networks:
   erp_net:
