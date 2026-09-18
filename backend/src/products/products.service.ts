@@ -120,6 +120,64 @@ export class ProductsService {
         },
         include: { category: true },
       });
+
+      // Barkod varsa TrendyolProductVariant + ProductCostDraft otomatik oluştur
+      if (data.barcode) {
+        try {
+          const existingVariant = await this.prisma.trendyolProductVariant.findUnique({ where: { barcode: data.barcode } });
+          if (!existingVariant) {
+            const salePrice = new Prisma.Decimal(data.marketPrice ?? data.shopPrice ?? 0);
+            const variant = await this.prisma.trendyolProductVariant.create({
+              data: {
+                productId: product.id,
+                barcode: data.barcode,
+                productName: data.productName!,
+                currentModelCode: data.modelCode,
+                proposedModelCode: data.modelCode,
+                brand: data.brand ?? 'Erhan Flowers',
+                stockQuantity: data.stockQuantity ?? 0,
+                trendyolSalePrice: salePrice,
+                n11SalePrice: salePrice,
+                hepsiburadaSalePrice: salePrice,
+                commissionPercent: new Prisma.Decimal(20),
+                status: 'ACTIVE',
+              },
+            });
+            await this.prisma.productCostDraft.create({
+              data: {
+                variantId: variant.id,
+                profitMarginPercent: new Prisma.Decimal(45),
+                vatPercent: new Prisma.Decimal(20),
+                marketplaceMarkupPercent: new Prisma.Decimal(25),
+                campaignBufferPercent: new Prisma.Decimal(10),
+                shippingCost: new Prisma.Decimal(data.shippingCost ?? 0),
+                desi: new Prisma.Decimal(data.desi ?? 1),
+                status: 'DRAFT',
+              },
+            });
+          } else if (!existingVariant.productId) {
+            await this.prisma.trendyolProductVariant.update({ where: { id: existingVariant.id }, data: { productId: product.id } });
+            const hasDraft = await this.prisma.productCostDraft.findUnique({ where: { variantId: existingVariant.id } });
+            if (!hasDraft) {
+              await this.prisma.productCostDraft.create({
+                data: {
+                  variantId: existingVariant.id,
+                  profitMarginPercent: new Prisma.Decimal(45),
+                  vatPercent: new Prisma.Decimal(20),
+                  marketplaceMarkupPercent: new Prisma.Decimal(25),
+                  campaignBufferPercent: new Prisma.Decimal(10),
+                  shippingCost: new Prisma.Decimal(data.shippingCost ?? 0),
+                  desi: new Prisma.Decimal(data.desi ?? 1),
+                  status: 'DRAFT',
+                },
+              });
+            }
+          }
+        } catch (err) {
+          this.logger.warn(`Maliyet taslağı oluşturma hatası: ${String(err)}`);
+        }
+      }
+
       this.broadcastPriceStock(product).catch((err) =>
         this.logger.warn(`Platform yayını hatası (create): ${String(err)}`),
       );
@@ -232,6 +290,82 @@ export class ProductsService {
 
   // Tüm aktif ürünleri tüm bağlı platformlara toplu yayınlar.
   // 10'lu batch'ler halinde paralel gönderir — batch arası 500ms bekler.
+  async backfillCostDrafts(): Promise<{ checked: number; created: number; skipped: number }> {
+    const products = await this.prisma.product.findMany({
+      where: { barcode: { not: null }, status: 'ACTIVE' },
+      select: { id: true, barcode: true, productName: true, modelCode: true, marketPrice: true, shopPrice: true, desi: true, shippingCost: true },
+    });
+
+    let created = 0;
+    let skipped = 0;
+
+    for (const product of products) {
+      if (!product.barcode) { skipped++; continue; }
+      try {
+        const variant = await this.prisma.trendyolProductVariant.findUnique({ where: { barcode: product.barcode } });
+        if (!variant) {
+          const salePrice = new Prisma.Decimal(Number(product.marketPrice ?? product.shopPrice ?? 0));
+          const newVariant = await this.prisma.trendyolProductVariant.create({
+            data: {
+              productId: product.id,
+              barcode: product.barcode,
+              productName: product.productName,
+              currentModelCode: product.modelCode,
+              proposedModelCode: product.modelCode,
+              brand: 'Erhan Flowers',
+              trendyolSalePrice: salePrice,
+              n11SalePrice: salePrice,
+              hepsiburadaSalePrice: salePrice,
+              commissionPercent: new Prisma.Decimal(20),
+              status: 'ACTIVE',
+            },
+          });
+          await this.prisma.productCostDraft.create({
+            data: {
+              variantId: newVariant.id,
+              profitMarginPercent: new Prisma.Decimal(45),
+              vatPercent: new Prisma.Decimal(20),
+              marketplaceMarkupPercent: new Prisma.Decimal(25),
+              campaignBufferPercent: new Prisma.Decimal(10),
+              shippingCost: new Prisma.Decimal(Number(product.shippingCost ?? 0)),
+              desi: new Prisma.Decimal(Number(product.desi ?? 1)),
+              status: 'DRAFT',
+            },
+          });
+          created++;
+        } else {
+          if (!variant.productId) {
+            await this.prisma.trendyolProductVariant.update({ where: { id: variant.id }, data: { productId: product.id } });
+          }
+          const hasDraft = await this.prisma.productCostDraft.findUnique({ where: { variantId: variant.id } });
+          if (!hasDraft) {
+            await this.prisma.productCostDraft.create({
+              data: {
+                variantId: variant.id,
+                profitMarginPercent: new Prisma.Decimal(45),
+                vatPercent: new Prisma.Decimal(20),
+                marketplaceMarkupPercent: new Prisma.Decimal(25),
+                campaignBufferPercent: new Prisma.Decimal(10),
+                shippingCost: new Prisma.Decimal(Number(product.shippingCost ?? 0)),
+                desi: new Prisma.Decimal(Number(product.desi ?? 1)),
+                status: 'DRAFT',
+              },
+            });
+            created++;
+          } else {
+            skipped++;
+          }
+        }
+      } catch (err) {
+        this.logger.warn(`Backfill hatası (${product.barcode}): ${String(err)}`);
+        skipped++;
+      }
+    }
+
+    this.logger.log(`Maliyet taslağı backfill: ${created} oluşturuldu, ${skipped} atlandı`);
+    return { checked: products.length, created, skipped };
+  }
+
   async broadcastAll(): Promise<{ total: number; sent: number; skipped: number; errors: number }> {
     const products = await this.prisma.product.findMany({
       where: { status: 'ACTIVE' },
