@@ -205,15 +205,23 @@ export class TrendyolAdapter extends BaseIntegrationAdapter {
 
     const contentId = this.text(this.record(payload).contentId);
     const productResponse = contentId ? await this.requestContentUpdate(payload, contentId) : await this.requestProductUpsert(payload);
+    let batchRequestId = '';
     if (!productResponse.ok) {
-      return {
-        ok: false,
-        status: productResponse.status === 401 || productResponse.status === 403 ? 'MISSING_CREDENTIALS' : 'FAILED',
-        message: `Trendyol urun gonderimi basarisiz. HTTP ${productResponse.status}: ${await this.safeErrorText(productResponse)}`,
-      };
+      const errText = await this.safeErrorText(productResponse);
+      // Ürün zaten Trendyol'da mevcut → sadece fiyat/stok güncelle
+      if (errText.includes('recurring.product.create.not.allowed') || errText.includes('tekrarlı ürün oluşturma')) {
+        // batchRequestId boş kalır, sadece fiyat/stok güncelleniyor
+      } else {
+        return {
+          ok: false,
+          status: productResponse.status === 401 || productResponse.status === 403 ? 'MISSING_CREDENTIALS' : 'FAILED',
+          message: `Trendyol urun gonderimi basarisiz. HTTP ${productResponse.status}: ${errText}`,
+        };
+      }
+    } else {
+      const productBody = await productResponse.json().catch(() => ({} as Record<string, unknown>));
+      batchRequestId = this.text((productBody as Record<string, unknown>).batchRequestId);
     }
-    const productBody = await productResponse.json().catch(() => ({} as Record<string, unknown>));
-    const batchRequestId = this.text((productBody as Record<string, unknown>).batchRequestId);
 
     const priceResponse = await this.requestPriceAndInventory(payload);
     if (!priceResponse.ok) {
@@ -232,7 +240,9 @@ export class TrendyolAdapter extends BaseIntegrationAdapter {
       status: 'CONNECTED',
       message: batchRequestId
         ? `Trendyol urun, stok ve fiyat gonderimi kuyruga alindi (batchRequestId: ${batchRequestId}${listingUploadId ? `, listingUploadId: ${listingUploadId}` : ''}). Trendyol tarafinda asenkron olarak islenir; hemen goruntulenmeyebilir.`
-        : 'Trendyol urun, stok ve fiyat gonderimi tamamlandi.',
+        : listingUploadId
+          ? `Trendyol stok ve fiyat guncelleme kuyruga alindi (urun zaten mevcut, listingUploadId: ${listingUploadId}).`
+          : 'Trendyol stok ve fiyat guncelleme tamamlandi (urun zaten mevcuttu).',
       batchRequestId,
       listingUploadId,
     };
