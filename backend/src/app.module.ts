@@ -28,6 +28,7 @@ import { StaffTasksModule } from './staff-tasks/staff-tasks.module';
 import { ProductCenterModule } from './product-center/product-center.module';
 import { MarketIntelligenceModule } from './market-intelligence/market-intelligence.module';
 import { PublicCatalogModule } from './public-catalog/public-catalog.module';
+import { WebOrdersModule } from './web-orders/web-orders.module';
 import { SuppliersModule } from './suppliers/suppliers.module';
 import { EftModule } from './eft/eft.module';
 import { CustomerQuestionsModule } from './customer-questions/customer-questions.module';
@@ -69,6 +70,7 @@ import { CustomerQuestionsModule } from './customer-questions/customer-questions
     ProductCenterModule,
     MarketIntelligenceModule,
     PublicCatalogModule,
+    WebOrdersModule,
     SuppliersModule,
     EftModule,
     CustomerQuestionsModule,

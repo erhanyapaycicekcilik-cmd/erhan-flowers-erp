@@ -2338,3 +2338,57 @@ model PushSubscription {
   @@map("push_subscriptions")
 }
 
+
+enum WebOrderStatus {
+  PENDING
+  CONFIRMED
+  PREPARING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+enum WebOrderPaymentMethod {
+  WHATSAPP
+  EFT
+}
+
+model WebOrder {
+  id            Int                   @id @default(autoincrement())
+  orderNumber   String                @unique @map("order_number")
+  status        WebOrderStatus        @default(PENDING)
+  paymentMethod WebOrderPaymentMethod @default(WHATSAPP) @map("payment_method")
+  customerName  String                @map("customer_name")
+  customerPhone String                @map("customer_phone")
+  customerEmail String?               @map("customer_email")
+  city          String
+  district      String?
+  address       String
+  postalCode    String?               @map("postal_code")
+  note          String?
+  subtotal      Decimal               @db.Decimal(14, 2)
+  grandTotal    Decimal               @map("grand_total") @db.Decimal(14, 2)
+  items         WebOrderItem[]
+  createdAt     DateTime              @default(now()) @map("created_at")
+  updatedAt     DateTime              @updatedAt @map("updated_at")
+
+  @@index([status])
+  @@index([createdAt(sort: Desc)])
+  @@map("web_orders")
+}
+
+model WebOrderItem {
+  id           Int      @id @default(autoincrement())
+  orderId      Int      @map("order_id")
+  productId    String   @map("product_id")
+  productName  String   @map("product_name")
+  productSlug  String   @map("product_slug")
+  productImage String?  @map("product_image")
+  unitPrice    Decimal  @map("unit_price") @db.Decimal(14, 2)
+  quantity     Int
+  lineTotal    Decimal  @map("line_total") @db.Decimal(14, 2)
+  order        WebOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@map("web_order_items")
+}

@@ -61,7 +61,7 @@ export default function SiparisPage() {
     return Object.keys(e).length === 0
   }
 
-  function buildWhatsApp() {
+  function buildWhatsAppMsg(orderNumber: string) {
     const urunler = items
       .map((i) => `• ${i.name} x${i.quantity} — ${fmt(i.price * i.quantity)}`)
       .join('\n')
@@ -69,7 +69,7 @@ export default function SiparisPage() {
       ? `\n*Ödeme Yöntemi:* EFT/Havale (%3 indirim uygulandı)\n*Ödenecek Tutar:* ${fmt(genelToplam)}`
       : '\n*Ödeme Yöntemi:* Teslimatta Nakit / Havale'
     const msg = [
-      '🌿 *Erhan Flowers — Yeni Sipariş*',
+      `🌿 *Erhan Flowers — Yeni Sipariş #${orderNumber}*`,
       '',
       `*Ad Soyad:* ${form.ad} ${form.soyad}`,
       `*Telefon:* ${form.telefon}`,
@@ -89,22 +89,55 @@ export default function SiparisPage() {
     return `https://wa.me/905446546220?text=${encodeURIComponent(msg)}`
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!validate()) return
     if (items.length === 0) return
     setLoading(true)
 
-    const siparisKodu = Date.now().toString(36).toUpperCase()
-    const waUrl = buildWhatsApp()
+    try {
+      // 1. ERP backend'e sipariş kaydet
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/public/orders`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          paymentMethod: odemeYontemi === 'eft' ? 'EFT' : 'WHATSAPP',
+          customerName: `${form.ad} ${form.soyad}`,
+          customerPhone: form.telefon,
+          customerEmail: form.email || undefined,
+          city: form.sehir,
+          district: form.ilce || undefined,
+          address: form.adres,
+          postalCode: form.postaKodu || undefined,
+          note: form.not || undefined,
+          items: items.map((i) => ({
+            productId: String(i.id),
+            productName: i.name,
+            productSlug: i.slug,
+            productImage: i.image || undefined,
+            unitPrice: i.price,
+            quantity: i.quantity,
+          })),
+        }),
+      })
 
-    if (odemeYontemi === 'eft') {
-      // EFT: önce WhatsApp'a bildir, sonra dekont yükleme sayfasına git
+      const data = res.ok ? await res.json() : { orderNumber: Date.now().toString(36).toUpperCase() }
+      const orderNumber = data.orderNumber || 'WEB-' + Date.now().toString(36).toUpperCase()
+
+      // 2. WhatsApp'a bildir
+      const waUrl = buildWhatsAppMsg(orderNumber)
       window.open(waUrl, '_blank')
       clearCart()
-      router.push(`/dekont-yukle?kod=${siparisKodu}&tutar=${Math.round(genelToplam)}`)
-    } else {
-      // WhatsApp ile normal akış
+
+      if (odemeYontemi === 'eft') {
+        router.push(`/dekont-yukle?kod=${orderNumber}&tutar=${Math.round(genelToplam)}`)
+      } else {
+        router.push('/siparis-tamamlandi')
+      }
+    } catch {
+      // backend erişilemese de WhatsApp akışı çalışır
+      const orderNumber = 'WEB-' + Date.now().toString(36).toUpperCase()
+      const waUrl = buildWhatsAppMsg(orderNumber)
       window.open(waUrl, '_blank')
       clearCart()
       router.push('/siparis-tamamlandi')
