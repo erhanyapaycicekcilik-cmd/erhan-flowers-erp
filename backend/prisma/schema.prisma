@@ -450,6 +450,8 @@ model Product {
   potType              String?                 @map("pot_type")
   potSize              String?                 @map("pot_size")
   stemCount            Int?                    @map("stem_count")
+  branchCount          Int?                    @map("branch_count")
+  leavesPerBranch      Int?                    @map("leaves_per_branch")
   leafCount            Int?                    @map("leaf_count")
   status               RecordStatus            @default(ACTIVE)
   description          String?

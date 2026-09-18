@@ -253,7 +253,13 @@ const emptyForm = {
   potType: '',
   potSize: '',
   stemCount: '',
+  branchCount: '',
+  leavesPerBranch: '',
   leafCount: '',
+  potW: '',
+  potD: '',
+  potH: '',
+  potVolumeLitre: '',
 };
 
 const emptyQuickForm: QuickForm = {
@@ -872,7 +878,20 @@ export default function ProductsPage() {
       potType: (entry as any).potType || '',
       potSize: (entry as any).potSize || '',
       stemCount: (entry as any).stemCount ? String((entry as any).stemCount) : '',
+      branchCount: (entry as any).branchCount ? String((entry as any).branchCount) : '',
+      leavesPerBranch: (entry as any).leavesPerBranch ? String((entry as any).leavesPerBranch) : '',
       leafCount: (entry as any).leafCount ? String((entry as any).leafCount) : '',
+      ...(() => {
+        const ps = (entry as any).potSize || '';
+        const nums = ps.match(/\d+(\.\d+)?/g)?.map(Number) || [];
+        const [w=0,d=0,h=0] = nums;
+        return {
+          potW: w ? String(w) : '',
+          potD: d ? String(d) : '',
+          potH: h ? String(h) : '',
+          potVolumeLitre: w&&d&&h ? ((w*d*h)/1000).toFixed(1) : '',
+        };
+      })(),
     });
     setStep(0);
     loadCost(entry.variantId).catch(() => setCostDetail(null));
@@ -897,6 +916,8 @@ export default function ProductsPage() {
         hepsiburadaSalePrice: Number(form.hepsiburadaSalePrice) || Number(form.salePrice),
         commissionPercent: Number(form.commissionPercent),
         stemCount: (form as any).stemCount ? Number((form as any).stemCount) : undefined,
+        branchCount: (form as any).branchCount ? Number((form as any).branchCount) : undefined,
+        leavesPerBranch: (form as any).leavesPerBranch ? Number((form as any).leavesPerBranch) : undefined,
         leafCount: (form as any).leafCount ? Number((form as any).leafCount) : undefined,
       },
     });
@@ -1978,9 +1999,45 @@ export default function ProductsPage() {
                 {/* Fiziksel özellikler */}
                 <Field label="Ürün boyu"><input className="field" value={(form as any).productHeight || ''} onChange={(e) => update('productHeight' as any, e.target.value)} placeholder="180 cm" /></Field>
                 <Field label="Gövde sayısı"><input className="field" type="number" min="0" value={(form as any).stemCount || ''} onChange={(e) => update('stemCount' as any, e.target.value)} placeholder="3" /></Field>
-                <Field label="Yaprak sayısı"><input className="field" type="number" min="0" value={(form as any).leafCount || ''} onChange={(e) => update('leafCount' as any, e.target.value)} placeholder="120" /></Field>
+                <Field label="Dal sayısı"><input className="field" type="number" min="0" value={(form as any).branchCount || ''} onChange={(e) => {
+                  update('branchCount' as any, e.target.value);
+                  const b = Number(e.target.value); const l = Number((form as any).leavesPerBranch);
+                  if (b && l) update('leafCount' as any, String(b * l));
+                }} placeholder="12" /></Field>
+                <Field label="Dal başına yaprak"><input className="field" type="number" min="0" value={(form as any).leavesPerBranch || ''} onChange={(e) => {
+                  update('leavesPerBranch' as any, e.target.value);
+                  const b = Number((form as any).branchCount); const l = Number(e.target.value);
+                  if (b && l) update('leafCount' as any, String(b * l));
+                }} placeholder="36" /></Field>
+                <Field label={`Yaprak sayısı${(form as any).branchCount && (form as any).leavesPerBranch ? ` (${(form as any).branchCount}×${(form as any).leavesPerBranch}=${Number((form as any).branchCount)*Number((form as any).leavesPerBranch)})` : ''}`}><input className="field" type="number" min="0" value={(form as any).leafCount || ''} onChange={(e) => update('leafCount' as any, e.target.value)} placeholder="432" /></Field>
                 <Field label="Saksı tipi"><input className="field" value={(form as any).potType || ''} onChange={(e) => update('potType' as any, e.target.value)} placeholder="Kare Saksı" /></Field>
-                <Field label="Saksı ölçüsü"><input className="field" value={(form as any).potSize || ''} onChange={(e) => update('potSize' as any, e.target.value)} placeholder="28×28 cm" /></Field>
+                <div>
+                  <label className="label">Saksı ebatları (cm)</label>
+                  <div className="flex items-center gap-1">
+                    <input className="field w-16 text-center" type="number" min="0" value={(form as any).potW || ''} onChange={(e) => {
+                      update('potW' as any, e.target.value);
+                      const w=Number(e.target.value),d=Number((form as any).potD||e.target.value),h=Number((form as any).potH);
+                      const size=[w,d,h].filter(Boolean).map(n=>n+'cm').join('×'); update('potSize' as any, size);
+                      if(w&&d&&h) update('potVolumeLitre' as any, ((w*d*h)/1000).toFixed(1));
+                    }} placeholder="G" title="Genişlik" />
+                    <span className="text-gray-400 text-xs">×</span>
+                    <input className="field w-16 text-center" type="number" min="0" value={(form as any).potD || ''} onChange={(e) => {
+                      update('potD' as any, e.target.value);
+                      const w=Number((form as any).potW),d=Number(e.target.value),h=Number((form as any).potH);
+                      const size=[w,d,h].filter(Boolean).map(n=>n+'cm').join('×'); update('potSize' as any, size);
+                      if(w&&d&&h) update('potVolumeLitre' as any, ((w*d*h)/1000).toFixed(1));
+                    }} placeholder="D" title="Derinlik" />
+                    <span className="text-gray-400 text-xs">×</span>
+                    <input className="field w-16 text-center" type="number" min="0" value={(form as any).potH || ''} onChange={(e) => {
+                      update('potH' as any, e.target.value);
+                      const w=Number((form as any).potW),d=Number((form as any).potD),h=Number(e.target.value);
+                      const size=[w,d,h].filter(Boolean).map(n=>n+'cm').join('×'); update('potSize' as any, size);
+                      if(w&&d&&h) update('potVolumeLitre' as any, ((w*d*h)/1000).toFixed(1));
+                    }} placeholder="Y" title="Yükseklik" />
+                    {(form as any).potVolumeLitre && <span className="text-xs font-semibold text-emerald-700 whitespace-nowrap">= {(form as any).potVolumeLitre} L</span>}
+                  </div>
+                  <input className="field mt-1 text-xs" value={(form as any).potSize || ''} onChange={(e) => update('potSize' as any, e.target.value)} placeholder="28×28×30cm (düzenlenebilir)" />
+                </div>
                 <div className="md:col-span-2 xl:col-span-4">
                   <div className="rounded-md border border-line bg-slate-50 p-4">
                     <div className="flex flex-wrap items-center justify-between gap-3">
