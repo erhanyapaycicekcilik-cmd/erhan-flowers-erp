@@ -1505,7 +1505,10 @@ export default function ProductsPage() {
       potSize: (form as any).potSize || extractSizeText([form.colorVariant, ...potNames].join(' ')),
       fillerMaterial,
       stemCount: (form as any).stemCount || undefined,
+      branchCount: (form as any).branchCount || undefined,
+      leavesPerBranch: (form as any).leavesPerBranch || undefined,
       leafCount: (form as any).leafCount || undefined,
+      potVolumeLitre: (form as any).potVolumeLitre || undefined,
     };
 
     try {
