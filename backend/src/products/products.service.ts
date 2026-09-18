@@ -394,26 +394,42 @@ export class ProductsService {
   }
 
   async broadcastAll(): Promise<{ total: number; sent: number; skipped: number; errors: number }> {
+    this.invalidatePlatformCache();
+    const platformNames = await this.getConnectedPlatforms();
+    const connections = platformNames.map((platform) => ({ platform }));
+
+    type Payload = { barcode: string; modelCode: string; salePrice: number; listPrice: number; stockQuantity: number };
+    const payloadMap = new Map<string, Payload>(); // barcode/modelCode → payload (tekrar eklemeyi önle)
+    let skipped = 0;
+
+    // 1) Trendyol varyantları — bunlar ana katalog (425 aktif ürün)
+    const variants = await this.prisma.trendyolProductVariant.findMany({
+      where: { status: 'ACTIVE' },
+      include: { productCostDraft: true },
+    });
+
+    for (const v of variants) {
+      const key = v.barcode ?? v.currentModelCode ?? v.supplierStockCode;
+      if (!key) { skipped++; continue; }
+      const salePrice = Number(v.productCostDraft?.salePrice ?? v.trendyolSalePrice ?? 0);
+      if (!salePrice) { skipped++; continue; }
+      const stockQuantity = Number(v.stockQuantity ?? 0);
+      const listPrice = Math.ceil(salePrice * 1.1);
+      payloadMap.set(key, { barcode: v.barcode ?? key, modelCode: v.currentModelCode ?? key, salePrice, listPrice, stockQuantity });
+    }
+
+    // 2) Ürünler tablosu — Trendyol'da olmayan ürünleri de kapsa
     const products = await this.prisma.product.findMany({
       where: { status: 'ACTIVE' },
       select: { id: true, barcode: true, modelCode: true, marketPrice: true, listPrice: true, shopPrice: true, stockQuantity: true },
     });
 
-    this.invalidatePlatformCache(); // toplu gönderimde her zaman taze bağlantı listesi al
-    const platformNames = await this.getConnectedPlatforms();
-    const connections = platformNames.map((platform) => ({ platform }));
-
-    if (connections.length === 0) return { total: products.length, sent: 0, skipped: products.length, errors: 0 };
-
-    // Geçerli ürünleri payload'a çevir, fiyatsız/kodsuzları atla
-    type Payload = { barcode: string; modelCode: string; salePrice: number; listPrice: number; stockQuantity: number };
-    const payloads: Payload[] = [];
-    let skipped = 0;
     for (const product of products) {
-      if (!product.barcode && !product.modelCode) { skipped++; continue; }
+      const key = product.barcode ?? product.modelCode;
+      if (!key || payloadMap.has(key)) continue; // Trendyol varyantında varsa zaten eklendi
       const salePrice = Number(product.marketPrice ?? product.shopPrice ?? 0);
       if (!salePrice) { skipped++; continue; }
-      payloads.push({
+      payloadMap.set(key, {
         barcode: product.barcode ?? product.modelCode ?? '',
         modelCode: product.modelCode ?? product.barcode ?? '',
         salePrice,
@@ -421,6 +437,11 @@ export class ProductsService {
         stockQuantity: Number(product.stockQuantity ?? 0),
       });
     }
+
+    const payloads = Array.from(payloadMap.values());
+    const total = payloads.length + skipped;
+
+    if (connections.length === 0) return { total, sent: 0, skipped: total, errors: 0 };
 
     let sent = 0; let errors = 0;
     const BATCH = 10;
@@ -441,11 +462,10 @@ export class ProductsService {
         errors += failCount;
       }
 
-      // Batch arası rate-limit koruması
       if (i + BATCH < payloads.length) await new Promise((res) => setTimeout(res, 500));
     }
 
-    return { total: products.length, sent, skipped, errors };
+    return { total, sent, skipped, errors };
   }
 
   passive(id: number) {
