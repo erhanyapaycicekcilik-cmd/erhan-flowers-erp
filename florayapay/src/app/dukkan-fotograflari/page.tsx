@@ -19,11 +19,9 @@ const photos = [
   { src: 'https://images.unsplash.com/photo-1501004318641-b39e6451bec6?w=800&q=80', alt: 'Yapay bambu ve separatörler' },
 ]
 
-// Google Maps Place ID for Erhan Flowers Manavgat
-// Replace with real place ID once confirmed: use maps.google.com search → share → embed
-const GOOGLE_MAPS_EMBED = 'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3192.0!2d31.443!3d36.777!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0%3A0x0!2zMzbCsDQ2JzM3LjIiTiAzMcKwMjYnMzQuOCJF!5e0!3m2!1str!2str!4v1700000000000!5m2!1str!2str'
-const GOOGLE_MAPS_URL = 'https://maps.google.com/?q=Erhan+Flowers+Manavgat+Antalya'
-const GOOGLE_REVIEW_URL = 'https://search.google.com/local/writereview?placeid=ChIJ_erhan_flowers_place_id'
+const GOOGLE_MAPS_URL = 'https://www.google.com/maps/place/Erhan+Flowers+Yapay+%C3%87i%C3%A7ek+ve+Dekorasyon/@36.7997103,31.4212618,17z'
+const GOOGLE_MAPS_EMBED = 'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3133.8!2d31.4212618!3d36.7997103!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x14c359f611f5a7a9%3A0x6c7f89ab6f52f16d!2sErhan+Flowers+Yapay+%C3%87i%C3%A7ek+ve+Dekorasyon!5e0!3m2!1str!2str!4v1726666000000!5m2!1str!2str'
+const GOOGLE_REVIEW_URL = 'https://search.google.com/local/writereview?placeid=ChIJqaf1EfZZwxRt8VJvq4l_bA'
 
 export default function DukkanFotografPage() {
   return (
@@ -85,17 +83,17 @@ export default function DukkanFotografPage() {
                 Yol Tarifi Al →
               </a>
             </div>
-            <div className="aspect-video w-full bg-[#E0DDD4] flex items-center justify-center text-[#8C8A82]">
-              {/* Google Maps embed — replace src with real embed URL from Google Maps share */}
-              <div className="text-center p-8">
-                <p className="text-4xl mb-3">📍</p>
-                <p className="font-medium text-[#3A3A34]">Manavgat, Antalya</p>
-                <p className="text-sm mt-1">Sarılar Mah. Cumhuriyet Cd. 2038 Sk. No:52/1/2</p>
-                <a href={GOOGLE_MAPS_URL} target="_blank" rel="noopener noreferrer"
-                  className="inline-block mt-4 bg-[#4285F4] text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-blue-600 transition-colors">
-                  Google Maps&apos;te Aç
-                </a>
-              </div>
+            <div className="aspect-video w-full">
+              <iframe
+                src={GOOGLE_MAPS_EMBED}
+                width="100%"
+                height="100%"
+                style={{ border: 0 }}
+                allowFullScreen
+                loading="lazy"
+                referrerPolicy="no-referrer-when-downgrade"
+                title="Erhan Flowers Manavgat Konum"
+              />
             </div>
             <div className="p-4 grid grid-cols-3 divide-x divide-[#E0DDD4] text-center text-sm">
               <div className="px-3">
