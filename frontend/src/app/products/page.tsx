@@ -249,6 +249,11 @@ const emptyForm = {
   commissionPercent: 20,
   images: [] as string[],
   status: 'ACTIVE' as 'ACTIVE' | 'PASSIVE',
+  productHeight: '',
+  potType: '',
+  potSize: '',
+  stemCount: '',
+  leafCount: '',
 };
 
 const emptyQuickForm: QuickForm = {
@@ -863,6 +868,11 @@ export default function ProductsPage() {
       commissionPercent: Number(entry.commissionPercent || 20),
       images: entry.images ?? [],
       status: entry.status,
+      productHeight: (entry as any).productHeight || '',
+      potType: (entry as any).potType || '',
+      potSize: (entry as any).potSize || '',
+      stemCount: (entry as any).stemCount ? String((entry as any).stemCount) : '',
+      leafCount: (entry as any).leafCount ? String((entry as any).leafCount) : '',
     });
     setStep(0);
     loadCost(entry.variantId).catch(() => setCostDetail(null));
@@ -886,6 +896,8 @@ export default function ProductsPage() {
         n11SalePrice: Number(form.n11SalePrice) || Number(form.salePrice),
         hepsiburadaSalePrice: Number(form.hepsiburadaSalePrice) || Number(form.salePrice),
         commissionPercent: Number(form.commissionPercent),
+        stemCount: (form as any).stemCount ? Number((form as any).stemCount) : undefined,
+        leafCount: (form as any).leafCount ? Number((form as any).leafCount) : undefined,
       },
     });
     const costSaved = costDetail ? await saveCostDraftForVariant(result.entry.variantId, false) : false;
@@ -1467,10 +1479,12 @@ export default function ProductsPage() {
     const fillerMaterial = materialNames.find((name) => /taş|tas|alçı|alci|strafor|dolgu/i.test(name)) ?? '';
     const payload = {
       productName: seedProductName,
-      productHeight: extractSizeText(seedProductName),
-      potType: potNames[0] || form.colorVariant,
-      potSize: extractSizeText([form.colorVariant, ...potNames].join(' ')),
+      productHeight: (form as any).productHeight || extractSizeText(seedProductName),
+      potType: (form as any).potType || potNames[0] || form.colorVariant,
+      potSize: (form as any).potSize || extractSizeText([form.colorVariant, ...potNames].join(' ')),
       fillerMaterial,
+      stemCount: (form as any).stemCount || undefined,
+      leafCount: (form as any).leafCount || undefined,
     };
 
     try {
@@ -1961,6 +1975,12 @@ export default function ProductsPage() {
                 </div>
                 <Field label="Kategori"><select className="field" value={form.categoryId} onChange={(event) => update('categoryId', event.target.value)}><option value="">Seçin</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></Field>
                 <Field label="Renk / çeşit"><input className="field" value={form.colorVariant} onChange={(event) => update('colorVariant', event.target.value)} /></Field>
+                {/* Fiziksel özellikler */}
+                <Field label="Ürün boyu"><input className="field" value={(form as any).productHeight || ''} onChange={(e) => update('productHeight' as any, e.target.value)} placeholder="180 cm" /></Field>
+                <Field label="Gövde sayısı"><input className="field" type="number" min="0" value={(form as any).stemCount || ''} onChange={(e) => update('stemCount' as any, e.target.value)} placeholder="3" /></Field>
+                <Field label="Yaprak sayısı"><input className="field" type="number" min="0" value={(form as any).leafCount || ''} onChange={(e) => update('leafCount' as any, e.target.value)} placeholder="120" /></Field>
+                <Field label="Saksı tipi"><input className="field" value={(form as any).potType || ''} onChange={(e) => update('potType' as any, e.target.value)} placeholder="Kare Saksı" /></Field>
+                <Field label="Saksı ölçüsü"><input className="field" value={(form as any).potSize || ''} onChange={(e) => update('potSize' as any, e.target.value)} placeholder="28×28 cm" /></Field>
                 <div className="md:col-span-2 xl:col-span-4">
                   <div className="rounded-md border border-line bg-slate-50 p-4">
                     <div className="flex flex-wrap items-center justify-between gap-3">

@@ -27,6 +27,11 @@ type ProductPayload = {
   packageDimensions?: string;
   warrantyMonths?: number;
   warrantyType?: string;
+  productHeight?: string;
+  potType?: string;
+  potSize?: string;
+  stemCount?: number;
+  leafCount?: number;
   status?: 'ACTIVE' | 'PASSIVE';
   description?: string;
 };
@@ -115,6 +120,11 @@ export class ProductsService {
           packageDimensions: data.packageDimensions,
           warrantyMonths: data.warrantyMonths ?? 0,
           warrantyType: data.warrantyType,
+          productHeight: data.productHeight,
+          potType: data.potType,
+          potSize: data.potSize,
+          stemCount: data.stemCount,
+          leafCount: data.leafCount,
           status: data.status ?? 'ACTIVE',
           description: data.description,
         },
@@ -216,6 +226,11 @@ export class ProductsService {
     if (hasKey('packageDimensions') || hasKey('package_dimensions')) patch['packageDimensions'] = data.packageDimensions;
     if (hasKey('warrantyMonths') || hasKey('warranty_months')) patch['warrantyMonths'] = data.warrantyMonths;
     if (hasKey('warrantyType') || hasKey('warranty_type')) patch['warrantyType'] = data.warrantyType;
+    if (hasKey('productHeight') || hasKey('product_height')) patch['productHeight'] = data.productHeight;
+    if (hasKey('potType') || hasKey('pot_type')) patch['potType'] = data.potType;
+    if (hasKey('potSize') || hasKey('pot_size')) patch['potSize'] = data.potSize;
+    if (hasKey('stemCount') || hasKey('stem_count')) patch['stemCount'] = data.stemCount;
+    if (hasKey('leafCount') || hasKey('leaf_count')) patch['leafCount'] = data.leafCount;
     if (hasKey('status')) patch['status'] = data.status;
     if (hasKey('description')) patch['description'] = data.description;
 
@@ -539,6 +554,11 @@ export class ProductsService {
       packageDimensions: this.text(body.packageDimensions ?? body.package_dimensions),
       warrantyMonths: this.toInt(body.warrantyMonths ?? body.warranty_months, 0),
       warrantyType: this.text(body.warrantyType ?? body.warranty_type),
+      productHeight: this.text(body.productHeight ?? body.product_height),
+      potType: this.text(body.potType ?? body.pot_type),
+      potSize: this.text(body.potSize ?? body.pot_size),
+      stemCount: body.stemCount != null || body.stem_count != null ? this.toInt(body.stemCount ?? body.stem_count, 0) || undefined : undefined,
+      leafCount: body.leafCount != null || body.leaf_count != null ? this.toInt(body.leafCount ?? body.leaf_count, 0) || undefined : undefined,
       status: body.status === 'PASSIVE' ? 'PASSIVE' : 'ACTIVE',
       description: body.description ? String(body.description) : undefined,
     };

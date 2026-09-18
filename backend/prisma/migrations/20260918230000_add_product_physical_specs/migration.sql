@@ -1,0 +1,5 @@
+ALTER TABLE "products" ADD COLUMN IF NOT EXISTS "product_height" TEXT;
+ALTER TABLE "products" ADD COLUMN IF NOT EXISTS "pot_type" TEXT;
+ALTER TABLE "products" ADD COLUMN IF NOT EXISTS "pot_size" TEXT;
+ALTER TABLE "products" ADD COLUMN IF NOT EXISTS "stem_count" INTEGER;
+ALTER TABLE "products" ADD COLUMN IF NOT EXISTS "leaf_count" INTEGER;
