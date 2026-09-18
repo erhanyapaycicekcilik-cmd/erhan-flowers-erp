@@ -7,6 +7,33 @@ import { ShoppingCart, Menu, X, Search } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useCart } from '@/hooks/useCart'
 
+const announcements = [
+  '🚚 1.000 TL ve üzeri ÜCRETSİZ kargo  ·  📞 0544 654 62 20',
+  '⭐ Google\'da 4.9 yıldız — 127 yorum  ·  14 gün iade garantisi',
+  '🔥 Bu hafta 200+ sipariş gönderildi',
+  '💬 WhatsApp\'tan sipariş — anında yanıt',
+  '🌿 Trendyol\'a göre %15 daha uygun fiyat',
+]
+
+function AnnouncementBar() {
+  const [idx, setIdx] = useState(0)
+  const [vis, setVis] = useState(true)
+  useEffect(() => {
+    const t = setInterval(() => {
+      setVis(false)
+      setTimeout(() => { setIdx(i => (i + 1) % announcements.length); setVis(true) }, 350)
+    }, 3500)
+    return () => clearInterval(t)
+  }, [])
+  return (
+    <div className="bg-[#0D1510] text-[#EAE6DC] text-xs py-2 text-center overflow-hidden h-7 flex items-center justify-center">
+      <p className={`transition-all duration-300 ${vis ? 'opacity-100' : 'opacity-0'}`}>
+        {announcements[idx]}
+      </p>
+    </div>
+  )
+}
+
 const navLinks = [
   { href: '/urunler', label: 'Tüm Ürünler' },
   { href: '/urunler?kategori=yapay-agac-yesil', label: 'Yapay Ağaç' },
@@ -51,16 +78,8 @@ export function Header() {
 
   return (
     <header className="sticky top-0 z-50 bg-[#F4F2EC] border-b border-[#D6D2C4]">
-      {/* Duyuru çubuğu */}
-      <div className="bg-[#0D1510] text-[#EAE6DC] text-xs py-2 text-center tracking-widest uppercase">
-        <span>Ücretsiz kargo — 1.000 TL ve üzeri &nbsp;·&nbsp; 14 gün iade garantisi</span>
-        <a
-          href="tel:+905446546220"
-          className="ml-6 underline underline-offset-2 opacity-70 hover:opacity-100 transition-opacity"
-        >
-          0544 654 62 20
-        </a>
-      </div>
+      {/* Dönen duyuru çubuğu */}
+      <AnnouncementBar />
 
       {/* Logo satırı */}
       <div className="flex items-center justify-between px-4 md:px-6 py-3">

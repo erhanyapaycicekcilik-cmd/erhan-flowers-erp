@@ -1,42 +1,36 @@
 import type { MetadataRoute } from 'next'
+import { getProducts } from '@/lib/api/catalog'
 
-const SITE_URL = process.env.SITE_URL || 'https://erhanflowers.com'
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8101'
+const BASE = 'https://florayapaycicek.com'
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const staticPages: MetadataRoute.Sitemap = [
-    { url: SITE_URL, lastModified: new Date(), changeFrequency: 'daily', priority: 1.0 },
-    { url: `${SITE_URL}/urunler`, lastModified: new Date(), changeFrequency: 'daily', priority: 0.9 },
-    { url: `${SITE_URL}/hakkimizda`, lastModified: new Date(), changeFrequency: 'monthly', priority: 0.5 },
-    { url: `${SITE_URL}/iletisim`, lastModified: new Date(), changeFrequency: 'monthly', priority: 0.6 },
-    { url: `${SITE_URL}/kargo-ve-iade`, lastModified: new Date(), changeFrequency: 'monthly', priority: 0.4 },
-    { url: `${SITE_URL}/iletisim`, lastModified: new Date(), changeFrequency: 'monthly', priority: 0.6 },
-    { url: `${SITE_URL}/odeme-kosullari`, lastModified: new Date(), changeFrequency: 'monthly', priority: 0.4 },
-    { url: `${SITE_URL}/gizlilik-politikasi`, lastModified: new Date(), changeFrequency: 'yearly', priority: 0.3 },
-    { url: `${SITE_URL}/kullanim-kosullari`, lastModified: new Date(), changeFrequency: 'yearly', priority: 0.3 },
-    { url: `${SITE_URL}/cerez-politikasi`, lastModified: new Date(), changeFrequency: 'yearly', priority: 0.2 },
-    { url: `${SITE_URL}/mesafeli-satis-sozlesmesi`, lastModified: new Date(), changeFrequency: 'yearly', priority: 0.3 },
+    { url: BASE, lastModified: new Date(), changeFrequency: 'daily', priority: 1.0 },
+    { url: `${BASE}/urunler`, lastModified: new Date(), changeFrequency: 'daily', priority: 0.9 },
+    { url: `${BASE}/yapay-cicek-bakimi`, changeFrequency: 'monthly', priority: 0.7 },
+    { url: `${BASE}/sss`, changeFrequency: 'monthly', priority: 0.6 },
+    { url: `${BASE}/referanslarimiz`, changeFrequency: 'monthly', priority: 0.6 },
+    { url: `${BASE}/projelerimiz`, changeFrequency: 'monthly', priority: 0.6 },
+    { url: `${BASE}/dukkan-fotograflari`, changeFrequency: 'monthly', priority: 0.6 },
+    { url: `${BASE}/agac-boyut-rehberi`, changeFrequency: 'monthly', priority: 0.6 },
+    { url: `${BASE}/doviz-kurlari`, changeFrequency: 'hourly', priority: 0.4 },
+    { url: `${BASE}/mekaninizi-gonderin`, changeFrequency: 'monthly', priority: 0.5 },
+    { url: `${BASE}/oneri-istek`, changeFrequency: 'monthly', priority: 0.4 },
+    { url: `${BASE}/sepet`, changeFrequency: 'never', priority: 0.3 },
   ]
 
-  // Dinamik ürün sayfaları
   let productPages: MetadataRoute.Sitemap = []
   try {
-    const res = await fetch(`${API_URL}/public/catalog/products?limit=1000&page=1`, {
-      next: { revalidate: 3600 },
-    })
-    if (res.ok) {
-      const data = await res.json() as { products: Array<{ slug: string }> }
-      productPages = data.products
-        .filter((p) => p.slug)
-        .map((p) => ({
-          url: `${SITE_URL}/urun/${p.slug}`,
-          lastModified: new Date(),
-          changeFrequency: 'weekly' as const,
-          priority: 0.8,
-        }))
-    }
+    // Fetch all products (up to 500) for sitemap
+    const { products } = await getProducts({ page: 1, sort: 'newest' })
+    productPages = products.map(p => ({
+      url: `${BASE}/urun/${p.slug}`,
+      lastModified: new Date(),
+      changeFrequency: 'weekly' as const,
+      priority: 0.8,
+    }))
   } catch {
-    // API erişilemezse sadece statik sayfalar döner
+    // If product fetch fails, sitemap still works with static pages
   }
 
   return [...staticPages, ...productPages]

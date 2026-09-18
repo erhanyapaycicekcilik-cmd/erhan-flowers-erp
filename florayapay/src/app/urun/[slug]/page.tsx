@@ -12,6 +12,11 @@ import { formatPrice } from '@/lib/utils/format'
 import { ProductImageGallery } from '@/components/product/ProductImageGallery'
 import { AddToCartButton } from '@/components/product/AddToCartButton'
 import { ProductTracker } from '@/components/product/ProductTracker'
+import { UrgencyBar } from '@/components/product/UrgencyBar'
+import { DeliveryEstimate } from '@/components/product/DeliveryEstimate'
+import { WhatsAppOrderButton } from '@/components/product/WhatsAppOrderButton'
+import { StickyMobileCTA } from '@/components/product/StickyMobileCTA'
+import { RelatedProducts } from '@/components/product/RelatedProducts'
 
 const SITE_URL = process.env.SITE_URL || 'https://erhanflowers.com'
 
@@ -157,8 +162,11 @@ export default async function ProductDetailPage({ params }: PageProps) {
                 </p>
               </div>
 
+              {/* Aciliyet çubuğu */}
+              <UrgencyBar productId={String(product.id)} />
+
               {/* Sepete ekle */}
-              <div className="mt-6">
+              <div className="mt-2 space-y-3">
                 <AddToCartButton
                   product={{
                     id: String(product.id),
@@ -170,7 +178,23 @@ export default async function ProductDetailPage({ params }: PageProps) {
                   disabled={!product.inStock}
                   size="lg"
                 />
+                <WhatsAppOrderButton
+                  productName={product.name}
+                  price={product.sitePrice}
+                  slug={params.slug}
+                />
               </div>
+
+              {/* Teslimat tahmini */}
+              <div className="mt-4">
+                <DeliveryEstimate />
+              </div>
+
+              {/* Sticky mobil CTA */}
+              <StickyMobileCTA
+                product={{ id: String(product.id), name: product.name, price: product.sitePrice, image: product.mainImage, slug: params.slug }}
+                inStock={product.inStock}
+              />
 
               {/* Güven göstergeleri */}
               <div className="mt-5 grid grid-cols-3 gap-3">
@@ -222,6 +246,11 @@ export default async function ProductDetailPage({ params }: PageProps) {
               )}
             </div>
           </div>
+        </div>
+
+        {/* Benzer ürünler */}
+        <div className="max-w-screen-2xl mx-auto px-4 pb-12">
+          <RelatedProducts category={product.category ?? undefined} currentSlug={params.slug} />
         </div>
       </main>
 
