@@ -192,7 +192,7 @@ export default async function ProductDetailPage({ params }: PageProps) {
 
               {/* Sticky mobil CTA */}
               <StickyMobileCTA
-                product={{ id: String(product.id), name: product.name, price: product.sitePrice, image: product.mainImage, slug: params.slug }}
+                product={{ id: String(product.id), name: product.name, price: product.sitePrice, image: product.mainImage ?? '', slug: params.slug }}
                 inStock={product.inStock}
               />
 
