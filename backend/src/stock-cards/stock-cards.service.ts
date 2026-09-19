@@ -1098,6 +1098,10 @@ export class StockCardsService {
       await tx.$executeRaw`UPDATE stock_reservations SET stock_card_id = ${targetId} WHERE stock_card_id = ${sourceId}`;
       await tx.$executeRaw`UPDATE bambu_cost_rules SET leaf_stock_card_id = ${targetId} WHERE leaf_stock_card_id = ${sourceId}`;
       await tx.$executeRaw`UPDATE bambu_cost_rules SET trunk_stock_card_id = ${targetId} WHERE trunk_stock_card_id = ${sourceId}`;
+      await tx.$executeRaw`UPDATE product_pot_items SET stock_card_id = ${targetId} WHERE stock_card_id = ${sourceId}`;
+      await tx.$executeRaw`UPDATE knowledge_rules SET stock_card_id = ${targetId} WHERE stock_card_id = ${sourceId}`;
+      await tx.$executeRaw`UPDATE knowledge_recipe_items SET stock_card_id = ${targetId} WHERE stock_card_id = ${sourceId}`;
+      await tx.$executeRaw`UPDATE knowledge_pot_profiles SET stock_card_id = ${targetId} WHERE stock_card_id = ${sourceId}`;
 
       // Stok miktarlarını hedefte topla
       const newQty = Number(target.stockQuantity) + Number(source.stockQuantity);
