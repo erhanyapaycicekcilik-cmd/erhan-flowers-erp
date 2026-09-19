@@ -60,7 +60,8 @@ export default function HizliSatisPage() {
   }
 
   function updatePrice(id: number, price: string) {
-    setCart(prev => prev.map(i => i.id === id ? { ...i, unitPrice: Number(price) || 0 } : i));
+    const val = Number(price);
+    setCart(prev => prev.map(i => i.id === id ? { ...i, unitPrice: val > 0 ? val : 0 } : i));
   }
 
   function updateQty(id: number, delta: number) {
@@ -75,6 +76,11 @@ export default function HizliSatisPage() {
 
   async function completeSale() {
     if (!cart.length) return;
+    const zeroPriceItems = cart.filter(i => !i.unitPrice || i.unitPrice <= 0);
+    if (zeroPriceItems.length > 0) {
+      setError(`Fiyat sıfır olamaz: ${zeroPriceItems.map(i => i.productName).join(', ')}`);
+      return;
+    }
     setSaving(true);
     setError(null);
     setSuccess(null);
@@ -178,8 +184,8 @@ export default function HizliSatisPage() {
               <div className="flex items-center gap-1">
                 <input
                   type="number"
-                  min="0"
-                  className="w-24 border border-slate-200 rounded px-2 py-1 text-sm text-right font-semibold focus:outline-none focus:ring-2 focus:ring-brand/30"
+                  min="1"
+                  className={`w-24 border rounded px-2 py-1 text-sm text-right font-semibold focus:outline-none focus:ring-2 focus:ring-brand/30 ${item.unitPrice <= 0 ? 'border-red-400 bg-red-50 text-red-700' : 'border-slate-200'}`}
                   value={item.unitPrice}
                   onChange={e => updatePrice(item.id, e.target.value)}
                 />
