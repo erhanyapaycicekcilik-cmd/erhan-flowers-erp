@@ -917,6 +917,8 @@ model TrendyolProductVariant {
   sizeOptionId          Int?                      @map("size_option_id")
   potOptionId           Int?                      @map("pot_option_id")
   templateId            Int?                      @map("template_id")
+  shopCategoryId        Int?                      @map("shop_category_id")
+  shopCategory          ShopCategory?             @relation(fields: [shopCategoryId], references: [id])
   trendyolSalePrice     Decimal                   @default(0) @map("trendyol_sale_price") @db.Decimal(12, 2)
   n11SalePrice          Decimal                   @default(0) @map("n11_sale_price") @db.Decimal(12, 2)
   hepsiburadaSalePrice  Decimal                   @default(0) @map("hepsiburada_sale_price") @db.Decimal(12, 2)
@@ -2400,3 +2402,22 @@ model WebOrderItem {
   @@index([orderId])
   @@map("web_order_items")
 }
+
+// E-ticaret / katalog kategorileri — üretim Category tablosundan bağımsız
+model ShopCategory {
+  id             Int            @id @default(autoincrement())
+  name           String
+  slug           String         @unique
+  parentId       Int?           @map("parent_id")
+  parent         ShopCategory?  @relation("ShopCategoryChildren", fields: [parentId], references: [id])
+  children       ShopCategory[] @relation("ShopCategoryChildren")
+  coverImageUrl  String?        @map("cover_image_url")
+  sortOrder      Int            @default(0) @map("sort_order")
+  status         RecordStatus   @default(ACTIVE)
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
+  products       TrendyolProductVariant[]
+
+  @@map("shop_categories")
+}
+

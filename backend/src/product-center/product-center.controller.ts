@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Req, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, Req, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Request } from 'express';
 import { AuthGuard } from '../auth/auth.guard';
@@ -98,5 +98,16 @@ export class ProductCenterController {
   @UseGuards(OwnerGuard)
   trendyolCategories() {
     return this.productCenter.trendyolCategories();
+  }
+
+  // Ürün düzenleme endpoint'leri
+  @Get('variants')
+  listVariants(@Query('search') search?: string) {
+    return this.productCenter.listVariantsForEdit(search);
+  }
+
+  @Patch('variants/:id')
+  editVariant(@Param('id') id: string, @Body() body: any) {
+    return this.productCenter.editVariant(Number(id), body);
   }
 }

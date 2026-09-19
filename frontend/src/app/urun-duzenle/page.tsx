@@ -1,548 +1,267 @@
-'use client';
+'use client'
 
-import { useEffect, useRef, useState } from 'react';
-import { AdminShell } from '@/components/AdminShell';
-import { api } from '@/lib/api';
-import { Check, ChevronDown, ChevronUp, Edit3, Image, Loader2, Search, Sparkles, Trash2, Upload, X } from 'lucide-react';
+import { useEffect, useState, useRef } from 'react'
+import { AdminShell } from '@/components/AdminShell'
 
-type Category = {
-  id: number;
-  name: string;
-  codePrefix: string;
-};
+const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
 
-type Product = {
-  id: number;
-  productName: string;
-  modelCode: string;
-  barcode: string | null;
-  categoryId: number | null;
-  categoryName: string | null;
-  description: string | null;
-  status: string;
-  imageUrls: string[];
-};
-
-type EditState = {
-  productName: string;
-  description: string;
-  categoryId: number | null;
-  imageUrls: string[];
-};
-
-type AiForm = {
-  productHeight: string;
-  potType: string;
-  potSize: string;
-  fillerMaterial: string;
-  stemCount: string;
-  leafCount: string;
-  comesInTwoParts: boolean;
-  comesWith: string;
-  cleaningTip: string;
-  extraNotes: string;
-};
-
-const emptyAiForm = (): AiForm => ({
-  productHeight: '',
-  potType: '',
-  potSize: '',
-  fillerMaterial: '',
-  stemCount: '',
-  leafCount: '',
-  comesInTwoParts: false,
-  comesWith: '',
-  cleaningTip: '',
-  extraNotes: '',
-});
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
-
-function imgSrc(url: string) {
-  if (url.startsWith('http')) return url;
-  return `${API_BASE}${url}`;
+function fmt(n: number) {
+  return '₺' + new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2 }).format(n)
 }
 
 export default function UrunDuzenlePage() {
-  const [products, setProducts] = useState<Product[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
-  const [editingId, setEditingId] = useState<number | null>(null);
-  const [editState, setEditState] = useState<EditState>({ productName: '', description: '', categoryId: null, imageUrls: [] });
-  const [saving, setSaving] = useState(false);
-  const [savedId, setSavedId] = useState<number | null>(null);
-  const [catOpen, setCatOpen] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  // AI bölümü — düzenleme paneli içinde
-  const [aiOpen, setAiOpen] = useState(false);
-  const [aiForm, setAiForm] = useState<AiForm>(emptyAiForm());
-  const [aiLoading, setAiLoading] = useState(false);
-  const [aiResult, setAiResult] = useState<{ productName: string; description: string; hashtags: string[] } | null>(null);
-  const catRef = useRef<HTMLDivElement>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
+  const [products, setProducts] = useState<any[]>([])
+  const [categories, setCategories] = useState<any[]>([])
+  const [search, setSearch] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [selected, setSelected] = useState<any>(null)
+  const [form, setForm] = useState<any>(null)
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const searchTimeout = useRef<any>(null)
+
+  // Tüm kategoriler düz liste
+  const allCats: any[] = []
+  categories.forEach((c) => {
+    allCats.push(c)
+    c.children?.forEach((ch: any) => allCats.push({ ...ch, _indent: true }))
+  })
+
+  async function loadCategories() {
+    const res = await fetch(`${API}/shop-categories`, { credentials: 'include' })
+    setCategories(await res.json())
+  }
+
+  async function loadProducts(q = '') {
+    setLoading(true)
+    try {
+      const qs = q ? `?search=${encodeURIComponent(q)}` : ''
+      const res = await fetch(`${API}/product-center/variants${qs}`, { credentials: 'include' })
+      setProducts(await res.json())
+    } finally { setLoading(false) }
+  }
 
   useEffect(() => {
-    Promise.all([
-      api('/products?limit=500') as Promise<any>,
-      api('/categories') as Promise<Category[]>,
-    ]).then(([prodData, catData]) => {
-      const raw: Product[] = Array.isArray(prodData)
-        ? prodData
-        : Array.isArray(prodData?.items)
-        ? prodData.items
-        : [];
-      setProducts(raw.filter(p => p.status === 'ACTIVE'));
-      setCategories(catData);
-    }).finally(() => setLoading(false));
-  }, []);
+    loadCategories()
+    loadProducts()
+  }, [])
 
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (catRef.current && !catRef.current.contains(e.target as Node)) setCatOpen(false);
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, []);
+  function handleSearchChange(val: string) {
+    setSearch(val)
+    clearTimeout(searchTimeout.current)
+    searchTimeout.current = setTimeout(() => loadProducts(val), 400)
+  }
 
-  const filtered = products.filter(p =>
-    [p.productName, p.modelCode, p.barcode, p.categoryName]
-      .filter(Boolean).join(' ')
-      .toLocaleLowerCase('tr-TR')
-      .includes(search.toLocaleLowerCase('tr-TR'))
-  );
+  function selectProduct(p: any) {
+    setSelected(p)
+    setForm({
+      productName: p.productName ?? '',
+      productDescription: p.productDescription ?? '',
+      images: Array.isArray(p.images) ? p.images.join('\n') : '',
+      currentModelCode: p.currentModelCode ?? '',
+      barcode: p.barcode ?? '',
+      shopCategoryId: p.shopCategoryId ? String(p.shopCategoryId) : '',
+    })
+    setSaved(false)
+  }
 
-  const startEdit = (p: Product) => {
-    setEditingId(p.id);
-    const urls = Array.isArray(p.imageUrls) ? p.imageUrls : [];
-    setEditState({ productName: p.productName, description: p.description ?? '', categoryId: p.categoryId, imageUrls: urls });
-    setCatOpen(false);
-    setAiOpen(false);
-    setAiForm(emptyAiForm());
-    setAiResult(null);
-  };
-
-  const cancelEdit = () => {
-    setEditingId(null);
-    setCatOpen(false);
-    setAiOpen(false);
-    setAiResult(null);
-  };
-
-  const uploadPhoto = async (p: Product, file: File) => {
-    setUploading(true);
+  async function save() {
+    if (!selected || !form) return
+    setSaving(true)
     try {
-      const form = new FormData();
-      form.append('file', file);
-      form.append('productId', String(p.id));
-      const res = await fetch(`${API_BASE}/media/upload`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${typeof window !== 'undefined' ? localStorage.getItem('token') ?? '' : ''}` },
-        body: form,
-      });
-      if (!res.ok) throw new Error('Upload failed');
-      const data = await res.json();
-      const newUrl: string = data.filePath ?? data.url ?? '';
-      if (newUrl) setEditState(s => ({ ...s, imageUrls: [...s.imageUrls, newUrl] }));
-    } catch {
-      alert('Fotoğraf yüklenemedi');
-    } finally {
-      setUploading(false);
-    }
-  };
+      const imagesArr = form.images
+        .split('\n')
+        .map((s: string) => s.trim())
+        .filter(Boolean)
 
-  const removePhoto = (url: string) => {
-    setEditState(s => ({ ...s, imageUrls: s.imageUrls.filter(u => u !== url) }));
-  };
-
-  const generateAi = async () => {
-    setAiLoading(true);
-    setAiResult(null);
-    try {
-      const result = await api('/products/gemini-seo', {
-        method: 'POST',
-        body: JSON.stringify({ productName: editState.productName, ...aiForm }),
-      }) as { productName: string; description: string; hashtags?: string[] };
-      setAiResult({ productName: result.productName, description: result.description, hashtags: result.hashtags ?? [] });
-    } catch {
-      alert('Gemini içerik üretimi başarısız. Backend loglarını kontrol edin.');
-    } finally {
-      setAiLoading(false);
-    }
-  };
-
-  const applyAiResult = () => {
-    if (!aiResult) return;
-    const hashtagLine = aiResult.hashtags.length ? '\n\n' + aiResult.hashtags.join(' ') : '';
-    setEditState(s => ({ ...s, productName: aiResult.productName, description: aiResult.description + hashtagLine }));
-    setAiOpen(false);
-    setAiResult(null);
-  };
-
-  const save = async (p: Product) => {
-    if (!editState.productName.trim()) return;
-    setSaving(true);
-    try {
-      const updated = await api(`/products/${p.id}`, {
+      await fetch(`${API}/product-center/variants/${selected.id}`, {
         method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
-          productName: editState.productName,
-          description: editState.description || null,
-          categoryId: editState.categoryId,
-          imageUrls: editState.imageUrls,
+          productName: form.productName,
+          productDescription: form.productDescription,
+          images: imagesArr,
+          currentModelCode: form.currentModelCode,
+          barcode: form.barcode,
+          shopCategoryId: form.shopCategoryId ? Number(form.shopCategoryId) : null,
         }),
-      }) as Product;
-      setProducts(prev => prev.map(x => x.id === p.id ? {
-        ...x,
-        productName: updated.productName ?? editState.productName,
-        description: updated.description ?? editState.description,
-        categoryId: editState.categoryId,
-        categoryName: categories.find(c => c.id === editState.categoryId)?.name ?? x.categoryName,
-        imageUrls: editState.imageUrls,
-      } : x));
-      setSavedId(p.id);
-      setTimeout(() => setSavedId(null), 2000);
-      setEditingId(null);
-    } catch {
-      alert('Kaydetme hatası');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const selectedCatName = categories.find(c => c.id === editState.categoryId)?.name ?? 'Kategori seçin';
+      })
+      setSaved(true)
+      await loadProducts(search)
+      // Seçili ürünü güncelle
+      setSelected((prev: any) => ({ ...prev, ...form, images: form.images.split('\n').map((s: string) => s.trim()).filter(Boolean) }))
+    } finally { setSaving(false) }
+  }
 
   return (
-    <AdminShell title="Ürün Düzenle">
-      <div className="p-6 max-w-5xl mx-auto">
-        {/* Header */}
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
-            <Edit3 className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-          </div>
-          <div>
-            <h1 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Ürün Düzenle</h1>
-            <p className="text-sm text-gray-500 dark:text-gray-400">Satışta olan ürünler — ad, açıklama, kategori ve fotoğraf değiştirin</p>
-          </div>
+    <AdminShell>
+      <div className="p-6 max-w-7xl mx-auto">
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold text-gray-900">Ürün Düzenle</h1>
+          <p className="text-sm text-gray-500 mt-1">Açıklama, görsel, model kodu ve kategori güncelleme</p>
         </div>
 
-        {/* Arama */}
-        <div className="relative mb-4">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <input
-            type="text"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Ürün adı, barkod veya model kodu ara…"
-            className="w-full pl-9 pr-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-          {search && (
-            <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-              <X className="w-4 h-4" />
-            </button>
-          )}
-        </div>
-
-        {loading ? (
-          <div className="flex items-center justify-center py-20 text-gray-400 gap-2">
-            <Loader2 className="w-5 h-5 animate-spin" /> Yükleniyor…
-          </div>
-        ) : (
-          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
-            <div className="px-4 py-2.5 bg-gray-50 dark:bg-gray-800/80 border-b border-gray-200 dark:border-gray-700 text-xs text-gray-500 dark:text-gray-400">
-              {filtered.length} ürün
-            </div>
-
-            <div className="divide-y divide-gray-100 dark:divide-gray-700">
-              {filtered.map(p => (
-                <div key={p.id} className="px-4 py-3">
-                  {editingId === p.id ? (
-                    /* Düzenleme modu */
-                    <div className="space-y-3">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        {/* Ürün Adı */}
-                        <div>
-                          <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Ürün Adı</label>
-                          <input
-                            type="text"
-                            value={editState.productName}
-                            onChange={e => setEditState(s => ({ ...s, productName: e.target.value }))}
-                            className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          />
-                        </div>
-
-                        {/* Kategori */}
-                        <div>
-                          <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Kategori</label>
-                          <div className="relative" ref={catRef}>
-                            <button
-                              type="button"
-                              onClick={() => setCatOpen(o => !o)}
-                              className="w-full flex items-center justify-between border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            >
-                              <span className={editState.categoryId ? '' : 'text-gray-400'}>{selectedCatName}</span>
-                              <ChevronDown className="w-4 h-4 text-gray-400" />
-                            </button>
-                            {catOpen && (
-                              <div className="absolute z-20 mt-1 w-full bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg max-h-52 overflow-y-auto">
-                                {categories.map(c => (
-                                  <button
-                                    key={c.id}
-                                    type="button"
-                                    onClick={() => { setEditState(s => ({ ...s, categoryId: c.id })); setCatOpen(false); }}
-                                    className={`w-full text-left px-3 py-2 text-sm hover:bg-blue-50 dark:hover:bg-blue-900/20 flex items-center justify-between ${editState.categoryId === c.id ? 'text-blue-600 dark:text-blue-400 font-medium' : 'text-gray-700 dark:text-gray-300'}`}
-                                  >
-                                    {c.name}
-                                    {editState.categoryId === c.id && <Check className="w-4 h-4" />}
-                                  </button>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+          {/* Ürün listesi */}
+          <div className="lg:col-span-2">
+            <input
+              className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Ürün adı, barkod veya model kodu..."
+              value={search}
+              onChange={(e) => handleSearchChange(e.target.value)}
+            />
+            <div className="space-y-2 max-h-[calc(100vh-220px)] overflow-y-auto pr-1">
+              {loading ? (
+                <div className="text-center py-10 text-gray-400 text-sm">Yükleniyor...</div>
+              ) : products.length === 0 ? (
+                <div className="text-center py-10 text-gray-400 text-sm">Ürün bulunamadı</div>
+              ) : products.map((p) => {
+                const firstImage = Array.isArray(p.images) && p.images.length > 0 ? p.images[0] : null
+                return (
+                  <div
+                    key={p.id}
+                    onClick={() => selectProduct(p)}
+                    className={`flex items-center gap-3 bg-white rounded-xl border p-3 cursor-pointer hover:shadow-sm transition-shadow ${
+                      selected?.id === p.id ? 'border-blue-500 ring-1 ring-blue-500' : 'border-gray-200'
+                    }`}
+                  >
+                    {firstImage ? (
+                      <img src={firstImage} alt="" className="w-12 h-12 rounded-lg object-cover shrink-0" />
+                    ) : (
+                      <div className="w-12 h-12 rounded-lg bg-gray-100 flex items-center justify-center shrink-0">
+                        <span className="text-gray-300 text-xl">🌸</span>
                       </div>
-
-                      {/* Açıklama */}
-                      <div>
-                        <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Açıklama</label>
-                        <textarea
-                          rows={7}
-                          value={editState.description}
-                          onChange={e => setEditState(s => ({ ...s, description: e.target.value }))}
-                          className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y"
-                          placeholder="Ürün açıklaması…"
-                        />
-                      </div>
-
-                      {/* ✦ AI Açıklama Asistanı — genişleyen bölüm */}
-                      <div className="border border-purple-200 dark:border-purple-800 rounded-xl overflow-hidden">
-                        <button
-                          type="button"
-                          onClick={() => { setAiOpen(o => !o); setAiResult(null); }}
-                          className="w-full flex items-center justify-between px-4 py-3 bg-purple-50 dark:bg-purple-900/20 hover:bg-purple-100 dark:hover:bg-purple-900/30 transition-colors"
-                        >
-                          <span className="flex items-center gap-2 text-sm font-semibold text-purple-700 dark:text-purple-300">
-                            <Sparkles className="w-4 h-4" /> AI ile Açıklama &amp; Ürün Adı Üret
-                          </span>
-                          {aiOpen ? <ChevronUp className="w-4 h-4 text-purple-400" /> : <ChevronDown className="w-4 h-4 text-purple-400" />}
-                        </button>
-
-                        {aiOpen && (
-                          <div className="px-4 pb-4 pt-3 space-y-3 bg-white dark:bg-gray-800">
-                            <p className="text-xs text-gray-500 dark:text-gray-400">Alanları doldurun → Üret → Sonucu Uygula ile ürün adı ve açıklama otomatik değişir.</p>
-                            <div className="grid grid-cols-2 gap-3">
-                              {([
-                                ['productHeight', 'Boy', '180 cm'],
-                                ['potType', 'Saksı tipi', 'Kare Saksı'],
-                                ['potSize', 'Saksı ölçüsü', '28x28 cm'],
-                                ['fillerMaterial', 'Dolgu malzemesi', 'Çakıl taşı'],
-                                ['stemCount', 'Gövde sayısı', '3'],
-                                ['leafCount', 'Yaprak sayısı', '120'],
-                                ['comesWith', 'Birlikte gelir', 'Taş, dekoratif toprak'],
-                                ['cleaningTip', 'Temizlik notu', 'Nemli bezle silin'],
-                              ] as [keyof AiForm, string, string][]).map(([key, label, ph]) => (
-                                <div key={key}>
-                                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{label}</label>
-                                  <input
-                                    type="text"
-                                    value={aiForm[key] as string}
-                                    onChange={e => setAiForm(f => ({ ...f, [key]: e.target.value }))}
-                                    placeholder={ph}
-                                    className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500"
-                                  />
-                                </div>
-                              ))}
-                            </div>
-
-                            {/* İki parça toggle */}
-                            <button
-                              type="button"
-                              onClick={() => setAiForm(f => ({ ...f, comesInTwoParts: !f.comesInTwoParts }))}
-                              className="flex items-center gap-3"
-                            >
-                              <div className={`w-9 h-5 rounded-full transition-colors flex items-center px-0.5 ${aiForm.comesInTwoParts ? 'bg-purple-500' : 'bg-gray-300 dark:bg-gray-600'}`}>
-                                <div className={`w-4 h-4 bg-white rounded-full shadow transition-transform ${aiForm.comesInTwoParts ? 'translate-x-4' : 'translate-x-0'}`} />
-                              </div>
-                              <span className="text-xs text-gray-600 dark:text-gray-300">Ürün iki parça halinde gönderilir</span>
-                            </button>
-
-                            {/* Ek notlar */}
-                            <div>
-                              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Ek notlar / özellikler</label>
-                              <textarea
-                                rows={2}
-                                value={aiForm.extraNotes}
-                                onChange={e => setAiForm(f => ({ ...f, extraNotes: e.target.value }))}
-                                placeholder="Örn: UV dayanımlı yapraklar, renk seçeneği mevcut…"
-                                className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-2.5 py-1.5 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none"
-                              />
-                            </div>
-
-                            {/* Üret butonu */}
-                            <button
-                              onClick={generateAi}
-                              disabled={aiLoading}
-                              className="w-full flex items-center justify-center gap-2 py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-60 text-white rounded-lg text-sm font-medium transition-colors"
-                            >
-                              {aiLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-                              {aiLoading ? 'Gemini yazıyor…' : 'Üret'}
-                            </button>
-
-                            {/* Sonuç */}
-                            {aiResult && (
-                              <div className="bg-purple-50 dark:bg-purple-900/20 rounded-xl p-3 space-y-2.5 border border-purple-200 dark:border-purple-700">
-                                <div>
-                                  <p className="text-xs font-medium text-purple-600 dark:text-purple-400 mb-0.5">SEO Ürün Adı</p>
-                                  <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{aiResult.productName}</p>
-                                </div>
-                                <div>
-                                  <p className="text-xs font-medium text-purple-600 dark:text-purple-400 mb-0.5">Açıklama</p>
-                                  <p className="text-xs text-gray-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed max-h-52 overflow-y-auto">{aiResult.description}</p>
-                                </div>
-                                {aiResult.hashtags.length > 0 && (
-                                  <div>
-                                    <p className="text-xs font-medium text-purple-600 dark:text-purple-400 mb-0.5">Hashtagler</p>
-                                    <p className="text-xs text-purple-700 dark:text-purple-300 flex flex-wrap gap-1">
-                                      {aiResult.hashtags.map((h, i) => <span key={i}>{h}</span>)}
-                                    </p>
-                                  </div>
-                                )}
-                                <button
-                                  onClick={applyAiResult}
-                                  className="w-full flex items-center justify-center gap-1.5 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-medium transition-colors"
-                                >
-                                  <Check className="w-3.5 h-3.5" /> Açıklama & Adı Uygula
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Fotoğraflar */}
-                      <div>
-                        <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5 flex items-center gap-1">
-                          <Image className="w-3.5 h-3.5" /> Fotoğraflar
-                        </label>
-                        <div className="flex flex-wrap gap-2">
-                          {editState.imageUrls.map((url, i) => (
-                            <div key={i} className="relative group w-20 h-20">
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img
-                                src={imgSrc(url)}
-                                alt=""
-                                className="w-20 h-20 object-cover rounded-lg border border-gray-200 dark:border-gray-600"
-                              />
-                              <button
-                                type="button"
-                                onClick={() => removePhoto(url)}
-                                className="absolute top-0.5 right-0.5 opacity-0 group-hover:opacity-100 p-0.5 bg-red-500 hover:bg-red-600 text-white rounded-md transition-opacity"
-                                title="Kaldır"
-                              >
-                                <Trash2 className="w-3 h-3" />
-                              </button>
-                            </div>
-                          ))}
-                          <button
-                            type="button"
-                            onClick={() => fileRef.current?.click()}
-                            disabled={uploading}
-                            className="w-20 h-20 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg flex flex-col items-center justify-center text-gray-400 hover:border-blue-400 hover:text-blue-500 transition-colors disabled:opacity-50"
-                            title="Fotoğraf ekle"
-                          >
-                            {uploading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Upload className="w-5 h-5" />}
-                            <span className="text-xs mt-1">{uploading ? '' : 'Ekle'}</span>
-                          </button>
-                          <input
-                            ref={fileRef}
-                            type="file"
-                            accept="image/*"
-                            className="hidden"
-                            onChange={e => {
-                              const f = e.target.files?.[0];
-                              if (f) uploadPhoto(p, f);
-                              e.target.value = '';
-                            }}
-                          />
-                        </div>
-                      </div>
-
-                      {/* Butonlar */}
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => save(p)}
-                          disabled={saving}
-                          className="flex items-center gap-1.5 px-4 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white rounded-lg text-sm font-medium transition-colors"
-                        >
-                          {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-                          Kaydet
-                        </button>
-                        <button
-                          onClick={cancelEdit}
-                          className="px-4 py-1.5 text-sm text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-                        >
-                          İptal
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    /* Görüntüleme modu */
-                    <div className="flex items-start justify-between gap-3">
-                      {p.imageUrls?.length > 0 && (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={imgSrc(p.imageUrls[0])}
-                          alt=""
-                          className="w-12 h-12 object-cover rounded-lg border border-gray-200 dark:border-gray-600 flex-shrink-0"
-                        />
+                    )}
+                    <div className="min-w-0">
+                      <p className="font-medium text-sm text-gray-900 line-clamp-2">{p.productName}</p>
+                      <p className="text-xs text-gray-400 mt-0.5">{p.barcode} · {p.currentModelCode}</p>
+                      {p.shopCategory && (
+                        <span className="text-xs bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded mt-0.5 inline-block">{p.shopCategory.name}</span>
                       )}
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-medium text-gray-900 dark:text-gray-100 text-sm">{p.productName}</span>
-                          {savedId === p.id && (
-                            <span className="text-xs text-green-600 dark:text-green-400 flex items-center gap-1">
-                              <Check className="w-3 h-3" /> Kaydedildi
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                          <span className="text-xs font-mono text-gray-400">{p.modelCode}</span>
-                          {p.categoryName && (
-                            <span className="text-xs px-2 py-0.5 bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-400 rounded-full">
-                              {p.categoryName}
-                            </span>
-                          )}
-                          {!p.categoryId && (
-                            <span className="text-xs px-2 py-0.5 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 rounded-full">
-                              Kategori yok
-                            </span>
-                          )}
-                        </div>
-                        {p.description && (
-                          <p className="text-xs text-gray-400 mt-1 line-clamp-2">{p.description}</p>
-                        )}
-                      </div>
-                      <button
-                        onClick={() => startEdit(p)}
-                        className="flex-shrink-0 p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
-                        title="Düzenle"
-                      >
-                        <Edit3 className="w-4 h-4" />
-                      </button>
                     </div>
-                  )}
-                </div>
-              ))}
-
-              {filtered.length === 0 && (
-                <div className="text-center py-16 text-gray-400 text-sm">
-                  {search ? 'Arama sonucu bulunamadı.' : 'Ürün bulunamadı.'}
-                </div>
-              )}
+                    <div className="shrink-0 text-right">
+                      <p className="text-sm font-semibold text-gray-900">{fmt(Number(p.trendyolSalePrice))}</p>
+                      <p className="text-xs text-gray-400">stok: {p.stockQuantity}</p>
+                    </div>
+                  </div>
+                )
+              })}
             </div>
           </div>
-        )}
+
+          {/* Düzenleme formu */}
+          <div className="lg:col-span-3">
+            {!selected ? (
+              <div className="bg-gray-50 rounded-xl border border-dashed border-gray-200 h-64 flex items-center justify-center text-gray-400 text-sm">
+                Sol taraftan bir ürün seçin
+              </div>
+            ) : (
+              <div className="bg-white rounded-xl border border-gray-200 p-5">
+                <div className="flex items-center justify-between mb-5">
+                  <h2 className="font-bold text-gray-900">{selected.productName}</h2>
+                  {saved && <span className="text-xs text-green-600 font-semibold">✓ Kaydedildi</span>}
+                </div>
+
+                <div className="space-y-4">
+                  {/* Ürün Adı */}
+                  <div>
+                    <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Ürün Adı</label>
+                    <input
+                      className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      value={form.productName}
+                      onChange={(e) => { setForm({ ...form, productName: e.target.value }); setSaved(false) }}
+                    />
+                  </div>
+
+                  {/* Açıklama */}
+                  <div>
+                    <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Ürün Açıklaması</label>
+                    <textarea
+                      className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                      rows={5}
+                      value={form.productDescription}
+                      onChange={(e) => { setForm({ ...form, productDescription: e.target.value }); setSaved(false) }}
+                      placeholder="Ürün açıklaması..."
+                    />
+                  </div>
+
+                  {/* Görsel URL'leri */}
+                  <div>
+                    <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                      Görsel URL'leri <span className="text-gray-400 normal-case font-normal">(her satıra bir URL)</span>
+                    </label>
+                    <textarea
+                      className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                      rows={4}
+                      value={form.images}
+                      onChange={(e) => { setForm({ ...form, images: e.target.value }); setSaved(false) }}
+                      placeholder="https://cdn.example.com/resim1.jpg&#10;https://cdn.example.com/resim2.jpg"
+                    />
+                    {/* Önizleme */}
+                    {form.images.split('\n').filter((s: string) => s.trim().startsWith('http')).length > 0 && (
+                      <div className="flex gap-2 mt-2 flex-wrap">
+                        {form.images.split('\n').filter((s: string) => s.trim().startsWith('http')).slice(0, 6).map((url: string, i: number) => (
+                          <img key={i} src={url.trim()} alt="" className="w-16 h-16 rounded-lg object-cover border border-gray-200" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Model Kodu & Barkod */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Model Kodu</label>
+                      <input
+                        className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        value={form.currentModelCode}
+                        onChange={(e) => { setForm({ ...form, currentModelCode: e.target.value }); setSaved(false) }}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Barkod</label>
+                      <input
+                        className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        value={form.barcode}
+                        onChange={(e) => { setForm({ ...form, barcode: e.target.value }); setSaved(false) }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Kategori */}
+                  <div>
+                    <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Kategori</label>
+                    <select
+                      className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      value={form.shopCategoryId}
+                      onChange={(e) => { setForm({ ...form, shopCategoryId: e.target.value }); setSaved(false) }}
+                    >
+                      <option value="">— Kategori Seçin —</option>
+                      {allCats.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c._indent ? `  └ ${c.name}` : c.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <button
+                  onClick={save}
+                  disabled={saving}
+                  className="mt-5 w-full bg-blue-600 text-white py-2.5 rounded-xl text-sm font-semibold hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {saving ? 'Kaydediliyor...' : 'Kaydet'}
+                </button>
+
+                <p className="text-xs text-gray-400 mt-2 text-center">
+                  Değişiklikler ERP'ye kaydedilir. Trendyol görsellerini Seller Panel'den onaylatmanız gerekebilir.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </AdminShell>
-  );
+  )
 }
