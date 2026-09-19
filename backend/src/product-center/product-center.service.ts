@@ -11,6 +11,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ProductionCostsService } from '../production-costs/production-costs.service';
 import { IntegrationCenterService } from '../integrations/services/integration-center.service';
 import { TrendyolAdapter } from '../integrations/adapters/trendyol.adapter';
+import { ProductsService } from '../products/products.service';
 
 type EntryPayload = {
   variantId?: unknown;
@@ -56,6 +57,7 @@ export class ProductCenterService {
     private readonly prisma: PrismaService,
     private readonly productionCosts: ProductionCostsService,
     private readonly integrationCenter: IntegrationCenterService,
+    private readonly products: ProductsService,
   ) {}
 
   async listEntries() {
@@ -1212,7 +1214,10 @@ export class ProductCenterService {
       await this.prisma.product.update({ where: { id: variant.productId }, data: physicalFields }).catch(() => undefined)
     }
 
-    // Trendyol content-bulk-update için contentId gerekli; bu aşamada DB'de saklanmıyor.
+    // Tüm platformlara fiyat/stok yayını + site cache sıfırla
+    void this.products.broadcastVariantById(id).catch(() => undefined)
+    void revalidateSite()
+
     return variant
   }
 

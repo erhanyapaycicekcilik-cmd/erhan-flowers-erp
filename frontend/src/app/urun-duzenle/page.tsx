@@ -289,7 +289,7 @@ export default function UrunDuzenlePage() {
                 </button>
 
                 <p className="text-xs text-gray-400 mt-2 text-center">
-                  Değişiklikler ERP'ye kaydedilir. Trendyol görsellerini Seller Panel'den onaylatmanız gerekebilir.
+                  Kaydedince fiyat/stok tüm platformlara (Trendyol, N11, HB) ve siteye otomatik iletilir. Trendyol görseli/adı değişikliği Seller Panel onayı gerektirebilir.
                 </p>
               </div>
             )}

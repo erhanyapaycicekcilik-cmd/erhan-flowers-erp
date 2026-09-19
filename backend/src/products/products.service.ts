@@ -267,6 +267,28 @@ export class ProductsService {
     }
   }
 
+  // Tek bir varyantı platformlara yayınlar — ürün düzenleme sonrası çağrılır.
+  async broadcastVariantById(variantId: number): Promise<void> {
+    const variant = await this.prisma.trendyolProductVariant.findUnique({
+      where: { id: variantId },
+      include: { productCostDraft: true },
+    });
+    if (!variant) return;
+    const draft = variant.productCostDraft as any;
+    const salePrice = Number(
+      draft?.marketplaceSalePrice > 0
+        ? draft.marketplaceSalePrice
+        : variant.trendyolSalePrice ?? draft?.salePrice ?? 0,
+    );
+    if (!salePrice) return;
+    await this.broadcastPriceStock({
+      barcode: variant.barcode,
+      modelCode: variant.currentModelCode,
+      marketPrice: salePrice,
+      stockQuantity: Number(variant.stockQuantity ?? 0),
+    }).catch(() => undefined);
+  }
+
   // Satış sonrası stok kartına bağlı ürün/varyantları platformlara gönderir.
   async broadcastStockCardUpdate(stockCardIds: number[]): Promise<void> {
     if (!stockCardIds.length) return;
