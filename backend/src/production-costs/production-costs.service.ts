@@ -1508,6 +1508,38 @@ export class ProductionCostsService {
     });
   }
 
+  async recalculateMarketplacePrices() {
+    const drafts = await this.prisma.productCostDraft.findMany({
+      select: { id: true, salePrice: true, vatPercent: true, marketplaceMarkupPercent: true, campaignBufferPercent: true, shippingCost: true },
+    });
+
+    let updated = 0;
+    for (const draft of drafts) {
+      const salePrice = Number(draft.salePrice);
+      const vatPercent = Number(draft.vatPercent);
+      const markupPercent = Number(draft.marketplaceMarkupPercent);
+      const campaignPercent = Number(draft.campaignBufferPercent);
+      const shippingCost = Number(draft.shippingCost);
+
+      if (!salePrice) continue;
+
+      // shopSalePrice already includes VAT — get base before VAT
+      const basePrice = salePrice / (1 + vatPercent / 100);
+      const commissionAmount = basePrice * (markupPercent / 100);
+      const campaignAmount = (basePrice + commissionAmount) * (campaignPercent / 100);
+      const marketplaceBeforeVat = basePrice + commissionAmount + campaignAmount + shippingCost;
+      const marketplaceSalePrice = this.round(marketplaceBeforeVat * (1 + vatPercent / 100));
+
+      await this.prisma.productCostDraft.update({
+        where: { id: draft.id },
+        data: { marketplaceSalePrice },
+      });
+      updated++;
+    }
+
+    return { updated, total: drafts.length };
+  }
+
   async createVariant(payload: unknown) {
     const body = (payload ?? {}) as Record<string, unknown>;
     const barcode = this.text(body.barcode);
