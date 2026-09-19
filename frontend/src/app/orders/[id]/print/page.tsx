@@ -85,12 +85,16 @@ export default function OrderPrintPreviewPage() {
         const sale = page.sale ?? {};
         const id = Number(sale.id);
         if (!id || printedIds.includes(id)) continue;
-        await api<SalePrintData>(`/sales/${id}/print/${endpoint}`);
-        if (printType === 'delivery' && canPromoteAfterPrint(text(sale.status))) {
-          await api(`/sales/${id}/status`, { method: 'POST', json: { status: 'PREPARING', note: 'A5 sipariş çıktısı yazdırıldı.' } }).catch(() => null);
-          await syncTrendyolPackageStatus(sale).catch(() => null);
+        try {
+          await api<SalePrintData>(`/sales/${id}/print/${endpoint}`);
+          if (printType === 'delivery' && canPromoteAfterPrint(text(sale.status))) {
+            await api(`/sales/${id}/status`, { method: 'POST', json: { status: 'PREPARING', note: 'A5 sipariş çıktısı yazdırıldı.' } }).catch(() => null);
+            await syncTrendyolPackageStatus(sale).catch(() => null);
+          }
+          setPrintedIds((current) => [...current, id]);
+        } catch {
+          // API hatası yazdırmayı engellemez
         }
-        setPrintedIds((current) => [...current, id]);
       }
       window.print();
     } finally {
@@ -450,12 +454,13 @@ export default function OrderPrintPreviewPage() {
         }
         @page {
           size: ${printType === 'order' ? 'A4 portrait' : printType === 'label' ? '100mm 150mm' : 'A5 portrait'};
-          margin: 7mm;
+          margin: 5mm;
         }
         @media print {
           html,
           body {
             margin: 0 !important;
+            padding: 0 !important;
             background: white !important;
           }
           .print-toolbar {
@@ -466,11 +471,14 @@ export default function OrderPrintPreviewPage() {
           .label-preview {
             width: auto !important;
             min-height: 0 !important;
+            max-height: none !important;
             margin: 0 !important;
             padding: 0 !important;
             box-shadow: none !important;
             page-break-after: always;
             break-after: page;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
           }
           .a5-preview:last-child,
           .a4-preview:last-child,
@@ -480,9 +488,22 @@ export default function OrderPrintPreviewPage() {
           }
           .a5-receipt {
             width: 100% !important;
-            min-height: 196mm !important;
-            page-break-inside: avoid;
-            break-inside: avoid;
+            min-height: 0 !important;
+            max-height: 194mm !important;
+            overflow: hidden !important;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+          }
+          .thankyou-strip {
+            margin-top: 2mm !important;
+            padding-top: 2mm !important;
+          }
+          .receipt-footer {
+            margin-top: 2mm !important;
+          }
+          .customer-section h2,
+          .items-section h2 {
+            margin: 2mm 0 1mm !important;
           }
         }
       `}</style>
