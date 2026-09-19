@@ -12,6 +12,7 @@ import { ProductionCostsService } from '../production-costs/production-costs.ser
 import { IntegrationCenterService } from '../integrations/services/integration-center.service';
 import { TrendyolAdapter } from '../integrations/adapters/trendyol.adapter';
 import { ProductsService } from '../products/products.service';
+import { PublishingService } from '../publishing/publishing.service';
 
 type EntryPayload = {
   variantId?: unknown;
@@ -58,6 +59,7 @@ export class ProductCenterService {
     private readonly productionCosts: ProductionCostsService,
     private readonly integrationCenter: IntegrationCenterService,
     private readonly products: ProductsService,
+    private readonly publishing: PublishingService,
   ) {}
 
   async listEntries() {
@@ -1214,8 +1216,9 @@ export class ProductCenterService {
       await this.prisma.product.update({ where: { id: variant.productId }, data: physicalFields }).catch(() => undefined)
     }
 
-    // Tüm platformlara fiyat/stok yayını + site cache sıfırla
-    void this.products.broadcastVariantById(id).catch(() => undefined)
+    // Tüm platformlara tam içerik yayını (isim, açıklama, görseller, fiyat, stok)
+    // allowIncomplete: true → eksik alan olsa da gönder
+    void this.publishing.send([id], 0, { allowIncomplete: true }).catch(() => undefined)
     void revalidateSite()
 
     return variant
