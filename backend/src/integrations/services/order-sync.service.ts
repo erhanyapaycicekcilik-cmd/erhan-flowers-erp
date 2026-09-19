@@ -620,6 +620,7 @@ export class OrderSyncService {
 
   private async markMissingAsDelivered(platform: string, fetchedIds: string[]): Promise<void> {
     if (fetchedIds.length === 0) return;
+    // OUT_FOR_DELIVERY → DELIVERED (teslim edilmiş)
     const transitSales = await this.prisma.$queryRaw<Array<{ id: number; external_order_id: string }>>`
       SELECT id, external_order_id FROM retail_sales
       WHERE channel = ${platform}::"RetailSaleChannel"
@@ -632,6 +633,23 @@ export class OrderSyncService {
           UPDATE retail_sales SET status = 'DELIVERED'::"RetailSaleStatus", updated_at = NOW() WHERE id = ${sale.id}
         `;
         this.logger.log(`[${platform}] Siparis #${sale.id} (${sale.external_order_id}) API'de gorünmuyor → DELIVERED olarak isaratlendi.`);
+      }
+    }
+    // CONFIRMED / PREPARING → CANCELLED (platform tarafında iptal/kaybolmuş eski siparişler)
+    // Sadece 2 günden eski siparişleri kontrol et (yeni siparişlerin eklenmesine zaman tanı)
+    const staleSales = await this.prisma.$queryRaw<Array<{ id: number; external_order_id: string }>>`
+      SELECT id, external_order_id FROM retail_sales
+      WHERE channel = ${platform}::"RetailSaleChannel"
+        AND status IN ('CONFIRMED'::"RetailSaleStatus", 'PREPARING'::"RetailSaleStatus")
+        AND external_order_id IS NOT NULL
+        AND created_at < NOW() - INTERVAL '2 days'
+    `;
+    for (const sale of staleSales) {
+      if (!fetchedIds.includes(sale.external_order_id)) {
+        await this.prisma.$executeRaw`
+          UPDATE retail_sales SET status = 'CANCELLED'::"RetailSaleStatus", updated_at = NOW() WHERE id = ${sale.id}
+        `;
+        this.logger.log(`[${platform}] Eski siparis #${sale.id} (${sale.external_order_id}) API'de yok → CANCELLED olarak isaratlendi.`);
       }
     }
   }
