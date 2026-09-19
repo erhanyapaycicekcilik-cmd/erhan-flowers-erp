@@ -59,8 +59,16 @@ export default function UrunDuzenlePage() {
       productDescription: p.productDescription ?? '',
       images: Array.isArray(p.images) ? p.images.join('\n') : '',
       currentModelCode: p.currentModelCode ?? '',
+      supplierStockCode: p.supplierStockCode ?? '',
       barcode: p.barcode ?? '',
       shopCategoryId: p.shopCategoryId ? String(p.shopCategoryId) : '',
+      potSize: p.product?.potSize ?? '',
+      potType: p.product?.potType ?? '',
+      productHeight: p.product?.productHeight ?? '',
+      leafCount: p.product?.leafCount != null ? String(p.product.leafCount) : '',
+      stemCount: p.product?.stemCount != null ? String(p.product.stemCount) : '',
+      branchCount: p.product?.branchCount != null ? String(p.product.branchCount) : '',
+      leavesPerBranch: p.product?.leavesPerBranch != null ? String(p.product.leavesPerBranch) : '',
     })
     setSaved(false)
   }
@@ -74,6 +82,8 @@ export default function UrunDuzenlePage() {
         .map((s: string) => s.trim())
         .filter(Boolean)
 
+      const num = (v: string) => v.trim() !== '' ? Number(v) : null
+
       await fetch(`${API}/product-center/variants/${selected.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -83,8 +93,16 @@ export default function UrunDuzenlePage() {
           productDescription: form.productDescription,
           images: imagesArr,
           currentModelCode: form.currentModelCode,
+          supplierStockCode: form.supplierStockCode,
           barcode: form.barcode,
           shopCategoryId: form.shopCategoryId ? Number(form.shopCategoryId) : null,
+          potSize: form.potSize || null,
+          potType: form.potType || null,
+          productHeight: form.productHeight || null,
+          leafCount: num(form.leafCount),
+          stemCount: num(form.stemCount),
+          branchCount: num(form.branchCount),
+          leavesPerBranch: num(form.leavesPerBranch),
         }),
       })
       setSaved(true)
@@ -208,14 +226,22 @@ export default function UrunDuzenlePage() {
                     )}
                   </div>
 
-                  {/* Model Kodu & Barkod */}
-                  <div className="grid grid-cols-2 gap-3">
+                  {/* Kodlar */}
+                  <div className="grid grid-cols-3 gap-3">
                     <div>
                       <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Model Kodu</label>
                       <input
                         className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                         value={form.currentModelCode}
                         onChange={(e) => { setForm({ ...form, currentModelCode: e.target.value }); setSaved(false) }}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Stok Kodu</label>
+                      <input
+                        className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        value={form.supplierStockCode}
+                        onChange={(e) => { setForm({ ...form, supplierStockCode: e.target.value }); setSaved(false) }}
                       />
                     </div>
                     <div>
@@ -245,6 +271,64 @@ export default function UrunDuzenlePage() {
                     </select>
                   </div>
                 </div>
+
+                  {/* Fiziksel Özellikler */}
+                  <div>
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Fiziksel Özellikler</p>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div>
+                        <label className="text-xs text-gray-500">Saksı Boyu</label>
+                        <input
+                          className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          value={form.potSize}
+                          onChange={(e) => { setForm({ ...form, potSize: e.target.value }); setSaved(false) }}
+                          placeholder="ör. 17cm"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-500">Saksı Türü</label>
+                        <input
+                          className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          value={form.potType}
+                          onChange={(e) => { setForm({ ...form, potType: e.target.value }); setSaved(false) }}
+                          placeholder="ör. Metal"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-500">Yükseklik</label>
+                        <input
+                          className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          value={form.productHeight}
+                          onChange={(e) => { setForm({ ...form, productHeight: e.target.value }); setSaved(false) }}
+                          placeholder="ör. 120cm"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-500">Yaprak Sayısı</label>
+                        <input type="number"
+                          className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          value={form.leafCount}
+                          onChange={(e) => { setForm({ ...form, leafCount: e.target.value }); setSaved(false) }}
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-500">Dal Sayısı</label>
+                        <input type="number"
+                          className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          value={form.branchCount}
+                          onChange={(e) => { setForm({ ...form, branchCount: e.target.value }); setSaved(false) }}
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-500">Daldaki Yaprak</label>
+                        <input type="number"
+                          className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          value={form.leavesPerBranch}
+                          onChange={(e) => { setForm({ ...form, leavesPerBranch: e.target.value }); setSaved(false) }}
+                        />
+                      </div>
+                    </div>
+                  </div>
 
                 <button
                   onClick={save}
