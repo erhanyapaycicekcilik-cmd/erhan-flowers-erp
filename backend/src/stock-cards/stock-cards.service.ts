@@ -9,6 +9,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { stockImageFallbackRoots, stockImageRoot } from '../stock-image-paths';
 import { IntegrationCenterService } from '../integrations/services/integration-center.service';
 import { TrendyolAdapter } from '../integrations/adapters/trendyol.adapter';
+import { ProductsService } from '../products/products.service';
 
 type StockCardPayload = {
   name?: string;
@@ -123,6 +124,7 @@ export class StockCardsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly integrationCenter: IntegrationCenterService,
+    private readonly products: ProductsService,
   ) {}
 
   async list(userRole?: string) {
@@ -400,6 +402,11 @@ export class StockCardsService {
         where: { id },
         data: updateData,
       });
+
+      const priceOrStockChanged = ['stockQuantity', 'salePrice', 'purchasePrice'].some((k) => updateData[k] !== undefined);
+      if (priceOrStockChanged) {
+        this.products.broadcastStockCardUpdate([id]).catch(() => undefined);
+      }
 
       return this.serialize(stockCard);
     } catch (error) {
