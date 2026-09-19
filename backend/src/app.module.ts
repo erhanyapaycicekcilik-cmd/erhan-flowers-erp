@@ -32,6 +32,7 @@ import { WebOrdersModule } from './web-orders/web-orders.module';
 import { SuppliersModule } from './suppliers/suppliers.module';
 import { EftModule } from './eft/eft.module';
 import { CustomerQuestionsModule } from './customer-questions/customer-questions.module';
+import { ShopCategoriesModule } from './shop-categories/shop-categories.module';
 
 @Module({
   imports: [
@@ -74,6 +75,7 @@ import { CustomerQuestionsModule } from './customer-questions/customer-questions
     SuppliersModule,
     EftModule,
     CustomerQuestionsModule,
+    ShopCategoriesModule,
   ],
   controllers: [AppController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

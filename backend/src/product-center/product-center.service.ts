@@ -1160,6 +1160,65 @@ export class ProductCenterService {
     return adapter.checkBatchStatus(batchId);
   }
 
+  // Ürün düzenleme: açıklama, görseller, model kodu, barkod, kategori → tüm platformlara broadcast
+  async editVariant(id: number, body: {
+    productName?: string;
+    productDescription?: string;
+    images?: string[];
+    currentModelCode?: string;
+    barcode?: string;
+    shopCategoryId?: number | null;
+  }) {
+    const data: any = {}
+    if (body.productName !== undefined) data.productName = body.productName
+    if (body.productDescription !== undefined) data.productDescription = body.productDescription
+    if (body.images !== undefined) data.images = body.images
+    if (body.currentModelCode !== undefined) data.currentModelCode = body.currentModelCode
+    if (body.barcode !== undefined) data.barcode = body.barcode
+    if (body.shopCategoryId !== undefined) data.shopCategoryId = body.shopCategoryId
+
+    const variant = await this.prisma.trendyolProductVariant.update({
+      where: { id },
+      data,
+      include: { productCostDraft: true },
+    })
+
+    // Trendyol content-bulk-update için contentId gerekli; bu aşamada DB'de saklanmıyor.
+    // Ürün adı/açıklama/görsel değişikliklerini Trendyol Seller Panel'den onaylatmak gerekir.
+
+    return variant
+  }
+
+  async listVariantsForEdit(search?: string) {
+    const where: any = { status: 'ACTIVE' }
+    if (search) {
+      where.OR = [
+        { productName: { contains: search, mode: 'insensitive' } },
+        { barcode: { contains: search } },
+        { currentModelCode: { contains: search, mode: 'insensitive' } },
+      ]
+    }
+    return this.prisma.trendyolProductVariant.findMany({
+      where,
+      select: {
+        id: true,
+        productName: true,
+        barcode: true,
+        currentModelCode: true,
+        supplierStockCode: true,
+        productDescription: true,
+        images: true,
+        shopCategoryId: true,
+        shopCategory: { select: { id: true, name: true } },
+        trendyolSalePrice: true,
+        stockQuantity: true,
+        status: true,
+      },
+      orderBy: { productName: 'asc' },
+      take: 100,
+    })
+  }
+
   private localUploadPath(value?: string) {
     if (!value || /^https?:\/\//i.test(value)) return null;
     const relative = value.replace(/^\/?uploads[\\/]/, '').replace(/\\/g, path.sep);

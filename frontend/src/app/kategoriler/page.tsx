@@ -1,381 +1,192 @@
-'use client';
+'use client'
 
-import { useEffect, useState } from 'react';
-import { AdminShell } from '@/components/AdminShell';
-import { api } from '@/lib/api';
-import { Globe, LayoutGrid, Plus, Save, Trash2, X } from 'lucide-react';
+import { useEffect, useState } from 'react'
+import { AdminShell } from '@/components/AdminShell'
 
-type Category = {
-  id: number;
-  name: string;
-  codePrefix: string;
-  startCode: number;
-  currentCode: number;
-  trendyolCategoryId: number | null;
-  platforms: string[];
-  hasBanner: boolean;
-  sortOrder: number;
-  description: string | null;
-  status: string;
-};
-
-const PLATFORMS = [
-  { key: 'WEB', label: 'Web Sitesi', color: '#2B5797', bg: '#E3ECFA' },
-  { key: 'TRENDYOL', label: 'Trendyol', color: '#F27A1A', bg: '#FEF0E2' },
-  { key: 'N11', label: 'N11', color: '#7B2FBE', bg: '#F1E8FC' },
-  { key: 'HEPSIBURADA', label: 'Hepsiburada', color: '#C0392B', bg: '#FAEAE8' },
-];
-
-type ModalState = {
-  open: boolean;
-  name: string;
-  codePrefix: string;
-  startCode: string;
-  description: string;
-  platforms: string[];
-  hasBanner: boolean;
-};
-
-const emptyModal: ModalState = {
-  open: false,
-  name: '',
-  codePrefix: '',
-  startCode: '',
-  description: '',
-  platforms: [],
-  hasBanner: false,
-};
+const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
 
 export default function KategorilerPage() {
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState<number | null>(null);
-  const [modal, setModal] = useState<ModalState>(emptyModal);
-  const [creating, setCreating] = useState(false);
-  const [deleting, setDeleting] = useState<number | null>(null);
+  const [cats, setCats] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [form, setForm] = useState<{ name: string; parentId: string; coverImageUrl: string } | null>(null)
+  const [editing, setEditing] = useState<any>(null)
+  const [saving, setSaving] = useState(false)
 
-  const load = async () => {
-    setLoading(true);
+  async function load() {
+    setLoading(true)
     try {
-      const data = await api('/categories') as Category[];
-      setCategories(data);
-    } finally {
-      setLoading(false);
-    }
-  };
+      const res = await fetch(`${API}/shop-categories`, { credentials: 'include' })
+      setCats(await res.json())
+    } finally { setLoading(false) }
+  }
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load() }, [])
 
-  const togglePlatform = (cat: Category, platform: string) => {
-    const has = cat.platforms.includes(platform);
-    const updated = has
-      ? cat.platforms.filter(p => p !== platform)
-      : [...cat.platforms, platform];
-    setCategories(prev => prev.map(c => c.id === cat.id ? { ...c, platforms: updated } : c));
-  };
-
-  const toggleBanner = (cat: Category) => {
-    setCategories(prev => prev.map(c => c.id === cat.id ? { ...c, hasBanner: !c.hasBanner } : c));
-  };
-
-  const save = async (cat: Category) => {
-    setSaving(cat.id);
+  async function save() {
+    if (!form?.name.trim()) return
+    setSaving(true)
     try {
-      await api(`/categories/${cat.id}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ platforms: cat.platforms, hasBanner: cat.hasBanner }),
-      });
-    } finally {
-      setSaving(null);
-    }
-  };
-
-  const handleCreate = async () => {
-    if (!modal.name || !modal.codePrefix || !modal.startCode) return;
-    setCreating(true);
-    try {
-      await api('/categories', {
-        method: 'POST',
+      const url = editing ? `${API}/shop-categories/${editing.id}` : `${API}/shop-categories`
+      await fetch(url, {
+        method: editing ? 'PATCH' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
-          name: modal.name,
-          codePrefix: modal.codePrefix,
-          startCode: Number(modal.startCode),
-          description: modal.description || undefined,
-          platforms: modal.platforms,
-          hasBanner: modal.hasBanner,
+          name: form.name.trim(),
+          parentId: form.parentId ? Number(form.parentId) : null,
+          coverImageUrl: form.coverImageUrl.trim() || null,
         }),
-      });
-      setModal(emptyModal);
-      await load();
-    } finally {
-      setCreating(false);
-    }
-  };
+      })
+      setForm(null); setEditing(null)
+      await load()
+    } finally { setSaving(false) }
+  }
 
-  const handleDelete = async (id: number) => {
-    if (!confirm('Bu kategoriyi pasife almak istediğinize emin misiniz?')) return;
-    setDeleting(id);
-    try {
-      await api(`/categories/${id}`, { method: 'DELETE' });
-      await load();
-    } finally {
-      setDeleting(null);
-    }
-  };
+  async function remove(id: number) {
+    if (!confirm('Bu kategoriyi silmek istediğine emin misin?')) return
+    await fetch(`${API}/shop-categories/${id}`, { method: 'DELETE', credentials: 'include' })
+    await load()
+  }
 
-  const modalTogglePlatform = (platform: string) => {
-    setModal(prev => ({
-      ...prev,
-      platforms: prev.platforms.includes(platform)
-        ? prev.platforms.filter(p => p !== platform)
-        : [...prev.platforms, platform],
-    }));
-  };
+  function openNew(parentId?: number) {
+    setEditing(null)
+    setForm({ name: '', parentId: parentId ? String(parentId) : '', coverImageUrl: '' })
+  }
+
+  function openEdit(cat: any) {
+    setEditing(cat)
+    setForm({ name: cat.name, parentId: cat.parentId ? String(cat.parentId) : '', coverImageUrl: cat.coverImageUrl ?? '' })
+  }
+
+  // Tüm kategoriler düz liste (modal select için)
+  const allFlat: any[] = []
+  cats.forEach((c) => { allFlat.push(c); c.children?.forEach((ch: any) => allFlat.push(ch)) })
 
   return (
-    <AdminShell title="Kategori Yönetimi">
-      <div className="p-6 max-w-5xl mx-auto">
-        {/* Header */}
+    <AdminShell>
+      <div className="p-6 max-w-4xl mx-auto">
         <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-violet-100 dark:bg-violet-900/30 flex items-center justify-center">
-              <LayoutGrid className="w-5 h-5 text-violet-600 dark:text-violet-400" />
-            </div>
-            <div>
-              <h1 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Kategori Yönetimi</h1>
-              <p className="text-sm text-gray-500 dark:text-gray-400">Kategorileri düzenleyin ve platform atamalarını yapın</p>
-            </div>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Kategoriler</h1>
+            <p className="text-sm text-gray-500 mt-1">E-ticaret / katalog kategori yönetimi</p>
           </div>
           <button
-            onClick={() => setModal({ ...emptyModal, open: true })}
-            className="flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-sm font-medium transition-colors"
+            onClick={() => openNew()}
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-blue-700"
           >
-            <Plus className="w-4 h-4" />
-            Yeni Kategori
+            + Yeni Kategori
           </button>
         </div>
 
-        {/* Legend */}
-        <div className="flex flex-wrap gap-2 mb-4">
-          {PLATFORMS.map(p => (
-            <span key={p.key} className="flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full" style={{ color: p.color, background: p.bg }}>
-              <Globe className="w-3 h-3" />
-              {p.label}
-            </span>
-          ))}
-          <span className="flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
-            🏷 Banner
-          </span>
-        </div>
-
-        {/* Table */}
         {loading ? (
-          <div className="text-center py-16 text-gray-400">Yükleniyor…</div>
+          <div className="text-center py-20 text-gray-400">Yükleniyor...</div>
         ) : (
-          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/80">
-                  <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-gray-400">Kategori</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-gray-400">Kod</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-gray-400">Platformlar</th>
-                  <th className="text-center px-4 py-3 font-medium text-gray-600 dark:text-gray-400">Banner</th>
-                  <th className="px-4 py-3"></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                {categories.map(cat => (
-                  <tr key={cat.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/40 transition-colors">
-                    <td className="px-4 py-3">
-                      <div className="font-medium text-gray-900 dark:text-gray-100">{cat.name}</div>
-                      {cat.description && (
-                        <div className="text-xs text-gray-400 mt-0.5">{cat.description}</div>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="font-mono text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-2 py-0.5 rounded">
-                        {cat.codePrefix}-{cat.startCode}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-wrap gap-1.5">
-                        {PLATFORMS.map(p => {
-                          const active = cat.platforms.includes(p.key);
-                          return (
-                            <button
-                              key={p.key}
-                              onClick={() => togglePlatform(cat, p.key)}
-                              className="text-xs px-2.5 py-1 rounded-full font-medium border transition-all"
-                              style={active
-                                ? { color: p.color, background: p.bg, borderColor: p.color + '40' }
-                                : { color: '#9CA3AF', background: 'transparent', borderColor: '#E5E7EB' }
-                              }
-                            >
-                              {p.label}
-                            </button>
-                          );
-                        })}
+          <div className="space-y-4">
+            {cats.map((cat) => (
+              <div key={cat.id} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                {/* Ana kategori */}
+                <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-200">
+                  <div className="flex items-center gap-3">
+                    {cat.coverImageUrl && (
+                      <img src={cat.coverImageUrl} alt="" className="w-8 h-8 rounded object-cover" />
+                    )}
+                    <span className="font-semibold text-gray-900">{cat.name}</span>
+                    <span className="text-xs text-gray-400 font-mono">{cat.slug}</span>
+                    <span className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full">
+                      {cat.children?.length ?? 0} alt
+                    </span>
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={() => openNew(cat.id)} className="text-xs text-blue-600 hover:underline">+ Alt Ekle</button>
+                    <button onClick={() => openEdit(cat)} className="text-xs text-gray-500 hover:underline">Düzenle</button>
+                    <button onClick={() => remove(cat.id)} className="text-xs text-red-500 hover:underline">Sil</button>
+                  </div>
+                </div>
+                {/* Alt kategoriler */}
+                {cat.children?.length > 0 && (
+                  <div className="divide-y divide-gray-100">
+                    {cat.children.map((ch: any) => (
+                      <div key={ch.id} className="flex items-center justify-between px-6 py-2.5">
+                        <div className="flex items-center gap-2">
+                          <span className="text-gray-400 text-xs">└</span>
+                          {ch.coverImageUrl && (
+                            <img src={ch.coverImageUrl} alt="" className="w-6 h-6 rounded object-cover" />
+                          )}
+                          <span className="text-sm text-gray-800">{ch.name}</span>
+                          <span className="text-xs text-gray-400 font-mono">{ch.slug}</span>
+                        </div>
+                        <div className="flex gap-2">
+                          <button onClick={() => openEdit(ch)} className="text-xs text-gray-500 hover:underline">Düzenle</button>
+                          <button onClick={() => remove(ch.id)} className="text-xs text-red-500 hover:underline">Sil</button>
+                        </div>
                       </div>
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <button
-                        onClick={() => toggleBanner(cat)}
-                        className={`w-8 h-8 rounded-lg flex items-center justify-center mx-auto transition-colors ${
-                          cat.hasBanner
-                            ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400'
-                            : 'bg-gray-100 dark:bg-gray-700 text-gray-400'
-                        }`}
-                        title={cat.hasBanner ? 'Banner var' : 'Banner yok'}
-                      >
-                        🏷
-                      </button>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-1 justify-end">
-                        <button
-                          onClick={() => save(cat)}
-                          disabled={saving === cat.id}
-                          className="flex items-center gap-1.5 px-3 py-1.5 bg-violet-600 hover:bg-violet-700 disabled:opacity-60 text-white rounded-lg text-xs font-medium transition-colors"
-                        >
-                          <Save className="w-3.5 h-3.5" />
-                          {saving === cat.id ? 'Kaydediliyor…' : 'Kaydet'}
-                        </button>
-                        <button
-                          onClick={() => handleDelete(cat.id)}
-                          disabled={deleting === cat.id}
-                          className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-                          title="Pasife Al"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
 
-            {categories.length === 0 && (
-              <div className="text-center py-16 text-gray-400">Henüz kategori yok.</div>
-            )}
+        {/* Modal */}
+        {form && (
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+            <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl">
+              <h2 className="font-bold text-gray-900 text-lg mb-4">
+                {editing ? 'Kategori Düzenle' : 'Yeni Kategori'}
+              </h2>
+              <div className="space-y-3">
+                <div>
+                  <label className="text-sm font-medium text-gray-700">Kategori Adı *</label>
+                  <input
+                    className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={form.name}
+                    onChange={(e) => setForm({ ...form, name: e.target.value })}
+                    placeholder="ör. Yeşil Ağaçlar"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-700">Üst Kategori</label>
+                  <select
+                    className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={form.parentId}
+                    onChange={(e) => setForm({ ...form, parentId: e.target.value })}
+                  >
+                    <option value="">— Ana Kategori —</option>
+                    {cats.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-700">Kapak Görseli URL</label>
+                  <input
+                    className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={form.coverImageUrl}
+                    onChange={(e) => setForm({ ...form, coverImageUrl: e.target.value })}
+                    placeholder="https://..."
+                  />
+                </div>
+              </div>
+              <div className="flex gap-2 mt-5">
+                <button
+                  onClick={save}
+                  disabled={saving || !form.name.trim()}
+                  className="flex-1 bg-blue-600 text-white py-2 rounded-lg text-sm font-semibold hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {saving ? 'Kaydediliyor...' : 'Kaydet'}
+                </button>
+                <button
+                  onClick={() => { setForm(null); setEditing(null) }}
+                  className="px-4 py-2 rounded-lg border border-gray-200 text-sm text-gray-600 hover:bg-gray-50"
+                >
+                  İptal
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>
-
-      {/* Yeni Kategori Modal */}
-      {modal.open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Yeni Kategori Ekle</h2>
-              <button
-                onClick={() => setModal(emptyModal)}
-                className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-400 transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="px-6 py-5 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Kategori Adı *</label>
-                <input
-                  type="text"
-                  value={modal.name}
-                  onChange={e => setModal(p => ({ ...p, name: e.target.value }))}
-                  placeholder="ör. Vazo & Aksesuar"
-                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-violet-500"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Kod Prefix *</label>
-                  <input
-                    type="text"
-                    value={modal.codePrefix}
-                    onChange={e => setModal(p => ({ ...p, codePrefix: e.target.value.toUpperCase() }))}
-                    placeholder="ör. VA"
-                    maxLength={5}
-                    className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm font-mono bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-violet-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Başlangıç Kodu *</label>
-                  <input
-                    type="number"
-                    value={modal.startCode}
-                    onChange={e => setModal(p => ({ ...p, startCode: e.target.value }))}
-                    placeholder="ör. 5000"
-                    className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-violet-500"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Açıklama</label>
-                <input
-                  type="text"
-                  value={modal.description}
-                  onChange={e => setModal(p => ({ ...p, description: e.target.value }))}
-                  placeholder="İsteğe bağlı kısa açıklama"
-                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-violet-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Platformlar</label>
-                <div className="flex flex-wrap gap-2">
-                  {PLATFORMS.map(p => {
-                    const active = modal.platforms.includes(p.key);
-                    return (
-                      <button
-                        key={p.key}
-                        type="button"
-                        onClick={() => modalTogglePlatform(p.key)}
-                        className="text-sm px-3 py-1.5 rounded-full font-medium border-2 transition-all"
-                        style={active
-                          ? { color: p.color, background: p.bg, borderColor: p.color }
-                          : { color: '#9CA3AF', background: 'transparent', borderColor: '#E5E7EB' }
-                        }
-                      >
-                        {p.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <label className="flex items-center gap-3 cursor-pointer">
-                <div
-                  onClick={() => setModal(p => ({ ...p, hasBanner: !p.hasBanner }))}
-                  className={`w-10 h-6 rounded-full transition-colors relative ${modal.hasBanner ? 'bg-amber-500' : 'bg-gray-300 dark:bg-gray-600'}`}
-                >
-                  <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${modal.hasBanner ? 'translate-x-5' : 'translate-x-1'}`} />
-                </div>
-                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Banner Var</span>
-              </label>
-            </div>
-
-            <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-200 dark:border-gray-700">
-              <button
-                onClick={() => setModal(emptyModal)}
-                className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-              >
-                İptal
-              </button>
-              <button
-                onClick={handleCreate}
-                disabled={creating || !modal.name || !modal.codePrefix || !modal.startCode}
-                className="flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-700 disabled:opacity-60 text-white rounded-lg text-sm font-medium transition-colors"
-              >
-                <Plus className="w-4 h-4" />
-                {creating ? 'Oluşturuluyor…' : 'Kategori Oluştur'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </AdminShell>
-  );
+  )
 }
