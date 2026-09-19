@@ -410,7 +410,7 @@ export class StockCardsService {
       });
 
       const priceOrStockChanged = ['stockQuantity', 'salePrice', 'purchasePrice'].some(
-        (k) => updateData[k] !== undefined,
+        (k) => (updateData as Record<string, unknown>)[k] !== undefined,
       );
       if (priceOrStockChanged) {
         this.products.broadcastStockCardUpdate([id]).catch(() => undefined);
