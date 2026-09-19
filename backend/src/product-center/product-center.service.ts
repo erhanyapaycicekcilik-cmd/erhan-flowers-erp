@@ -1166,26 +1166,53 @@ export class ProductCenterService {
     productDescription?: string;
     images?: string[];
     currentModelCode?: string;
+    supplierStockCode?: string;
     barcode?: string;
     shopCategoryId?: number | null;
+    // Fiziksel özellikler — bağlı Product tablosuna yazılır
+    potSize?: string | null;
+    potType?: string | null;
+    productHeight?: string | null;
+    leafCount?: number | null;
+    stemCount?: number | null;
+    branchCount?: number | null;
+    leavesPerBranch?: number | null;
   }) {
-    const data: any = {}
-    if (body.productName !== undefined) data.productName = body.productName
-    if (body.productDescription !== undefined) data.productDescription = body.productDescription
-    if (body.images !== undefined) data.images = body.images
-    if (body.currentModelCode !== undefined) data.currentModelCode = body.currentModelCode
-    if (body.barcode !== undefined) data.barcode = body.barcode
-    if (body.shopCategoryId !== undefined) data.shopCategoryId = body.shopCategoryId
+    const variantData: any = {}
+    if (body.productName !== undefined) variantData.productName = body.productName
+    if (body.productDescription !== undefined) variantData.productDescription = body.productDescription
+    if (body.images !== undefined) variantData.images = body.images
+    if (body.currentModelCode !== undefined) variantData.currentModelCode = body.currentModelCode
+    if (body.supplierStockCode !== undefined) variantData.supplierStockCode = body.supplierStockCode
+    if (body.barcode !== undefined) variantData.barcode = body.barcode
+    if (body.shopCategoryId !== undefined) variantData.shopCategoryId = body.shopCategoryId
 
     const variant = await this.prisma.trendyolProductVariant.update({
       where: { id },
-      data,
-      include: { productCostDraft: true },
+      data: variantData,
+      select: { id: true, productId: true, productName: true, barcode: true, currentModelCode: true,
+                supplierStockCode: true, productDescription: true, images: true, shopCategoryId: true,
+                trendyolSalePrice: true, stockQuantity: true, status: true,
+                shopCategory: { select: { id: true, name: true } } },
     })
 
-    // Trendyol content-bulk-update için contentId gerekli; bu aşamada DB'de saklanmıyor.
-    // Ürün adı/açıklama/görsel değişikliklerini Trendyol Seller Panel'den onaylatmak gerekir.
+    // Fiziksel özellikleri bağlı Product'a yaz
+    const physicalFields: any = {}
+    if (body.potSize !== undefined) physicalFields.potSize = body.potSize
+    if (body.potType !== undefined) physicalFields.potType = body.potType
+    if (body.productHeight !== undefined) physicalFields.productHeight = body.productHeight
+    if (body.leafCount !== undefined) physicalFields.leafCount = body.leafCount
+    if (body.stemCount !== undefined) physicalFields.stemCount = body.stemCount
+    if (body.branchCount !== undefined) physicalFields.branchCount = body.branchCount
+    if (body.leavesPerBranch !== undefined) physicalFields.leavesPerBranch = body.leavesPerBranch
+    if (body.productName !== undefined) physicalFields.productName = body.productName
+    if (body.currentModelCode !== undefined) physicalFields.modelCode = body.currentModelCode
 
+    if (variant.productId && Object.keys(physicalFields).length > 0) {
+      await this.prisma.product.update({ where: { id: variant.productId }, data: physicalFields }).catch(() => undefined)
+    }
+
+    // Trendyol content-bulk-update için contentId gerekli; bu aşamada DB'de saklanmıyor.
     return variant
   }
 
@@ -1196,6 +1223,7 @@ export class ProductCenterService {
         { productName: { contains: search, mode: 'insensitive' } },
         { barcode: { contains: search } },
         { currentModelCode: { contains: search, mode: 'insensitive' } },
+        { supplierStockCode: { contains: search, mode: 'insensitive' } },
       ]
     }
     return this.prisma.trendyolProductVariant.findMany({
@@ -1213,9 +1241,13 @@ export class ProductCenterService {
         trendyolSalePrice: true,
         stockQuantity: true,
         status: true,
+        product: {
+          select: { potSize: true, potType: true, productHeight: true,
+                    leafCount: true, stemCount: true, branchCount: true, leavesPerBranch: true }
+        },
       },
       orderBy: { productName: 'asc' },
-      take: 100,
+      take: 200,
     })
   }
 
