@@ -661,6 +661,7 @@ export default function ProductCostDetailPage() {
         method: 'POST',
         json: {
           salePrice: totals.shopSalePrice,
+          marketplaceSalePrice: totals.marketplaceSalePrice,
           profitMarginPercent,
           commissionPercent: 0,
           vatPercent,

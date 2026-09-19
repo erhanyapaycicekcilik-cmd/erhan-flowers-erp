@@ -664,6 +664,7 @@ export class ProductionCostsService {
     const desi = this.optionalNumber(body.desi) ?? 0;
     const marketplaceMarkupPercent = this.optionalNumber(body.marketplaceMarkupPercent) ?? 25;
     const campaignBufferPercent = this.optionalNumber(body.campaignBufferPercent) ?? 0;
+    const marketplaceSalePrice = this.optionalNumber(body.marketplaceSalePrice) ?? 0;
     const stockCostMap = await this.buildStockCostMap([...items, ...pots]);
     const totalCost = this.round(
       items.reduce((sum: number, item: any) => sum + this.itemTotal(item, stockCostMap), 0) +
@@ -687,6 +688,7 @@ export class ProductionCostsService {
           desi,
           marketplaceMarkupPercent,
           campaignBufferPercent,
+          marketplaceSalePrice,
           totalCost,
           status: approve ? 'APPROVED' : 'DRAFT',
           approvedAt: approve ? new Date() : null,
@@ -701,6 +703,7 @@ export class ProductionCostsService {
           desi,
           marketplaceMarkupPercent,
           campaignBufferPercent,
+          marketplaceSalePrice,
           totalCost,
           status: approve ? 'APPROVED' : 'DRAFT',
           approvedAt: approve ? new Date() : null,
