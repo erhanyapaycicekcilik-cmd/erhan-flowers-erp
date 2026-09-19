@@ -89,6 +89,12 @@ export class StockCardsController {
     return this.stockCards.mergeStockCards(Number(body.sourceId), Number(body.targetId));
   }
 
+  @Post(':id/sync-platforms')
+  async syncPlatforms(@Param('id') id: string) {
+    await this.stockCards.syncPlatforms(Number(id));
+    return { ok: true };
+  }
+
   @Get('trendyol-categories')
   trendyolCategories() {
     return this.stockCards.trendyolCategories();

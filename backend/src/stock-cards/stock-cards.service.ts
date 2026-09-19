@@ -343,6 +343,10 @@ export class StockCardsService {
     }
   }
 
+  async syncPlatforms(id: number) {
+    await this.products.broadcastStockCardUpdate([id]);
+  }
+
   async update(id: number, payload: unknown) {
     const data = this.normalize(payload);
     const body = (payload ?? {}) as Record<string, unknown>;
@@ -405,10 +409,7 @@ export class StockCardsService {
         data: updateData,
       });
 
-      const priceOrStockChanged = ['stockQuantity', 'salePrice', 'purchasePrice'].some((k) => updateData[k] !== undefined);
-      if (priceOrStockChanged) {
-        this.products.broadcastStockCardUpdate([id]).catch(() => undefined);
-      }
+      this.products.broadcastStockCardUpdate([id]).catch(() => undefined);
 
       return this.serialize(stockCard);
     } catch (error) {

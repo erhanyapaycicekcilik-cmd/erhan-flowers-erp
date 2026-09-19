@@ -614,6 +614,15 @@ export default function StockCardsPage() {
     setPanelMode(mode);
   }
 
+  async function syncPlatforms(stockCard: StockCard) {
+    try {
+      await api(`/stock-cards/${stockCard.id}/sync-platforms`, { method: 'POST' });
+      alert(`${stockCard.name} stok ve fiyatı platformlara gönderildi.`);
+    } catch {
+      alert('Gönderme başarısız — backend loglarını kontrol edin.');
+    }
+  }
+
   function openTrendyol(stockCard: StockCard) {
     setSelected(stockCard);
     setTrendyolResult(null);
@@ -814,6 +823,7 @@ export default function StockCardsPage() {
                     onUpload={(files) => uploadImages(item, files)}
                     onSetMainImage={(imageId) => setMainImage(item, imageId)}
                     onTrendyol={() => openTrendyol(item)}
+                    onSyncPlatforms={() => syncPlatforms(item)}
                     isStaff={isStaff}
                   />
                 ))}
@@ -1312,6 +1322,7 @@ function StockVisualCard({
   onUpload,
   onSetMainImage,
   onTrendyol,
+  onSyncPlatforms,
   isStaff,
 }: {
   item: StockCard;
@@ -1324,6 +1335,7 @@ function StockVisualCard({
   onUpload: (files: FileList | null) => void;
   onSetMainImage: (imageId: number) => void;
   onTrendyol: () => void;
+  onSyncPlatforms: () => void;
   isStaff: boolean;
 }) {
   const criticalLevel = Number(item.criticalStockLevel ?? 0);
@@ -1401,6 +1413,11 @@ function StockVisualCard({
           {!isStaff && (
             <button type="button" className="btn btn-secondary col-span-2 min-h-10 border-orange-300 text-orange-700 hover:bg-orange-50" onClick={onTrendyol}>
               <Send size={16} /> Trendyol'a Satışa Aç
+            </button>
+          )}
+          {!isStaff && (
+            <button type="button" className="btn btn-secondary col-span-2 min-h-10 border-blue-300 text-blue-700 hover:bg-blue-50" onClick={onSyncPlatforms}>
+              <Send size={16} /> Stok/Fiyat → Platformlara Gönder
             </button>
           )}
           {!isStaff && <button className="btn btn-secondary min-h-10" onClick={() => window.print()}><FileText size={16} /> A5 Çıktı</button>}
