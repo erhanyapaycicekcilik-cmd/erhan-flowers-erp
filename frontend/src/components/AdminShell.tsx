@@ -14,6 +14,7 @@ import {
   Home,
   Edit3,
   LayoutGrid,
+  ImageIcon,
   ListChecks,
   LogOut,
   Megaphone,
@@ -84,6 +85,7 @@ const navGroups: { section: string; icon: LucideIcon; items: NavItem[] }[] = [
       { href: '/musteri-sorulari', label: 'Müşteri Soruları', icon: MessageSquare, roles: OWNER_MANAGER },
       { href: '/kategoriler', label: 'Kategoriler', icon: LayoutGrid, roles: OWNER_MANAGER },
       { href: '/urun-duzenle', label: 'Ürün Düzenle', icon: Edit3, roles: OWNER_MANAGER },
+      { href: '/referanslar', label: 'Referans Projeler', icon: ImageIcon, roles: OWNER_MANAGER },
     ],
   },
   {

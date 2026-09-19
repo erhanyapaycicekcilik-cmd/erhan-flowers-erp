@@ -33,6 +33,7 @@ import { SuppliersModule } from './suppliers/suppliers.module';
 import { EftModule } from './eft/eft.module';
 import { CustomerQuestionsModule } from './customer-questions/customer-questions.module';
 import { ShopCategoriesModule } from './shop-categories/shop-categories.module';
+import { ProjectReferencesModule } from './project-references/project-references.module';
 
 @Module({
   imports: [
@@ -76,6 +77,7 @@ import { ShopCategoriesModule } from './shop-categories/shop-categories.module';
     EftModule,
     CustomerQuestionsModule,
     ShopCategoriesModule,
+    ProjectReferencesModule,
   ],
   controllers: [AppController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
