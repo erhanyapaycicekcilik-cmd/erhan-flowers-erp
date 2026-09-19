@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { RefreshCw, Package, Clock, ExternalLink, Camera, Printer, ChevronDown, ChevronUp, Phone, MapPin, CheckCircle } from 'lucide-react';
+import { RefreshCw, Package, Clock, ExternalLink, Camera, Video, Printer, ChevronDown, ChevronUp, Phone, MapPin, CheckCircle } from 'lucide-react';
 import { AdminShell } from '@/components/AdminShell';
 import { api, apiFileUrl, apiBaseUrl } from '@/lib/api';
 
@@ -336,6 +336,7 @@ function OrderCard({ order, onStatusChange, readySection }: { order: OrderRow; o
   const [showDetails, setShowDetails] = useState(false);
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const videoRef = useRef<HTMLInputElement>(null);
 
   const itemsWithImg = order.items.filter((i) => i.imagePath);
   const activeItem = itemsWithImg[activeIdx] ?? order.items[activeIdx] ?? order.items[0];
@@ -557,10 +558,16 @@ function OrderCard({ order, onStatusChange, readySection }: { order: OrderRow; o
           ) : (
             <>
               <input ref={fileRef} type="file" accept="image/*" capture="environment" multiple className="hidden" onChange={handlePhoto} />
+              <input ref={videoRef} type="file" accept="video/*" capture="environment" multiple className="hidden" onChange={handlePhoto} />
               <button onClick={() => void markReadyWithoutPhoto()} disabled={uploading}
                 title="Fotoğrafsız hazır yap"
                 className="flex items-center justify-center p-2 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-100 transition">
                 <CheckCircle size={15} />
+              </button>
+              <button onClick={() => videoRef.current?.click()} disabled={uploading}
+                title="Video kanıt yükle"
+                className="flex items-center justify-center p-2 rounded-lg border border-blue-200 text-blue-600 hover:bg-blue-50 transition disabled:opacity-60">
+                <Video size={15} />
               </button>
               <button onClick={() => fileRef.current?.click()} disabled={uploading}
                 className="flex-1 flex items-center justify-center gap-1 text-sm px-3 py-2 rounded-lg bg-green-600 text-white hover:bg-green-700 transition disabled:opacity-60 font-bold">

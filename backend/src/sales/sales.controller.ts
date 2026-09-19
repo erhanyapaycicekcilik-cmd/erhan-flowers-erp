@@ -142,7 +142,7 @@ export class SalesController {
           cb(null, `${Date.now()}-${Math.round(Math.random() * 1e9)}${extname(file.originalname)}`);
         },
       }),
-      limits: { fileSize: 15 * 1024 * 1024 },
+      limits: { fileSize: 200 * 1024 * 1024 },
     }),
   )
   uploadProofPhoto(
@@ -167,7 +167,7 @@ export class SalesController {
           cb(null, `${Date.now()}-${Math.round(Math.random() * 1e9)}${extname(file.originalname)}`);
         },
       }),
-      limits: { fileSize: 15 * 1024 * 1024 },
+      limits: { fileSize: 200 * 1024 * 1024 },
     }),
   )
   async uploadProofPhotos(

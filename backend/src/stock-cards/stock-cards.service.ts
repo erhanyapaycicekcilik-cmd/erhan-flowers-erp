@@ -1098,8 +1098,6 @@ export class StockCardsService {
       await tx.$executeRaw`UPDATE stock_reservations SET stock_card_id = ${targetId} WHERE stock_card_id = ${sourceId}`;
       await tx.$executeRaw`UPDATE bambu_cost_rules SET leaf_stock_card_id = ${targetId} WHERE leaf_stock_card_id = ${sourceId}`;
       await tx.$executeRaw`UPDATE bambu_cost_rules SET trunk_stock_card_id = ${targetId} WHERE trunk_stock_card_id = ${sourceId}`;
-      await tx.$executeRaw`UPDATE trendyol_product_variants SET stock_card_id = ${targetId} WHERE stock_card_id = ${sourceId}` .catch(() => null);
-      await tx.$executeRaw`UPDATE production_orders SET stock_card_id = ${targetId} WHERE stock_card_id = ${sourceId}` .catch(() => null);
 
       // Stok miktarlarını hedefte topla
       const newQty = Number(target.stockQuantity) + Number(source.stockQuantity);
