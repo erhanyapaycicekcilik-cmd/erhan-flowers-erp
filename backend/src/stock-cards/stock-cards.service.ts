@@ -405,6 +405,11 @@ export class StockCardsService {
         data: updateData,
       });
 
+      const priceOrStockChanged = ['stockQuantity', 'salePrice', 'purchasePrice'].some((k) => updateData[k] !== undefined);
+      if (priceOrStockChanged) {
+        this.products.broadcastStockCardUpdate([id]).catch(() => undefined);
+      }
+
       return this.serialize(stockCard);
     } catch (error) {
       this.handleUniqueError(error);
