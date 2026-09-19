@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Prisma } from '../generated/prisma-client';
 import * as fs from 'fs';
 import { extname, join } from 'path';
@@ -9,6 +9,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { stockImageFallbackRoots, stockImageRoot } from '../stock-image-paths';
 import { IntegrationCenterService } from '../integrations/services/integration-center.service';
 import { TrendyolAdapter } from '../integrations/adapters/trendyol.adapter';
+import { ProductsService } from '../products/products.service';
 
 type StockCardPayload = {
   name?: string;
@@ -120,9 +121,12 @@ const stockCardListSelect = {
 
 @Injectable()
 export class StockCardsService {
+  private readonly logger = new Logger(StockCardsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly integrationCenter: IntegrationCenterService,
+    private readonly products: ProductsService,
   ) {}
 
   async list(userRole?: string) {
@@ -559,6 +563,10 @@ export class StockCardsService {
 
       return saved;
     });
+
+    this.products.broadcastStockCardUpdate([id]).catch((err) =>
+      this.logger.warn(`Stok hareketi sonrası platform yayını hatası: ${String(err)}`),
+    );
 
     return this.serialize(updated, userRole);
   }
