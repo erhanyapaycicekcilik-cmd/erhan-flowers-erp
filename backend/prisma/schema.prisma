@@ -955,6 +955,7 @@ model ProductCostDraft {
   desi                     Decimal                @default(0) @db.Decimal(8, 2)
   marketplaceMarkupPercent Decimal                @default(25) @map("marketplace_markup_percent") @db.Decimal(5, 2)
   campaignBufferPercent    Decimal                @default(10) @map("campaign_buffer_percent") @db.Decimal(5, 2)
+  marketplaceSalePrice     Decimal                @default(0) @map("marketplace_sale_price") @db.Decimal(12, 2)
   totalCost                Decimal                @default(0) @map("total_cost") @db.Decimal(12, 2)
   status                   ProductCostStatus      @default(DRAFT)
   approvedAt               DateTime?              @map("approved_at")

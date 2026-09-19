@@ -284,7 +284,11 @@ export class ProductsService {
       });
       if (variants.length > 0) {
         for (const variant of variants) {
-          const salePrice = Number(variant.trendyolSalePrice ?? variant.productCostDraft?.salePrice ?? 0);
+          const salePrice = Number(
+            (variant.productCostDraft as any)?.marketplaceSalePrice > 0
+              ? (variant.productCostDraft as any).marketplaceSalePrice
+              : variant.trendyolSalePrice ?? variant.productCostDraft?.salePrice ?? 0
+          );
           await this.broadcastPriceStock({ barcode: variant.barcode, modelCode: variant.currentModelCode, marketPrice: salePrice, stockQuantity: Number(card.stockQuantity) }).catch(() => undefined);
         }
       } else {
