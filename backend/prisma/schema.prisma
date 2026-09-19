@@ -2421,3 +2421,18 @@ model ShopCategory {
   @@map("shop_categories")
 }
 
+
+// Referans projeleri — florayapaycicek.com referanslarımız sayfasında gösterilir
+model ProjectReference {
+  id          Int          @id @default(autoincrement())
+  title       String
+  description String?
+  location    String?
+  imageUrls   String[]     @default([]) @map("image_urls")
+  sortOrder   Int          @default(0) @map("sort_order")
+  status      RecordStatus @default(ACTIVE)
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+
+  @@map("project_references")
+}
