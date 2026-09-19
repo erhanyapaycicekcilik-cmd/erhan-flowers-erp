@@ -436,7 +436,12 @@ export class ProductsService {
     for (const v of variants) {
       const key = v.barcode ?? v.currentModelCode ?? v.supplierStockCode;
       if (!key) { skipped++; continue; }
-      const salePrice = Number(v.productCostDraft?.salePrice ?? v.trendyolSalePrice ?? 0);
+      const draft = v.productCostDraft as any;
+      const salePrice = Number(
+        draft?.marketplaceSalePrice > 0
+          ? draft.marketplaceSalePrice
+          : draft?.salePrice ?? v.trendyolSalePrice ?? 0,
+      );
       if (!salePrice) { skipped++; continue; }
       const stockQuantity = Number(v.stockQuantity ?? 0);
       const listPrice = Math.ceil(salePrice * 1.1);
