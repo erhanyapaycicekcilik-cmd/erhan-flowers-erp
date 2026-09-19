@@ -269,4 +269,9 @@ export class ProductionCostsController {
   createVariant(@Body() body: unknown) {
     return this.productionCosts.createVariant(body);
   }
+
+  @Post('recalculate-marketplace-prices')
+  recalculateMarketplacePrices() {
+    return this.productionCosts.recalculateMarketplacePrices();
+  }
 }

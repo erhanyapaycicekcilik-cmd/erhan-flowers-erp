@@ -342,6 +342,7 @@ export default function ProductsPage() {
   const [importingExcel, setImportingExcel] = useState(false);
   const [broadcastingAll, setBroadcastingAll] = useState(false);
   const [broadcastResult, setBroadcastResult] = useState<{ total: number; sent: number; skipped: number; errors: number } | null>(null);
+  const [recalculating, setRecalculating] = useState(false);
   const [backfillingCosts, setBackfillingCosts] = useState(false);
   const [backfillResult, setBackfillResult] = useState<{ checked: number; created: number; skipped: number } | null>(null);
   const [openingTrendyolPanel, setOpeningTrendyolPanel] = useState(false);
@@ -1696,6 +1697,25 @@ export default function ProductsPage() {
             <Upload size={17} /> {importingExcel ? 'Yükleniyor...' : 'Excel ile Toplu Yükle'}
             <input type="file" accept=".xlsx,.xls" className="hidden" disabled={importingExcel} onChange={(event) => { const file = event.target.files?.[0]; if (file) importExcelFile(file); event.target.value = ''; }} />
           </label>
+          <button
+            className="btn btn-secondary"
+            disabled={recalculating}
+            onClick={async () => {
+              if (!confirm('Tüm ürünlerin pazaryeri fiyatları mevcut maliyet verilerinden yeniden hesaplanacak ve kaydedilecek. Devam edilsin mi?')) return;
+              setRecalculating(true);
+              try {
+                const result = await api<{ updated: number; total: number }>('/production-costs/recalculate-marketplace-prices', { method: 'POST' });
+                alert(`Pazaryeri fiyatları güncellendi: ${result.updated} / ${result.total} ürün`);
+              } catch {
+                alert('Fiyat hesaplama sırasında hata oluştu.');
+              } finally {
+                setRecalculating(false);
+              }
+            }}
+          >
+            {recalculating ? <RefreshCw size={17} className="animate-spin" /> : <Send size={17} />}
+            {recalculating ? 'Hesaplanıyor...' : 'Pazaryeri Fiyatlarını Hesapla'}
+          </button>
           <button
             className="btn btn-secondary"
             disabled={broadcastingAll}
