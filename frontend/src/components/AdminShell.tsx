@@ -134,6 +134,7 @@ const roleAllowedPaths: Record<UserRole, string[]> = {
     '/dashboard', '/products', '/media', '/model-codes', '/barcodes', '/stock-cards',
     '/hesap-makinesi', '/orders', '/staff/orders', '/sales', '/crm',
     '/integrations', '/market-analizi', '/reports', '/staff/tasks',
+    '/urun-duzenle', '/kategoriler', '/referanslar', '/eft-yonetim', '/musteri-sorulari',
   ],
   STAFF: ['/staff/orders', '/staff/photo-archive', '/products'],
 };
