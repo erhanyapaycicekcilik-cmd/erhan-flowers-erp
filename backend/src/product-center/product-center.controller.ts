@@ -115,4 +115,14 @@ export class ProductCenterController {
   nextModelCodePreview(@Query('shopCategoryId') shopCategoryId?: string) {
     return this.productCenter.previewNextModelCode(shopCategoryId ? Number(shopCategoryId) : undefined);
   }
+
+  @Get('variants/:id')
+  getVariant(@Param('id') id: string) {
+    return this.productCenter.getVariantForEdit(Number(id));
+  }
+
+  @Post('suggest-name')
+  suggestName(@Body() body: { current: string; description: string; category: string }) {
+    return this.productCenter.suggestProductName(body.current ?? '', body.description ?? '', body.category ?? '');
+  }
 }
