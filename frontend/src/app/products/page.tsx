@@ -234,6 +234,7 @@ const emptyForm = {
   modelCode: '',
   stockCode: '',
   categoryId: '',
+  shopCategoryId: '',
   familyId: '',
   sizeOptionId: '',
   potOptionId: '',
@@ -351,6 +352,8 @@ export default function ProductsPage() {
   const [productTrendyolResult, setProductTrendyolResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [productTrendyolSending, setProductTrendyolSending] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [shopCategories, setShopCategories] = useState<any[]>([]);
+  const [erhCodePreview, setErhCodePreview] = useState('');
   const [families, setFamilies] = useState<Family[]>([]);
   const [mediaFiles, setMediaFiles] = useState<MediaFile[]>([]);
   const [stockCards, setStockCards] = useState<StockCard[]>([]);
@@ -402,9 +405,10 @@ export default function ProductsPage() {
   const costSectionRef = useRef<HTMLDivElement | null>(null);
 
   async function load() {
-    const [entryData, categoryData, familyData, mediaData, stockCardData, defaultExpenseData, userData, imageStatusData] = await Promise.all([
+    const [entryData, categoryData, shopCategoryData, familyData, mediaData, stockCardData, defaultExpenseData, userData, imageStatusData] = await Promise.all([
       api<Entry[]>('/product-center/entries').catch(() => []),
       api<Category[]>('/categories').catch(() => []),
+      api<any[]>('/shop-categories').catch(() => []),
       api<Family[]>('/production-costs/families').catch(() => []),
       api<MediaFile[]>('/media').catch(() => []),
       api<StockCard[]>('/stock-cards').catch(() => []),
@@ -414,6 +418,12 @@ export default function ProductsPage() {
     ]);
     setEntries(entryData.map(normalizeEntry));
     setCategories(categoryData.map((category) => ({ ...category, name: cleanText(category.name) })));
+    const flatShopCats: any[] = [];
+    (Array.isArray(shopCategoryData) ? shopCategoryData : []).forEach((c: any) => {
+      flatShopCats.push(c);
+      c.children?.forEach((ch: any) => flatShopCats.push({ ...ch, _indent: true }));
+    });
+    setShopCategories(flatShopCats);
     setFamilies(familyData.map(normalizeFamily));
     setMediaFiles(mediaData);
     setStockCards(normalizeStockCards(stockCardData));
@@ -505,6 +515,17 @@ export default function ProductsPage() {
     const id = Number(new URLSearchParams(window.location.search).get('variantId'));
     if (id) api<Entry>(`/product-center/entries/${id}`).then((entry) => editEntry(normalizeEntry(entry))).catch(() => null);
   }, []);
+
+  useEffect(() => {
+    const shopCatId = (form as any).shopCategoryId;
+    if (!shopCatId) { setErhCodePreview(''); return; }
+    api<{ modelCode: string }>(`/product-center/next-model-code?shopCategoryId=${shopCatId}`)
+      .then((r) => {
+        setErhCodePreview(r.modelCode);
+        if (!form.modelCode) setForm((c) => ({ ...c, modelCode: r.modelCode }));
+      })
+      .catch(() => setErhCodePreview(''));
+  }, [(form as any).shopCategoryId]);
 
   useEffect(() => {
     if (form.variantId || !form.productName.trim() || !form.categoryId) return;
@@ -860,6 +881,7 @@ export default function ProductsPage() {
       modelCode: entry.modelCode,
       stockCode: entry.stockCode || '',
       categoryId: entry.categoryId ? String(entry.categoryId) : '',
+      shopCategoryId: (entry as any).shopCategoryId ? String((entry as any).shopCategoryId) : '',
       familyId: entry.familyId ? String(entry.familyId) : '',
       sizeOptionId: entry.sizeOptionId ? String(entry.sizeOptionId) : '',
       potOptionId: entry.potOptionId ? String(entry.potOptionId) : '',
@@ -907,6 +929,7 @@ export default function ProductsPage() {
         variantId: form.variantId ? Number(form.variantId) : undefined,
         productId: form.productId ? Number(form.productId) : undefined,
         categoryId: Number(form.categoryId),
+        shopCategoryId: (form as any).shopCategoryId ? Number((form as any).shopCategoryId) : undefined,
         familyId: form.familyId ? Number(form.familyId) : undefined,
         sizeOptionId: form.sizeOptionId ? Number(form.sizeOptionId) : undefined,
         potOptionId: form.potOptionId ? Number(form.potOptionId) : undefined,
@@ -2018,6 +2041,26 @@ export default function ProductsPage() {
                   )}
                 </div>
                 <Field label="Kategori"><select className="field" value={form.categoryId} onChange={(event) => update('categoryId', event.target.value)}><option value="">Seçin</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></Field>
+                <div>
+                  <Field label="Site kategorisi (ERH kodu için)">
+                    <select
+                      className="field"
+                      value={(form as any).shopCategoryId || ''}
+                      onChange={(e) => setForm((c) => ({ ...c, shopCategoryId: e.target.value }))}
+                    >
+                      <option value="">— Seçin —</option>
+                      {shopCategories.map((c) => (
+                        <option key={c.id} value={c.id}>{c._indent ? `  └ ${c.name}` : c.name}</option>
+                      ))}
+                    </select>
+                  </Field>
+                  {erhCodePreview && (
+                    <div className="mt-1 flex items-center gap-2">
+                      <span className="text-xs text-slate-500">ERH model kodu:</span>
+                      <span className="rounded bg-blue-50 px-2 py-0.5 text-xs font-mono font-bold text-blue-700">{erhCodePreview}</span>
+                    </div>
+                  )}
+                </div>
                 <Field label="Renk / çeşit"><input className="field" value={form.colorVariant} onChange={(event) => update('colorVariant', event.target.value)} /></Field>
                 {/* Fiziksel özellikler */}
                 <Field label="Ürün boyu"><input className="field" value={(form as any).productHeight || ''} onChange={(e) => update('productHeight' as any, e.target.value)} placeholder="180 cm" /></Field>

@@ -158,7 +158,7 @@ export class ProductCenterService {
         status,
       });
 
-      const data = {
+      const data: any = {
         productId: product.id,
         barcode,
         productName,
@@ -171,6 +171,7 @@ export class ProductCenterService {
         productDescription: this.text(payload.description),
         stockQuantity: this.optionalInt(payload.stockQuantity) ?? 0,
         images,
+        shopCategoryId: this.optionalInt((payload as any).shopCategoryId),
         familyId: this.optionalInt(payload.familyId),
         sizeOptionId: this.optionalInt(payload.sizeOptionId),
         potOptionId: this.optionalInt(payload.potOptionId),
