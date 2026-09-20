@@ -2,8 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react'
 import { AdminShell } from '@/components/AdminShell'
-
-const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
+import { api } from '@/lib/api'
 
 function fmt(n: number) {
   return '₺' + new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2 }).format(n)
@@ -30,8 +29,7 @@ export default function UrunDuzenlePage() {
 
   async function loadCategories() {
     try {
-      const res = await fetch(`${API}/shop-categories`, { credentials: 'include' })
-      const data = await res.json()
+      const data = await api<any[]>('/shop-categories')
       setCategories(Array.isArray(data) ? data : [])
     } catch { setCategories([]) }
   }
@@ -40,9 +38,7 @@ export default function UrunDuzenlePage() {
     setLoading(true)
     try {
       const qs = q ? `?search=${encodeURIComponent(q)}` : ''
-      const res = await fetch(`${API}/product-center/variants${qs}`, { credentials: 'include' })
-      if (res.status === 401) { window.location.href = '/login'; return }
-      const data = await res.json()
+      const data = await api<any[]>(`/product-center/variants${qs}`)
       setProducts(Array.isArray(data) ? data : [])
     } catch { setProducts([]) }
     finally { setLoading(false) }
@@ -82,11 +78,9 @@ export default function UrunDuzenlePage() {
         .map((s: string) => s.trim())
         .filter(Boolean)
 
-      await fetch(`${API}/product-center/variants/${selected.id}`, {
+      await api(`/product-center/variants/${selected.id}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
+        json: {
           productName: form.productName,
           productDescription: form.productDescription,
           images: imagesArr,
@@ -94,7 +88,7 @@ export default function UrunDuzenlePage() {
           supplierStockCode: form.supplierStockCode,
           barcode: form.barcode,
           shopCategoryId: form.shopCategoryId ? Number(form.shopCategoryId) : null,
-        }),
+        },
       })
       setSaved(true)
       await loadProducts(search)
