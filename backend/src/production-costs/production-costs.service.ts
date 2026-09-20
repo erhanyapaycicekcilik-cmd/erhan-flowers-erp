@@ -785,11 +785,13 @@ export class ProductionCostsService {
             },
           });
           // Maliyet onaylanınca tüm platformlara fiyat/stok yayını
+          // marketplaceSalePrice = dükkan fiyatı + komisyon + KDV + kargo (hesaplanmış platform fiyatı)
+          const platformPrice = marketplaceSalePrice > 0 ? marketplaceSalePrice : salePrice;
           this.broadcastApprovedCost({
             barcode: product.barcode,
             modelCode: product.modelCode,
-            salePrice,
-            listPrice: salePrice,
+            salePrice: platformPrice,
+            listPrice: platformPrice,
             stockQuantity: Number(variant.stockQuantity ?? 0),
           }).catch((err) => this.logger.warn(`Maliyet onay yayın hatası: ${String(err)}`));
         }
