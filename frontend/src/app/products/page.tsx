@@ -2040,6 +2040,17 @@ export default function ProductsPage() {
                     </button>
                   )}
                 </div>
+                <div className="md:col-span-2 xl:col-span-4">
+                  <div className="rounded-md border border-line bg-slate-50 p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <div className="font-bold">Stok bileşenleri</div>
+                        <div className="mt-1 text-xs text-slate-500">{componentSummary(activeDraft)}</div>
+                      </div>
+                      <button type="button" className="btn btn-secondary" onClick={openComponentPicker}><Search size={16} /> Stok bileşenlerini seç</button>
+                    </div>
+                  </div>
+                </div>
                 <Field label="Kategori"><select className="field" value={form.categoryId} onChange={(event) => update('categoryId', event.target.value)}><option value="">Seçin</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></Field>
                 <div>
                   <Field label="Site kategorisi (ERH kodu için)">
@@ -2103,17 +2114,6 @@ export default function ProductsPage() {
                     {(form as any).potVolumeLitre && <span className="text-xs font-semibold text-emerald-700 whitespace-nowrap">= {(form as any).potVolumeLitre} L</span>}
                   </div>
                   <input className="field mt-1 text-xs" value={(form as any).potSize || ''} onChange={(e) => update('potSize' as any, e.target.value)} placeholder="28×28×30cm (düzenlenebilir)" />
-                </div>
-                <div className="md:col-span-2 xl:col-span-4">
-                  <div className="rounded-md border border-line bg-slate-50 p-4">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div>
-                        <div className="font-bold">Stok bileşenleri</div>
-                        <div className="mt-1 text-xs text-slate-500">{componentSummary(activeDraft)}</div>
-                      </div>
-                      <button type="button" className="btn btn-secondary" onClick={openComponentPicker}><Search size={16} /> Stok bileşenlerini seç</button>
-                    </div>
-                  </div>
                 </div>
                 <div className="md:col-span-2 xl:col-span-4">
                   <div className="rounded-md border border-emerald-200 bg-emerald-50">
