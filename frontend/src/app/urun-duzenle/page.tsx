@@ -18,6 +18,7 @@ export default function UrunDuzenlePage() {
   const [form, setForm] = useState<any>(null)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [error, setError] = useState('')
   const searchTimeout = useRef<any>(null)
 
   // Tüm kategoriler düz liste
@@ -41,8 +42,13 @@ export default function UrunDuzenlePage() {
       const qs = q ? `?search=${encodeURIComponent(q)}` : ''
       const res = await fetch(`${API}/product-center/variants${qs}`, { credentials: 'include' })
       const data = await res.json()
-      setProducts(Array.isArray(data) ? data : [])
-    } catch { setProducts([]) }
+      if (!Array.isArray(data)) {
+        setError(`API hatası: ${JSON.stringify(data).slice(0, 200)}`)
+        setProducts([])
+      } else {
+        setProducts(data)
+      }
+    } catch (e) { setError(`Bağlantı hatası: ${String(e)}`); setProducts([]) }
     finally { setLoading(false) }
   }
 
@@ -118,6 +124,7 @@ export default function UrunDuzenlePage() {
               value={search}
               onChange={(e) => handleSearchChange(e.target.value)}
             />
+            {error && <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-2 break-all">{error}</div>}
             <div className="space-y-2 max-h-[calc(100vh-220px)] overflow-y-auto pr-1">
               {loading ? (
                 <div className="text-center py-10 text-gray-400 text-sm">Yükleniyor...</div>
