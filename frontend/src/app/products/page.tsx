@@ -72,6 +72,9 @@ type StockCard = {
   model?: string | null;
   barcode?: string | null;
   potColor?: string | null;
+  potType?: string | null;
+  potSize?: string | null;
+  height?: string | null;
   productFamily?: string | null;
   productType?: string | null;
   imagePath?: string | null;
@@ -758,10 +761,21 @@ export default function ProductsPage() {
   function selectCompositeStock(type: 'product' | 'leaf' | 'trunk' | 'pot', stockCard: StockCard) {
     const stockImage = stockCardPrimaryImage(stockCard);
     setCompositeImageError('');
-    setForm((current) => ({
-      ...current,
-      images: current.images.filter((image) => image !== stockImage && !image.startsWith(compositeGeneratedImagePrefix)),
-    }));
+    setForm((current) => {
+      const updates: Record<string, unknown> = {
+        images: current.images.filter((image) => image !== stockImage && !image.startsWith(compositeGeneratedImagePrefix)),
+      };
+      if (type === 'pot') {
+        const resolvedPotType = stockCard.potType ?? stockCard.productType ?? stockCard.category ?? '';
+        const resolvedPotSize = stockCard.potSize ?? '';
+        if (resolvedPotType && !(current as any).potType) updates.potType = resolvedPotType;
+        if (resolvedPotSize && !(current as any).potSize) updates.potSize = resolvedPotSize;
+      }
+      if ((type === 'product' || type === 'trunk') && stockCard.height && !(current as any).productHeight) {
+        updates.productHeight = stockCard.height;
+      }
+      return { ...current, ...updates };
+    });
     setCompositeBuilder((current) => {
       if (type === 'product') return { ...current, productStockCardId: String(stockCard.id), productSearch: stockCard.name };
       if (type === 'leaf') return { ...current, leafStockCardId: String(stockCard.id), leafSearch: stockCard.name };
@@ -1134,9 +1148,16 @@ export default function ProductsPage() {
       setForm((current) => current.categoryId ? current : { ...current, categoryId: String(matchedCategoryId), channelCategoryName: category?.name ?? current.channelCategoryName });
     }
     if (role === 'POT') {
+      const resolvedPotType = stockCard.potType ?? stockCard.productType ?? stockCard.category ?? 'Saksı';
+      const resolvedPotSize = stockCard.potSize ?? '';
+      setForm((current) => ({
+        ...current,
+        ...(!( current as any).potType && resolvedPotType ? { potType: resolvedPotType } : {}),
+        ...(!( current as any).potSize && resolvedPotSize ? { potSize: resolvedPotSize } : {}),
+      }));
       const nextPot = {
         name: stockCard.name,
-        potType: stockCard.productType ?? stockCard.category ?? 'Saksı',
+        potType: resolvedPotType,
         color: null,
         quantity,
         unit: stockCard.unit,
@@ -1154,6 +1175,9 @@ export default function ProductsPage() {
       return;
     }
 
+    if ((role === 'TRUNK' || role === 'LEAF' || role === 'FLOWER') && stockCard.height) {
+      setForm((current) => (current as any).productHeight ? current : { ...current, productHeight: stockCard.height });
+    }
     const roleName = componentRoleLabel(role);
     const group = componentRoleGroup(role, stockCard);
     const nextItem = {
