@@ -1217,7 +1217,7 @@ export class ProductCenterService {
   }
 
   async listVariantsForEdit(search?: string) {
-    const where: any = { status: 'ACTIVE' }
+    const where: any = {}
     if (search) {
       where.OR = [
         { productName: { contains: search, mode: 'insensitive' } },
