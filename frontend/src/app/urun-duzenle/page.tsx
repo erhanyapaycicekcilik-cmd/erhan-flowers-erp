@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react'
 import { AdminShell } from '@/components/AdminShell'
-import { api } from '@/lib/api'
+import { api, apiFileUrl, apiBaseUrl } from '@/lib/api'
 
 function fmt(n: number) {
   return '₺' + new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2 }).format(n)
@@ -19,7 +19,26 @@ export default function UrunDuzenlePage() {
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState('')
   const [physOpen, setPhysOpen] = useState(false)
+  const [uploading, setUploading] = useState(false)
   const searchTimeout = useRef<any>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  async function uploadImage(file: File) {
+    setUploading(true)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const res = await api<any>('/media/upload', { method: 'POST', body: fd })
+      const url = res.cleanBackground?.filePath
+        ? apiFileUrl(res.cleanBackground.filePath)
+        : apiFileUrl(res.filePath)
+      setForm((f: any) => {
+        const existing = (f.images || '').trim()
+        return { ...f, images: existing ? existing + '\n' + url : url }
+      })
+      setSaved(false)
+    } finally { setUploading(false) }
+  }
 
   // Tüm kategoriler düz liste
   const allCats: any[] = []
@@ -207,24 +226,61 @@ export default function UrunDuzenlePage() {
 
                   {/* Görsel URL'leri */}
                   <div>
-                    <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                      Görsel URL'leri <span className="text-gray-400 normal-case font-normal">(her satıra bir URL)</span>
-                    </label>
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                        Görseller
+                      </label>
+                      <button
+                        type="button"
+                        disabled={uploading}
+                        onClick={() => fileInputRef.current?.click()}
+                        className="text-xs text-blue-600 font-medium hover:underline disabled:opacity-50"
+                      >
+                        {uploading ? 'Yükleniyor...' : '+ Görsel Yükle'}
+                      </button>
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        className="hidden"
+                        onChange={async (e) => {
+                          const files = Array.from(e.target.files ?? [])
+                          for (const f of files) await uploadImage(f)
+                          e.target.value = ''
+                        }}
+                      />
+                    </div>
+                    {/* Önizleme + sıralama */}
+                    {form.images.split('\n').filter((s: string) => s.trim()).length > 0 && (
+                      <div className="flex gap-2 mt-2 flex-wrap">
+                        {form.images.split('\n').filter((s: string) => s.trim()).map((url: string, i: number, arr: string[]) => (
+                          <div key={i} className="relative group">
+                            <img
+                              src={url.trim()}
+                              alt=""
+                              className="w-16 h-16 rounded-lg object-cover border border-gray-200"
+                              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const lines = arr.filter((_, j) => j !== i)
+                                setForm({ ...form, images: lines.join('\n') }); setSaved(false)
+                              }}
+                              className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-4 h-4 text-xs leading-none hidden group-hover:flex items-center justify-center"
+                            >×</button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                     <textarea
-                      className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-                      rows={4}
+                      className="mt-2 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                      rows={3}
                       value={form.images}
                       onChange={(e) => { setForm({ ...form, images: e.target.value }); setSaved(false) }}
                       placeholder="https://cdn.example.com/resim1.jpg&#10;https://cdn.example.com/resim2.jpg"
                     />
-                    {/* Önizleme */}
-                    {form.images.split('\n').filter((s: string) => s.trim().startsWith('http')).length > 0 && (
-                      <div className="flex gap-2 mt-2 flex-wrap">
-                        {form.images.split('\n').filter((s: string) => s.trim().startsWith('http')).slice(0, 6).map((url: string, i: number) => (
-                          <img key={i} src={url.trim()} alt="" className="w-16 h-16 rounded-lg object-cover border border-gray-200" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
-                        ))}
-                      </div>
-                    )}
                   </div>
 
                   {/* Kodlar */}
