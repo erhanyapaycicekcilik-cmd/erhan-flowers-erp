@@ -28,8 +28,11 @@ export default function UrunDuzenlePage() {
   })
 
   async function loadCategories() {
-    const res = await fetch(`${API}/shop-categories`, { credentials: 'include' })
-    setCategories(await res.json())
+    try {
+      const res = await fetch(`${API}/shop-categories`, { credentials: 'include' })
+      const data = await res.json()
+      setCategories(Array.isArray(data) ? data : [])
+    } catch { setCategories([]) }
   }
 
   async function loadProducts(q = '') {
@@ -37,8 +40,10 @@ export default function UrunDuzenlePage() {
     try {
       const qs = q ? `?search=${encodeURIComponent(q)}` : ''
       const res = await fetch(`${API}/product-center/variants${qs}`, { credentials: 'include' })
-      setProducts(await res.json())
-    } finally { setLoading(false) }
+      const data = await res.json()
+      setProducts(Array.isArray(data) ? data : [])
+    } catch { setProducts([]) }
+    finally { setLoading(false) }
   }
 
   useEffect(() => {
