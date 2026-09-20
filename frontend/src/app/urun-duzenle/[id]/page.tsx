@@ -9,8 +9,30 @@ function fmt(n: number) {
   return '₺' + new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2 }).format(n)
 }
 
+function buildForm(p: any) {
+  const prod = p?.product ?? {}
+  const physLines: string[] = []
+  if (prod.productHeight) physLines.push(`Yükseklik: ${prod.productHeight}`)
+  if (prod.potSize) physLines.push(`Saksı Boyu: ${prod.potSize}`)
+  if (prod.potType) physLines.push(`Saksı Türü: ${prod.potType}`)
+  if (prod.branchCount != null && prod.branchCount !== '') physLines.push(`Dal Sayısı: ${prod.branchCount}`)
+  if (prod.leafCount != null && prod.leafCount !== '') physLines.push(`Yaprak Sayısı: ${prod.leafCount}`)
+  if (prod.leavesPerBranch != null && prod.leavesPerBranch !== '') physLines.push(`Daldaki Yaprak: ${prod.leavesPerBranch}`)
+  return {
+    productName: p?.productName ?? '',
+    productDescription: p?.productDescription || physLines.join('\n'),
+    images: Array.isArray(p?.images) ? p.images.join('\n') : (p?.images ?? ''),
+    shopCategoryId: p?.shopCategoryId ? String(p.shopCategoryId) : '',
+    potSize: prod.potSize ?? '', potType: prod.potType ?? '',
+    productHeight: prod.productHeight ?? '', leafCount: prod.leafCount ?? '',
+    stemCount: prod.stemCount ?? '', branchCount: prod.branchCount ?? '',
+    leavesPerBranch: prod.leavesPerBranch ?? '',
+  }
+}
+
 export default function UrunDetayPage() {
-  const { id } = useParams<{ id: string }>()
+  const params = useParams()
+  const id = params?.id as string | undefined
   const router = useRouter()
 
   const [product, setProduct] = useState<any>(null)
@@ -24,41 +46,35 @@ export default function UrunDetayPage() {
   const [loadingSugg, setLoadingSugg] = useState(false)
   const [nextCode, setNextCode] = useState<string | null>(null)
   const [dragOver, setDragOver] = useState<number | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const allCats: any[] = []
-  categories.forEach((c) => {
-    allCats.push(c)
-    c.children?.forEach((ch: any) => allCats.push({ ...ch, _indent: true }))
-  })
-
   useEffect(() => {
-    api<any[]>('/shop-categories').then(d => setCategories(Array.isArray(d) ? d : [])).catch(() => {})
-    api<any>(`/product-center/variants/${id}`).then(v => {
-      setProduct(v)
-      setForm(buildForm(v))
-    }).catch(() => router.replace('/urun-duzenle'))
+    if (!id) return
+    api<any[]>('/shop-categories')
+      .then(d => setCategories(Array.isArray(d) ? d : []))
+      .catch(() => {})
+    api<any>(`/product-center/variants/${id}`)
+      .then(v => {
+        if (!v) { router.replace('/urun-duzenle'); return }
+        setProduct(v)
+        setForm(buildForm(v))
+      })
+      .catch((err) => {
+        const msg = err?.message || String(err)
+        setLoadError(msg)
+      })
   }, [id])
 
-  function buildForm(p: any) {
-    const prod = p.product ?? {}
-    const physLines: string[] = []
-    if (prod.productHeight) physLines.push(`Yükseklik: ${prod.productHeight}`)
-    if (prod.potSize) physLines.push(`Saksı Boyu: ${prod.potSize}`)
-    if (prod.potType) physLines.push(`Saksı Türü: ${prod.potType}`)
-    if (prod.branchCount != null && prod.branchCount !== '') physLines.push(`Dal Sayısı: ${prod.branchCount}`)
-    if (prod.leafCount != null && prod.leafCount !== '') physLines.push(`Yaprak Sayısı: ${prod.leafCount}`)
-    if (prod.leavesPerBranch != null && prod.leavesPerBranch !== '') physLines.push(`Daldaki Yaprak: ${prod.leavesPerBranch}`)
-    return {
-      productName: p.productName ?? '',
-      productDescription: p.productDescription || physLines.join('\n'),
-      images: Array.isArray(p.images) ? p.images.join('\n') : '',
-      shopCategoryId: p.shopCategoryId ? String(p.shopCategoryId) : '',
-      potSize: prod.potSize ?? '', potType: prod.potType ?? '',
-      productHeight: prod.productHeight ?? '', leafCount: prod.leafCount ?? '',
-      stemCount: prod.stemCount ?? '', branchCount: prod.branchCount ?? '',
-      leavesPerBranch: prod.leavesPerBranch ?? '',
-    }
+  const allCats: any[] = []
+  if (Array.isArray(categories)) {
+    categories.forEach((c) => {
+      if (!c) return
+      allCats.push(c)
+      if (Array.isArray(c.children)) {
+        c.children.forEach((ch: any) => { if (ch) allCats.push({ ...ch, _indent: true }) })
+      }
+    })
   }
 
   async function uploadImage(file: File) {
@@ -67,13 +83,14 @@ export default function UrunDetayPage() {
       const fd = new FormData()
       fd.append('file', file)
       const res = await api<any>('/media/upload', { method: 'POST', body: fd })
-      const url = res.cleanBackground?.filePath ? apiFileUrl(res.cleanBackground.filePath) : apiFileUrl(res.filePath)
+      const url = res?.cleanBackground?.filePath ? apiFileUrl(res.cleanBackground.filePath) : apiFileUrl(res?.filePath ?? '')
       setForm((f: any) => {
-        const existing = (f.images || '').trim()
+        const existing = (f?.images || '').trim()
         return { ...f, images: existing ? existing + '\n' + url : url }
       })
       setSaved(false)
-    } finally { setUploading(false) }
+    } catch { /* ignore */ }
+    finally { setUploading(false) }
   }
 
   async function fetchSuggestions() {
@@ -88,15 +105,16 @@ export default function UrunDetayPage() {
         method: 'POST',
         json: { current: form.productName, description: form.productDescription, category: catName },
       })
-      setSuggestions(res.suggestions ?? [])
-    } finally { setLoadingSugg(false) }
+      setSuggestions(res?.suggestions ?? [])
+    } catch { /* ignore */ }
+    finally { setLoadingSugg(false) }
   }
 
   async function save() {
     if (!product || !form) return
     setSaving(true)
     try {
-      const imagesArr = form.images.split('\n').map((s: string) => s.trim()).filter(Boolean)
+      const imagesArr = (form.images || '').split('\n').map((s: string) => s.trim()).filter(Boolean)
       await api(`/product-center/variants/${product.id}`, {
         method: 'PATCH',
         json: {
@@ -113,40 +131,59 @@ export default function UrunDetayPage() {
         },
       })
       setSaved(true)
-      // Refresh product data
       const updated = await api<any>(`/product-center/variants/${product.id}`)
       setProduct(updated)
-    } finally { setSaving(false) }
+    } catch { /* ignore */ }
+    finally { setSaving(false) }
   }
 
-  // Drag & drop görsel sıralama
   function moveImage(from: number, to: number) {
-    const lines = form.images.split('\n').filter((s: string) => s.trim())
+    const lines = (form?.images || '').split('\n').filter((s: string) => s.trim())
     const [item] = lines.splice(from, 1)
     lines.splice(to, 0, item)
     setForm({ ...form, images: lines.join('\n') })
     setSaved(false)
   }
 
-  const imageList = form ? form.images.split('\n').filter((s: string) => s.trim()) : []
+  if (!id) {
+    return (
+      <AdminShell title="">
+        <div className="p-8 text-center text-red-400">Geçersiz ürün ID.</div>
+      </AdminShell>
+    )
+  }
 
-  // Eksik bilgi kontrolleri
-  const missing: string[] = []
-  if (product) {
-    if (!form?.productDescription?.trim()) missing.push('Açıklama eksik')
-    if (imageList.length === 0) missing.push('Görsel yok')
-    if (!form?.shopCategoryId) missing.push('Kategori seçilmemiş')
-    if (!product.currentModelCode) missing.push('Model kodu yok')
+  if (loadError) {
+    return (
+      <AdminShell title="">
+        <div className="p-8 max-w-xl mx-auto">
+          <h2 className="text-base font-bold text-red-600 mb-2">Ürün yüklenemedi</h2>
+          <p className="text-sm text-red-500 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-4">{loadError}</p>
+          <button onClick={() => router.back()} className="text-sm text-blue-600 hover:underline">← Geri dön</button>
+        </div>
+      </AdminShell>
+    )
   }
 
   if (!product || !form) {
-    return <AdminShell><div className="p-8 text-center text-gray-400">Yükleniyor...</div></AdminShell>
+    return (
+      <AdminShell title="">
+        <div className="p-8 text-center text-gray-400">Yükleniyor...</div>
+      </AdminShell>
+    )
   }
 
-  const price = Number(product.product?.productCostDraft?.marketplaceSalePrice || product.trendyolSalePrice || 0)
+  const imageList: string[] = (form.images || '').split('\n').filter((s: string) => s.trim())
+  const price = Number(product?.product?.productCostDraft?.marketplaceSalePrice || product?.trendyolSalePrice || 0)
+
+  const missing: string[] = []
+  if (!form.productDescription?.trim()) missing.push('Açıklama eksik')
+  if (imageList.length === 0) missing.push('Görsel yok')
+  if (!form.shopCategoryId) missing.push('Kategori seçilmemiş')
+  if (!product.currentModelCode) missing.push('Model kodu yok')
 
   return (
-    <AdminShell>
+    <AdminShell title={product.productName ?? ''}>
       <div className="p-4 max-w-3xl mx-auto">
         {/* Geri + başlık */}
         <div className="flex items-center gap-3 mb-5">
@@ -239,7 +276,6 @@ export default function UrunDetayPage() {
                 }}
               />
             </div>
-            {/* Drag & drop sıralama */}
             {imageList.length > 0 && (
               <div className="flex gap-2 flex-wrap mb-2">
                 {imageList.map((url: string, i: number) => (
@@ -273,7 +309,7 @@ export default function UrunDetayPage() {
             />
           </div>
 
-          {/* Kategori + model kodu önizleme */}
+          {/* Kategori */}
           <div>
             <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Kategori</label>
             <select
@@ -285,7 +321,7 @@ export default function UrunDetayPage() {
                 if (e.target.value) {
                   try {
                     const res = await api<{ modelCode: string }>(`/product-center/next-model-code?shopCategoryId=${e.target.value}`)
-                    setNextCode(res.modelCode)
+                    setNextCode(res?.modelCode ?? null)
                   } catch { /* ignore */ }
                 }
               }}
@@ -344,7 +380,7 @@ export default function UrunDetayPage() {
                       <input
                         type={type || 'text'}
                         className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        value={(form as any)[key]}
+                        value={(form as any)[key] ?? ''}
                         onChange={(e) => { setForm({ ...form, [key]: e.target.value }); setSaved(false) }}
                         placeholder={placeholder || '0'}
                       />
