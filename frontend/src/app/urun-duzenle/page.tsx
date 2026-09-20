@@ -20,6 +20,7 @@ export default function UrunDuzenlePage() {
   const [error, setError] = useState('')
   const [physOpen, setPhysOpen] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [nextCode, setNextCode] = useState<string | null>(null)
   const searchTimeout = useRef<any>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -75,11 +76,27 @@ export default function UrunDuzenlePage() {
     searchTimeout.current = setTimeout(() => loadProducts(val), 400)
   }
 
+  function buildPhysDesc(p: any): string {
+    const prod = p.product ?? {}
+    const lines: string[] = []
+    if (prod.productHeight) lines.push(`Yükseklik: ${prod.productHeight}`)
+    if (prod.potSize) lines.push(`Saksı Boyu: ${prod.potSize}`)
+    if (prod.potType) lines.push(`Saksı Türü: ${prod.potType}`)
+    if (prod.branchCount != null && prod.branchCount !== '') lines.push(`Dal Sayısı: ${prod.branchCount}`)
+    if (prod.leafCount != null && prod.leafCount !== '') lines.push(`Yaprak Sayısı: ${prod.leafCount}`)
+    if (prod.leavesPerBranch != null && prod.leavesPerBranch !== '') lines.push(`Daldaki Yaprak: ${prod.leavesPerBranch}`)
+    return lines.join('\n')
+  }
+
   function selectProduct(p: any) {
     setSelected(p)
+    setNextCode(null)
+    // Açıklama: varsa mevcut açıklama, yoksa fiziksel özelliklerden otomatik oluştur
+    const physDesc = buildPhysDesc(p)
+    const description = p.productDescription || physDesc
     setForm({
       productName: p.productName ?? '',
-      productDescription: p.productDescription ?? '',
+      productDescription: description,
       images: Array.isArray(p.images) ? p.images.join('\n') : '',
       currentModelCode: p.currentModelCode ?? '',
       supplierStockCode: p.supplierStockCode ?? '',
@@ -176,7 +193,9 @@ export default function UrunDuzenlePage() {
                       )}
                     </div>
                     <div className="shrink-0 text-right">
-                      <p className="text-sm font-semibold text-gray-900">{fmt(Number(p.trendyolSalePrice))}</p>
+                      <p className="text-sm font-semibold text-gray-900">
+                        {fmt(Number(p.product?.productCostDraft?.marketplaceSalePrice || p.trendyolSalePrice || 0))}
+                      </p>
                       <p className="text-xs text-gray-400">stok: {p.stockQuantity}</p>
                     </div>
                   </div>
@@ -305,7 +324,16 @@ export default function UrunDuzenlePage() {
                     <select
                       className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                       value={form.shopCategoryId}
-                      onChange={(e) => { setForm({ ...form, shopCategoryId: e.target.value }); setSaved(false) }}
+                      onChange={async (e) => {
+                        setForm({ ...form, shopCategoryId: e.target.value }); setSaved(false)
+                        setNextCode(null)
+                        if (e.target.value) {
+                          try {
+                            const res = await api<{ modelCode: string }>(`/product-center/next-model-code?shopCategoryId=${e.target.value}`)
+                            setNextCode(res.modelCode)
+                          } catch { /* ignore */ }
+                        }
+                      }}
                     >
                       <option value="">— Kategori Seçin —</option>
                       {allCats.map((c) => (
@@ -314,6 +342,12 @@ export default function UrunDuzenlePage() {
                         </option>
                       ))}
                     </select>
+                    {nextCode && (
+                      <p className="mt-1 text-xs text-blue-600">
+                        Bu kategoride bir sonraki model kodu: <strong>{nextCode}</strong>
+                        <span className="text-gray-400"> (kayıt sırasında atanır)</span>
+                      </p>
+                    )}
                   </div>
                 </div>
 

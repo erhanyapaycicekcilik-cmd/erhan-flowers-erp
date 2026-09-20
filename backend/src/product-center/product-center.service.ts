@@ -1216,8 +1216,55 @@ export class ProductCenterService {
     return variant
   }
 
+  // Türkçe kategori adından kısa kod türetir: "Yeşil Ağaçlar" → "YA", "Benjamin" → "BEN"
+  private shopCategoryCode(name: string): string {
+    const norm = name.toUpperCase()
+      .replace(/Ş/g, 'S').replace(/Ç/g, 'C').replace(/Ğ/g, 'G')
+      .replace(/İ/g, 'I').replace(/Ö/g, 'O').replace(/Ü/g, 'U')
+      .replace(/[^A-Z0-9 ]/g, '').trim();
+    const words = norm.split(/\s+/).filter(Boolean);
+    if (words.length === 1) return words[0].slice(0, 3);
+    return words.map(w => w[0]).join('').slice(0, 3);
+  }
+
+  async previewNextModelCode(shopCategoryId?: number): Promise<{ modelCode: string; prefix: string }> {
+    let prefix = 'ERH';
+    if (shopCategoryId) {
+      const cat = await this.prisma.shopCategory.findUnique({
+        where: { id: shopCategoryId },
+        include: { parent: true },
+      });
+      if (cat) {
+        const parentCode = cat.parent ? this.shopCategoryCode(cat.parent.name) : null;
+        const childCode = this.shopCategoryCode(cat.name);
+        prefix = parentCode ? `ERH-${parentCode}-${childCode}` : `ERH-${childCode}`;
+      }
+    }
+
+    // Mevcut model kodlarından bu prefix ile başlayanların max numarasını bul
+    const pattern = `${prefix}-%`;
+    const [variantRows, productRows] = await Promise.all([
+      this.prisma.$queryRaw<{ code: string }[]>`
+        SELECT current_model_code AS code FROM trendyol_product_variants
+        WHERE current_model_code ILIKE ${pattern}`,
+      this.prisma.$queryRaw<{ code: string }[]>`
+        SELECT model_code AS code FROM products
+        WHERE model_code ILIKE ${pattern}`,
+    ]);
+
+    const allCodes = [...variantRows, ...productRows].map(r => r.code);
+    let maxNum = 0;
+    for (const code of allCodes) {
+      const parts = code.split('-');
+      const num = parseInt(parts[parts.length - 1], 10);
+      if (!isNaN(num) && num > maxNum) maxNum = num;
+    }
+    const next = String(maxNum + 1).padStart(3, '0');
+    return { modelCode: `${prefix}-${next}`, prefix };
+  }
+
   async listVariantsForEdit(search?: string) {
-    const where: any = {}
+    const where: any = { status: 'ACTIVE' }
     if (search) {
       where.OR = [
         { productName: { contains: search, mode: 'insensitive' } },
@@ -1242,8 +1289,11 @@ export class ProductCenterService {
         stockQuantity: true,
         status: true,
         product: {
-          select: { potSize: true, potType: true, productHeight: true,
-                    leafCount: true, stemCount: true, branchCount: true, leavesPerBranch: true }
+          select: {
+            potSize: true, potType: true, productHeight: true,
+            leafCount: true, stemCount: true, branchCount: true, leavesPerBranch: true,
+            productCostDraft: { select: { salePrice: true, marketplaceSalePrice: true } },
+          }
         },
       },
       orderBy: { productName: 'asc' },
