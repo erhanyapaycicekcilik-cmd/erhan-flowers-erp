@@ -1,4 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { GoogleGenAI } from '@google/genai';
 import { revalidateSite } from '../common/site-revalidate';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -56,6 +58,7 @@ export class ProductCenterService {
     private readonly prisma: PrismaService,
     private readonly productionCosts: ProductionCostsService,
     private readonly integrationCenter: IntegrationCenterService,
+    private readonly config: ConfigService,
   ) {}
 
   async listEntries() {
@@ -1261,6 +1264,51 @@ export class ProductCenterService {
     }
     const next = String(maxNum + 1).padStart(3, '0');
     return { modelCode: `${prefix}-${next}`, prefix };
+  }
+
+  async getVariantForEdit(id: number) {
+    const v = await this.prisma.trendyolProductVariant.findUnique({
+      where: { id },
+      select: {
+        id: true, productName: true, barcode: true, currentModelCode: true,
+        supplierStockCode: true, productDescription: true, images: true,
+        shopCategoryId: true, shopCategory: { select: { id: true, name: true, parent: { select: { id: true, name: true } } } },
+        trendyolSalePrice: true, stockQuantity: true, status: true,
+        product: {
+          select: {
+            potSize: true, potType: true, productHeight: true,
+            leafCount: true, stemCount: true, branchCount: true, leavesPerBranch: true,
+            productCostDraft: { select: { salePrice: true, marketplaceSalePrice: true } },
+          }
+        },
+      },
+    });
+    if (!v) throw new NotFoundException('Varyant bulunamadı');
+    return v;
+  }
+
+  async suggestProductName(current: string, description: string, category: string): Promise<{ suggestions: string[] }> {
+    const apiKey = this.config.get<string>('GEMINI_API_KEY')?.trim();
+    if (!apiKey) return { suggestions: [] };
+    try {
+      const ai = new GoogleGenAI({ apiKey });
+      const prompt = `Sen bir e-ticaret SEO uzmanısın. Türk yapay çiçek/bitki satıcısı için Trendyol, N11 ve Hepsiburada'da arama sıralamasını yükseltecek ürün adları öner.
+
+Mevcut ad: "${current}"
+Kategori: "${category}"
+Açıklama: "${description}"
+
+3 farklı SEO uyumlu ürün adı öner. Kurallar:
+- Türkçe, doğal, aranabilir anahtar kelimeler içersin
+- 60-80 karakter arası
+- Boyut/özellik varsa içersin (örn: 180 cm, 14'lük saksı)
+- Her öneri yeni satırda, sadece ürün adı, başka açıklama yok
+
+Sadece 3 satır ürün adı yaz, başka hiçbir şey yazma.`;
+      const resp = await ai.models.generateContent({ model: 'gemini-2.0-flash', contents: [{ role: 'user', parts: [{ text: prompt }] }] });
+      const lines = (resp.text ?? '').split('\n').map(s => s.replace(/^\d+[\.\)]\s*/, '').trim()).filter(Boolean).slice(0, 3);
+      return { suggestions: lines };
+    } catch { return { suggestions: [] }; }
   }
 
   async listVariantsForEdit(search?: string) {
