@@ -41,14 +41,10 @@ export default function UrunDuzenlePage() {
     try {
       const qs = q ? `?search=${encodeURIComponent(q)}` : ''
       const res = await fetch(`${API}/product-center/variants${qs}`, { credentials: 'include' })
+      if (res.status === 401) { window.location.href = '/login'; return }
       const data = await res.json()
-      if (!Array.isArray(data)) {
-        setError(`API hatası: ${JSON.stringify(data).slice(0, 200)}`)
-        setProducts([])
-      } else {
-        setProducts(data)
-      }
-    } catch (e) { setError(`Bağlantı hatası: ${String(e)}`); setProducts([]) }
+      setProducts(Array.isArray(data) ? data : [])
+    } catch { setProducts([]) }
     finally { setLoading(false) }
   }
 
@@ -124,7 +120,6 @@ export default function UrunDuzenlePage() {
               value={search}
               onChange={(e) => handleSearchChange(e.target.value)}
             />
-            {error && <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-2 break-all">{error}</div>}
             <div className="space-y-2 max-h-[calc(100vh-220px)] overflow-y-auto pr-1">
               {loading ? (
                 <div className="text-center py-10 text-gray-400 text-sm">Yükleniyor...</div>
