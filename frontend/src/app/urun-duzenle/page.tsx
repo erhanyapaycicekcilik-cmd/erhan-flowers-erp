@@ -284,31 +284,52 @@ export default function UrunDuzenlePage() {
                       Fiziksel Özellikler
                     </button>
                     {physOpen && (
-                      <div className="mt-2 grid grid-cols-2 gap-3">
-                        <div>
-                          <label className="text-xs text-gray-400">Saksı Boyu</label>
-                          <input className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" value={form.potSize} onChange={(e) => { setForm({ ...form, potSize: e.target.value }); setSaved(false) }} placeholder="örn. 14cm" />
+                      <div className="mt-2">
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="text-xs text-gray-400">Saksı Boyu</label>
+                            <input className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" value={form.potSize} onChange={(e) => { setForm({ ...form, potSize: e.target.value }); setSaved(false) }} placeholder="örn. 14cm" />
+                          </div>
+                          <div>
+                            <label className="text-xs text-gray-400">Saksı Türü</label>
+                            <input className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" value={form.potType} onChange={(e) => { setForm({ ...form, potType: e.target.value }); setSaved(false) }} placeholder="örn. Plastik" />
+                          </div>
+                          <div>
+                            <label className="text-xs text-gray-400">Yükseklik</label>
+                            <input className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" value={form.productHeight} onChange={(e) => { setForm({ ...form, productHeight: e.target.value }); setSaved(false) }} placeholder="örn. 40cm" />
+                          </div>
+                          <div>
+                            <label className="text-xs text-gray-400">Yaprak Sayısı</label>
+                            <input type="number" className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" value={form.leafCount} onChange={(e) => { setForm({ ...form, leafCount: e.target.value }); setSaved(false) }} placeholder="0" />
+                          </div>
+                          <div>
+                            <label className="text-xs text-gray-400">Gövde / Dal Sayısı</label>
+                            <input type="number" className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" value={form.branchCount} onChange={(e) => { setForm({ ...form, branchCount: e.target.value }); setSaved(false) }} placeholder="0" />
+                          </div>
+                          <div>
+                            <label className="text-xs text-gray-400">Daldaki Yaprak</label>
+                            <input type="number" className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" value={form.leavesPerBranch} onChange={(e) => { setForm({ ...form, leavesPerBranch: e.target.value }); setSaved(false) }} placeholder="0" />
+                          </div>
                         </div>
-                        <div>
-                          <label className="text-xs text-gray-400">Saksı Türü</label>
-                          <input className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" value={form.potType} onChange={(e) => { setForm({ ...form, potType: e.target.value }); setSaved(false) }} placeholder="örn. Plastik" />
-                        </div>
-                        <div>
-                          <label className="text-xs text-gray-400">Yükseklik</label>
-                          <input className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" value={form.productHeight} onChange={(e) => { setForm({ ...form, productHeight: e.target.value }); setSaved(false) }} placeholder="örn. 40cm" />
-                        </div>
-                        <div>
-                          <label className="text-xs text-gray-400">Yaprak Sayısı</label>
-                          <input type="number" className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" value={form.leafCount} onChange={(e) => { setForm({ ...form, leafCount: e.target.value }); setSaved(false) }} placeholder="0" />
-                        </div>
-                        <div>
-                          <label className="text-xs text-gray-400">Gövde / Dal Sayısı</label>
-                          <input type="number" className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" value={form.branchCount} onChange={(e) => { setForm({ ...form, branchCount: e.target.value }); setSaved(false) }} placeholder="0" />
-                        </div>
-                        <div>
-                          <label className="text-xs text-gray-400">Daldaki Yaprak</label>
-                          <input type="number" className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" value={form.leavesPerBranch} onChange={(e) => { setForm({ ...form, leavesPerBranch: e.target.value }); setSaved(false) }} placeholder="0" />
-                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const lines: string[] = []
+                            if (form.productHeight) lines.push(`Yükseklik: ${form.productHeight}`)
+                            if (form.potSize) lines.push(`Saksı Boyu: ${form.potSize}`)
+                            if (form.potType) lines.push(`Saksı Türü: ${form.potType}`)
+                            if (form.branchCount !== '') lines.push(`Dal Sayısı: ${form.branchCount}`)
+                            if (form.leafCount !== '') lines.push(`Yaprak Sayısı: ${form.leafCount}`)
+                            if (form.leavesPerBranch !== '') lines.push(`Daldaki Yaprak: ${form.leavesPerBranch}`)
+                            if (lines.length === 0) return
+                            const block = '\n' + lines.join('\n')
+                            setForm({ ...form, productDescription: (form.productDescription || '').trimEnd() + block })
+                            setSaved(false)
+                          }}
+                          className="mt-3 w-full border border-blue-300 text-blue-600 rounded-lg py-2 text-sm font-medium hover:bg-blue-50"
+                        >
+                          ↑ Açıklamaya Ekle
+                        </button>
                       </div>
                     )}
                   </div>
