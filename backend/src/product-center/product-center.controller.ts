@@ -110,4 +110,9 @@ export class ProductCenterController {
   editVariant(@Param('id') id: string, @Body() body: any) {
     return this.productCenter.editVariant(Number(id), body);
   }
+
+  @Get('next-model-code')
+  nextModelCodePreview(@Query('shopCategoryId') shopCategoryId?: string) {
+    return this.productCenter.previewNextModelCode(shopCategoryId ? Number(shopCategoryId) : undefined);
+  }
 }
