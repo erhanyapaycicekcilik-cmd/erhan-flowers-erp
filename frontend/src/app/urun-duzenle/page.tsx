@@ -112,9 +112,6 @@ export default function UrunDuzenlePage() {
           productName: form.productName,
           productDescription: form.productDescription,
           images: imagesArr,
-          currentModelCode: form.currentModelCode,
-          supplierStockCode: form.supplierStockCode,
-          barcode: form.barcode,
           shopCategoryId: form.shopCategoryId ? Number(form.shopCategoryId) : null,
           potSize: form.potSize || null,
           potType: form.potType || null,
@@ -283,33 +280,24 @@ export default function UrunDuzenlePage() {
                     />
                   </div>
 
-                  {/* Kodlar */}
+                  {/* Kodlar — salt okunur (Trendyol kuralları gereği değiştirilemez) */}
                   <div className="grid grid-cols-3 gap-3">
-                    <div>
-                      <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Model Kodu</label>
-                      <input
-                        className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        value={form.currentModelCode}
-                        onChange={(e) => { setForm({ ...form, currentModelCode: e.target.value }); setSaved(false) }}
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Stok Kodu</label>
-                      <input
-                        className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        value={form.supplierStockCode}
-                        onChange={(e) => { setForm({ ...form, supplierStockCode: e.target.value }); setSaved(false) }}
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Barkod</label>
-                      <input
-                        className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        value={form.barcode}
-                        onChange={(e) => { setForm({ ...form, barcode: e.target.value }); setSaved(false) }}
-                      />
-                    </div>
+                    {[
+                      { label: 'Model Kodu', val: selected.currentModelCode },
+                      { label: 'Stok Kodu', val: selected.supplierStockCode },
+                      { label: 'Barkod', val: selected.barcode },
+                    ].map(({ label, val }) => (
+                      <div key={label}>
+                        <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider">{label}</label>
+                        <div className="mt-1 w-full bg-gray-50 border border-gray-100 rounded-lg px-3 py-2 text-sm text-gray-500 select-all break-all">
+                          {val || <span className="text-gray-300">—</span>}
+                        </div>
+                      </div>
+                    ))}
                   </div>
+                  <p className="text-xs text-amber-600 bg-amber-50 rounded-lg px-3 py-2">
+                    ⚠️ Barkod, model kodu ve stok kodu Trendyol kuralları gereği değiştirilemez. Değiştirilirse ürün kilitlenebilir.
+                  </p>
 
                   {/* Kategori */}
                   <div>
