@@ -2548,11 +2548,8 @@ ${potLines.join('\n')}
           />
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <button className="btn btn-primary min-h-8 px-3 text-xs" onClick={save} disabled={saving || pushing || !name}>
-            {saving ? 'Kaydediliyor...' : 'Kaydet'}
-          </button>
-          <button className="btn btn-secondary min-h-8 px-3 text-xs" onClick={pushDescription} disabled={saving || pushing || !desc}>
-            {pushing ? 'Gönderiliyor...' : '📤 Açıklamayı Trendyol\'a Gönder'}
+          <button className="btn btn-primary min-h-8 px-3 text-xs" onClick={pushDescription} disabled={saving || pushing || !desc}>
+            {pushing ? 'Gönderiliyor...' : '📤 Trendyol\'a Gönder'}
           </button>
           {msg && <span className="text-xs font-semibold text-emerald-600">{msg}</span>}
         </div>
