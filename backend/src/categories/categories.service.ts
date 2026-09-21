@@ -56,6 +56,8 @@ export class CategoriesService {
     id: number,
     data: {
       trendyolCategoryId?: number | null;
+      n11CategoryId?: number | null;
+      hepsiburadaCategoryId?: number | null;
       platforms?: string[];
       hasBanner?: boolean;
       sortOrder?: number;

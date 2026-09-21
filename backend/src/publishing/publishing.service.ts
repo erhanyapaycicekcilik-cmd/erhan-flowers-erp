@@ -306,6 +306,8 @@ export class PublishingService {
       shortDescription: variant.seoShortDescription,
       categoryName: variant.trendyolCategoryName,
       categoryId: variant.product?.category?.trendyolCategoryId ?? variant.family?.category?.trendyolCategoryId ?? null,
+      n11CategoryId: (variant.product?.category as any)?.n11CategoryId ?? (variant.family?.category as any)?.n11CategoryId ?? null,
+      hepsiburadaCategoryId: (variant.product?.category as any)?.hepsiburadaCategoryId ?? (variant.family?.category as any)?.hepsiburadaCategoryId ?? null,
       brand: variant.brand,
       color,
       flowerType: this.extractFlowerType(productName),
