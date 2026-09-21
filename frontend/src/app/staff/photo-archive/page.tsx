@@ -11,9 +11,11 @@ type PhotoRow = {
   customer_name: string;
   channel: string;
   image_path: string;
+  thumbnail_path?: string | null;
   photo_type: string;
   created_at: string;
   expires_at: string;
+  product_names?: string | null;
 };
 
 function mediaUrl(imagePath: string) {
@@ -73,6 +75,13 @@ export default function PhotoArchivePage() {
     TRENDYOL: 'bg-orange-100 text-orange-700',
     HEPSIBURADA: 'bg-red-100 text-red-700',
     N11: 'bg-blue-100 text-blue-700',
+  };
+
+  const photoTypeLabel: Record<string, string> = {
+    BARCODE: 'Barkod',
+    PACKAGE: 'Kargo',
+    PRODUCT: 'Ürün',
+    READY: 'Hazırlık',
   };
 
   const videoCount = rows.filter(r => isVideo(r.image_path)).length;
@@ -159,14 +168,22 @@ export default function PhotoArchivePage() {
                 <div className="aspect-square bg-slate-100 overflow-hidden relative flex items-center justify-center">
                   {video ? (
                     <>
-                      <video
-                        src={mediaUrl(row.image_path)}
-                        className="w-full h-full object-cover"
-                        muted
-                        preload="metadata"
-                      />
+                      {row.thumbnail_path ? (
+                        <img
+                          src={mediaUrl(row.thumbnail_path)}
+                          alt=""
+                          className="w-full h-full object-cover"
+                          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                        />
+                      ) : (
+                        <div className="w-full h-full bg-slate-800 flex items-center justify-center">
+                          <Video size={32} className="text-slate-400" />
+                        </div>
+                      )}
                       <div className="absolute inset-0 flex items-center justify-center bg-black/30">
-                        <Video size={28} className="text-white drop-shadow" />
+                        <div className="bg-white/90 rounded-full p-2">
+                          <Video size={20} className="text-slate-800" />
+                        </div>
                       </div>
                     </>
                   ) : (
@@ -174,6 +191,7 @@ export default function PhotoArchivePage() {
                       src={mediaUrl(row.image_path)}
                       alt={row.customer_name}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                      loading="lazy"
                       onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                     />
                   )}
@@ -181,11 +199,21 @@ export default function PhotoArchivePage() {
                 <div className="p-2 space-y-1">
                   <div className="font-semibold text-xs truncate">{row.customer_name || '—'}</div>
                   <div className="text-[10px] text-slate-500 font-mono">{row.sale_number}</div>
+                  {row.product_names && (
+                    <div className="text-[10px] text-slate-400 truncate">{row.product_names}</div>
+                  )}
                   <div className="flex items-center justify-between gap-1">
-                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${channelColor[row.channel] ?? 'bg-slate-100 text-slate-600'}`}>
-                      {row.channel}
-                    </span>
-                    <span className="text-[10px] text-slate-400">{new Date(row.created_at).toLocaleDateString('tr-TR')}</span>
+                    <div className="flex items-center gap-1 flex-wrap">
+                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${channelColor[row.channel] ?? 'bg-slate-100 text-slate-600'}`}>
+                        {row.channel}
+                      </span>
+                      {row.photo_type && row.photo_type !== 'BARCODE' && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-600">
+                          {photoTypeLabel[row.photo_type] ?? row.photo_type}
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-[10px] text-slate-400 shrink-0">{new Date(row.created_at).toLocaleDateString('tr-TR')}</span>
                   </div>
                 </div>
               </button>
@@ -213,7 +241,17 @@ export default function PhotoArchivePage() {
               <div className="p-4 space-y-1">
                 <div className="font-bold text-lg">{selected.customer_name}</div>
                 <div className="text-sm text-slate-500 font-mono">{selected.sale_number} · {selected.channel}</div>
-                <div className="text-xs text-slate-400">Çekildi: {fmt(selected.created_at)}</div>
+                {selected.product_names && (
+                  <div className="text-sm text-slate-600">{selected.product_names}</div>
+                )}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs text-slate-400">Çekildi: {fmt(selected.created_at)}</span>
+                  {selected.photo_type && (
+                    <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">
+                      {photoTypeLabel[selected.photo_type] ?? selected.photo_type}
+                    </span>
+                  )}
+                </div>
                 <div className="text-xs text-slate-400">Son geçerlilik: {fmt(selected.expires_at)}</div>
                 <div className="flex gap-2 pt-2">
                   <a
