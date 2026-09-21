@@ -18,6 +18,10 @@ jobs:
           command_timeout: 30m
           request_pty: true
           script: |
+            set -e
+            export DOCKER_BUILDKIT=0
+            export COMPOSE_DOCKER_CLI_BUILD=0
+
             if [ ! -d /opt/erp ]; then
               git clone https://${{ secrets.GH_TOKEN }}@github.com/erhanyapaycicekcilik-cmd/erhan-flowers-erp.git /opt/erp
             fi
@@ -26,10 +30,22 @@ jobs:
             git reset --hard FETCH_HEAD
             echo "=== Son commit ==="
             git log --oneline -3
-            echo "=== Build basliyor (BuildKit kapali, klasik builder) ==="
-            export DOCKER_BUILDKIT=0
-            export COMPOSE_DOCKER_CLI_BUILD=0
-            docker compose -f docker-compose.prod.yml build --no-cache --progress=plain backend frontend florayapay
+
+            echo "=== RAM durumu ==="
+            free -h
+
+            echo "=== Backend build ==="
+            docker compose -f docker-compose.prod.yml build --no-cache --progress=plain backend
+            echo "Backend OK"
+
+            echo "=== Frontend build ==="
+            docker compose -f docker-compose.prod.yml build --no-cache --progress=plain frontend
+            echo "Frontend OK"
+
+            echo "=== Florayapay build ==="
+            docker compose -f docker-compose.prod.yml build --no-cache --progress=plain florayapay
+            echo "Florayapay OK"
+
             echo "=== Containerlar baslatiliyor ==="
             docker compose -f docker-compose.prod.yml up -d
             docker image prune -f
