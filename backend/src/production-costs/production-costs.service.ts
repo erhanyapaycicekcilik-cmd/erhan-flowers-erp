@@ -1770,8 +1770,8 @@ export class ProductionCostsService {
   }
 
   async restoreApprovedCosts(userId: number) {
-    // costStatus='Tamamlandı' olan varyantların draft'larını APPROVED'a çek
-    const variants = await this.prisma.trendyolProductVariant.findMany({
+    // 1) costStatus='Tamamlandı' olanların draft'larını APPROVED yap
+    const byStatus = await this.prisma.trendyolProductVariant.findMany({
       where: { costStatus: 'Tamamlandı' },
       include: { productCostDraft: { select: { id: true, status: true } } },
     });
@@ -1780,24 +1780,45 @@ export class ProductionCostsService {
     let alreadyOk = 0;
     let noDraft = 0;
 
-    for (const variant of variants) {
-      if (!variant.productCostDraft) {
-        noDraft++;
-        continue;
-      }
-      if (variant.productCostDraft.status === 'APPROVED') {
-        alreadyOk++;
-        continue;
-      }
-      await this.prisma.productCostDraft.update({
-        where: { id: variant.productCostDraft.id },
-        data: { status: 'APPROVED' },
-      });
+    for (const variant of byStatus) {
+      if (!variant.productCostDraft) { noDraft++; continue; }
+      if (variant.productCostDraft.status === 'APPROVED') { alreadyOk++; continue; }
+      await this.prisma.productCostDraft.update({ where: { id: variant.productCostDraft.id }, data: { status: 'APPROVED' } });
+      await this.prisma.trendyolProductVariant.update({ where: { id: variant.id }, data: { costStatus: 'Tamamlandı' } });
       draftRestored++;
     }
 
-    this.logger.log(`restoreApprovedCosts: ${draftRestored} draft APPROVED yapıldı, ${alreadyOk} zaten tamam, ${noDraft} draft yok`);
-    return { ok: true, draftRestored, alreadyOk, noDraft, total: variants.length };
+    // 2) Draft'ı APPROVED ama costStatus yanlış/eksik olanları da düzelt
+    const byDraft = await this.prisma.trendyolProductVariant.findMany({
+      where: { costStatus: { not: 'Tamamlandı' }, productCostDraft: { status: 'APPROVED' } },
+      select: { id: true },
+    });
+    const statusFixed = byDraft.length;
+    if (byDraft.length > 0) {
+      await this.prisma.trendyolProductVariant.updateMany({
+        where: { id: { in: byDraft.map((v) => v.id) } },
+        data: { costStatus: 'Tamamlandı' },
+      });
+    }
+
+    // 3) Draft var, salePrice > 0 ama status DRAFT olan kayıtları APPROVED yap (daha önce onaylandı ama bir şekilde sıfırlandı)
+    const staleDrafts = await this.prisma.productCostDraft.findMany({
+      where: {
+        status: 'DRAFT',
+        salePrice: { gt: 0 },
+        totalCost: { gt: 0 },
+        variant: { costStatus: 'Tamamlandı' },
+      },
+      select: { id: true, variantId: true },
+    });
+    let staleDraftFixed = 0;
+    for (const d of staleDrafts) {
+      await this.prisma.productCostDraft.update({ where: { id: d.id }, data: { status: 'APPROVED' } });
+      staleDraftFixed++;
+    }
+
+    this.logger.log(`restoreApprovedCosts: draft=${draftRestored} statusFixed=${statusFixed} staleDraft=${staleDraftFixed} noDraft=${noDraft}`);
+    return { ok: true, draftRestored: draftRestored + staleDraftFixed, statusFixed, alreadyOk, noDraft, total: byStatus.length + byDraft.length };
   }
 
   async autoFillMissingCosts() {
