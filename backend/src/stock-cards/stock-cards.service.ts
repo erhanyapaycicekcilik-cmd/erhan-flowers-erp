@@ -577,6 +577,58 @@ export class StockCardsService {
     return this.serialize(updated, userRole);
   }
 
+  async listMovementsReport(query: Record<string, string>, userRole?: string) {
+    if (userRole !== 'OWNER') throw new BadRequestException('Bu raporu sadece sistem sahibi görebilir.');
+
+    const dateFrom = query.dateFrom ? new Date(query.dateFrom) : new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const dateTo = query.dateTo ? new Date(query.dateTo + 'T23:59:59') : new Date();
+    const typeFilter = query.type && query.type !== 'all' ? query.type : null;
+    const limit = Math.min(Number(query.limit ?? 200), 500);
+
+    const base = `
+      SELECT
+        sm.id,
+        sm.type,
+        sm.quantity::float AS "quantity",
+        sm.unit,
+        sm.previous_stock::float AS "previousStock",
+        sm.next_stock::float AS "nextStock",
+        sm.reason,
+        sm.reference_type AS "referenceType",
+        sm.reference_id AS "referenceId",
+        sm.created_at AS "createdAt",
+        COALESCE(sc.name, p.product_name, tv.name) AS "itemName",
+        COALESCE(sc.barcode, p.barcode, tv.barcode) AS "barcode",
+        sc.id AS "stockCardId",
+        p.id AS "productId",
+        rs.sale_number AS "saleNumber",
+        rs.customer_name AS "customerName",
+        rs.channel AS "channel",
+        u.name AS "createdByName"
+      FROM stock_movements sm
+      LEFT JOIN stock_cards sc ON sc.id = sm.stock_card_id
+      LEFT JOIN products p ON p.id = sm.product_id
+      LEFT JOIN trendyol_product_variants tv ON tv.id = sm.variant_id
+      LEFT JOIN retail_sales rs ON rs.id::text = sm.reference_id AND sm.reference_type = 'RETAIL_SALE'
+      LEFT JOIN users u ON u.id = sm.created_by_id
+    `;
+
+    let rows: Array<Record<string, unknown>>;
+    if (typeFilter) {
+      rows = await this.prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
+        base + ` WHERE sm.created_at BETWEEN $1 AND $2 AND sm.type = $3 ORDER BY sm.created_at DESC LIMIT $4`,
+        dateFrom, dateTo, typeFilter, limit,
+      );
+    } else {
+      rows = await this.prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
+        base + ` WHERE sm.created_at BETWEEN $1 AND $2 ORDER BY sm.created_at DESC LIMIT $3`,
+        dateFrom, dateTo, limit,
+      );
+    }
+
+    return rows;
+  }
+
   async listMovements(id: number, userRole?: string) {
     if (userRole !== 'OWNER') {
       throw new BadRequestException('Stok hareket geçmişini sadece sistem sahibi görebilir.');

@@ -74,6 +74,11 @@ export class StockCardsController {
     return this.stockCards.addMovement(Number(id), body, request.user?.role);
   }
 
+  @Get('movements/report')
+  movementsReport(@Query() query: Record<string, string>, @Req() request: AuthenticatedRequest) {
+    return this.stockCards.listMovementsReport(query, request.user?.role);
+  }
+
   @Get(':id/movements')
   movements(@Param('id') id: string, @Req() request: AuthenticatedRequest) {
     return this.stockCards.listMovements(Number(id), request.user?.role);

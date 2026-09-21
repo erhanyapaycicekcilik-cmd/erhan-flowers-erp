@@ -58,6 +58,7 @@ const navGroups: { section: string; icon: LucideIcon; items: NavItem[] }[] = [
     items: [
       { href: '/products', label: 'Ürün Merkezi', icon: Boxes, roles: ALL },
       { href: '/stock-cards', label: 'Stok Kartları', icon: Warehouse, roles: OWNER_MANAGER },
+      { href: '/stok-raporu', label: 'Stok Hareketleri', icon: Warehouse, roles: OWNER_ONLY },
     ],
   },
   {
