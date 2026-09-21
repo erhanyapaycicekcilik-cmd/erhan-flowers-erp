@@ -939,6 +939,10 @@ export default function ProductsPage() {
 
   async function saveEntry(event?: FormEvent) {
     event?.preventDefault();
+    if (!form.variantId && form.images.length === 0) {
+      setMessage('⚠️ Görsel olmadan yeni ürün kaydedilemez. Lütfen önce görsel yükleyin.');
+      return;
+    }
     const result = await api<{ ok: boolean; entry: Entry }>('/product-center/entries', {
       method: 'POST',
       json: {
@@ -2641,11 +2645,22 @@ export default function ProductsPage() {
               </div>
             )}
 
+            {!form.variantId && form.images.length === 0 && (
+              <div className="rounded-md bg-amber-50 border border-amber-200 px-3 py-2 text-xs font-semibold text-amber-800">
+                ⚠️ Görsel yüklemeden yeni ürün kaydedilemez — lütfen önce görsel ekleyin.
+              </div>
+            )}
+
             <div className="mt-6 flex flex-wrap justify-between gap-2 border-t border-line pt-4">
               <button type="button" className="btn btn-secondary" onClick={() => { setForm(emptyForm); setCostDetail(null); setStep(0); }}><PackagePlus size={16} /> Yeni Ürün</button>
               <div className="flex gap-2">
                 <button type="button" className="hidden" onClick={goToPreviousStep}>Geri</button>
-                <button className="btn btn-primary" type="submit"><Save size={16} /> Kaydet</button>
+                <button
+                  className="btn btn-primary"
+                  type="submit"
+                  disabled={!form.variantId && form.images.length === 0}
+                  title={!form.variantId && form.images.length === 0 ? 'Görsel olmadan yeni ürün kaydedilemez' : undefined}
+                ><Save size={16} /> Kaydet</button>
                 <button type="button" className="hidden" onClick={goToNextStep}>İleri</button>
               </div>
             </div>
