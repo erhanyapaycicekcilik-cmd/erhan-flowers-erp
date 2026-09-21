@@ -1275,11 +1275,11 @@ export class ProductCenterService {
         supplierStockCode: true, productDescription: true, images: true,
         shopCategoryId: true, shopCategory: { select: { id: true, name: true, parent: { select: { id: true, name: true } } } },
         trendyolSalePrice: true, stockQuantity: true, status: true,
+        productCostDraft: { select: { salePrice: true, marketplaceSalePrice: true } },
         product: {
           select: {
             potSize: true, potType: true, productHeight: true,
             leafCount: true, stemCount: true, branchCount: true, leavesPerBranch: true,
-            productCostDraft: { select: { salePrice: true, marketplaceSalePrice: true } },
           }
         },
       },
@@ -1337,11 +1337,11 @@ Sadece 3 satır ürün adı yaz, başka hiçbir şey yazma.`;
         trendyolSalePrice: true,
         stockQuantity: true,
         status: true,
+        productCostDraft: { select: { salePrice: true, marketplaceSalePrice: true } },
         product: {
           select: {
             potSize: true, potType: true, productHeight: true,
             leafCount: true, stemCount: true, branchCount: true, leavesPerBranch: true,
-            productCostDraft: { select: { salePrice: true, marketplaceSalePrice: true } },
           }
         },
       },
