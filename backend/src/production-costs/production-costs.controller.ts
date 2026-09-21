@@ -223,8 +223,8 @@ export class ProductionCostsController {
   }
 
   @Post('variants/:id/push-all-platforms')
-  pushAllPlatforms(@Param('id') id: string, @Body() body: { salePrice?: number }, @Req() request: AuthenticatedRequest) {
-    return this.productionCosts.pushImagesAndPriceToAllPlatforms(Number(id), Number(body.salePrice ?? 0), request.user!.id);
+  pushAllPlatforms(@Param('id') id: string, @Body() body: { salePrice?: number; seoLongDescription?: string; seoProductName?: string; seoKeywords?: string }, @Req() request: AuthenticatedRequest) {
+    return this.productionCosts.pushImagesAndPriceToAllPlatforms(Number(id), Number(body.salePrice ?? 0), request.user!.id, { seoLongDescription: body.seoLongDescription, seoProductName: body.seoProductName, seoKeywords: body.seoKeywords });
   }
 
   @Post('variants/:id/update-name')

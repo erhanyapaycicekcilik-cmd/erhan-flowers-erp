@@ -1175,14 +1175,15 @@ export class ProductionCostsService {
     return this.publishing.send([variantId], userId, { allowIncomplete: true, platforms: ['TRENDYOL'] as IntegrationPlatform[] });
   }
 
-  async pushImagesAndPriceToAllPlatforms(variantId: number, salePrice: number, userId: number) {
+  async pushImagesAndPriceToAllPlatforms(variantId: number, salePrice: number, userId: number, seo?: { seoLongDescription?: string; seoProductName?: string; seoKeywords?: string }) {
     if (!Number.isFinite(salePrice) || salePrice <= 0) {
       throw new BadRequestException('Geçerli bir satış fiyatı gereklidir.');
     }
-    await this.prisma.trendyolProductVariant.update({
-      where: { id: variantId },
-      data: { trendyolSalePrice: salePrice, n11SalePrice: salePrice, hepsiburadaSalePrice: salePrice },
-    });
+    const updateData: any = { trendyolSalePrice: salePrice, n11SalePrice: salePrice, hepsiburadaSalePrice: salePrice };
+    if (seo?.seoLongDescription) updateData.seoLongDescription = seo.seoLongDescription;
+    if (seo?.seoProductName) updateData.seoProductName = seo.seoProductName;
+    if (seo?.seoKeywords) updateData.seoKeywords = seo.seoKeywords.split(',').map((k: string) => k.trim()).filter(Boolean);
+    await this.prisma.trendyolProductVariant.update({ where: { id: variantId }, data: updateData });
     return this.publishing.send([variantId], userId, { allowIncomplete: true, platforms: ['TRENDYOL', 'N11', 'HEPSIBURADA'] as IntegrationPlatform[] });
   }
 

@@ -850,15 +850,14 @@ export default function ProductCostDetailPage() {
     setSendingAllPlatforms(true);
     setMessage('Görsel ve fiyat tüm platformlara gönderiliyor...');
     try {
-      // Kaydedilmemiş SEO açıklaması varsa push öncesi otomatik kaydet
-      if (pendingSeo && variant) {
-        try {
-          await api(`/production-costs/variants/${variant.id}/seo`, { method: 'POST', json: { seoProductName: pendingSeo.name, seoLongDescription: pendingSeo.desc, seoKeywords: pendingSeo.keywords } });
-        } catch { /* kayıt başarısız olsa da push devam etsin */ }
-      }
       const result = await api<{ success: number; failed: number; results: Array<{ platform: string; ok: boolean; successMessage?: string | null; errorMessage?: string | null }> }>(`/production-costs/variants/${productId}/push-all-platforms`, {
         method: 'POST',
-        json: { salePrice: totals.marketplaceSalePrice },
+        json: {
+          salePrice: totals.marketplaceSalePrice,
+          seoLongDescription: pendingSeo?.desc || undefined,
+          seoProductName: pendingSeo?.name || undefined,
+          seoKeywords: pendingSeo?.keywords || undefined,
+        },
       });
       const platforms = result.results ?? [];
       const okList = platforms.filter(r => r.ok).map(r => r.platform).join(', ');
