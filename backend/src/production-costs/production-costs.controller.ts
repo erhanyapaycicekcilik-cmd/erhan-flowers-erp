@@ -237,6 +237,11 @@ export class ProductionCostsController {
     return this.productionCosts.updateVariantName(Number(id), body.productName);
   }
 
+  @Post('variants/:id/update-codes')
+  updateVariantCodes(@Param('id') id: string, @Body() body: { modelCode?: string; stockCode?: string; trendyolProductUrl?: string }) {
+    return this.productionCosts.updateVariantCodes(Number(id), body);
+  }
+
   @Post('variants/:id/activate')
   activateVariant(@Param('id') id: string) {
     return this.productionCosts.activateVariant(Number(id));

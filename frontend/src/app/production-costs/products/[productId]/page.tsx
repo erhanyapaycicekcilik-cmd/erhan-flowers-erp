@@ -229,6 +229,10 @@ export default function ProductCostDetailPage() {
   const [editingName, setEditingName] = useState(false);
   const [nameInput, setNameInput] = useState('');
   const [savingName, setSavingName] = useState(false);
+  const [modelCodeInput, setModelCodeInput] = useState('');
+  const [stockCodeInput, setStockCodeInput] = useState('');
+  const [trendyolUrlInput, setTrendyolUrlInput] = useState('');
+  const [savingCodes, setSavingCodes] = useState(false);
   const [productDescription, setProductDescription] = useState('');
   const [shopCategoryId, setShopCategoryId] = useState('');
   const [categories, setCategories] = useState<{ id: number; name: string; children?: { id: number; name: string }[] }[]>([]);
@@ -265,6 +269,9 @@ export default function ProductCostDetailPage() {
         setVariants(variantData);
         setImages(Array.isArray(data.variant.images) ? data.variant.images : []);
         setVariantStatus((data.variant as any).status ?? 'ACTIVE');
+        setModelCodeInput(data.variant.currentModelCode ?? data.variant.proposedModelCode ?? '');
+        setStockCodeInput(data.variant.supplierStockCode ?? '');
+        setTrendyolUrlInput(data.variant.trendyolProductUrl ?? '');
         if (pcVariant) {
           setProductDescription(pcVariant.productDescription ?? '');
           setShopCategoryId(pcVariant.shopCategoryId ? String(pcVariant.shopCategoryId) : '');
@@ -874,6 +881,22 @@ export default function ProductCostDetailPage() {
     }
   }
 
+  async function saveCodes() {
+    setSavingCodes(true);
+    try {
+      await api(`/production-costs/variants/${productId}/update-codes`, {
+        method: 'POST',
+        json: { modelCode: modelCodeInput.trim() || undefined, stockCode: stockCodeInput.trim() || undefined, trendyolProductUrl: trendyolUrlInput.trim() || undefined },
+      });
+      setDetail((prev) => prev ? { ...prev, variant: { ...prev.variant, currentModelCode: modelCodeInput.trim() || null, proposedModelCode: modelCodeInput.trim() || null, supplierStockCode: stockCodeInput.trim() || null, trendyolProductUrl: trendyolUrlInput.trim() || null } } : prev);
+      setMessage('Kodlar kaydedildi ✓');
+    } catch {
+      setMessage('Kodlar kaydedilemedi.');
+    } finally {
+      setSavingCodes(false);
+    }
+  }
+
   async function saveProductName() {
     if (!nameInput.trim()) return;
     setSavingName(true);
@@ -1196,10 +1219,25 @@ export default function ProductCostDetailPage() {
           )}
           <div className="mt-3 grid gap-2 text-xs">
             <Info label="Barkod" value={variant?.barcode ?? '-'} />
-            <Info label="Eski model" value={variant?.currentModelCode ?? variant?.supplierStockCode ?? '-'} />
-            <Info label="Yeni model" value={variant?.proposedModelCode ?? '-'} />
             <Info label="Boy" value={variant?.detectedSize ?? '-'} />
             <Info label="Mevcut satış" value={money(parseMoney(variant?.trendyolSalePrice))} />
+          </div>
+          <div className="mt-3 space-y-2">
+            <div>
+              <label className="block text-[10px] font-semibold uppercase text-slate-400 mb-0.5">Model Kodu</label>
+              <input className="input w-full text-xs" value={modelCodeInput} onChange={(e) => setModelCodeInput(e.target.value)} placeholder="ör. BA-6001" />
+            </div>
+            <div>
+              <label className="block text-[10px] font-semibold uppercase text-slate-400 mb-0.5">Stok Kodu</label>
+              <input className="input w-full text-xs" value={stockCodeInput} onChange={(e) => setStockCodeInput(e.target.value)} placeholder="Tedarikçi stok kodu" />
+            </div>
+            <div>
+              <label className="block text-[10px] font-semibold uppercase text-slate-400 mb-0.5">Trendyol URL</label>
+              <input className="input w-full text-xs" value={trendyolUrlInput} onChange={(e) => setTrendyolUrlInput(e.target.value)} placeholder="https://www.trendyol.com/..." />
+            </div>
+            <button className="btn btn-primary w-full min-h-8 text-xs justify-center" onClick={saveCodes} disabled={savingCodes}>
+              {savingCodes ? 'Kaydediliyor...' : 'Kodları Kaydet'}
+            </button>
           </div>
           {variant?.barcode && (
             <a
