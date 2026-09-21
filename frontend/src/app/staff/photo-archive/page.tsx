@@ -34,6 +34,8 @@ export default function PhotoArchivePage() {
   const [error, setError] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [saleNumber, setSaleNumber] = useState('');
+  const [productName, setProductName] = useState('');
+  const [barcode, setBarcode] = useState('');
   const [dateFrom, setDateFrom] = useState(() => {
     const d = new Date();
     d.setDate(d.getDate() - 45);
@@ -49,6 +51,8 @@ export default function PhotoArchivePage() {
       const params = new URLSearchParams();
       if (customerName) params.set('customerName', customerName);
       if (saleNumber) params.set('saleNumber', saleNumber);
+      if (productName) params.set('productName', productName);
+      if (barcode) params.set('barcode', barcode);
       if (dateFrom) params.set('dateFrom', dateFrom);
       if (dateTo) params.set('dateTo', dateTo);
       params.set('limit', '100');
@@ -61,7 +65,7 @@ export default function PhotoArchivePage() {
     } finally {
       setLoading(false);
     }
-  }, [customerName, saleNumber, dateFrom, dateTo]);
+  }, [customerName, saleNumber, productName, barcode, dateFrom, dateTo]);
 
   useEffect(() => { void search(); }, []);
 
@@ -90,23 +94,23 @@ export default function PhotoArchivePage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="relative">
               <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                className="field pl-9 w-full"
-                placeholder="Müşteri adı..."
-                value={customerName}
-                onChange={(e) => setCustomerName(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && void search()}
-              />
+              <input className="field pl-9 w-full" placeholder="Müşteri adı..." value={customerName}
+                onChange={(e) => setCustomerName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void search()} />
             </div>
             <div className="relative">
               <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                className="field pl-9 w-full"
-                placeholder="Sipariş no (EF-2026-000001)..."
-                value={saleNumber}
-                onChange={(e) => setSaleNumber(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && void search()}
-              />
+              <input className="field pl-9 w-full" placeholder="Sipariş no (EF-2026-000001)..." value={saleNumber}
+                onChange={(e) => setSaleNumber(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void search()} />
+            </div>
+            <div className="relative">
+              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input className="field pl-9 w-full" placeholder="Ürün adı..." value={productName}
+                onChange={(e) => setProductName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void search()} />
+            </div>
+            <div className="relative">
+              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input className="field pl-9 w-full" placeholder="Barkod..." value={barcode}
+                onChange={(e) => setBarcode(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void search()} />
             </div>
           </div>
           <div className="flex gap-3 flex-wrap items-center">

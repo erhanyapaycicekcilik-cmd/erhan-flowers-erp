@@ -1343,10 +1343,12 @@ export class SalesService {
     return (Math.round(value * 1000) / 1000).toLocaleString('tr-TR', { maximumFractionDigits: 3 });
   }
 
-  async searchProofPhotoArchive(query: { customerName?: string; saleNumber?: string; dateFrom?: string; dateTo?: string; limit?: number }) {
+  async searchProofPhotoArchive(query: { customerName?: string; saleNumber?: string; productName?: string; barcode?: string; dateFrom?: string; dateTo?: string; limit?: number }) {
     const limit = Math.min(Number(query.limit ?? 50), 200);
     const nameFilter = query.customerName ? `%${query.customerName}%` : '%';
     const saleFilter = query.saleNumber ? `%${query.saleNumber}%` : '%';
+    const productFilter = query.productName ? `%${query.productName}%` : null;
+    const barcodeFilter = query.barcode ? `%${query.barcode}%` : null;
     const dateFrom = query.dateFrom ? new Date(query.dateFrom) : new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
     const dateTo = query.dateTo ? new Date(query.dateTo) : new Date();
 
@@ -1359,16 +1361,22 @@ export class SalesService {
       photo_type: string;
       created_at: Date;
       expires_at: Date;
+      product_names: string;
     }>>`
       SELECT p.sale_id, rs.sale_number, rs.customer_name, rs.channel,
-             p.image_path, p.photo_type, p.created_at, p.expires_at
+             p.image_path, p.photo_type, p.created_at, p.expires_at,
+             STRING_AGG(DISTINCT rsi.product_name, ', ') AS product_names
       FROM retail_sale_proof_photos p
       JOIN retail_sales rs ON rs.id = p.sale_id
+      LEFT JOIN retail_sale_items rsi ON rsi.sale_id = rs.id
       WHERE p.expires_at > NOW()
         AND rs.customer_name ILIKE ${nameFilter}
         AND rs.sale_number ILIKE ${saleFilter}
         AND p.created_at >= ${dateFrom}
         AND p.created_at <= ${dateTo}
+        AND (${productFilter}::text IS NULL OR rsi.product_name ILIKE ${productFilter})
+        AND (${barcodeFilter}::text IS NULL OR rsi.barcode ILIKE ${barcodeFilter})
+      GROUP BY p.id, rs.sale_number, rs.customer_name, rs.channel
       ORDER BY p.created_at DESC
       LIMIT ${limit}
     `;
