@@ -12,11 +12,12 @@ const execFileAsync = promisify(execFile);
 
 const VIDEO_EXTENSIONS = new Set(['.mp4', '.mov', '.avi', '.webm', '.mkv', '.m4v', '.3gp', '.hevc']);
 
-async function compressVideoIfNeeded(filePath: string): Promise<string> {
+async function compressVideoIfNeeded(filePath: string): Promise<{ videoPath: string; thumbPath: string | null }> {
   const ext = extname(filePath).toLowerCase();
-  if (!VIDEO_EXTENSIONS.has(ext)) return filePath; // fotoğraf — dokunma
+  if (!VIDEO_EXTENSIONS.has(ext)) return { videoPath: filePath, thumbPath: null };
 
   const outPath = filePath.replace(/\.[^.]+$/, '_c.mp4');
+  const thumbPath = filePath.replace(/\.[^.]+$/, '_thumb.jpg');
   try {
     await execFileAsync('ffmpeg', [
       '-i', filePath,
@@ -26,11 +27,21 @@ async function compressVideoIfNeeded(filePath: string): Promise<string> {
       '-y', outPath,
     ]);
     unlinkSync(filePath); // orijinali sil
-    return outPath;
+    // Thumbnail: 1. saniyeden 320px genişliğinde kare al
+    try {
+      await execFileAsync('ffmpeg', [
+        '-i', outPath,
+        '-ss', '00:00:01',
+        '-vframes', '1',
+        '-vf', 'scale=320:-1',
+        '-y', thumbPath,
+      ]);
+    } catch { /* thumbnail oluşturulamazsa devam et */ }
+    return { videoPath: outPath, thumbPath: existsSync(thumbPath) ? thumbPath : null };
   } catch {
     // ffmpeg başarısız olursa orijinali koru
     if (existsSync(outPath)) unlinkSync(outPath);
-    return filePath;
+    return { videoPath: filePath, thumbPath: null };
   }
 }
 
@@ -689,14 +700,14 @@ export class SalesService {
 
   async saveProofPhotoAndMarkReady(id: number, file: { filename: string; path?: string }, userId: number, photoType = 'BARCODE') {
     const rawPath = file.path ?? join(process.cwd(), 'uploads', 'proof-photos', file.filename);
-    // Video ise arka planda sıkıştır (fotoğraflara dokunmaz)
-    const finalPath = await compressVideoIfNeeded(rawPath);
+    const { videoPath: finalPath, thumbPath } = await compressVideoIfNeeded(rawPath);
     const imagePath = 'uploads/proof-photos/' + finalPath.split(/[\\/]/).pop();
+    const thumbnailPath = thumbPath ? 'uploads/proof-photos/' + thumbPath.split(/[\\/]/).pop() : null;
     const expiresAt = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000); // 90 gün
     const safeType = ['BARCODE', 'PACKAGE'].includes(photoType) ? photoType : 'BARCODE';
     await this.prisma.$executeRaw`
-      INSERT INTO retail_sale_proof_photos (sale_id, image_path, photo_type, expires_at, taken_by_id)
-      VALUES (${id}, ${imagePath}, ${safeType}, ${expiresAt}, ${userId})
+      INSERT INTO retail_sale_proof_photos (sale_id, image_path, thumbnail_path, photo_type, expires_at, taken_by_id)
+      VALUES (${id}, ${imagePath}, ${thumbnailPath}, ${safeType}, ${expiresAt}, ${userId})
     `;
     // Herhangi bir fotoğraf yüklenince HAZIR durumuna geç (tek fotoğraf yeterli)
     const currentStatus = await this.prisma.$queryRaw<{ status: string }[]>`
@@ -1358,13 +1369,14 @@ export class SalesService {
       customer_name: string;
       channel: string;
       image_path: string;
+      thumbnail_path: string | null;
       photo_type: string;
       created_at: Date;
       expires_at: Date;
       product_names: string;
     }>>`
       SELECT p.sale_id, rs.sale_number, rs.customer_name, rs.channel,
-             p.image_path, p.photo_type, p.created_at, p.expires_at,
+             p.image_path, p.thumbnail_path, p.photo_type, p.created_at, p.expires_at,
              STRING_AGG(DISTINCT rsi.product_name, ', ') AS product_names
       FROM retail_sale_proof_photos p
       JOIN retail_sales rs ON rs.id = p.sale_id

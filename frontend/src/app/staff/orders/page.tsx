@@ -123,6 +123,7 @@ function useUrgentAlarm(orders: OrderRow[]) {
       const m = now.getMinutes();
       const todayKey = now.toDateString();
 
+      // Sadece 16:00 - 16:04 arası tetikle, günde bir kez
       if (h !== 16 || m > 4) return;
       if (firedRef.current === todayKey) return;
 
@@ -139,6 +140,7 @@ function useUrgentAlarm(orders: OrderRow[]) {
       if (urgent.length === 0) return;
       firedRef.current = todayKey;
 
+      // Ses çal
       try {
         const ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
         const beep = (freq: number, start: number, dur: number) => {
@@ -154,6 +156,7 @@ function useUrgentAlarm(orders: OrderRow[]) {
         beep(880, 0, 0.2); beep(880, 0.25, 0.2); beep(1100, 0.5, 0.4);
       } catch { /* ses desteklenmiyorsa geç */ }
 
+      // Browser bildirimi (izin varsa)
       const msg = `⚠️ ${urgent.length} sipariş bugün veya yarın 12:00'a kadar çıkmalı!`;
       if ('Notification' in window && Notification.permission === 'granted') {
         new Notification('🌸 Erhan Flowers — Acil Sipariş', { body: msg, icon: '/icon-192.png' });
@@ -164,8 +167,8 @@ function useUrgentAlarm(orders: OrderRow[]) {
       }
     };
 
-    const interval = setInterval(check, 30_000);
-    check();
+    const interval = setInterval(check, 30_000); // 30 saniyede bir kontrol
+    check(); // sayfa açılışında da çalıştır
     return () => clearInterval(interval);
   }, [orders]);
 }
@@ -246,6 +249,7 @@ export default function StaffOrdersPage() {
     return acc;
   }, {});
 
+  // Bugün veya yarın 12:00'a kadar çıkması gereken siparişler
   const tomorrow12 = new Date();
   tomorrow12.setDate(tomorrow12.getDate() + 1);
   tomorrow12.setHours(12, 0, 0, 0);
