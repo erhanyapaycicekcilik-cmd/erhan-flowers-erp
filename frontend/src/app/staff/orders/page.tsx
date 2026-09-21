@@ -364,11 +364,13 @@ function OrderCard({ order, onStatusChange, readySection }: { order: OrderRow; o
       });
       if (res.ok) {
         onStatusChange(order.id, 'READY');
+      } else if (res.status === 413) {
+        alert('Dosya çok büyük. Video 500MB altında olmalı.');
       } else {
-        alert('Fotoğraf yüklenemedi. Tekrar deneyin.');
+        alert(`Yükleme başarısız (${res.status}). Tekrar deneyin.`);
       }
     } catch {
-      alert('Fotoğraf yüklenemedi. Tekrar deneyin.');
+      alert('Yükleme başarısız. İnternet bağlantınızı kontrol edin.');
     } finally {
       setUploading(false);
     }
