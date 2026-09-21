@@ -1176,6 +1176,12 @@ export class ProductionCostsService {
   }
 
   async pushDescriptionToTrendyol(variantId: number, userId: number) {
+    const variant = await this.prisma.trendyolProductVariant.findUnique({ where: { id: variantId }, select: { trendyolProductUrl: true } });
+    if (!variant) throw new NotFoundException('Ürün bulunamadı.');
+    const contentIdMatch = String(variant.trendyolProductUrl ?? '').match(/-p-(\d+)/);
+    if (!contentIdMatch) {
+      return { ok: false, message: 'Bu ürünün Trendyol URL\'si kayıtlı değil. Sol panelden Trendyol\'da aç linkini girin, ardından tekrar deneyin.' };
+    }
     const results = await this.publishing.send([variantId], userId, { allowIncomplete: true, platforms: ['TRENDYOL'] as IntegrationPlatform[] });
     const trendyol = (results.results as any[])?.find((r) => r.platform === 'TRENDYOL');
     return { ok: trendyol?.ok ?? false, message: trendyol?.successMessage ?? trendyol?.errorMessage ?? 'Gönderildi.' };
