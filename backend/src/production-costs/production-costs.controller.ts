@@ -299,4 +299,9 @@ export class ProductionCostsController {
   recalculateMarketplacePrices() {
     return this.productionCosts.recalculateMarketplacePrices();
   }
+
+  @Post('auto-assign-model-codes')
+  autoAssignModelCodes() {
+    return this.productionCosts.autoAssignModelCodes();
+  }
 }

@@ -420,6 +420,7 @@ model Category {
   products           Product[]
   productionFamilies ProductionFamily[]
   competitorKeywords CompetitorKeyword[]
+  shopCategories     ShopCategory[]
 
   @@map("categories")
 }
@@ -2413,6 +2414,8 @@ model ShopCategory {
   parentId       Int?           @map("parent_id")
   parent         ShopCategory?  @relation("ShopCategoryChildren", fields: [parentId], references: [id])
   children       ShopCategory[] @relation("ShopCategoryChildren")
+  categoryId     Int?           @map("category_id")
+  category       Category?      @relation(fields: [categoryId], references: [id])
   coverImageUrl  String?        @map("cover_image_url")
   sortOrder      Int            @default(0) @map("sort_order")
   status         RecordStatus   @default(ACTIVE)

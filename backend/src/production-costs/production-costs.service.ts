@@ -1227,6 +1227,48 @@ export class ProductionCostsService {
     return { ok: true };
   }
 
+  async autoAssignModelCodes() {
+    // Model kodu olmayan tüm varyantları bul
+    const variants = await this.prisma.trendyolProductVariant.findMany({
+      where: {
+        AND: [
+          { OR: [{ currentModelCode: null }, { currentModelCode: '' }] },
+          { status: 'ACTIVE' },
+        ],
+      },
+      select: { id: true, shopCategoryId: true, shopCategory: { select: { categoryId: true, category: { select: { id: true, codePrefix: true, startCode: true, currentCode: true } } } } },
+    });
+
+    let assigned = 0;
+    const errors: string[] = [];
+
+    for (const variant of variants) {
+      const category = variant.shopCategory?.category;
+      if (!category) { errors.push(`Varyant ${variant.id}: site kategorisi veya ERP kategori bağlantısı yok`); continue; }
+
+      try {
+        await this.prisma.$transaction(async (tx) => {
+          const cat = await tx.category.findUnique({ where: { id: category.id } });
+          if (!cat) throw new Error('Kategori bulunamadı');
+          let nextCode = Math.max(cat.currentCode + 1, cat.startCode);
+          let modelCode = `${cat.codePrefix}-${nextCode}`;
+          // Benzersizlik kontrolü
+          while (await tx.trendyolProductVariant.findFirst({ where: { OR: [{ currentModelCode: modelCode }, { proposedModelCode: modelCode }] } })) {
+            nextCode++;
+            modelCode = `${cat.codePrefix}-${nextCode}`;
+          }
+          await tx.category.update({ where: { id: cat.id }, data: { currentCode: nextCode } });
+          await tx.trendyolProductVariant.update({ where: { id: variant.id }, data: { currentModelCode: modelCode, proposedModelCode: modelCode, supplierStockCode: modelCode } });
+        });
+        assigned++;
+      } catch (e) {
+        errors.push(`Varyant ${variant.id}: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    }
+
+    return { assigned, skipped: errors.length, errors };
+  }
+
   async listOverheads() {
     const templates = await this.prisma.productionRecipeTemplate.findMany({
       include: {
