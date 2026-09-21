@@ -31,7 +31,17 @@ jobs:
             echo "=== Son commit ==="
             git log --oneline -3
 
-            echo "=== RAM durumu ==="
+            echo "=== RAM ve disk ==="
+            free -h
+            df -h /
+
+            echo "=== Swap olusturuluyor (2GB) ==="
+            if ! swapon --show | grep -q swapfile; then
+              fallocate -l 2G /swapfile || dd if=/dev/zero of=/swapfile bs=1M count=2048
+              chmod 600 /swapfile
+              mkswap /swapfile
+              swapon /swapfile
+            fi
             free -h
 
             echo "=== Backend build ==="
