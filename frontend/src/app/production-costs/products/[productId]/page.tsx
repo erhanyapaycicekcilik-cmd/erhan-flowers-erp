@@ -239,6 +239,7 @@ export default function ProductCostDetailPage() {
     stemCount: string; branchCount: string; leavesPerBranch: string; leafCount: string;
     potW: string; potD: string; potH: string; potType: string;
   }>({ stemCount: '', branchCount: '', leavesPerBranch: '', leafCount: '', potW: '', potD: '', potH: '', potType: '' });
+  const [pendingSeo, setPendingSeo] = useState<{ name: string; desc: string; keywords: string } | null>(null);
 
   useEffect(() => {
     const savedSettings = window.localStorage.getItem('ef_cost_price_settings');
@@ -849,6 +850,12 @@ export default function ProductCostDetailPage() {
     setSendingAllPlatforms(true);
     setMessage('Görsel ve fiyat tüm platformlara gönderiliyor...');
     try {
+      // Kaydedilmemiş SEO açıklaması varsa push öncesi otomatik kaydet
+      if (pendingSeo && variant) {
+        try {
+          await api(`/production-costs/variants/${variant.id}/seo`, { method: 'POST', json: { seoProductName: pendingSeo.name, seoLongDescription: pendingSeo.desc, seoKeywords: pendingSeo.keywords } });
+        } catch { /* kayıt başarısız olsa da push devam etsin */ }
+      }
       const result = await api<{ success: number; failed: number; results: Array<{ platform: string; ok: boolean; successMessage?: string | null; errorMessage?: string | null }> }>(`/production-costs/variants/${productId}/push-all-platforms`, {
         method: 'POST',
         json: { salePrice: totals.marketplaceSalePrice },
@@ -1450,6 +1457,7 @@ export default function ProductCostDetailPage() {
               potSize={variant.potSize}
               potType={variant.potType}
               physicalSpecsOverride={physicalSpecsForm}
+              onSeoChange={setPendingSeo}
             />
           )}
 
@@ -2343,7 +2351,7 @@ function PhysicalSpecsPanel({ productCenterId, productHeight, potType, potSize, 
   );
 }
 
-function SeoPanel({ variantId, productName, detectedSize, seoProductName, seoLongDescription, seoKeywords, knowledgeResult, materials, stemCount, branchCount, leavesPerBranch, leafCount, potSize, potType, physicalSpecsOverride }: {
+function SeoPanel({ variantId, productName, detectedSize, seoProductName, seoLongDescription, seoKeywords, knowledgeResult, materials, stemCount, branchCount, leavesPerBranch, leafCount, potSize, potType, physicalSpecsOverride, onSeoChange }: {
   variantId: number;
   productName: string;
   detectedSize?: string | null;
@@ -2359,12 +2367,17 @@ function SeoPanel({ variantId, productName, detectedSize, seoProductName, seoLon
   potSize?: string | null;
   potType?: string | null;
   physicalSpecsOverride?: { stemCount: string; branchCount: string; leavesPerBranch: string; leafCount: string; potW: string; potD: string; potH: string; potType: string };
+  onSeoChange?: (seo: { name: string; desc: string; keywords: string }) => void;
 }) {
   const [name, setName] = useState(seoProductName ?? '');
   const [desc, setDesc] = useState(seoLongDescription ?? '');
   const [keywords, setKeywords] = useState(Array.isArray(seoKeywords) ? seoKeywords.join(', ') : '');
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState('');
+
+  useEffect(() => {
+    onSeoChange?.({ name, desc, keywords });
+  }, [name, desc, keywords, onSeoChange]);
 
   function generate() {
     const pn = productName;
