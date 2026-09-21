@@ -130,6 +130,11 @@ export class ProductionCostsController {
     return this.productionCosts.restoreApprovedCosts(request.user!.id);
   }
 
+  @Post('auto-fill-missing-costs')
+  autoFillMissingCosts() {
+    return this.productionCosts.autoFillMissingCosts();
+  }
+
   @Get('variants/:id/detail')
   variantDetail(@Param('id') id: string) {
     return this.productionCosts.getVariantDetail(Number(id));

@@ -136,6 +136,20 @@ export default function ProductCostListPage() {
     }
   }
 
+  async function autoFillMissingCosts() {
+    setSyncing(true);
+    setMessage('');
+    try {
+      const result = await api<{ checked: number; filled: number }>('/production-costs/auto-fill-missing-costs', { method: 'POST' });
+      setMessage(`Otomatik doldurma tamamlandı. ${result.checked} ürün kontrol edildi, ${result.filled} tanesi stok kartından fiyat alarak tamamlandı.`);
+      loadProducts();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Otomatik doldurma başarısız oldu.');
+    } finally {
+      setSyncing(false);
+    }
+  }
+
   return (
     <AdminShell title="Ürün Maliyet Merkezi">
       <div className="mb-5 grid gap-4 xl:grid-cols-[1fr_420px]">
@@ -176,14 +190,18 @@ export default function ProductCostListPage() {
               <p className="mt-1 text-sm text-slate-500">Trendyol'daki güncel katalogla eşitler: görsel/fiyat/stok tazelenir, Trendyol'da olmayan (silinen) ürünler pasife alınır. Her gün 04:00'te otomatik de çalışır.</p>
             </div>
           </div>
-          <div className="mt-4 flex gap-2">
-            <button className="btn btn-primary flex-1 justify-center" onClick={syncTrendyol} disabled={syncing}>
+          <div className="mt-4 flex flex-col gap-2">
+            <button className="btn btn-primary w-full justify-center" onClick={syncTrendyol} disabled={syncing}>
               <RefreshCw size={16} className={syncing ? 'animate-spin' : ''} />
               {syncing ? 'İşleniyor...' : 'Şimdi Senkronize Et'}
             </button>
-            <button className="btn btn-secondary flex-1 justify-center" onClick={restoreApprovedCosts} disabled={syncing} title="Tamamlandı işaretli ama kaybolmuş maliyetleri geri yükle">
+            <button className="btn btn-secondary w-full justify-center" onClick={restoreApprovedCosts} disabled={syncing} title="Tamamlandı işaretli ama kaybolmuş maliyetleri geri yükle">
               <RefreshCw size={16} />
               Maliyetleri Geri Yükle
+            </button>
+            <button className="btn btn-secondary w-full justify-center" onClick={autoFillMissingCosts} disabled={syncing} title="Stok kartı olan ürünlerde maliyet otomatik doldur">
+              <RefreshCw size={16} />
+              Stok Kartından Otomatik Doldur
             </button>
           </div>
 
