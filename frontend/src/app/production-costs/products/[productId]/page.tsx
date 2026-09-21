@@ -36,6 +36,7 @@ type Variant = {
   branchCount?: number | null;
   leavesPerBranch?: number | null;
   leafCount?: number | null;
+  status?: 'ACTIVE' | 'PASSIVE';
 };
 
 type VariantListItem = {
@@ -228,6 +229,12 @@ export default function ProductCostDetailPage() {
   const [editingName, setEditingName] = useState(false);
   const [nameInput, setNameInput] = useState('');
   const [savingName, setSavingName] = useState(false);
+  const [productDescription, setProductDescription] = useState('');
+  const [shopCategoryId, setShopCategoryId] = useState('');
+  const [categories, setCategories] = useState<{ id: number; name: string; children?: { id: number; name: string }[] }[]>([]);
+  const [savingProductInfo, setSavingProductInfo] = useState(false);
+  const [activating, setActivating] = useState(false);
+  const [variantStatus, setVariantStatus] = useState<'ACTIVE' | 'PASSIVE'>('ACTIVE');
 
   useEffect(() => {
     const savedSettings = window.localStorage.getItem('ef_cost_price_settings');
@@ -244,12 +251,20 @@ export default function ProductCostDetailPage() {
       api<DetailResponse>(`/production-costs/variants/${productId}/detail`),
       api<StockCard[]>('/stock-cards'),
       api<VariantListItem[]>('/production-costs/variants').catch(() => []),
+      api<any>(`/product-center/variants/${productId}`).catch(() => null),
+      api<any[]>('/shop-categories').catch(() => []),
     ])
-      .then(([data, stockData, variantData]) => {
+      .then(([data, stockData, variantData, pcVariant, cats]) => {
         setDetail(data);
         setStockCards(stockData);
         setVariants(variantData);
         setImages(Array.isArray(data.variant.images) ? data.variant.images : []);
+        setVariantStatus((data.variant as any).status ?? 'ACTIVE');
+        if (pcVariant) {
+          setProductDescription(pcVariant.productDescription ?? '');
+          setShopCategoryId(pcVariant.shopCategoryId ? String(pcVariant.shopCategoryId) : '');
+        }
+        setCategories(Array.isArray(cats) ? cats : []);
         const savedMaterials = data.costDraft.items
           .filter((item: any) => !(item.source === 'MANUAL' && (item.isDefaultExpense || ['LABOR', 'OTHER', 'PACKAGING'].includes(item.group))))
           .map((item) => ({ ...item, key: crypto.randomUUID(), stockCardId: item.stockCardId ? Number(item.stockCardId) : '' as const }));
@@ -866,6 +881,37 @@ export default function ProductCostDetailPage() {
     }
   }
 
+  async function saveProductInfo() {
+    setSavingProductInfo(true);
+    try {
+      await api(`/product-center/variants/${productId}`, {
+        method: 'PATCH',
+        json: {
+          productDescription,
+          shopCategoryId: shopCategoryId ? Number(shopCategoryId) : null,
+        },
+      });
+      setMessage('Ürün bilgileri kaydedildi.');
+    } catch {
+      setMessage('Ürün bilgileri kaydedilemedi.');
+    } finally {
+      setSavingProductInfo(false);
+    }
+  }
+
+  async function activateVariant() {
+    setActivating(true);
+    try {
+      await api(`/production-costs/variants/${productId}/activate`, { method: 'POST' });
+      setVariantStatus('ACTIVE');
+      setMessage('Ürün satışa açıldı.');
+    } catch {
+      setMessage('Ürün satışa açılamadı.');
+    } finally {
+      setActivating(false);
+    }
+  }
+
   async function checkBatchStatus() {
     if (!pendingBatchId) return;
     setCheckingBatch(true);
@@ -1108,6 +1154,18 @@ export default function ProductCostDetailPage() {
               </a>
             )}
           </div>
+          {variantStatus === 'PASSIVE' && (
+            <div className="mt-2 flex items-center justify-between rounded-md bg-gray-100 px-3 py-2">
+              <span className="text-xs font-bold text-gray-600">📦 Arşivde — Satışta değil</span>
+              <button
+                onClick={activateVariant}
+                disabled={activating}
+                className="rounded bg-emerald-600 px-2 py-1 text-xs font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
+              >
+                {activating ? '...' : 'Satışa Aç'}
+              </button>
+            </div>
+          )}
           {editingName ? (
             <div className="mt-3 flex items-center gap-1">
               <input
@@ -1148,6 +1206,44 @@ export default function ProductCostDetailPage() {
         </section>
 
         <section className="space-y-3">
+          <CompactPanel
+            title="Ürün Bilgileri"
+            action={
+              <button className="btn btn-primary min-h-8 px-2 text-xs" onClick={saveProductInfo} disabled={savingProductInfo}>
+                <Save size={14} />{savingProductInfo ? 'Kaydediliyor...' : 'Kaydet'}
+              </button>
+            }
+          >
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Ürün Açıklaması</label>
+                <textarea
+                  className="mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand resize-none"
+                  rows={5}
+                  value={productDescription}
+                  onChange={e => setProductDescription(e.target.value)}
+                  placeholder="Ürün açıklaması..."
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Site Kategorisi</label>
+                <select
+                  className="mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand"
+                  value={shopCategoryId}
+                  onChange={e => setShopCategoryId(e.target.value)}
+                >
+                  <option value="">— Kategori Seçin —</option>
+                  {categories.map((c) => [
+                    <option key={c.id} value={c.id}>{c.name}</option>,
+                    ...(c.children ?? []).map((ch) => (
+                      <option key={ch.id} value={ch.id}>&nbsp;&nbsp;└ {ch.name}</option>
+                    )),
+                  ])}
+                </select>
+              </div>
+            </div>
+          </CompactPanel>
+
           <CompactPanel
             title="Görseller"
             action={

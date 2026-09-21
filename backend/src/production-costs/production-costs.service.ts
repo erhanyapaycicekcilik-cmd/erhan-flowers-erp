@@ -469,7 +469,6 @@ export class ProductionCostsService {
   async listVariants() {
     const [variants, orderCounts] = await Promise.all([
       this.prisma.trendyolProductVariant.findMany({
-        where: { status: 'ACTIVE' },
         include: {
           family: true,
           sizeOption: true,
@@ -1185,6 +1184,14 @@ export class ProductionCostsService {
       data: { trendyolSalePrice: salePrice, n11SalePrice: salePrice, hepsiburadaSalePrice: salePrice },
     });
     return this.publishing.send([variantId], userId, { allowIncomplete: true, platforms: ['TRENDYOL', 'N11', 'HEPSIBURADA'] as IntegrationPlatform[] });
+  }
+
+  async activateVariant(variantId: number) {
+    await this.prisma.trendyolProductVariant.update({
+      where: { id: variantId },
+      data: { status: 'ACTIVE' },
+    });
+    return { ok: true };
   }
 
   async updateVariantName(variantId: number, productName: string) {

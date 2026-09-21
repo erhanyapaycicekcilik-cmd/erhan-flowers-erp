@@ -232,6 +232,11 @@ export class ProductionCostsController {
     return this.productionCosts.updateVariantName(Number(id), body.productName);
   }
 
+  @Post('variants/:id/activate')
+  activateVariant(@Param('id') id: string) {
+    return this.productionCosts.activateVariant(Number(id));
+  }
+
   @Post('families')
   createFamily(@Body() body: unknown) {
     return this.productionCosts.createFamily(body);
