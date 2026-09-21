@@ -652,8 +652,13 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
         SELECT id FROM retail_sales WHERE idempotency_key = ${idempotencyKey} LIMIT 1
       `;
       if (existing[0]) {
+        const saleId = existing[0].id;
         const status = order.status ?? null;
         const invoiceStatus = order.invoiceStatus ?? null;
+        const prevRows = await tx.$queryRaw<Array<{ invoice_status: string }>>`
+          SELECT invoice_status FROM retail_sales WHERE id = ${saleId}
+        `;
+        const prevInvoiceStatus = prevRows[0]?.invoice_status;
         await tx.$executeRaw`
           UPDATE retail_sales
           SET status = COALESCE(${status}::"RetailSaleStatus", status),
@@ -664,9 +669,12 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
               cargo_tracking_number = COALESCE(${order.cargoTrackingNumber ?? null}, cargo_tracking_number),
               last_synced_at = NOW(),
               updated_at = NOW()
-          WHERE id = ${existing[0].id}
+          WHERE id = ${saleId}
         `;
-        return { created: false, saleId: existing[0].id };
+        if (invoiceStatus === 'RETURNED' && prevInvoiceStatus !== 'RETURNED') {
+          await this.returnSaleStockTx(tx, saleId, userId);
+        }
+        return { created: false, saleId };
       }
 
       const customer = await this.ensureCustomer(tx, order, userId);
@@ -1019,6 +1027,37 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
       if (!rows[0]) return true;
     }
     return false;
+  }
+
+  private async returnSaleStockTx(tx: Prisma.TransactionClient, saleId: number, userId: number) {
+    const items = await tx.$queryRaw<Array<{ id: number; stock_card_id: number | null; quantity: number; unit: string | null }>>`
+      SELECT id, stock_card_id, quantity, (SELECT unit FROM stock_cards WHERE id = stock_card_id) AS unit
+      FROM retail_sale_items
+      WHERE sale_id = ${saleId} AND stock_fulfillment_type = 'READY_STOCK' AND stock_card_id IS NOT NULL
+    `;
+    for (const item of items) {
+      const stockCardId = item.stock_card_id!;
+      const eventKey = `SALE_STOCK_RETURN:${saleId}:${item.id}`;
+      const already = await tx.$queryRaw<Array<{ id: number }>>`
+        SELECT id FROM stock_movements WHERE event_key = ${eventKey} LIMIT 1
+      `;
+      if (already.length > 0) continue;
+      await tx.$queryRaw`SELECT id FROM stock_cards WHERE id = ${stockCardId} FOR UPDATE`;
+      const cards = await tx.$queryRaw<Array<{ sq: number }>>`
+        SELECT stock_quantity AS sq FROM stock_cards WHERE id = ${stockCardId}
+      `;
+      const prev = Number(cards[0]?.sq ?? 0);
+      const next = prev + Number(item.quantity);
+      await tx.$executeRaw`
+        UPDATE stock_cards SET stock_quantity = ${next}, last_movement_at = NOW(), updated_at = NOW()
+        WHERE id = ${stockCardId}
+      `;
+      await tx.$executeRaw`
+        INSERT INTO stock_movements (stock_card_id, type, quantity, unit, previous_stock, next_stock, reason, reference_type, reference_id, event_key, created_by_id, created_at)
+        VALUES (${stockCardId}, 'IN', ${Number(item.quantity)}, ${item.unit ?? 'Adet'}, ${prev}, ${next}, 'RETURN', 'RETAIL_SALE', ${String(saleId)}, ${eventKey}, ${userId}, NOW())
+        ON CONFLICT (event_key) DO NOTHING
+      `;
+    }
   }
 
   private async ensureCustomer(tx: Prisma.TransactionClient, order: ExternalOrder, userId: number) {
