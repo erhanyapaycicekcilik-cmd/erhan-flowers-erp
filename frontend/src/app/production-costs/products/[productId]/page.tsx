@@ -1263,11 +1263,12 @@ export default function ProductCostDetailPage() {
                 <input
                   type="file"
                   accept="image/*"
+                  multiple
                   className="hidden"
                   disabled={uploadingImage}
-                  onChange={(event) => {
-                    const file = event.target.files?.[0];
-                    if (file) uploadImage(file);
+                  onChange={async (event) => {
+                    const files = Array.from(event.target.files ?? []);
+                    for (const file of files) await uploadImage(file);
                     event.target.value = '';
                   }}
                 />
