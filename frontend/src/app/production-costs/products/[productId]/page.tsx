@@ -1428,6 +1428,8 @@ export default function ProductCostDetailPage() {
               leavesPerBranch={variant.leavesPerBranch}
               leafCount={variant.leafCount}
               onFormChange={setPhysicalSpecsForm}
+              productName={variant.productName}
+              pots={pots}
             />
           )}
 
@@ -2142,7 +2144,7 @@ function Warning({ text }: { text: string }) {
   return <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">{text}</div>;
 }
 
-function PhysicalSpecsPanel({ productCenterId, productHeight, potType, potSize, stemCount, branchCount, leavesPerBranch, leafCount, onFormChange }: {
+function PhysicalSpecsPanel({ productCenterId, productHeight, potType, potSize, stemCount, branchCount, leavesPerBranch, leafCount, onFormChange, productName, pots }: {
   productCenterId?: number | null;
   productHeight?: string | null;
   potType?: string | null;
@@ -2152,6 +2154,8 @@ function PhysicalSpecsPanel({ productCenterId, productHeight, potType, potSize, 
   leavesPerBranch?: number | null;
   leafCount?: number | null;
   onFormChange?: (form: { stemCount: string; branchCount: string; leavesPerBranch: string; leafCount: string; potW: string; potD: string; potH: string; potType: string }) => void;
+  productName?: string;
+  pots?: PotItem[];
 }) {
   const [form, setForm] = useState({
     productHeight: productHeight ?? '',
@@ -2190,6 +2194,46 @@ function PhysicalSpecsPanel({ productCenterId, productHeight, potType, potSize, 
   useEffect(() => {
     onFormChange?.({ stemCount: form.stemCount, branchCount: form.branchCount, leavesPerBranch: form.leavesPerBranch, leafCount: form.leafCount, potW: form.potW, potD: form.potD, potH: form.potH, potType: form.potType });
   }, [form, onFormChange]);
+
+  // Ürün adından otomatik parse
+  useEffect(() => {
+    if (!productName) return;
+    const pn = productName;
+    // Boy: "70 Cm", "120cm", "1.2 M" vb.
+    const heightM = pn.match(/(\d+(?:[,.]\d+)?)\s*[Mm]\b/);
+    const heightCm = pn.match(/(\d+(?:[,.]\d+)?)\s*[Cc][Mm]/);
+    const parsedHeight = heightM ? `${parseFloat(heightM[1].replace(',', '.')) * 100} cm` : heightCm ? `${heightCm[1].replace(',', '.')} cm` : '';
+    // Gövde/adet sayısı: "10 Adet", "5li", "3 Gövde" vb.
+    const adetM = pn.match(/(\d+)\s*(?:adet|li\b|lü\b|lu\b|gövde)/i);
+    const parsedStem = adetM ? adetM[1] : '';
+    setForm((f) => ({
+      ...f,
+      productHeight: f.productHeight || parsedHeight,
+      stemCount: f.stemCount || parsedStem,
+    }));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [productName]);
+
+  // Saksı stok kartından ebat otomatik doldur
+  useEffect(() => {
+    if (!pots || pots.length === 0) return;
+    const pot = pots[0];
+    // sizeText örn: "15×15×13 cm" veya "15x15x13" veya "15 15 13"
+    const nums = pot.sizeText ? (pot.sizeText.match(/\d+(?:[,.]\d+)?/g)?.map((n) => n.replace(',', '.')) ?? []) : [];
+    if (nums.length >= 2) {
+      const [w, d, h] = nums;
+      const vol = w && d && h ? ((parseFloat(w) * parseFloat(d) * parseFloat(h)) / 1000).toFixed(1) : '';
+      setForm((f) => ({
+        ...f,
+        potW: f.potW || w || '',
+        potD: f.potD || d || '',
+        potH: f.potH || h || '',
+        potVolumeLitre: f.potVolumeLitre || vol,
+        potType: f.potType || pot.name || '',
+      }));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pots?.length]);
 
   function calcLeafCount(bc: string, lpb: string) {
     const b = parseInt(bc, 10);
