@@ -2077,7 +2077,7 @@ function stockSearchScore(stock: StockCard, normalizedQuery: string) {
 
   if (tokens.length > 0 && matchedTokens.length === 0 && !haystack.includes(normalizedQuery)) return 0;
 
-  let score = stockBasePriority(stock);
+  let score = 0;
   if (barcode && barcode === normalizedQuery) score += 900;
   if (sku && sku === normalizedQuery) score += 850;
   if (name === normalizedQuery) score += 800;
