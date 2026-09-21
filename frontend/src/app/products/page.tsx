@@ -2235,7 +2235,7 @@ export default function ProductsPage() {
                   </div>
                   <input className="field mt-1 text-xs" value={(form as any).potSize || ''} onChange={(e) => update('potSize' as any, e.target.value)} placeholder="28×28×30cm (düzenlenebilir)" />
                 </div>
-                <div className="md:col-span-2 xl:col-span-4">
+                {false && <div className="md:col-span-2 xl:col-span-4">
                   <div className="rounded-md border border-emerald-200 bg-emerald-50">
                     <button
                       type="button"
@@ -2369,7 +2369,7 @@ export default function ProductsPage() {
                   </div>
                     )}
                   </div>
-                </div>
+                </div>}
                 <div className="md:col-span-2 xl:col-span-4">
                   <Field label="Google SEO uyumlu satış ürün adı">
                     <input className="field" value={form.productName} onChange={(event) => update('productName', event.target.value)} placeholder="Yaprak, gövde ve saksıyı seçtikten sonra final ürün adını yazın" />
