@@ -1,6 +1,33 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+
+function useCountdown(due?: string | null, status?: string) {
+  const [, setTick] = useState(0);
+  const ref = useRef<ReturnType<typeof setInterval> | null>(null);
+  const done = status === 'DELIVERED' || status === 'COMPLETED' || status === 'CANCELLED';
+
+  useEffect(() => {
+    if (!due || done) return;
+    ref.current = setInterval(() => setTick((t) => t + 1), 1000);
+    return () => { if (ref.current) clearInterval(ref.current); };
+  }, [due, done]);
+
+  if (!due || done) return null;
+
+  const diffMs = new Date(due).getTime() - Date.now();
+  const isLate = diffMs < 0;
+  const abs = Math.abs(diffMs);
+  const totalSecs = Math.floor(abs / 1000);
+  const days = Math.floor(totalSecs / 86400);
+  const hours = Math.floor((totalSecs % 86400) / 3600);
+  const mins = Math.floor((totalSecs % 3600) / 60);
+  const secs = totalSecs % 60;
+  const pad = (n: number) => String(n).padStart(2, '0');
+
+  if (days > 0) return { text: `${isLate ? '+' : ''}${days}g ${pad(hours)}s ${pad(mins)}d`, isLate, isUrgent: !isLate && days <= 1 };
+  return { text: `${isLate ? '+' : ''}${pad(hours)}:${pad(mins)}:${pad(secs)}`, isLate, isUrgent: !isLate };
+}
 import Link from 'next/link';
 import {
   Camera,
@@ -442,6 +469,16 @@ export default function OrdersPage() {
           <Metric label="Geciken Sipariş" value={delayed} danger={delayed > 0} />
         </section>
 
+        {delayed > 0 && (
+          <div className="rounded-lg border border-red-300 bg-red-50 px-4 py-3 flex items-center gap-3">
+            <span className="text-2xl">🚨</span>
+            <div>
+              <div className="font-black text-red-800 text-base">{delayed} sipariş gecikti!</div>
+              <div className="text-sm text-red-700">Aşağıda kırmızı renkte gösterilen siparişler son çıkış tarihini geçmiş.</div>
+            </div>
+          </div>
+        )}
+
         <section className="panel p-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -673,8 +710,9 @@ function OrderCard({
   onReady: () => void;
 }) {
   const items = Array.isArray(order.items) ? order.items : [];
+  const countdown = useCountdown(order.deliveryDueAt, order.status);
   return (
-    <article className="grid gap-4 p-4 text-sm xl:grid-cols-[32px_1.1fr_1fr_1.5fr_80px_1fr_1fr_1fr_1fr_1.2fr]">
+    <article className={`grid gap-4 p-4 text-sm xl:grid-cols-[32px_1.1fr_1fr_1.5fr_80px_1fr_1fr_1fr_1fr_1.2fr] ${countdown?.isLate ? 'bg-red-50' : ''}`}>
       <div><input type="checkbox" checked={selected} onChange={(event) => onSelect(event.target.checked)} /></div>
       <Cell title="Sipariş Bilgileri">
         <div className="font-black text-ink">{order.saleNumber}</div>
@@ -682,7 +720,14 @@ function OrderCard({
         <div className="text-xs text-slate-500">Paket: {order.externalOrderId || '-'}</div>
         <div className="mt-2 text-xs">Sipariş: {date(order.orderDate || order.createdAt)}</div>
         <div className="text-xs">Son çıkış: {date(order.deliveryDueAt)}</div>
-        <div className={`mt-1 text-xs font-semibold ${isDelayed(order.deliveryDueAt, order.status) ? 'text-red-700' : 'text-emerald-700'}`}>{remainingText(order.deliveryDueAt, order.status)}</div>
+        {countdown ? (
+          <div className={`mt-1 flex items-center gap-1.5 rounded px-2 py-1 font-mono text-xs font-bold ${countdown.isLate ? 'bg-red-100 text-red-700' : countdown.isUrgent ? 'bg-amber-100 text-amber-700' : 'bg-emerald-50 text-emerald-700'}`}>
+            {countdown.isLate ? '🚨 +' : countdown.isUrgent ? '⚠️ ' : '✅ '}{countdown.text}
+            {countdown.isLate && <span className="ml-1 font-sans font-semibold">GECİKTİ</span>}
+          </div>
+        ) : (
+          <div className={`mt-1 text-xs font-semibold ${isDelayed(order.deliveryDueAt, order.status) ? 'text-red-700' : 'text-emerald-700'}`}>{remainingText(order.deliveryDueAt, order.status)}</div>
+        )}
       </Cell>
       <Cell title="Müşteri">
         <div className="font-semibold text-ink">{order.customerName || '-'}</div>
