@@ -122,6 +122,20 @@ export default function ProductCostListPage() {
     }
   }
 
+  async function restoreApprovedCosts() {
+    setSyncing(true);
+    setMessage('');
+    try {
+      const result = await api<{ draftRestored: number; alreadyOk: number; noDraft: number; total: number }>('/production-costs/restore-approved-costs', { method: 'POST' });
+      setMessage(`Geri yükleme tamamlandı. ${result.draftRestored} maliyet kurtarıldı, ${result.alreadyOk} zaten tamam, ${result.noDraft} ürünün verisi kayıp (sıfırdan girilmesi gerekiyor).`);
+      loadProducts();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Geri yükleme başarısız oldu.');
+    } finally {
+      setSyncing(false);
+    }
+  }
+
   return (
     <AdminShell title="Ürün Maliyet Merkezi">
       <div className="mb-5 grid gap-4 xl:grid-cols-[1fr_420px]">
@@ -162,10 +176,16 @@ export default function ProductCostListPage() {
               <p className="mt-1 text-sm text-slate-500">Trendyol'daki güncel katalogla eşitler: görsel/fiyat/stok tazelenir, Trendyol'da olmayan (silinen) ürünler pasife alınır. Her gün 04:00'te otomatik de çalışır.</p>
             </div>
           </div>
-          <button className="btn btn-primary mt-4 w-full justify-center" onClick={syncTrendyol} disabled={syncing}>
-            <RefreshCw size={16} className={syncing ? 'animate-spin' : ''} />
-            {syncing ? 'Senkronize ediliyor...' : 'Şimdi Senkronize Et'}
-          </button>
+          <div className="mt-4 flex gap-2">
+            <button className="btn btn-primary flex-1 justify-center" onClick={syncTrendyol} disabled={syncing}>
+              <RefreshCw size={16} className={syncing ? 'animate-spin' : ''} />
+              {syncing ? 'İşleniyor...' : 'Şimdi Senkronize Et'}
+            </button>
+            <button className="btn btn-secondary flex-1 justify-center" onClick={restoreApprovedCosts} disabled={syncing} title="Tamamlandı işaretli ama kaybolmuş maliyetleri geri yükle">
+              <RefreshCw size={16} />
+              Maliyetleri Geri Yükle
+            </button>
+          </div>
 
           <div className="mt-5 flex items-start gap-3 border-t border-line pt-4">
             <div className="flex h-10 w-10 items-center justify-center rounded-md bg-emerald-50 text-brand">

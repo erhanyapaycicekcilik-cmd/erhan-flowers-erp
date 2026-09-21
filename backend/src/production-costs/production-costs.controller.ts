@@ -125,6 +125,11 @@ export class ProductionCostsController {
     return this.productionCosts.syncWithTrendyol();
   }
 
+  @Post('restore-approved-costs')
+  restoreApprovedCosts(@Req() request: AuthenticatedRequest) {
+    return this.productionCosts.restoreApprovedCosts(request.user!.id);
+  }
+
   @Get('variants/:id/detail')
   variantDetail(@Param('id') id: string) {
     return this.productionCosts.getVariantDetail(Number(id));

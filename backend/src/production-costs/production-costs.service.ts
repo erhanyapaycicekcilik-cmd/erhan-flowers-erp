@@ -1767,9 +1767,42 @@ export class ProductionCostsService {
     return { total, completed };
   }
 
+  async restoreApprovedCosts(userId: number) {
+    // costStatus='Tamamlandı' olan varyantların draft'larını APPROVED'a çek
+    const variants = await this.prisma.trendyolProductVariant.findMany({
+      where: { costStatus: 'Tamamlandı' },
+      include: { productCostDraft: { select: { id: true, status: true } } },
+    });
+
+    let draftRestored = 0;
+    let alreadyOk = 0;
+    let noDraft = 0;
+
+    for (const variant of variants) {
+      if (!variant.productCostDraft) {
+        noDraft++;
+        continue;
+      }
+      if (variant.productCostDraft.status === 'APPROVED') {
+        alreadyOk++;
+        continue;
+      }
+      await this.prisma.productCostDraft.update({
+        where: { id: variant.productCostDraft.id },
+        data: { status: 'APPROVED' },
+      });
+      draftRestored++;
+    }
+
+    this.logger.log(`restoreApprovedCosts: ${draftRestored} draft APPROVED yapıldı, ${alreadyOk} zaten tamam, ${noDraft} draft yok`);
+    return { ok: true, draftRestored, alreadyOk, noDraft, total: variants.length };
+  }
+
   private variantCostStatus(variant: { productCostDraft?: { status: string } | null; costStatus?: string | null }) {
+    if (variant.productCostDraft?.status === 'APPROVED') return 'Tamamlandı';
+    // costStatus='Tamamlandı' ise draft kaybolsa veya senkron bozulsa da Tamamlandı göster
+    if (variant.costStatus === 'Tamamlandı') return 'Tamamlandı';
     if (!variant.productCostDraft) return 'Maliyet Girilmedi';
-    if (variant.productCostDraft.status === 'APPROVED') return 'Tamamlandı';
     if (variant.costStatus === 'Kontrol Edilecek') return 'Kontrol Edilecek';
     return 'Taslak';
   }
