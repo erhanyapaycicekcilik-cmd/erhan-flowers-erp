@@ -18,7 +18,7 @@ WORKDIR /app
 ENV NODE_ENV=production
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl ca-certificates openssl \
+    && apt-get install -y --no-install-recommends curl ca-certificates openssl ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 COPY package*.json ./

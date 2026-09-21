@@ -1,7 +1,38 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Cron } from '@nestjs/schedule';
 import { FinanceDirection, FinanceTransactionType, Prisma } from '../generated/prisma-client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProductsService } from '../products/products.service';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
+import { existsSync, unlinkSync, renameSync } from 'fs';
+import { join, extname } from 'path';
+
+const execFileAsync = promisify(execFile);
+
+const VIDEO_EXTENSIONS = new Set(['.mp4', '.mov', '.avi', '.webm', '.mkv', '.m4v', '.3gp', '.hevc']);
+
+async function compressVideoIfNeeded(filePath: string): Promise<string> {
+  const ext = extname(filePath).toLowerCase();
+  if (!VIDEO_EXTENSIONS.has(ext)) return filePath; // fotoğraf — dokunma
+
+  const outPath = filePath.replace(/\.[^.]+$/, '_c.mp4');
+  try {
+    await execFileAsync('ffmpeg', [
+      '-i', filePath,
+      '-vcodec', 'libx264', '-crf', '28', '-preset', 'fast',
+      '-acodec', 'aac', '-b:a', '96k',
+      '-movflags', '+faststart',
+      '-y', outPath,
+    ]);
+    unlinkSync(filePath); // orijinali sil
+    return outPath;
+  } catch {
+    // ffmpeg başarısız olursa orijinali koru
+    if (existsSync(outPath)) unlinkSync(outPath);
+    return filePath;
+  }
+}
 
 type SaleCustomerPayload = Record<string, unknown>;
 type SaleAddressPayload = Record<string, unknown>;
@@ -656,8 +687,11 @@ export class SalesService {
     });
   }
 
-  async saveProofPhotoAndMarkReady(id: number, file: { filename: string }, userId: number, photoType = 'BARCODE') {
-    const imagePath = `uploads/proof-photos/${file.filename}`;
+  async saveProofPhotoAndMarkReady(id: number, file: { filename: string; path?: string }, userId: number, photoType = 'BARCODE') {
+    const rawPath = file.path ?? join(process.cwd(), 'uploads', 'proof-photos', file.filename);
+    // Video ise arka planda sıkıştır (fotoğraflara dokunmaz)
+    const finalPath = await compressVideoIfNeeded(rawPath);
+    const imagePath = 'uploads/proof-photos/' + finalPath.split(/[\\/]/).pop();
     const expiresAt = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000); // 90 gün
     const safeType = ['BARCODE', 'PACKAGE'].includes(photoType) ? photoType : 'BARCODE';
     await this.prisma.$executeRaw`
@@ -673,6 +707,23 @@ export class SalesService {
       await this.updateStatus(id, { status: 'READY', note: 'Ürün hazırlandı — fotoğraf yüklendi.' }, userId);
     }
     return { uploaded: true, photoType: safeType, readyTriggered: !alreadyReady };
+  }
+
+  // Her gece 02:00'de süresi dolmuş medya dosyalarını temizle
+  @Cron('0 2 * * *')
+  async purgeExpiredProofPhotos() {
+    const expired = await this.prisma.$queryRaw<{ image_path: string; id: number }[]>`
+      SELECT id, image_path FROM retail_sale_proof_photos WHERE expires_at < NOW()
+    `;
+    let deleted = 0;
+    for (const row of expired) {
+      try {
+        const fullPath = join(process.cwd(), row.image_path);
+        if (existsSync(fullPath)) { unlinkSync(fullPath); deleted++; }
+      } catch { /* dosya zaten yok */ }
+      await this.prisma.$executeRaw`DELETE FROM retail_sale_proof_photos WHERE id = ${row.id}`;
+    }
+    if (expired.length > 0) this.logger.log(`Proof photo purge: ${deleted}/${expired.length} dosya silindi`);
   }
 
   async cancelSale(id: number, reason: string, userId: number) {
