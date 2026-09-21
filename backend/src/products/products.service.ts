@@ -285,11 +285,11 @@ export class ProductsService {
       if (variants.length > 0) {
         for (const variant of variants) {
           const salePrice = Number(variant.productCostDraft?.salePrice ?? variant.trendyolSalePrice ?? 0);
-          await this.broadcastPriceStock({ barcode: variant.barcode, modelCode: variant.currentModelCode, marketPrice: salePrice, stockQuantity: Number(card.stockQuantity) }).catch(() => undefined);
+          await this.broadcastPriceStock({ barcode: variant.barcode, modelCode: variant.currentModelCode, marketPrice: salePrice, stockQuantity: Math.max(0, Number(card.stockQuantity)) }).catch(() => undefined);
         }
       } else {
         const salePrice = Number(Number(card.salePrice) > 0 ? card.salePrice : card.purchasePrice ?? 0);
-        await this.broadcastPriceStock({ barcode: card.barcode, modelCode: card.sku ?? card.oldModelCode, marketPrice: salePrice, stockQuantity: Number(card.stockQuantity) }).catch(() => undefined);
+        await this.broadcastPriceStock({ barcode: card.barcode, modelCode: card.sku ?? card.oldModelCode, marketPrice: salePrice, stockQuantity: Math.max(0, Number(card.stockQuantity)) }).catch(() => undefined);
       }
     }
   }
@@ -309,7 +309,9 @@ export class ProductsService {
     // Tüm platformlara aynı fiyat gider (kullanıcı tercihi: tek fiyat politikası)
     // marketPrice = platform satış fiyatı, listPrice = KDV dahil liste fiyatı
     const salePrice = Number(product.marketPrice ?? product.shopPrice ?? 0);
-    if (!salePrice) return;
+    const stockQty = Math.max(0, Number(product.stockQuantity ?? 0));
+    // Stok 0'a düştüyse fiyat olmasa da platformlara gönder
+    if (!salePrice && stockQty > 0) return;
     const rawListPrice = Number(product.listPrice ?? product.marketPrice ?? 0);
     // listPrice her zaman salePrice'dan büyük olmalı (platform kuralı)
     const listPrice = rawListPrice > salePrice ? rawListPrice : Math.ceil(salePrice * 1.1);
@@ -319,7 +321,7 @@ export class ProductsService {
       modelCode: product.modelCode ?? product.barcode ?? '',
       salePrice,
       listPrice,
-      stockQuantity: Number(product.stockQuantity ?? 0),
+      stockQuantity: stockQty,
     };
 
     // Cache'den bağlı platformları al (5dk TTL, DB sorgusu atmaz)
