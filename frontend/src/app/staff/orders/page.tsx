@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { RefreshCw, Package, Clock, ExternalLink, Camera, Video, Printer, ChevronDown, ChevronUp, Phone, MapPin, CheckCircle } from 'lucide-react';
+import { RefreshCw, Package, Clock, ExternalLink, Video, Printer, ChevronDown, ChevronUp, Phone, MapPin, CheckCircle } from 'lucide-react';
 import { AdminShell } from '@/components/AdminShell';
 import { api, apiFileUrl, apiBaseUrl } from '@/lib/api';
 
@@ -110,6 +110,69 @@ function useCountdown(due?: string | null, status?: string) {
   return { text: `${isLate ? '+' : ''}${pad(hours)}:${pad(mins)}:${pad(secs)}`, isLate, isUrgent: !isLate };
 }
 
+// ──────────────────────────────────────────────────────
+// Saat 16:00 sesli uyarı hook'u
+// ──────────────────────────────────────────────────────
+function useUrgentAlarm(orders: OrderRow[]) {
+  const firedRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const check = () => {
+      const now = new Date();
+      const h = now.getHours();
+      const m = now.getMinutes();
+      const todayKey = now.toDateString();
+
+      // Sadece 16:00 - 16:04 arası tetikle, günde bir kez
+      if (h !== 16 || m > 4) return;
+      if (firedRef.current === todayKey) return;
+
+      const tomorrow12 = new Date(now);
+      tomorrow12.setDate(tomorrow12.getDate() + 1);
+      tomorrow12.setHours(12, 0, 0, 0);
+
+      const urgent = orders.filter((o) => {
+        if (o.status === 'READY' || o.status === 'COMPLETED' || o.status === 'CANCELLED') return false;
+        if (!o.deliveryDueAt) return false;
+        return new Date(o.deliveryDueAt).getTime() <= tomorrow12.getTime();
+      });
+
+      if (urgent.length === 0) return;
+      firedRef.current = todayKey;
+
+      // Ses çal
+      try {
+        const ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
+        const beep = (freq: number, start: number, dur: number) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.connect(gain); gain.connect(ctx.destination);
+          osc.frequency.value = freq;
+          gain.gain.setValueAtTime(0.4, ctx.currentTime + start);
+          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + start + dur);
+          osc.start(ctx.currentTime + start);
+          osc.stop(ctx.currentTime + start + dur + 0.05);
+        };
+        beep(880, 0, 0.2); beep(880, 0.25, 0.2); beep(1100, 0.5, 0.4);
+      } catch { /* ses desteklenmiyorsa geç */ }
+
+      // Browser bildirimi (izin varsa)
+      const msg = `⚠️ ${urgent.length} sipariş bugün veya yarın 12:00'a kadar çıkmalı!`;
+      if ('Notification' in window && Notification.permission === 'granted') {
+        new Notification('🌸 Erhan Flowers — Acil Sipariş', { body: msg, icon: '/icon-192.png' });
+      } else if ('Notification' in window && Notification.permission !== 'denied') {
+        void Notification.requestPermission().then((p) => {
+          if (p === 'granted') new Notification('🌸 Erhan Flowers — Acil Sipariş', { body: msg, icon: '/icon-192.png' });
+        });
+      }
+    };
+
+    const interval = setInterval(check, 30_000); // 30 saniyede bir kontrol
+    check(); // sayfa açılışında da çalıştır
+    return () => clearInterval(interval);
+  }, [orders]);
+}
+
 export default function StaffOrdersPage() {
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -186,6 +249,17 @@ export default function StaffOrdersPage() {
     return acc;
   }, {});
 
+  // Bugün veya yarın 12:00'a kadar çıkması gereken siparişler
+  const tomorrow12 = new Date();
+  tomorrow12.setDate(tomorrow12.getDate() + 1);
+  tomorrow12.setHours(12, 0, 0, 0);
+  const urgentToday = activeOrders.filter((o) => {
+    if (!o.deliveryDueAt) return false;
+    return new Date(o.deliveryDueAt).getTime() <= tomorrow12.getTime();
+  });
+
+  useUrgentAlarm(orders);
+
   return (
     <AdminShell title="Personel Siparişler">
       <div className="p-4 space-y-4 max-w-7xl mx-auto pb-20">
@@ -202,6 +276,28 @@ export default function StaffOrdersPage() {
             </button>
           </div>
         </div>
+
+        {/* Bugün/Yarın acil uyarı banner */}
+        {urgentToday.length > 0 && (
+          <div className="rounded-xl border-2 border-red-400 bg-red-50 px-4 py-3 flex items-start gap-3 animate-pulse">
+            <span className="text-3xl mt-0.5">🚨</span>
+            <div className="flex-1">
+              <div className="font-black text-red-800 text-base">{urgentToday.length} sipariş bugün veya yarın 12:00'a kadar çıkmalı!</div>
+              <div className="text-sm text-red-700 mt-1 space-y-0.5">
+                {urgentToday.map((o) => (
+                  <div key={o.id} className="font-mono">
+                    • {o.saleNumber} — {o.customerName}
+                    {o.deliveryDueAt && (
+                      <span className="ml-1 text-red-600 font-bold">
+                        (Son: {new Date(o.deliveryDueAt).toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })})
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Durum sekmeleri */}
         <div className="flex gap-1 flex-wrap border-b border-line pb-3">
@@ -335,7 +431,6 @@ function OrderCard({ order, onStatusChange, readySection }: { order: OrderRow; o
   const [activeIdx, setActiveIdx] = useState(0);
   const [showDetails, setShowDetails] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const fileRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLInputElement>(null);
 
   const itemsWithImg = order.items.filter((i) => i.imagePath);
@@ -559,21 +654,15 @@ function OrderCard({ order, onStatusChange, readySection }: { order: OrderRow; o
             </div>
           ) : (
             <>
-              <input ref={fileRef} type="file" accept="image/*" capture="environment" multiple className="hidden" onChange={handlePhoto} />
               <input ref={videoRef} type="file" accept="video/*" capture="environment" multiple className="hidden" onChange={handlePhoto} />
               <button onClick={() => void markReadyWithoutPhoto()} disabled={uploading}
-                title="Fotoğrafsız hazır yap"
+                title="Videosuz hazır yap"
                 className="flex items-center justify-center p-2 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-100 transition">
                 <CheckCircle size={15} />
               </button>
               <button onClick={() => videoRef.current?.click()} disabled={uploading}
-                title="Video kanıt yükle"
-                className="flex items-center justify-center p-2 rounded-lg border border-blue-200 text-blue-600 hover:bg-blue-50 transition disabled:opacity-60">
-                <Video size={15} />
-              </button>
-              <button onClick={() => fileRef.current?.click()} disabled={uploading}
-                className="flex-1 flex items-center justify-center gap-1 text-sm px-3 py-2 rounded-lg bg-green-600 text-white hover:bg-green-700 transition disabled:opacity-60 font-bold">
-                <Camera size={14} /> {uploading ? 'Yükleniyor...' : 'Fotoğraf + Hazır Yap'}
+                className="flex-1 flex items-center justify-center gap-1 text-sm px-3 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition disabled:opacity-60 font-bold">
+                <Video size={14} /> {uploading ? 'Yükleniyor...' : 'Video + Hazır Yap'}
               </button>
             </>
           )}
