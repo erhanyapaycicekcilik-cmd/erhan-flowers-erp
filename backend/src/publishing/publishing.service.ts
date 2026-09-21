@@ -519,12 +519,7 @@ export class PublishingService {
     if (!payload.modelCode) missing.push('Model kodu');
     if (!payload.productName) missing.push('Ürün adı');
     if (!payload.description) missing.push('Uzun açıklama');
-    // Trendyol kategori ID'si sadece Trendyol için zorunlu
-    const isTrendyol = !platform || platform === 'TRENDYOL';
-    if (isTrendyol && !payload.contentId) {
-      if (!payload.categoryName) missing.push('Trendyol kategori adı');
-      if (!payload.categoryId) missing.push('Trendyol kategori eşlemesi (kategori ayarlarından Trendyol ID girilmeli)');
-    }
+    // Trendyol kategori ID'si varsayılan 2995 kullanıldığından artık zorunlu değil
     if (!payload.salePrice || payload.salePrice <= 0) missing.push('Satış fiyatı');
     if (!Array.isArray(payload.images) || payload.images.length === 0) missing.push('Ürün görseli');
     return missing;
