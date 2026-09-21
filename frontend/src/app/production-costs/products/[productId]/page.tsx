@@ -235,6 +235,10 @@ export default function ProductCostDetailPage() {
   const [savingProductInfo, setSavingProductInfo] = useState(false);
   const [activating, setActivating] = useState(false);
   const [variantStatus, setVariantStatus] = useState<'ACTIVE' | 'PASSIVE'>('ACTIVE');
+  const [physicalSpecsForm, setPhysicalSpecsForm] = useState<{
+    stemCount: string; branchCount: string; leavesPerBranch: string; leafCount: string;
+    potW: string; potD: string; potH: string; potType: string;
+  }>({ stemCount: '', branchCount: '', leavesPerBranch: '', leafCount: '', potW: '', potD: '', potH: '', potType: '' });
 
   useEffect(() => {
     const savedSettings = window.localStorage.getItem('ef_cost_price_settings');
@@ -1423,6 +1427,7 @@ export default function ProductCostDetailPage() {
               branchCount={variant.branchCount}
               leavesPerBranch={variant.leavesPerBranch}
               leafCount={variant.leafCount}
+              onFormChange={setPhysicalSpecsForm}
             />
           )}
 
@@ -1442,6 +1447,7 @@ export default function ProductCostDetailPage() {
               leafCount={variant.leafCount}
               potSize={variant.potSize}
               potType={variant.potType}
+              physicalSpecsOverride={physicalSpecsForm}
             />
           )}
 
@@ -2136,7 +2142,7 @@ function Warning({ text }: { text: string }) {
   return <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">{text}</div>;
 }
 
-function PhysicalSpecsPanel({ productCenterId, productHeight, potType, potSize, stemCount, branchCount, leavesPerBranch, leafCount }: {
+function PhysicalSpecsPanel({ productCenterId, productHeight, potType, potSize, stemCount, branchCount, leavesPerBranch, leafCount, onFormChange }: {
   productCenterId?: number | null;
   productHeight?: string | null;
   potType?: string | null;
@@ -2145,6 +2151,7 @@ function PhysicalSpecsPanel({ productCenterId, productHeight, potType, potSize, 
   branchCount?: number | null;
   leavesPerBranch?: number | null;
   leafCount?: number | null;
+  onFormChange?: (form: { stemCount: string; branchCount: string; leavesPerBranch: string; leafCount: string; potW: string; potD: string; potH: string; potType: string }) => void;
 }) {
   const [form, setForm] = useState({
     productHeight: productHeight ?? '',
@@ -2179,6 +2186,10 @@ function PhysicalSpecsPanel({ productCenterId, productHeight, potType, potSize, 
       leafCount: leafCount != null ? String(leafCount) : '',
     }));
   }, [productCenterId, productHeight, potType, potSize, stemCount, branchCount, leavesPerBranch, leafCount]);
+
+  useEffect(() => {
+    onFormChange?.({ stemCount: form.stemCount, branchCount: form.branchCount, leavesPerBranch: form.leavesPerBranch, leafCount: form.leafCount, potW: form.potW, potD: form.potD, potH: form.potH, potType: form.potType });
+  }, [form, onFormChange]);
 
   function calcLeafCount(bc: string, lpb: string) {
     const b = parseInt(bc, 10);
@@ -2288,7 +2299,7 @@ function PhysicalSpecsPanel({ productCenterId, productHeight, potType, potSize, 
   );
 }
 
-function SeoPanel({ variantId, productName, detectedSize, seoProductName, seoLongDescription, seoKeywords, knowledgeResult, materials, stemCount, branchCount, leavesPerBranch, leafCount, potSize, potType }: {
+function SeoPanel({ variantId, productName, detectedSize, seoProductName, seoLongDescription, seoKeywords, knowledgeResult, materials, stemCount, branchCount, leavesPerBranch, leafCount, potSize, potType, physicalSpecsOverride }: {
   variantId: number;
   productName: string;
   detectedSize?: string | null;
@@ -2303,6 +2314,7 @@ function SeoPanel({ variantId, productName, detectedSize, seoProductName, seoLon
   leafCount?: number | null;
   potSize?: string | null;
   potType?: string | null;
+  physicalSpecsOverride?: { stemCount: string; branchCount: string; leavesPerBranch: string; leafCount: string; potW: string; potD: string; potH: string; potType: string };
 }) {
   const [name, setName] = useState(seoProductName ?? '');
   const [desc, setDesc] = useState(seoLongDescription ?? '');
@@ -2318,22 +2330,35 @@ function SeoPanel({ variantId, productName, detectedSize, seoProductName, seoLon
 
     const isSeprator = /seperat|speratör|seperatör/i.test(pn);
     const isBambu = /bambu/i.test(pn);
-    // Gerçek fiziksel özellikler önce, yoksa isimden parse et
+    // Gerçek fiziksel özellikler önce (API'den), yoksa PhysicalSpecsPanel form değerleri, yoksa isimden parse et
     const stemMatch = pn.match(/(\d+)\s*(adet|li|lü|lu)\s*bambu/i) ?? pn.match(/bambu\s*(\d+)/i);
-    const actualStemCount = stemCount ?? (stemMatch ? Number(stemMatch[1]) : null);
-    const actualBranchCount = branchCount ?? null;
-    const actualLeavesPerBranch = leavesPerBranch ?? null;
-    const actualLeafCount = leafCount ?? (actualBranchCount && actualLeavesPerBranch ? actualBranchCount * actualLeavesPerBranch : null);
+    const oStem = physicalSpecsOverride?.stemCount ? Number(physicalSpecsOverride.stemCount) : null;
+    const oBranch = physicalSpecsOverride?.branchCount ? Number(physicalSpecsOverride.branchCount) : null;
+    const oLpb = physicalSpecsOverride?.leavesPerBranch ? Number(physicalSpecsOverride.leavesPerBranch) : null;
+    const oLeaf = physicalSpecsOverride?.leafCount ? Number(physicalSpecsOverride.leafCount) : null;
+    const oPotType = physicalSpecsOverride?.potType || null;
+    const oPotW = physicalSpecsOverride?.potW ? Number(physicalSpecsOverride.potW) : null;
+    const oPotD = physicalSpecsOverride?.potD ? Number(physicalSpecsOverride.potD) : null;
+    const oPotH = physicalSpecsOverride?.potH ? Number(physicalSpecsOverride.potH) : null;
 
-    // Saksı ölçülerini potSize string'inden parse et (format: "GxDxY" veya "G D Y")
+    const actualStemCount = stemCount ?? oStem ?? (stemMatch ? Number(stemMatch[1]) : null);
+    const actualBranchCount = branchCount ?? oBranch ?? null;
+    const actualLeavesPerBranch = leavesPerBranch ?? oLpb ?? null;
+    const actualLeafCount = leafCount ?? oLeaf ?? (actualBranchCount && actualLeavesPerBranch ? actualBranchCount * actualLeavesPerBranch : null);
+
+    // Saksı ölçülerini potSize string'inden parse et, yoksa form'daki potW/D/H kullan
     const potNums = potSize ? (potSize.match(/\d+(\.\d+)?/g)?.map(Number) ?? []) : [];
-    const [potW, potD, potH] = potNums;
-    const potSizeStr = potW && potD && potH ? `${potW}×${potD}×${potH} cm (G×D×Y)` : potW && potD ? `${potW}×${potD} cm` : '';
+    const [apiPotW, apiPotD, apiPotH] = potNums;
+    const finalPotW = apiPotW ?? oPotW;
+    const finalPotD = apiPotD ?? oPotD;
+    const finalPotH = apiPotH ?? oPotH;
+    const potSizeStr = finalPotW && finalPotD && finalPotH ? `${finalPotW}×${finalPotD}×${finalPotH} cm (G×D×Y)` : finalPotW && finalPotD ? `${finalPotW}×${finalPotD} cm` : '';
 
     // Saksı bilgisini stok bileşenlerinden al
     const potMaterial = materials.find((m) => /saks[iı]/i.test(m.name));
-    const hasPot = Boolean(potMaterial) || Boolean(potType) || Boolean(potSizeStr);
-    const potDesc = potMaterial ? potMaterial.name : (potType || '');
+    const effectivePotType = potType ?? oPotType;
+    const hasPot = Boolean(potMaterial) || Boolean(effectivePotType) || Boolean(potSizeStr);
+    const potDesc = potMaterial ? potMaterial.name : (effectivePotType || '');
 
     // SEO adı
     const seoName = [
