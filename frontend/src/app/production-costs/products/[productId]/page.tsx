@@ -187,6 +187,14 @@ export default function ProductCostDetailPage() {
   const [pots, setPots] = useState<PotItem[]>([]);
   const [expenses, setExpenses] = useState<ExpenseItem[]>([]);
   const [profitMarginPercent, setProfitMarginPercent] = useState(45);
+  const [livePhysicalSpecs, setLivePhysicalSpecs] = useState<{
+    productHeight?: string | null;
+    potType?: string | null;
+    potSize?: string | null;
+    branchCount?: number | null;
+    leavesPerBranch?: number | null;
+    leafCount?: number | null;
+  } | null>(null);
   const [vatPercent, setVatPercent] = useState(20);
   const [shippingCost, setShippingCost] = useState(0);
   const [desi, setDesi] = useState(0);
@@ -1141,6 +1149,20 @@ export default function ProductCostDetailPage() {
                   {knowledgeLoading ? 'Analiz ediliyor...' : 'Reçete Getir'}
                 </button>
                 <button className="btn btn-secondary min-h-8 px-2 text-xs" onClick={() => setStoneModalOpen(true)}><Plus size={14} />Taş Ekle</button>
+                <button className="btn btn-secondary min-h-8 px-2 text-xs" onClick={() => {
+                  // Ürün adından anahtar kelimeleri çıkar (bambu, benjamin, saksı ölçüsü vs)
+                  const pn = variant?.productName ?? '';
+                  const sizeMatch = pn.match(/\d[\d×x\s]*cm/i);
+                  const keywords = [
+                    /bambu/i.test(pn) ? 'bambu' : '',
+                    /benjamin/i.test(pn) ? 'benjamin' : '',
+                    /saks/i.test(pn) ? 'saksı' : '',
+                    /yaprak/i.test(pn) ? 'yaprak' : '',
+                    sizeMatch ? sizeMatch[0] : '',
+                  ].filter(Boolean);
+                  setStockSearchQuery(keywords[0] ?? pn.split(' ')[0]);
+                  setStockSearchOpen(true);
+                }}>🔍 Addan Getir</button>
                 <button className="btn btn-primary min-h-8 px-2 text-xs" onClick={() => { setStockSearchQuery(''); setStockSearchOpen(o => !o); }}><Plus size={14} />Malzeme Ekle</button>
               </div>
             }
@@ -1210,6 +1232,7 @@ export default function ProductCostDetailPage() {
               branchCount={variant.branchCount}
               leavesPerBranch={variant.leavesPerBranch}
               leafCount={variant.leafCount}
+              onSaved={(specs) => setLivePhysicalSpecs(specs)}
             />
           )}
 
@@ -1223,12 +1246,12 @@ export default function ProductCostDetailPage() {
               seoKeywords={variant.seoKeywords}
               knowledgeResult={knowledgeResult}
               materials={materials}
-              potSize={variant.potSize}
-              potType={variant.potType}
-              productHeight={variant.productHeight}
-              branchCount={variant.branchCount}
-              leavesPerBranch={variant.leavesPerBranch}
-              leafCount={variant.leafCount}
+              potSize={livePhysicalSpecs?.potSize ?? variant.potSize}
+              potType={livePhysicalSpecs?.potType ?? variant.potType}
+              productHeight={livePhysicalSpecs?.productHeight ?? variant.productHeight}
+              branchCount={livePhysicalSpecs?.branchCount ?? variant.branchCount}
+              leavesPerBranch={livePhysicalSpecs?.leavesPerBranch ?? variant.leavesPerBranch}
+              leafCount={livePhysicalSpecs?.leafCount ?? variant.leafCount}
             />
           )}
 
@@ -1923,7 +1946,7 @@ function Warning({ text }: { text: string }) {
   return <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">{text}</div>;
 }
 
-function PhysicalSpecsPanel({ productCenterId, productHeight, potType, potSize, stemCount, branchCount, leavesPerBranch, leafCount }: {
+function PhysicalSpecsPanel({ productCenterId, productHeight, potType, potSize, stemCount, branchCount, leavesPerBranch, leafCount, onSaved }: {
   productCenterId?: number | null;
   productHeight?: string | null;
   potType?: string | null;
@@ -1932,6 +1955,7 @@ function PhysicalSpecsPanel({ productCenterId, productHeight, potType, potSize, 
   branchCount?: number | null;
   leavesPerBranch?: number | null;
   leafCount?: number | null;
+  onSaved?: (specs: { productHeight?: string | null; potType?: string | null; potSize?: string | null; branchCount?: number | null; leavesPerBranch?: number | null; leafCount?: number | null }) => void;
 }) {
   const [form, setForm] = useState({
     productHeight: productHeight ?? '',
@@ -1994,6 +2018,15 @@ function PhysicalSpecsPanel({ productCenterId, productHeight, potType, potSize, 
           leavesPerBranch: form.leavesPerBranch ? Number(form.leavesPerBranch) : null,
           leafCount: form.leafCount ? Number(form.leafCount) : null,
         },
+      });
+      const potSizeValue2 = calcPotSize(form.potW, form.potD, form.potH);
+      onSaved?.({
+        productHeight: form.productHeight || null,
+        potType: form.potType || null,
+        potSize: potSizeValue2 || null,
+        branchCount: form.branchCount ? Number(form.branchCount) : null,
+        leavesPerBranch: form.leavesPerBranch ? Number(form.leavesPerBranch) : null,
+        leafCount: form.leafCount ? Number(form.leafCount) : null,
       });
       setMsg('Kaydedildi.');
     } catch {
