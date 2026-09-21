@@ -1427,6 +1427,7 @@ export default function ProductCostDetailPage() {
                   key={item.key}
                   item={item}
                   stockCards={stockCards}
+                  productName={detail?.variant.productName}
                   onChange={(patch) => updateMaterial(item.key, patch)}
                   onSelectStock={(stockId) => selectStock(item, stockId)}
                   onDelete={() => setMaterials((rows) => rows.filter((row) => row.key !== item.key))}
@@ -1960,9 +1961,10 @@ function ProductImage({ src }: { src?: string }) {
   return <img className="aspect-square w-full rounded-md border border-line object-cover" src={normalizeImage(src)} alt="Ürün görseli" />;
 }
 
-function MaterialRow({ item, stockCards, onChange, onSelectStock, onDelete }: {
+function MaterialRow({ item, stockCards, productName, onChange, onSelectStock, onDelete }: {
   item: MaterialItem;
   stockCards: StockCard[];
+  productName?: string;
   onChange: (patch: Partial<MaterialItem>) => void;
   onSelectStock: (stockId: string) => void;
   onDelete: () => void;
@@ -1972,7 +1974,7 @@ function MaterialRow({ item, stockCards, onChange, onSelectStock, onDelete }: {
       <TextInput label="Malzeme" value={item.name} onChange={(value) => onChange({ name: value })} />
       <NumberField compact label="Miktar" value={item.quantity} onChange={(value) => onChange({ quantity: value })} />
       <ReadonlyField label="Kullanım birimi" value={item.unit || 'adet'} />
-      {item.source === 'AUTO' ? <StockSelect value={item.stockCardId} stockCards={stockCards} onChange={onSelectStock} /> : <NumberField compact label="Manuel" value={item.manualUnitCost} onChange={(value) => onChange({ manualUnitCost: value })} />}
+      {item.source === 'AUTO' ? <StockSelect value={item.stockCardId} stockCards={stockCards} hint={item.name || productName} onChange={onSelectStock} /> : <NumberField compact label="Manuel" value={item.manualUnitCost} onChange={(value) => onChange({ manualUnitCost: value })} />}
       <label className="flex items-center gap-2 rounded-md bg-slate-50 px-2 py-2 font-semibold">
         <input type="checkbox" checked={item.source === 'MANUAL'} onChange={(event) => onChange({ source: event.target.checked ? 'MANUAL' : 'AUTO' })} />
         Manuel
@@ -2000,7 +2002,7 @@ function PotRow({ item, stockCards, onChange, onSelectStock, onDelete }: {
       <TextInput label="Renk" value={item.color} onChange={(value) => onChange({ color: value })} />
       <TextInput label="Ölçü" value={item.sizeText} onChange={(value) => onChange({ sizeText: value })} />
       <NumberField compact label="Adet" value={item.quantity} onChange={(value) => onChange({ quantity: value })} />
-      {item.source === 'AUTO' ? <StockSelect value={item.stockCardId} stockCards={stockCards} onChange={onSelectStock} /> : <NumberField compact label="Fiyat" value={item.manualUnitCost} onChange={(value) => onChange({ manualUnitCost: value })} />}
+      {item.source === 'AUTO' ? <StockSelect value={item.stockCardId} stockCards={stockCards} hint={item.name} onChange={onSelectStock} /> : <NumberField compact label="Fiyat" value={item.manualUnitCost} onChange={(value) => onChange({ manualUnitCost: value })} />}
       <button className="rounded-md border border-line p-2 text-red-700" onClick={onDelete}><Trash2 size={16} /></button>
       <label className="xl:col-span-3 flex items-center gap-2 rounded-md bg-slate-50 px-2 py-2 font-semibold">
         <input type="checkbox" checked={item.source === 'MANUAL'} onChange={(event) => onChange({ source: event.target.checked ? 'MANUAL' : 'AUTO' })} />
@@ -2036,10 +2038,10 @@ function ExpenseRow({ item, onChange, onDelete }: { item: ExpenseItem; onChange:
   );
 }
 
-function StockSelect({ value, onChange, stockCards }: { value: number | ''; onChange: (value: string) => void; stockCards: StockCard[] }) {
+function StockSelect({ value, onChange, stockCards, hint }: { value: number | ''; onChange: (value: string) => void; stockCards: StockCard[]; hint?: string }) {
   const [query, setQuery] = useState('');
   const selected = stockCards.find((stock) => stock.id === Number(value));
-  const filtered = rankedStockCards(stockCards, query).slice(0, 120);
+  const filtered = rankedStockCards(stockCards, query || hint || '').slice(0, 120);
   return (
     <div>
       <input className="mb-1 w-full rounded-md border border-line px-2 py-1.5 outline-none focus:border-brand" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={selected?.name ?? 'Stok ara'} />
