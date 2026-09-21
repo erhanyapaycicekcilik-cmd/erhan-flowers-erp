@@ -1801,24 +1801,32 @@ export class ProductionCostsService {
       });
     }
 
-    // 3) Draft var, salePrice > 0 ama status DRAFT olan kayıtları APPROVED yap (daha önce onaylandı ama bir şekilde sıfırlandı)
+    // 3) salePrice>0 ve totalCost>0 olan TÜM DRAFT kayıtları APPROVED yap (costStatus şartı yok)
     const staleDrafts = await this.prisma.productCostDraft.findMany({
-      where: {
-        status: 'DRAFT',
-        salePrice: { gt: 0 },
-        totalCost: { gt: 0 },
-        variant: { costStatus: 'Tamamlandı' },
-      },
+      where: { status: 'DRAFT', salePrice: { gt: 0 }, totalCost: { gt: 0 } },
       select: { id: true, variantId: true },
     });
     let staleDraftFixed = 0;
     for (const d of staleDrafts) {
       await this.prisma.productCostDraft.update({ where: { id: d.id }, data: { status: 'APPROVED' } });
+      await this.prisma.trendyolProductVariant.update({ where: { id: d.variantId }, data: { costStatus: 'Tamamlandı' } });
       staleDraftFixed++;
     }
 
-    this.logger.log(`restoreApprovedCosts: draft=${draftRestored} statusFixed=${statusFixed} staleDraft=${staleDraftFixed} noDraft=${noDraft}`);
-    return { ok: true, draftRestored: draftRestored + staleDraftFixed, statusFixed, alreadyOk, noDraft, total: byStatus.length + byDraft.length };
+    // 4) Tekrar: APPROVED draft'ı olan ama costStatus hâlâ yanlış olanları toplu düzelt
+    const stillWrong = await this.prisma.trendyolProductVariant.findMany({
+      where: { costStatus: { not: 'Tamamlandı' }, productCostDraft: { status: 'APPROVED' } },
+      select: { id: true },
+    });
+    if (stillWrong.length > 0) {
+      await this.prisma.trendyolProductVariant.updateMany({
+        where: { id: { in: stillWrong.map((v) => v.id) } },
+        data: { costStatus: 'Tamamlandı' },
+      });
+    }
+
+    this.logger.log(`restoreApprovedCosts: draft=${draftRestored} statusFixed=${statusFixed} staleDraft=${staleDraftFixed} step4=${stillWrong.length} noDraft=${noDraft}`);
+    return { ok: true, draftRestored: draftRestored + staleDraftFixed, statusFixed: statusFixed + stillWrong.length, alreadyOk, noDraft, total: byStatus.length + byDraft.length + staleDrafts.length };
   }
 
   async autoFillMissingCosts() {
