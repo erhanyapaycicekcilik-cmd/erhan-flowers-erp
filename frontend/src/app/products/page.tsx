@@ -2106,7 +2106,8 @@ export default function ProductsPage() {
                   {entry.status === 'PASSIVE' && <span className="self-start rounded bg-slate-200 px-2 py-1 text-xs font-bold text-slate-600">Pasif</span>}
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2">
-                  <button type="button" className="btn btn-secondary min-h-9 px-3 text-xs" onClick={() => window.open(`/urun-duzenle/${entry.variantId}`, '_self')}><Edit3 size={14} /> Düzenle</button>
+                  <button type="button" className="btn btn-secondary min-h-9 px-3 text-xs" onClick={() => editEntry(entry)}><Edit3 size={14} /> Düzenle</button>
+                  <button type="button" className="btn btn-secondary min-h-9 px-3 text-xs" onClick={() => window.open(`/urun-duzenle/${entry.variantId}`, '_blank')} title="Açıklama/görsel düzenle">↗</button>
                   {entry.status !== 'PASSIVE' && (
                     <button type="button" className="btn btn-danger min-h-9 px-3 text-xs" onClick={() => passiveEntry(entry)}><Trash2 size={14} /> Pasife al</button>
                   )}
