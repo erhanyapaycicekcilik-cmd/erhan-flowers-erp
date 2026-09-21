@@ -2476,6 +2476,8 @@ ${potLines.join('\n')}
     setKeywords(kw);
   }
 
+  const [pushing, setPushing] = useState(false);
+
   async function save() {
     setSaving(true);
     setMsg('');
@@ -2486,6 +2488,23 @@ ${potLines.join('\n')}
       setMsg('Hata oluştu.');
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function pushDescription() {
+    if (!desc) { setMsg('Önce açıklama oluşturun.'); return; }
+    setPushing(true);
+    setMsg('');
+    try {
+      // Önce kaydet
+      await api(`/production-costs/variants/${variantId}/seo`, { method: 'POST', json: { seoProductName: name, seoLongDescription: desc, seoKeywords: keywords } });
+      // Sonra Trendyol'a gönder (sadece content update)
+      const result = await api<{ ok: boolean; message?: string }>(`/production-costs/variants/${variantId}/push-description`, { method: 'POST' });
+      setMsg(result.ok ? 'Açıklama Trendyol\'a gönderildi ✓' : (result.message ?? 'Hata oluştu.'));
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : 'Hata oluştu.');
+    } finally {
+      setPushing(false);
     }
   }
 
@@ -2528,9 +2547,12 @@ ${potLines.join('\n')}
             placeholder="yapay bambu, dekoratif ağaç, salon bitkisi..."
           />
         </div>
-        <div className="flex items-center gap-3">
-          <button className="btn btn-primary min-h-8 px-3 text-xs" onClick={save} disabled={saving || !name}>
+        <div className="flex items-center gap-2 flex-wrap">
+          <button className="btn btn-primary min-h-8 px-3 text-xs" onClick={save} disabled={saving || pushing || !name}>
             {saving ? 'Kaydediliyor...' : 'Kaydet'}
+          </button>
+          <button className="btn btn-secondary min-h-8 px-3 text-xs" onClick={pushDescription} disabled={saving || pushing || !desc}>
+            {pushing ? 'Gönderiliyor...' : '📤 Açıklamayı Trendyol\'a Gönder'}
           </button>
           {msg && <span className="text-xs font-semibold text-emerald-600">{msg}</span>}
         </div>

@@ -1175,6 +1175,12 @@ export class ProductionCostsService {
     return this.publishing.send([variantId], userId, { allowIncomplete: true, platforms: ['TRENDYOL'] as IntegrationPlatform[] });
   }
 
+  async pushDescriptionToTrendyol(variantId: number, userId: number) {
+    const results = await this.publishing.send([variantId], userId, { allowIncomplete: true, platforms: ['TRENDYOL'] as IntegrationPlatform[] });
+    const trendyol = (results.results as any[])?.find((r) => r.platform === 'TRENDYOL');
+    return { ok: trendyol?.ok ?? false, message: trendyol?.successMessage ?? trendyol?.errorMessage ?? 'Gönderildi.' };
+  }
+
   async pushImagesAndPriceToAllPlatforms(variantId: number, salePrice: number, userId: number, seo?: { seoLongDescription?: string; seoProductName?: string; seoKeywords?: string }) {
     if (!Number.isFinite(salePrice) || salePrice <= 0) {
       throw new BadRequestException('Geçerli bir satış fiyatı gereklidir.');
