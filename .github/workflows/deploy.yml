@@ -27,6 +27,7 @@ jobs:
         with:
           context: ./backend
           push: true
+          no-cache: true
           tags: ghcr.io/erhanyapaycicekcilik-cmd/erhan-flowers-backend:latest
 
       - name: Build and push frontend
@@ -34,6 +35,7 @@ jobs:
         with:
           context: ./frontend
           push: true
+          no-cache: true
           tags: ghcr.io/erhanyapaycicekcilik-cmd/erhan-flowers-frontend:latest
 
       - name: Build and push florayapay
@@ -41,6 +43,7 @@ jobs:
         with:
           context: ./florayapay
           push: true
+          no-cache: true
           tags: ghcr.io/erhanyapaycicekcilik-cmd/erhan-flowers-florayapay:latest
 
   deploy:
