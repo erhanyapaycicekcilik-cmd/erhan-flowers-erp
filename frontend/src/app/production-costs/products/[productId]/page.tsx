@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, ArrowRight, Brain, Copy, ExternalLink, ImageIcon, Plus, Save, Search, Star, Trash2, Upload } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Brain, Check, Copy, Download, ExternalLink, ImageIcon, Pencil, Plus, Save, Search, Send, Star, Trash2, Upload, X } from 'lucide-react';
 import { AdminShell } from '@/components/AdminShell';
 import { api, apiFileUrl } from '@/lib/api';
 import type { StockCard } from '@/types';
@@ -221,9 +221,13 @@ export default function ProductCostDetailPage() {
   const [images, setImages] = useState<string[]>([]);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [sendingImagesAndPrice, setSendingImagesAndPrice] = useState(false);
+  const [sendingAllPlatforms, setSendingAllPlatforms] = useState(false);
   const [pendingBatchId, setPendingBatchId] = useState<string | null>(null);
   const [checkingBatch, setCheckingBatch] = useState(false);
   const [openingTrendyolPanel, setOpeningTrendyolPanel] = useState(false);
+  const [editingName, setEditingName] = useState(false);
+  const [nameInput, setNameInput] = useState('');
+  const [savingName, setSavingName] = useState(false);
 
   useEffect(() => {
     const savedSettings = window.localStorage.getItem('ef_cost_price_settings');
@@ -795,6 +799,73 @@ export default function ProductCostDetailPage() {
     }
   }
 
+  function getPriceWarnings(): string[] {
+    const warnings: string[] = [];
+    const price = totals.marketplaceSalePrice;
+    const cost = totals.totalCost;
+    const currentPrice = parseMoney(variant?.trendyolSalePrice);
+    if (!price || price <= 0) { warnings.push('Fiyat hesaplanmadı — maliyet ve kâr alanlarını doldurun.'); return warnings; }
+    if (cost > 0 && price < cost) warnings.push(`⚠️ Zarar: Satış fiyatı (${money(price)}) maliyetin (${money(cost)}) altında!`);
+    else if (cost > 0 && price < cost * 1.05) warnings.push(`⚠️ Çok düşük kâr: Maliyetin sadece %${Math.round((price / cost - 1) * 100)} üzerinde.`);
+    if (price < 50) warnings.push(`⚠️ Çok düşük fiyat: ₺50'nin altında (${money(price)}).`);
+    if (currentPrice > 0 && price < currentPrice * 0.5) warnings.push(`⚠️ Mevcut Trendyol fiyatının (${money(currentPrice)}) yarısından az — büyük indirim!`);
+    if (currentPrice > 0 && price > currentPrice * 3) warnings.push(`⚠️ Mevcut Trendyol fiyatının (${money(currentPrice)}) 3 katından fazla — çok yüksek!`);
+    return warnings;
+  }
+
+  async function pushToAllPlatforms() {
+    if (!images.length) {
+      setMessage('Önce en az bir görsel yükleyin.');
+      return;
+    }
+    if (!totals.marketplaceSalePrice || totals.marketplaceSalePrice <= 0) {
+      setMessage('Fiyat hesaplanmadı; önce maliyet/kâr alanlarını doldurun.');
+      return;
+    }
+    const warnings = getPriceWarnings();
+    if (warnings.length > 0) {
+      const confirmed = window.confirm(`Fiyat uyarısı:\n\n${warnings.join('\n')}\n\nYine de göndermek istiyor musunuz?`);
+      if (!confirmed) return;
+    }
+    setSendingAllPlatforms(true);
+    setMessage('Görsel ve fiyat tüm platformlara gönderiliyor...');
+    try {
+      const result = await api<{ success: number; failed: number; results: Array<{ platform: string; ok: boolean; successMessage?: string | null; errorMessage?: string | null }> }>(`/production-costs/variants/${productId}/push-all-platforms`, {
+        method: 'POST',
+        json: { salePrice: totals.marketplaceSalePrice },
+      });
+      const platforms = result.results ?? [];
+      const okList = platforms.filter(r => r.ok).map(r => r.platform).join(', ');
+      const failList = platforms.filter(r => !r.ok).map(r => `${r.platform}: ${r.errorMessage ?? 'hata'}`).join('; ');
+      setMessage(
+        result.failed === 0
+          ? `Tüm platformlara gönderildi ✓ (${okList || 'Trendyol, N11, HB'})`
+          : `Kısmen başarılı — Başarılı: ${okList || '-'} | Başarısız: ${failList}`,
+      );
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Platformlara gönderilemedi.');
+    } finally {
+      setSendingAllPlatforms(false);
+    }
+  }
+
+  async function saveProductName() {
+    if (!nameInput.trim()) return;
+    setSavingName(true);
+    try {
+      await api(`/production-costs/variants/${productId}/update-name`, {
+        method: 'POST',
+        json: { productName: nameInput.trim() },
+      });
+      setDetail(prev => prev ? { ...prev, variant: { ...prev.variant, productName: nameInput.trim() } } : prev);
+      setEditingName(false);
+    } catch {
+      setMessage('Ürün adı kaydedilemedi.');
+    } finally {
+      setSavingName(false);
+    }
+  }
+
   async function checkBatchStatus() {
     if (!pendingBatchId) return;
     setCheckingBatch(true);
@@ -1024,8 +1095,37 @@ export default function ProductCostDetailPage() {
             {detail?.previousProductId && <Link className="btn btn-secondary min-h-9 px-2 text-xs" href={`/production-costs/products/${detail.previousProductId}`}>Önceki</Link>}
             {detail?.nextProductId && <Link className="btn btn-secondary min-h-9 px-2 text-xs" href={`/production-costs/products/${detail.nextProductId}`}>Sonraki</Link>}
           </div>
-          <ProductImage src={mainImage} />
-          <h2 className="mt-3 text-base font-bold leading-5">{variant?.productName ?? 'Ürün'}</h2>
+          <div className="relative">
+            <ProductImage src={mainImage} />
+            {mainImage && (
+              <a
+                href={normalizeImage(mainImage)}
+                download
+                className="absolute bottom-2 right-2 rounded-full bg-white/90 p-1.5 shadow hover:bg-white"
+                title="Ana görseli indir"
+              >
+                <Download size={14} className="text-slate-700" />
+              </a>
+            )}
+          </div>
+          {editingName ? (
+            <div className="mt-3 flex items-center gap-1">
+              <input
+                autoFocus
+                className="field flex-1 text-sm font-bold"
+                value={nameInput}
+                onChange={e => setNameInput(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') void saveProductName(); if (e.key === 'Escape') setEditingName(false); }}
+              />
+              <button onClick={() => void saveProductName()} disabled={savingName} className="rounded bg-emerald-600 p-1.5 text-white hover:bg-emerald-700 disabled:opacity-50"><Check size={13} /></button>
+              <button onClick={() => setEditingName(false)} className="rounded bg-slate-200 p-1.5 hover:bg-slate-300"><X size={13} /></button>
+            </div>
+          ) : (
+            <div className="mt-3 flex items-start gap-1">
+              <h2 className="flex-1 text-base font-bold leading-5">{variant?.productName ?? 'Ürün'}</h2>
+              <button onClick={() => { setNameInput(variant?.productName ?? ''); setEditingName(true); }} className="mt-0.5 rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700" title="Ürün adını düzenle"><Pencil size={13} /></button>
+            </div>
+          )}
           <div className="mt-3 grid gap-2 text-xs">
             <Info label="Barkod" value={variant?.barcode ?? '-'} />
             <Info label="Eski model" value={variant?.currentModelCode ?? variant?.supplierStockCode ?? '-'} />
@@ -1104,12 +1204,20 @@ export default function ProductCostDetailPage() {
                 ))}
               </div>
             )}
+            {getPriceWarnings().length > 0 && (
+              <div className="mt-3 space-y-1">
+                {getPriceWarnings().map((w, i) => (
+                  <div key={i} className="rounded-md bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">{w}</div>
+                ))}
+              </div>
+            )}
             <button
               className="btn btn-primary mt-3 w-full justify-center"
-              onClick={pushImagesAndPriceToTrendyol}
-              disabled={sendingImagesAndPrice}
+              onClick={pushToAllPlatforms}
+              disabled={sendingAllPlatforms}
             >
-              {sendingImagesAndPrice ? 'Gönderiliyor...' : 'Görselleri ve Fiyatı Trendyol\'a Gönder'}
+              <Send size={14} />
+              {sendingAllPlatforms ? 'Gönderiliyor...' : 'Görsel & Fiyatı Tüm Platformlara Gönder'}
             </button>
             {pendingBatchId && (
               <button

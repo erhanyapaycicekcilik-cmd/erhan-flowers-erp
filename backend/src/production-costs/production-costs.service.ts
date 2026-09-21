@@ -1176,6 +1176,25 @@ export class ProductionCostsService {
     return this.publishing.send([variantId], userId, { allowIncomplete: true, platforms: ['TRENDYOL'] as IntegrationPlatform[] });
   }
 
+  async pushImagesAndPriceToAllPlatforms(variantId: number, salePrice: number, userId: number) {
+    if (!Number.isFinite(salePrice) || salePrice <= 0) {
+      throw new BadRequestException('Geçerli bir satış fiyatı gereklidir.');
+    }
+    await this.prisma.trendyolProductVariant.update({
+      where: { id: variantId },
+      data: { trendyolSalePrice: salePrice, n11SalePrice: salePrice, hepsiburadaSalePrice: salePrice },
+    });
+    return this.publishing.send([variantId], userId, { allowIncomplete: true, platforms: ['TRENDYOL', 'N11', 'HEPSIBURADA'] as IntegrationPlatform[] });
+  }
+
+  async updateVariantName(variantId: number, productName: string) {
+    const updated = await this.prisma.trendyolProductVariant.update({
+      where: { id: variantId },
+      data: { productName },
+    });
+    return { ok: true, productName: updated.productName };
+  }
+
   async listOverheads() {
     const templates = await this.prisma.productionRecipeTemplate.findMany({
       include: {

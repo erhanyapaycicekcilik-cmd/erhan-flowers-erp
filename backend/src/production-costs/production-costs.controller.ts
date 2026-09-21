@@ -222,6 +222,16 @@ export class ProductionCostsController {
     return this.productionCosts.pushImagesAndPriceToTrendyol(Number(id), Number(body.salePrice ?? 0), request.user!.id);
   }
 
+  @Post('variants/:id/push-all-platforms')
+  pushAllPlatforms(@Param('id') id: string, @Body() body: { salePrice?: number }, @Req() request: AuthenticatedRequest) {
+    return this.productionCosts.pushImagesAndPriceToAllPlatforms(Number(id), Number(body.salePrice ?? 0), request.user!.id);
+  }
+
+  @Post('variants/:id/update-name')
+  updateVariantName(@Param('id') id: string, @Body() body: { productName: string }) {
+    return this.productionCosts.updateVariantName(Number(id), body.productName);
+  }
+
   @Post('families')
   createFamily(@Body() body: unknown) {
     return this.productionCosts.createFamily(body);
