@@ -8,6 +8,7 @@ RUN apt-get update \
 COPY package*.json ./
 RUN npm ci
 
+ARG CACHEBUST=1
 COPY . .
 RUN npx prisma generate
 RUN npx nest build

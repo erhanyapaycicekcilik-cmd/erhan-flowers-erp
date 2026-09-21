@@ -26,7 +26,8 @@ jobs:
             echo "=== Son commit ==="
             git log --oneline -3
             echo "=== Build basliyor ==="
-            docker compose -f docker-compose.prod.yml build --no-cache backend frontend florayapay
+            BUST=$(date +%s)
+            docker compose -f docker-compose.prod.yml build --build-arg CACHEBUST=$BUST backend frontend florayapay
             echo "=== Containerlar baslatiliyor ==="
             docker compose -f docker-compose.prod.yml up -d
             docker image prune -f
