@@ -59,8 +59,8 @@ export default function ProductCostListPage() {
     const needle = query.trim().toLocaleLowerCase('tr-TR');
     const result = variants.filter((item) => {
       const costStatus = item.productCostStatus || item.costStatus || 'Maliyet Girilmedi';
-      if (statusFilter === 'Arşiv') return item.status === 'PASSIVE';
-      if (statusFilter === 'Satışta') return item.status !== 'PASSIVE';
+      if (statusFilter === 'Arşiv') return item.status === 'PASSIVE' && costStatus !== 'Tamamlandı';
+      if (statusFilter === 'Satışta') return item.status !== 'PASSIVE' || costStatus === 'Tamamlandı';
       const statusOk = statusFilter === 'Tümü' || costStatus === statusFilter;
       const queryOk = !needle || [item.productName, item.barcode, item.currentModelCode, item.proposedModelCode, item.supplierStockCode]
         .filter(Boolean)
