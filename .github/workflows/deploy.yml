@@ -21,7 +21,13 @@ jobs:
               git clone https://${{ secrets.GH_TOKEN }}@github.com/erhanyapaycicekcilik-cmd/erhan-flowers-erp.git /opt/erp
             fi
             cd /opt/erp
-            git pull https://${{ secrets.GH_TOKEN }}@github.com/erhanyapaycicekcilik-cmd/erhan-flowers-erp.git main
-            docker compose -f docker-compose.prod.yml build --no-cache
+            git fetch https://${{ secrets.GH_TOKEN }}@github.com/erhanyapaycicekcilik-cmd/erhan-flowers-erp.git main
+            git reset --hard FETCH_HEAD
+            echo "=== Son commit ==="
+            git log --oneline -3
+            echo "=== Build basliyor ==="
+            docker compose -f docker-compose.prod.yml build --no-cache backend frontend florayapay
+            echo "=== Containerlar baslatiliyor ==="
             docker compose -f docker-compose.prod.yml up -d
             docker image prune -f
+            echo "=== Deploy tamamlandi ==="
