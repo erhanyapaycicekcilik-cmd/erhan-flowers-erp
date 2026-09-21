@@ -31,6 +31,7 @@ function fmt(d: string) {
 export default function PhotoArchivePage() {
   const [rows, setRows] = useState<PhotoRow[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [saleNumber, setSaleNumber] = useState('');
   const [dateFrom, setDateFrom] = useState(() => {
@@ -43,6 +44,7 @@ export default function PhotoArchivePage() {
 
   const search = useCallback(async () => {
     setLoading(true);
+    setError('');
     try {
       const params = new URLSearchParams();
       if (customerName) params.set('customerName', customerName);
@@ -52,6 +54,10 @@ export default function PhotoArchivePage() {
       params.set('limit', '100');
       const data = await api<PhotoRow[]>(`/sales/proof-photos/archive?${params}`);
       setRows(Array.isArray(data) ? data : []);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setError(msg);
+      setRows([]);
     } finally {
       setLoading(false);
     }
@@ -125,10 +131,15 @@ export default function PhotoArchivePage() {
           </div>
         )}
 
-        {rows.length === 0 && !loading && (
+        {error && (
+          <div className="rounded-md bg-red-50 border border-red-200 p-4 text-sm text-red-700">
+            <strong>Hata:</strong> {error}
+          </div>
+        )}
+        {rows.length === 0 && !loading && !error && (
           <div className="text-center text-slate-400 py-16">
             <Image size={48} className="mx-auto mb-3 opacity-30" />
-            <p>Medya bulunamadı</p>
+            <p>Medya bulunamadı — personel henüz fotoğraf yüklememiş olabilir</p>
           </div>
         )}
 
