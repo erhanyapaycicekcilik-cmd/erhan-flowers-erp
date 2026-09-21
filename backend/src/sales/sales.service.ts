@@ -716,8 +716,96 @@ export class SalesService {
     const alreadyReady = currentStatus[0]?.status === 'READY' || currentStatus[0]?.status === 'COMPLETED';
     if (!alreadyReady) {
       await this.updateStatus(id, { status: 'READY', note: 'Ürün hazırlandı — fotoğraf yüklendi.' }, userId);
+      await this.deductSaleStockOnReady(id, userId);
     }
     return { uploaded: true, photoType: safeType, readyTriggered: !alreadyReady };
+  }
+
+  private async deductSaleStockOnReady(saleId: number, userId: number) {
+    const affectedIds: number[] = [];
+    await this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM retail_sales WHERE id = ${saleId} FOR UPDATE`;
+      const items = await tx.$queryRaw<Array<Record<string, unknown>>>`
+        SELECT id, stock_card_id, variant_id, quantity, stock_fulfillment_type, product_name_snapshot
+        FROM retail_sale_items WHERE sale_id = ${saleId}
+      `;
+      for (const item of items) {
+        if (item.stock_fulfillment_type !== 'READY_STOCK') continue;
+        const stockCardId = item.stock_card_id ? Number(item.stock_card_id) : null;
+        if (!stockCardId) continue;
+        const itemId = Number(item.id);
+        const quantity = Number(item.quantity);
+        const eventKey = `SALE_STOCK_OUT:${saleId}:${itemId}`;
+        const already = await tx.$queryRaw<Array<{ id: number }>>`
+          SELECT id FROM stock_movements WHERE event_key = ${eventKey} LIMIT 1
+        `;
+        if (already.length > 0) continue;
+        await tx.$queryRaw`SELECT id FROM stock_cards WHERE id = ${stockCardId} FOR UPDATE`;
+        const cards = await tx.$queryRaw<Array<{ stockQuantity: number; unit: string }>>`
+          SELECT stock_quantity AS "stockQuantity", unit FROM stock_cards WHERE id = ${stockCardId}
+        `;
+        const previousStock = Number(cards[0]?.stockQuantity ?? 0);
+        const nextStock = previousStock - quantity;
+        await tx.$executeRaw`
+          UPDATE stock_cards
+          SET stock_quantity = ${nextStock}, last_movement_at = NOW(), updated_at = NOW()
+          WHERE id = ${stockCardId}
+        `;
+        await tx.$executeRaw`
+          INSERT INTO stock_movements (stock_card_id, type, quantity, unit, previous_stock, next_stock, reason, reference_type, reference_id, event_key, created_by_id, created_at)
+          VALUES (${stockCardId}, 'OUT', ${quantity}, ${String(cards[0]?.unit ?? 'Adet')}, ${previousStock}, ${nextStock}, 'RETAIL_SALE', 'RETAIL_SALE', ${String(saleId)}, ${eventKey}, ${userId}, NOW())
+          ON CONFLICT (event_key) DO NOTHING
+        `;
+        affectedIds.push(stockCardId);
+      }
+    });
+    if (affectedIds.length > 0) {
+      this.products.broadcastStockCardUpdate(affectedIds).catch(() => {});
+    }
+  }
+
+  async returnSaleStock(saleId: number, userId: number) {
+    const affectedIds: number[] = [];
+    await this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM retail_sales WHERE id = ${saleId} FOR UPDATE`;
+      const items = await tx.$queryRaw<Array<Record<string, unknown>>>`
+        SELECT id, stock_card_id, quantity, stock_fulfillment_type, product_name_snapshot
+        FROM retail_sale_items WHERE sale_id = ${saleId}
+      `;
+      for (const item of items) {
+        if (item.stock_fulfillment_type !== 'READY_STOCK') continue;
+        const stockCardId = item.stock_card_id ? Number(item.stock_card_id) : null;
+        if (!stockCardId) continue;
+        const itemId = Number(item.id);
+        const quantity = Number(item.quantity);
+        const eventKey = `SALE_STOCK_RETURN:${saleId}:${itemId}`;
+        const already = await tx.$queryRaw<Array<{ id: number }>>`
+          SELECT id FROM stock_movements WHERE event_key = ${eventKey} LIMIT 1
+        `;
+        if (already.length > 0) continue;
+        await tx.$queryRaw`SELECT id FROM stock_cards WHERE id = ${stockCardId} FOR UPDATE`;
+        const cards = await tx.$queryRaw<Array<{ stockQuantity: number; unit: string }>>`
+          SELECT stock_quantity AS "stockQuantity", unit FROM stock_cards WHERE id = ${stockCardId}
+        `;
+        const previousStock = Number(cards[0]?.stockQuantity ?? 0);
+        const nextStock = previousStock + quantity;
+        await tx.$executeRaw`
+          UPDATE stock_cards
+          SET stock_quantity = ${nextStock}, last_movement_at = NOW(), updated_at = NOW()
+          WHERE id = ${stockCardId}
+        `;
+        await tx.$executeRaw`
+          INSERT INTO stock_movements (stock_card_id, type, quantity, unit, previous_stock, next_stock, reason, reference_type, reference_id, event_key, created_by_id, created_at)
+          VALUES (${stockCardId}, 'IN', ${quantity}, ${String(cards[0]?.unit ?? 'Adet')}, ${previousStock}, ${nextStock}, 'RETURN', 'RETAIL_SALE', ${String(saleId)}, ${eventKey}, ${userId}, NOW())
+          ON CONFLICT (event_key) DO NOTHING
+        `;
+        affectedIds.push(stockCardId);
+      }
+    });
+    if (affectedIds.length > 0) {
+      this.products.broadcastStockCardUpdate(affectedIds).catch(() => {});
+    }
+    return { ok: true, stockCardCount: affectedIds.length };
   }
 
   // Her gece 02:00'de süresi dolmuş medya dosyalarını temizle
