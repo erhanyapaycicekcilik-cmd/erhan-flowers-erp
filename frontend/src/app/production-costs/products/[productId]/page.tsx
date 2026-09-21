@@ -2498,6 +2498,10 @@ ${potLines.join('\n')}
     setPushing(true);
     setMsg('');
     try {
+      // ERP ürün adını da güncelle
+      if (name) {
+        await api(`/production-costs/variants/${variantId}/update-name`, { method: 'POST', json: { productName: name } });
+      }
       const result = await api<{ results?: { platform: string; ok: boolean; errorMessage?: string }[] }>(
         `/production-costs/variants/${variantId}/push-all-platforms`,
         { method: 'POST', json: { salePrice: salePrice ?? 0, seoProductName: name, seoLongDescription: desc, seoKeywords: keywords } }
@@ -2527,7 +2531,7 @@ ${potLines.join('\n')}
     >
       <div className="space-y-3">
         <div>
-          <label className="mb-1 block text-[11px] font-semibold uppercase text-slate-400">SEO Ürün Adı <span className="text-slate-300 normal-case">(Trendyol'da görünen başlık)</span></label>
+          <label className="mb-1 block text-[11px] font-semibold uppercase text-slate-400">Ürün Adı <span className="text-slate-300 normal-case">(ERP + tüm platformlar)</span></label>
           <input
             className="input w-full text-sm"
             value={name}
