@@ -35,12 +35,17 @@ jobs:
             free -h
             df -h /
 
-            echo "=== Swap olusturuluyor (2GB) ==="
-            if ! swapon --show | grep -q swapfile; then
-              fallocate -l 2G /swapfile || dd if=/dev/zero of=/swapfile bs=1M count=2048
-              chmod 600 /swapfile
-              mkswap /swapfile
-              swapon /swapfile
+            echo "=== Docker temizlik (disk bosalt) ==="
+            docker system prune -f || true
+
+            echo "=== Disk sonrasi ==="
+            df -h /
+
+            echo "=== Swap olustur (hata olursa devam et) ==="
+            if ! swapon --show | grep -q /swapfile; then
+              fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile && echo "Swap aktif" || echo "Swap olusturulamadi, devam ediliyor"
+            else
+              echo "Swap zaten aktif"
             fi
             free -h
 
