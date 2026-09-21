@@ -21,5 +21,6 @@ jobs:
             fi
             cd /opt/erp
             git pull https://${{ secrets.GH_TOKEN }}@github.com/erhanyapaycicekcilik-cmd/erhan-flowers-erp.git main
-            docker compose -f docker-compose.prod.yml up -d --build
+            docker compose -f docker-compose.prod.yml build --no-cache
+            docker compose -f docker-compose.prod.yml up -d
             docker image prune -f
