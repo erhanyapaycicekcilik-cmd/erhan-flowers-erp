@@ -15,7 +15,8 @@ jobs:
           host: ${{ secrets.SSH_HOST }}
           username: root
           password: ${{ secrets.SSH_PASSWORD }}
-          command_timeout: 20m
+          command_timeout: 30m
+          request_pty: true
           script: |
             if [ ! -d /opt/erp ]; then
               git clone https://${{ secrets.GH_TOKEN }}@github.com/erhanyapaycicekcilik-cmd/erhan-flowers-erp.git /opt/erp
@@ -25,10 +26,10 @@ jobs:
             git reset --hard FETCH_HEAD
             echo "=== Son commit ==="
             git log --oneline -3
-            echo "=== Eski imajlar siliniyor ==="
-            docker compose -f docker-compose.prod.yml down --rmi local 2>/dev/null || true
-            echo "=== Build basliyor ==="
-            docker compose -f docker-compose.prod.yml build backend frontend florayapay
+            echo "=== Build basliyor (BuildKit kapali, klasik builder) ==="
+            export DOCKER_BUILDKIT=0
+            export COMPOSE_DOCKER_CLI_BUILD=0
+            docker compose -f docker-compose.prod.yml build --no-cache --progress=plain backend frontend florayapay
             echo "=== Containerlar baslatiliyor ==="
             docker compose -f docker-compose.prod.yml up -d
             docker image prune -f
