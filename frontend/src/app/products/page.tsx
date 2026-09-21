@@ -387,6 +387,7 @@ export default function ProductsPage() {
   const [cleanupLoading, setCleanupLoading] = useState(false);
   const [showPassiveEntries, setShowPassiveEntries] = useState(false);
   const [productListOpen, setProductListOpen] = useState(false);
+  const [entryFilter, setEntryFilter] = useState<'all' | 'done' | 'missing'>('all');
   const [identityGenerating, setIdentityGenerating] = useState(false);
   const [imagePickerOpen, setImagePickerOpen] = useState(false);
   const [treeVisualOpen, setTreeVisualOpen] = useState(false);
@@ -547,10 +548,12 @@ export default function ProductsPage() {
   }, [families, familySearch]);
   const visibleEntries = useMemo(() => {
     const needle = query.trim().toLocaleLowerCase('tr-TR');
-    const baseEntries = showPassiveEntries ? entries : entries.filter((entry) => entry.status !== 'PASSIVE');
-    if (!needle) return baseEntries;
-    return baseEntries.filter((entry) => [entry.productName, entry.barcode, entry.modelCode, entry.familyName, entry.categoryName].filter(Boolean).join(' ').toLocaleLowerCase('tr-TR').includes(needle));
-  }, [entries, query, showPassiveEntries]);
+    let base = showPassiveEntries ? entries : entries.filter((entry) => entry.status !== 'PASSIVE');
+    if (entryFilter === 'done') base = base.filter((e) => e.costStatus === 'Tamamlandı');
+    if (entryFilter === 'missing') base = base.filter((e) => e.costStatus !== 'Tamamlandı');
+    if (needle) base = base.filter((entry) => [entry.productName, entry.barcode, entry.modelCode, entry.familyName, entry.categoryName].filter(Boolean).join(' ').toLocaleLowerCase('tr-TR').includes(needle));
+    return [...base].sort((a, b) => b.variantId - a.variantId);
+  }, [entries, query, showPassiveEntries, entryFilter]);
   const copySources = useMemo(() => entries.filter((entry) => entry.variantId !== Number(form.variantId) && entry.costStatus !== 'Maliyet Girilmedi'), [entries, form.variantId]);
   const activeDraft = costDetail?.costDraft ?? defaultCostDraft(Number(form.salePrice), Number(form.commissionPercent));
   const currentCostStatus = costDetail?.hasSavedCostDraft
@@ -2069,12 +2072,23 @@ export default function ProductsPage() {
         {productListOpen && <section className="panel overflow-hidden">
           <div className="space-y-3 border-b border-line p-4">
             <input className="field" placeholder="Ürün, barkod, model ara" value={query} onChange={(event) => setQuery(event.target.value)} />
-            <label className="flex items-center gap-2 text-xs font-semibold text-slate-500">
-              <input type="checkbox" checked={showPassiveEntries} onChange={(event) => setShowPassiveEntries(event.target.checked)} />
-              Pasifleri göster
-            </label>
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex gap-1">
+                {(['all', 'done', 'missing'] as const).map((f) => (
+                  <button key={f} type="button"
+                    className={`rounded-md border px-3 py-1 text-xs font-semibold ${entryFilter === f ? 'border-brand bg-emerald-50 text-brand' : 'border-line bg-white text-slate-500'}`}
+                    onClick={() => setEntryFilter(f)}>
+                    {f === 'all' ? 'Tümü' : f === 'done' ? '✓ Tamamlanan' : '⚠ Eksik maliyet'}
+                  </button>
+                ))}
+              </div>
+              <label className="flex items-center gap-2 text-xs font-semibold text-slate-500 ml-auto">
+                <input type="checkbox" checked={showPassiveEntries} onChange={(event) => setShowPassiveEntries(event.target.checked)} />
+                Pasifleri göster
+              </label>
+            </div>
           </div>
-          <div className="grid max-h-[360px] gap-3 overflow-auto p-3 md:grid-cols-2 xl:grid-cols-4">
+          <div className="grid max-h-[400px] gap-3 overflow-auto p-3 md:grid-cols-2 xl:grid-cols-4">
             {visibleEntries.map((entry) => (
               <div key={entry.variantId} className={`rounded-md border border-line p-3 transition hover:bg-slate-50 ${entry.status === 'PASSIVE' ? 'bg-slate-50 opacity-70' : ''}`}>
                 <div className="flex gap-3">
@@ -2084,12 +2098,15 @@ export default function ProductsPage() {
                     <div className="mt-1 text-xs text-slate-500">{entry.barcode} / {entry.modelCode || '-'}</div>
                     <div className="mt-2 flex flex-wrap gap-1 text-xs">
                       <span className="rounded bg-emerald-50 px-2 py-1 text-emerald-700">{money(entry.salePrice)}</span>
+                      {entry.costStatus && entry.costStatus !== 'Maliyet Girilmedi' && (
+                        <span className={`rounded px-2 py-1 ${entry.costStatus === 'Tamamlandı' ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'}`}>{entry.costStatus}</span>
+                      )}
                     </div>
                   </div>
                   {entry.status === 'PASSIVE' && <span className="self-start rounded bg-slate-200 px-2 py-1 text-xs font-bold text-slate-600">Pasif</span>}
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2">
-                  <button type="button" className="btn btn-secondary min-h-9 px-3 text-xs" onClick={() => editEntry(entry)}><Edit3 size={14} /> Düzenle</button>
+                  <button type="button" className="btn btn-secondary min-h-9 px-3 text-xs" onClick={() => window.open(`/urun-duzenle/${entry.variantId}`, '_self')}><Edit3 size={14} /> Düzenle</button>
                   {entry.status !== 'PASSIVE' && (
                     <button type="button" className="btn btn-danger min-h-9 px-3 text-xs" onClick={() => passiveEntry(entry)}><Trash2 size={14} /> Pasife al</button>
                   )}
