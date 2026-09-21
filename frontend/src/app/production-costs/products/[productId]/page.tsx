@@ -1191,6 +1191,15 @@ export default function ProductCostDetailPage() {
                           <Star size={13} />
                         </button>
                       )}
+                      <a
+                        href={normalizeImage(image)}
+                        download
+                        className="rounded bg-white p-1 text-slate-600 shadow"
+                        title="Görseli indir"
+                        onClick={e => e.stopPropagation()}
+                      >
+                        <Download size={13} />
+                      </a>
                       <button
                         type="button"
                         className="rounded bg-white p-1 text-red-600 shadow"
