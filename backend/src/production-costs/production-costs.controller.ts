@@ -222,6 +222,31 @@ export class ProductionCostsController {
     return this.productionCosts.pushImagesAndPriceToTrendyol(Number(id), Number(body.salePrice ?? 0), request.user!.id);
   }
 
+  @Post('variants/:id/push-description')
+  pushDescription(@Param('id') id: string, @Req() request: AuthenticatedRequest) {
+    return this.productionCosts.pushDescriptionToTrendyol(Number(id), request.user!.id);
+  }
+
+  @Post('variants/:id/push-all-platforms')
+  pushAllPlatforms(@Param('id') id: string, @Body() body: { salePrice?: number; seoLongDescription?: string; seoProductName?: string; seoKeywords?: string }, @Req() request: AuthenticatedRequest) {
+    return this.productionCosts.pushImagesAndPriceToAllPlatforms(Number(id), Number(body.salePrice ?? 0), request.user!.id, { seoLongDescription: body.seoLongDescription, seoProductName: body.seoProductName, seoKeywords: body.seoKeywords });
+  }
+
+  @Post('variants/:id/update-name')
+  updateVariantName(@Param('id') id: string, @Body() body: { productName: string }) {
+    return this.productionCosts.updateVariantName(Number(id), body.productName);
+  }
+
+  @Post('variants/:id/update-codes')
+  updateVariantCodes(@Param('id') id: string, @Body() body: { modelCode?: string; stockCode?: string; trendyolProductUrl?: string }) {
+    return this.productionCosts.updateVariantCodes(Number(id), body);
+  }
+
+  @Post('variants/:id/activate')
+  activateVariant(@Param('id') id: string) {
+    return this.productionCosts.activateVariant(Number(id));
+  }
+
   @Post('families')
   createFamily(@Body() body: unknown) {
     return this.productionCosts.createFamily(body);
@@ -273,5 +298,10 @@ export class ProductionCostsController {
   @Post('recalculate-marketplace-prices')
   recalculateMarketplacePrices() {
     return this.productionCosts.recalculateMarketplacePrices();
+  }
+
+  @Post('auto-assign-model-codes')
+  autoAssignModelCodes() {
+    return this.productionCosts.autoAssignModelCodes();
   }
 }

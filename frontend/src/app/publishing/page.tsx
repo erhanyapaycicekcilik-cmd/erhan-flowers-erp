@@ -9,6 +9,8 @@ type Category = {
   id: number;
   name: string;
   trendyolCategoryId: number | null;
+  n11CategoryId: number | null;
+  hepsiburadaCategoryId: number | null;
 };
 
 type PublishProduct = {
@@ -94,7 +96,11 @@ export default function PublishingPage() {
     setProducts(productData);
     setHistory(historyData);
     setCategories(categoryData);
-    setCategoryInputs(Object.fromEntries(categoryData.map((c) => [c.id, String(c.trendyolCategoryId ?? '')])));
+    setCategoryInputs(Object.fromEntries(categoryData.flatMap((c) => [
+      [`${c.id}_trendyol`, String(c.trendyolCategoryId ?? '')],
+      [`${c.id}_n11`, String(c.n11CategoryId ?? '')],
+      [`${c.id}_hb`, String(c.hepsiburadaCategoryId ?? '')],
+    ])));
   }
 
   useEffect(() => {
@@ -152,14 +158,20 @@ export default function PublishingPage() {
   }
 
   async function saveCategoryId(categoryId: number) {
-    const value = categoryInputs[categoryId] ?? '';
-    const trendyolCategoryId = value.trim() === '' ? null : Number(value);
-    if (trendyolCategoryId !== null && isNaN(trendyolCategoryId)) {
-      setMessage('Trendyol kategori ID sayı olmalıdır.');
+    const tVal = categoryInputs[`${categoryId}_trendyol`] ?? '';
+    const n11Val = categoryInputs[`${categoryId}_n11`] ?? '';
+    const hbVal = categoryInputs[`${categoryId}_hb`] ?? '';
+    const trendyolCategoryId = tVal.trim() === '' ? null : Number(tVal);
+    const n11CategoryId = n11Val.trim() === '' ? null : Number(n11Val);
+    const hepsiburadaCategoryId = hbVal.trim() === '' ? null : Number(hbVal);
+    if ((trendyolCategoryId !== null && isNaN(trendyolCategoryId)) ||
+        (n11CategoryId !== null && isNaN(n11CategoryId)) ||
+        (hepsiburadaCategoryId !== null && isNaN(hepsiburadaCategoryId))) {
+      setMessage('Kategori ID sayı olmalıdır.');
       return;
     }
-    await api(`/categories/${categoryId}`, { method: 'PATCH', json: { trendyolCategoryId } });
-    setMessage('Kategori Trendyol ID kaydedildi.');
+    await api(`/categories/${categoryId}`, { method: 'PATCH', json: { trendyolCategoryId, n11CategoryId, hepsiburadaCategoryId } });
+    setMessage('Kategori ID\'leri kaydedildi ✓');
     await load();
   }
 
@@ -322,19 +334,30 @@ export default function PublishingPage() {
       )}
 
       <section className="panel mb-6 p-4">
-        <h3 className="mb-3 font-bold">Kategori Trendyol ID Ayarları</h3>
-        <p className="mb-4 text-sm text-slate-500">Her kategoriye karşılık gelen Trendyol kategori numarasını girin. Yapay Çiçek/Ağaç → 2995, Saksı → 2615</p>
-        <div className="flex flex-wrap gap-4">
+        <h3 className="mb-3 font-bold">Kategori Platform ID Ayarları</h3>
+        <p className="mb-4 text-sm text-slate-500">Her kategoriye karşılık gelen platform kategori numaralarını girin. Trendyol: Yapay Çiçek/Ağaç → 2995 | N11: Yapay Çiçek → 1000675 | HB: Yapay Çiçek → 60001290</p>
+        <div className="space-y-3">
           {categories.map((cat) => (
-            <div key={cat.id} className="flex items-center gap-2 rounded-md border border-line p-3">
-              <span className="min-w-40 text-sm font-semibold">{cat.name}</span>
-              <input
-                className="field w-28"
-                type="number"
-                placeholder="Trendyol ID"
-                value={categoryInputs[cat.id] ?? ''}
-                onChange={(e) => setCategoryInputs((prev) => ({ ...prev, [cat.id]: e.target.value }))}
-              />
+            <div key={cat.id} className="flex flex-wrap items-center gap-3 rounded-md border border-line p-3">
+              <span className="w-40 text-sm font-semibold">{cat.name}</span>
+              <div className="flex items-center gap-1">
+                <span className="text-xs text-slate-400 w-20">Trendyol ID</span>
+                <input className="field w-28" type="number" placeholder="ör. 2995"
+                  value={categoryInputs[`${cat.id}_trendyol`] ?? ''}
+                  onChange={(e) => setCategoryInputs((prev) => ({ ...prev, [`${cat.id}_trendyol`]: e.target.value }))} />
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="text-xs text-slate-400 w-20">N11 ID</span>
+                <input className="field w-28" type="number" placeholder="ör. 1000675"
+                  value={categoryInputs[`${cat.id}_n11`] ?? ''}
+                  onChange={(e) => setCategoryInputs((prev) => ({ ...prev, [`${cat.id}_n11`]: e.target.value }))} />
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="text-xs text-slate-400 w-20">HB ID</span>
+                <input className="field w-28" type="number" placeholder="ör. 60001290"
+                  value={categoryInputs[`${cat.id}_hb`] ?? ''}
+                  onChange={(e) => setCategoryInputs((prev) => ({ ...prev, [`${cat.id}_hb`]: e.target.value }))} />
+              </div>
               <button className="btn btn-primary px-3 py-1.5 text-sm" onClick={() => saveCategoryId(cat.id)}>Kaydet</button>
             </div>
           ))}

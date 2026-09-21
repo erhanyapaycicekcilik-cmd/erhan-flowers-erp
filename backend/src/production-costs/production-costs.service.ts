@@ -469,7 +469,6 @@ export class ProductionCostsService {
   async listVariants() {
     const [variants, orderCounts] = await Promise.all([
       this.prisma.trendyolProductVariant.findMany({
-        where: { status: 'ACTIVE' },
         include: {
           family: true,
           sizeOption: true,
@@ -1174,6 +1173,100 @@ export class ProductionCostsService {
       data: { trendyolSalePrice: salePrice },
     });
     return this.publishing.send([variantId], userId, { allowIncomplete: true, platforms: ['TRENDYOL'] as IntegrationPlatform[] });
+  }
+
+  async pushDescriptionToTrendyol(variantId: number, userId: number) {
+    const variant = await this.prisma.trendyolProductVariant.findUnique({ where: { id: variantId }, select: { trendyolProductUrl: true } });
+    if (!variant) throw new NotFoundException('Ürün bulunamadı.');
+    const contentIdMatch = String(variant.trendyolProductUrl ?? '').match(/-p-(\d+)/);
+    if (!contentIdMatch) {
+      return { ok: false, message: 'Bu ürünün Trendyol URL\'si kayıtlı değil. Sol panelden Trendyol\'da aç linkini girin, ardından tekrar deneyin.' };
+    }
+    const results = await this.publishing.send([variantId], userId, { allowIncomplete: true, platforms: ['TRENDYOL'] as IntegrationPlatform[] });
+    const trendyol = (results.results as any[])?.find((r) => r.platform === 'TRENDYOL');
+    return { ok: trendyol?.ok ?? false, message: trendyol?.successMessage ?? trendyol?.errorMessage ?? 'Gönderildi.' };
+  }
+
+  async pushImagesAndPriceToAllPlatforms(variantId: number, salePrice: number, userId: number, seo?: { seoLongDescription?: string; seoProductName?: string; seoKeywords?: string }) {
+    if (!Number.isFinite(salePrice) || salePrice <= 0) {
+      throw new BadRequestException('Geçerli bir satış fiyatı gereklidir.');
+    }
+    const updateData: any = { trendyolSalePrice: salePrice, n11SalePrice: salePrice, hepsiburadaSalePrice: salePrice };
+    if (seo?.seoLongDescription) updateData.seoLongDescription = seo.seoLongDescription;
+    if (seo?.seoProductName) updateData.seoProductName = seo.seoProductName;
+    if (seo?.seoKeywords) updateData.seoKeywords = seo.seoKeywords.split(',').map((k: string) => k.trim()).filter(Boolean);
+    await this.prisma.trendyolProductVariant.update({ where: { id: variantId }, data: updateData });
+    return this.publishing.send([variantId], userId, { allowIncomplete: true, platforms: ['TRENDYOL', 'N11', 'HEPSIBURADA'] as IntegrationPlatform[] });
+  }
+
+  async activateVariant(variantId: number) {
+    await this.prisma.trendyolProductVariant.update({
+      where: { id: variantId },
+      data: { status: 'ACTIVE' },
+    });
+    return { ok: true };
+  }
+
+  async updateVariantName(variantId: number, productName: string) {
+    const updated = await this.prisma.trendyolProductVariant.update({
+      where: { id: variantId },
+      data: { productName },
+    });
+    return { ok: true, productName: updated.productName };
+  }
+
+  async updateVariantCodes(variantId: number, data: { modelCode?: string; stockCode?: string; trendyolProductUrl?: string }) {
+    const updateData: Record<string, string> = {};
+    if (data.modelCode !== undefined) {
+      updateData.currentModelCode = data.modelCode;
+      updateData.proposedModelCode = data.modelCode;
+    }
+    if (data.stockCode !== undefined) updateData.supplierStockCode = data.stockCode;
+    if (data.trendyolProductUrl !== undefined) updateData.trendyolProductUrl = data.trendyolProductUrl;
+    await this.prisma.trendyolProductVariant.update({ where: { id: variantId }, data: updateData });
+    return { ok: true };
+  }
+
+  async autoAssignModelCodes() {
+    // Model kodu olmayan tüm varyantları bul
+    const variants = await this.prisma.trendyolProductVariant.findMany({
+      where: {
+        AND: [
+          { OR: [{ currentModelCode: null }, { currentModelCode: '' }] },
+          { status: 'ACTIVE' },
+        ],
+      },
+      select: { id: true, shopCategoryId: true, shopCategory: { select: { categoryId: true, category: { select: { id: true, codePrefix: true, startCode: true, currentCode: true } } } } },
+    });
+
+    let assigned = 0;
+    const errors: string[] = [];
+
+    for (const variant of variants) {
+      const category = variant.shopCategory?.category;
+      if (!category) { errors.push(`Varyant ${variant.id}: site kategorisi veya ERP kategori bağlantısı yok`); continue; }
+
+      try {
+        await this.prisma.$transaction(async (tx) => {
+          const cat = await tx.category.findUnique({ where: { id: category.id } });
+          if (!cat) throw new Error('Kategori bulunamadı');
+          let nextCode = Math.max(cat.currentCode + 1, cat.startCode);
+          let modelCode = `${cat.codePrefix}-${nextCode}`;
+          // Benzersizlik kontrolü
+          while (await tx.trendyolProductVariant.findFirst({ where: { OR: [{ currentModelCode: modelCode }, { proposedModelCode: modelCode }] } })) {
+            nextCode++;
+            modelCode = `${cat.codePrefix}-${nextCode}`;
+          }
+          await tx.category.update({ where: { id: cat.id }, data: { currentCode: nextCode } });
+          await tx.trendyolProductVariant.update({ where: { id: variant.id }, data: { currentModelCode: modelCode, proposedModelCode: modelCode, supplierStockCode: modelCode } });
+        });
+        assigned++;
+      } catch (e) {
+        errors.push(`Varyant ${variant.id}: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    }
+
+    return { assigned, skipped: errors.length, errors };
   }
 
   async listOverheads() {

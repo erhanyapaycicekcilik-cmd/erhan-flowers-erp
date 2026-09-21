@@ -13,7 +13,7 @@ services:
       - postgres_prod_data:/var/lib/postgresql/data
 
   backend:
-    build: ./backend
+    image: ghcr.io/erhanyapaycicekcilik-cmd/erhan-flowers-backend:latest
     container_name: erhan-flowers-backend-prod
     restart: unless-stopped
     networks:
@@ -38,7 +38,7 @@ services:
       start_period: 60s
 
   frontend:
-    build: ./frontend
+    image: ghcr.io/erhanyapaycicekcilik-cmd/erhan-flowers-frontend:latest
     container_name: erhan-flowers-frontend-prod
     restart: unless-stopped
     networks:
@@ -50,7 +50,7 @@ services:
         condition: service_healthy
 
   florayapay:
-    build: ./florayapay
+    image: ghcr.io/erhanyapaycicekcilik-cmd/erhan-flowers-florayapay:latest
     container_name: erhan-flowers-florayapay-prod
     restart: unless-stopped
     networks:

@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, ArrowRight, Brain, Copy, ExternalLink, ImageIcon, Plus, Save, Search, Star, Trash2, Upload } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Brain, Check, Copy, Download, ExternalLink, ImageIcon, Pencil, Plus, Save, Search, Send, Star, Trash2, Upload, X } from 'lucide-react';
 import { AdminShell } from '@/components/AdminShell';
 import { api, apiFileUrl } from '@/lib/api';
 import type { StockCard } from '@/types';
@@ -36,6 +36,7 @@ type Variant = {
   branchCount?: number | null;
   leavesPerBranch?: number | null;
   leafCount?: number | null;
+  status?: 'ACTIVE' | 'PASSIVE';
 };
 
 type VariantListItem = {
@@ -187,19 +188,11 @@ export default function ProductCostDetailPage() {
   const [pots, setPots] = useState<PotItem[]>([]);
   const [expenses, setExpenses] = useState<ExpenseItem[]>([]);
   const [profitMarginPercent, setProfitMarginPercent] = useState(45);
-  const [livePhysicalSpecs, setLivePhysicalSpecs] = useState<{
-    productHeight?: string | null;
-    potType?: string | null;
-    potSize?: string | null;
-    branchCount?: number | null;
-    leavesPerBranch?: number | null;
-    leafCount?: number | null;
-  } | null>(null);
   const [vatPercent, setVatPercent] = useState(20);
   const [shippingCost, setShippingCost] = useState(0);
   const [desi, setDesi] = useState(0);
   const [marketplaceMarkupPercent, setMarketplaceMarkupPercent] = useState(25);
-  const [campaignBufferPercent, setCampaignBufferPercent] = useState(10);
+  const [campaignBufferPercent, setCampaignBufferPercent] = useState(20);
   const [stockWarningAccepted, setStockWarningAccepted] = useState(false);
   const [knowledgeLoading, setKnowledgeLoading] = useState(false);
   const [knowledgeResult, setKnowledgeResult] = useState<KnowledgeAnalysis | null>(null);
@@ -229,9 +222,28 @@ export default function ProductCostDetailPage() {
   const [images, setImages] = useState<string[]>([]);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [sendingImagesAndPrice, setSendingImagesAndPrice] = useState(false);
+  const [sendingAllPlatforms, setSendingAllPlatforms] = useState(false);
   const [pendingBatchId, setPendingBatchId] = useState<string | null>(null);
   const [checkingBatch, setCheckingBatch] = useState(false);
   const [openingTrendyolPanel, setOpeningTrendyolPanel] = useState(false);
+  const [editingName, setEditingName] = useState(false);
+  const [nameInput, setNameInput] = useState('');
+  const [savingName, setSavingName] = useState(false);
+  const [modelCodeInput, setModelCodeInput] = useState('');
+  const [stockCodeInput, setStockCodeInput] = useState('');
+  const [trendyolUrlInput, setTrendyolUrlInput] = useState('');
+  const [savingCodes, setSavingCodes] = useState(false);
+  const [productDescription, setProductDescription] = useState('');
+  const [shopCategoryId, setShopCategoryId] = useState('');
+  const [categories, setCategories] = useState<{ id: number; name: string; children?: { id: number; name: string }[] }[]>([]);
+  const [savingProductInfo, setSavingProductInfo] = useState(false);
+  const [activating, setActivating] = useState(false);
+  const [variantStatus, setVariantStatus] = useState<'ACTIVE' | 'PASSIVE'>('ACTIVE');
+  const [physicalSpecsForm, setPhysicalSpecsForm] = useState<{
+    stemCount: string; branchCount: string; leavesPerBranch: string; leafCount: string;
+    potW: string; potD: string; potH: string; potType: string;
+  }>({ stemCount: '', branchCount: '', leavesPerBranch: '', leafCount: '', potW: '', potD: '', potH: '', potType: '' });
+  const [pendingSeo, setPendingSeo] = useState<{ name: string; desc: string; keywords: string } | null>(null);
 
   useEffect(() => {
     const savedSettings = window.localStorage.getItem('ef_cost_price_settings');
@@ -248,12 +260,23 @@ export default function ProductCostDetailPage() {
       api<DetailResponse>(`/production-costs/variants/${productId}/detail`),
       api<StockCard[]>('/stock-cards'),
       api<VariantListItem[]>('/production-costs/variants').catch(() => []),
+      api<any>(`/product-center/variants/${productId}`).catch(() => null),
+      api<any[]>('/shop-categories').catch(() => []),
     ])
-      .then(([data, stockData, variantData]) => {
+      .then(([data, stockData, variantData, pcVariant, cats]) => {
         setDetail(data);
         setStockCards(stockData);
         setVariants(variantData);
         setImages(Array.isArray(data.variant.images) ? data.variant.images : []);
+        setVariantStatus((data.variant as any).status ?? 'ACTIVE');
+        setModelCodeInput(data.variant.currentModelCode ?? data.variant.proposedModelCode ?? '');
+        setStockCodeInput(data.variant.supplierStockCode ?? '');
+        setTrendyolUrlInput(data.variant.trendyolProductUrl ?? '');
+        if (pcVariant) {
+          setProductDescription(pcVariant.productDescription ?? '');
+          setShopCategoryId(pcVariant.shopCategoryId ? String(pcVariant.shopCategoryId) : '');
+        }
+        setCategories(Array.isArray(cats) ? cats : []);
         const savedMaterials = data.costDraft.items
           .filter((item: any) => !(item.source === 'MANUAL' && (item.isDefaultExpense || ['LABOR', 'OTHER', 'PACKAGING'].includes(item.group))))
           .map((item) => ({ ...item, key: crypto.randomUUID(), stockCardId: item.stockCardId ? Number(item.stockCardId) : '' as const }));
@@ -289,7 +312,7 @@ export default function ProductCostDetailPage() {
         setShippingCost(Number(data.costDraft.shippingCost || 0));
         setDesi(Number(data.costDraft.desi || 0));
         setMarketplaceMarkupPercent(Number(data.costDraft.marketplaceMarkupPercent || 25));
-        setCampaignBufferPercent(Number(data.costDraft.campaignBufferPercent || 10));
+        setCampaignBufferPercent(Number(data.costDraft.campaignBufferPercent || 20));
         if (!data.hasSavedCostDraft && data.variant.productName) {
           setKnowledgeLoading(true);
           api<KnowledgeAnalysis>('/knowledge-base/analyze-product-name', {
@@ -803,6 +826,125 @@ export default function ProductCostDetailPage() {
     }
   }
 
+  function getPriceWarnings(): string[] {
+    const warnings: string[] = [];
+    const price = totals.marketplaceSalePrice;
+    const cost = totals.totalCost;
+    const currentPrice = parseMoney(variant?.trendyolSalePrice);
+    if (!price || price <= 0) { warnings.push('Fiyat hesaplanmadı — maliyet ve kâr alanlarını doldurun.'); return warnings; }
+    if (cost > 0 && price < cost) warnings.push(`⚠️ Zarar: Satış fiyatı (${money(price)}) maliyetin (${money(cost)}) altında!`);
+    else if (cost > 0 && price < cost * 1.05) warnings.push(`⚠️ Çok düşük kâr: Maliyetin sadece %${Math.round((price / cost - 1) * 100)} üzerinde.`);
+    if (price < 50) warnings.push(`⚠️ Çok düşük fiyat: ₺50'nin altında (${money(price)}).`);
+    if (currentPrice > 0 && price < currentPrice * 0.5) warnings.push(`⚠️ Mevcut Trendyol fiyatının (${money(currentPrice)}) yarısından az — büyük indirim!`);
+    if (currentPrice > 0 && price > currentPrice * 3) warnings.push(`⚠️ Mevcut Trendyol fiyatının (${money(currentPrice)}) 3 katından fazla — çok yüksek!`);
+    return warnings;
+  }
+
+  async function pushToAllPlatforms() {
+    if (!images.length) {
+      setMessage('Önce en az bir görsel yükleyin.');
+      return;
+    }
+    if (!totals.marketplaceSalePrice || totals.marketplaceSalePrice <= 0) {
+      setMessage('Fiyat hesaplanmadı; önce maliyet/kâr alanlarını doldurun.');
+      return;
+    }
+    const warnings = getPriceWarnings();
+    if (warnings.length > 0) {
+      const confirmed = window.confirm(`Fiyat uyarısı:\n\n${warnings.join('\n')}\n\nYine de göndermek istiyor musunuz?`);
+      if (!confirmed) return;
+    }
+    setSendingAllPlatforms(true);
+    setMessage('Görsel ve fiyat tüm platformlara gönderiliyor...');
+    try {
+      const result = await api<{ success: number; failed: number; results: Array<{ platform: string; ok: boolean; successMessage?: string | null; errorMessage?: string | null }> }>(`/production-costs/variants/${productId}/push-all-platforms`, {
+        method: 'POST',
+        json: {
+          salePrice: totals.marketplaceSalePrice,
+          seoLongDescription: pendingSeo?.desc || undefined,
+          seoProductName: pendingSeo?.name || undefined,
+          seoKeywords: pendingSeo?.keywords || undefined,
+        },
+      });
+      const platforms = result.results ?? [];
+      const okList = platforms.filter(r => r.ok).map(r => r.platform).join(', ');
+      const failList = platforms.filter(r => !r.ok).map(r => `${r.platform}: ${r.errorMessage ?? 'hata'}`).join('; ');
+      setMessage(
+        result.failed === 0
+          ? `Tüm platformlara gönderildi ✓ (${okList || 'Trendyol, N11, HB'})`
+          : `Kısmen başarılı — Başarılı: ${okList || '-'} | Başarısız: ${failList}`,
+      );
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Platformlara gönderilemedi.');
+    } finally {
+      setSendingAllPlatforms(false);
+    }
+  }
+
+  async function saveCodes() {
+    setSavingCodes(true);
+    try {
+      await api(`/production-costs/variants/${productId}/update-codes`, {
+        method: 'POST',
+        json: { modelCode: modelCodeInput.trim() || undefined, stockCode: stockCodeInput.trim() || undefined, trendyolProductUrl: trendyolUrlInput.trim() || undefined },
+      });
+      setDetail((prev) => prev ? { ...prev, variant: { ...prev.variant, currentModelCode: modelCodeInput.trim() || null, proposedModelCode: modelCodeInput.trim() || null, supplierStockCode: stockCodeInput.trim() || null, trendyolProductUrl: trendyolUrlInput.trim() || null } } : prev);
+      setMessage('Kodlar kaydedildi ✓');
+    } catch {
+      setMessage('Kodlar kaydedilemedi.');
+    } finally {
+      setSavingCodes(false);
+    }
+  }
+
+  async function saveProductName() {
+    if (!nameInput.trim()) return;
+    setSavingName(true);
+    try {
+      await api(`/production-costs/variants/${productId}/update-name`, {
+        method: 'POST',
+        json: { productName: nameInput.trim() },
+      });
+      setDetail(prev => prev ? { ...prev, variant: { ...prev.variant, productName: nameInput.trim() } } : prev);
+      setEditingName(false);
+    } catch {
+      setMessage('Ürün adı kaydedilemedi.');
+    } finally {
+      setSavingName(false);
+    }
+  }
+
+  async function saveProductInfo() {
+    setSavingProductInfo(true);
+    try {
+      await api(`/product-center/variants/${productId}`, {
+        method: 'PATCH',
+        json: {
+          productDescription,
+          shopCategoryId: shopCategoryId ? Number(shopCategoryId) : null,
+        },
+      });
+      setMessage('Ürün bilgileri kaydedildi.');
+    } catch {
+      setMessage('Ürün bilgileri kaydedilemedi.');
+    } finally {
+      setSavingProductInfo(false);
+    }
+  }
+
+  async function activateVariant() {
+    setActivating(true);
+    try {
+      await api(`/production-costs/variants/${productId}/activate`, { method: 'POST' });
+      setVariantStatus('ACTIVE');
+      setMessage('Ürün satışa açıldı.');
+    } catch {
+      setMessage('Ürün satışa açılamadı.');
+    } finally {
+      setActivating(false);
+    }
+  }
+
   async function checkBatchStatus() {
     if (!pendingBatchId) return;
     setCheckingBatch(true);
@@ -947,7 +1089,7 @@ export default function ProductCostDetailPage() {
     setProfitMarginPercent(Number(refreshed.costDraft.profitMarginPercent || 45));
     setVatPercent(Number(refreshed.costDraft.vatPercent || 20));
     setMarketplaceMarkupPercent(Number(refreshed.costDraft.marketplaceMarkupPercent || 25));
-    setCampaignBufferPercent(Number(refreshed.costDraft.campaignBufferPercent || 10));
+    setCampaignBufferPercent(Number(refreshed.costDraft.campaignBufferPercent || 20));
   }
 
   async function copyRecipeFromProduct() {
@@ -1032,14 +1174,70 @@ export default function ProductCostDetailPage() {
             {detail?.previousProductId && <Link className="btn btn-secondary min-h-9 px-2 text-xs" href={`/production-costs/products/${detail.previousProductId}`}>Önceki</Link>}
             {detail?.nextProductId && <Link className="btn btn-secondary min-h-9 px-2 text-xs" href={`/production-costs/products/${detail.nextProductId}`}>Sonraki</Link>}
           </div>
-          <ProductImage src={mainImage} />
-          <h2 className="mt-3 text-base font-bold leading-5">{variant?.productName ?? 'Ürün'}</h2>
+          <div className="relative">
+            <ProductImage src={mainImage} />
+            {mainImage && (
+              <a
+                href={normalizeImage(mainImage)}
+                download
+                className="absolute bottom-2 right-2 rounded-full bg-white/90 p-1.5 shadow hover:bg-white"
+                title="Ana görseli indir"
+              >
+                <Download size={14} className="text-slate-700" />
+              </a>
+            )}
+          </div>
+          {variantStatus === 'PASSIVE' && (
+            <div className="mt-2 flex items-center justify-between rounded-md bg-gray-100 px-3 py-2">
+              <span className="text-xs font-bold text-gray-600">📦 Arşivde — Satışta değil</span>
+              <button
+                onClick={activateVariant}
+                disabled={activating}
+                className="rounded bg-emerald-600 px-2 py-1 text-xs font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
+              >
+                {activating ? '...' : 'Satışa Aç'}
+              </button>
+            </div>
+          )}
+          {editingName ? (
+            <div className="mt-3 flex items-center gap-1">
+              <input
+                autoFocus
+                className="field flex-1 text-sm font-bold"
+                value={nameInput}
+                onChange={e => setNameInput(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') void saveProductName(); if (e.key === 'Escape') setEditingName(false); }}
+              />
+              <button onClick={() => void saveProductName()} disabled={savingName} className="rounded bg-emerald-600 p-1.5 text-white hover:bg-emerald-700 disabled:opacity-50"><Check size={13} /></button>
+              <button onClick={() => setEditingName(false)} className="rounded bg-slate-200 p-1.5 hover:bg-slate-300"><X size={13} /></button>
+            </div>
+          ) : (
+            <div className="mt-3 flex items-start gap-1">
+              <h2 className="flex-1 text-base font-bold leading-5">{variant?.productName ?? 'Ürün'}</h2>
+              <button onClick={() => { setNameInput(variant?.productName ?? ''); setEditingName(true); }} className="mt-0.5 rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700" title="Ürün adını düzenle"><Pencil size={13} /></button>
+            </div>
+          )}
           <div className="mt-3 grid gap-2 text-xs">
             <Info label="Barkod" value={variant?.barcode ?? '-'} />
-            <Info label="Eski model" value={variant?.currentModelCode ?? variant?.supplierStockCode ?? '-'} />
-            <Info label="Yeni model" value={variant?.proposedModelCode ?? '-'} />
             <Info label="Boy" value={variant?.detectedSize ?? '-'} />
             <Info label="Mevcut satış" value={money(parseMoney(variant?.trendyolSalePrice))} />
+          </div>
+          <div className="mt-3 space-y-2">
+            <div>
+              <label className="block text-[10px] font-semibold uppercase text-slate-400 mb-0.5">Model Kodu</label>
+              <input className="input w-full text-xs" value={modelCodeInput} onChange={(e) => setModelCodeInput(e.target.value)} placeholder="ör. BA-6001" />
+            </div>
+            <div>
+              <label className="block text-[10px] font-semibold uppercase text-slate-400 mb-0.5">Stok Kodu</label>
+              <input className="input w-full text-xs" value={stockCodeInput} onChange={(e) => setStockCodeInput(e.target.value)} placeholder="Tedarikçi stok kodu" />
+            </div>
+            <div>
+              <label className="block text-[10px] font-semibold uppercase text-slate-400 mb-0.5">Trendyol URL</label>
+              <input className="input w-full text-xs" value={trendyolUrlInput} onChange={(e) => setTrendyolUrlInput(e.target.value)} placeholder="https://www.trendyol.com/..." />
+            </div>
+            <button className="btn btn-primary w-full min-h-8 text-xs justify-center" onClick={saveCodes} disabled={savingCodes}>
+              {savingCodes ? 'Kaydediliyor...' : 'Kodları Kaydet'}
+            </button>
           </div>
           {variant?.barcode && (
             <a
@@ -1057,6 +1255,44 @@ export default function ProductCostDetailPage() {
 
         <section className="space-y-3">
           <CompactPanel
+            title="Ürün Bilgileri"
+            action={
+              <button className="btn btn-primary min-h-8 px-2 text-xs" onClick={saveProductInfo} disabled={savingProductInfo}>
+                <Save size={14} />{savingProductInfo ? 'Kaydediliyor...' : 'Kaydet'}
+              </button>
+            }
+          >
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Ürün Açıklaması</label>
+                <textarea
+                  className="mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand resize-none"
+                  rows={5}
+                  value={productDescription}
+                  onChange={e => setProductDescription(e.target.value)}
+                  placeholder="Ürün açıklaması..."
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Site Kategorisi</label>
+                <select
+                  className="mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand"
+                  value={shopCategoryId}
+                  onChange={e => setShopCategoryId(e.target.value)}
+                >
+                  <option value="">— Kategori Seçin —</option>
+                  {categories.map((c) => [
+                    <option key={c.id} value={c.id}>{c.name}</option>,
+                    ...(c.children ?? []).map((ch) => (
+                      <option key={ch.id} value={ch.id}>&nbsp;&nbsp;└ {ch.name}</option>
+                    )),
+                  ])}
+                </select>
+              </div>
+            </div>
+          </CompactPanel>
+
+          <CompactPanel
             title="Görseller"
             action={
               <label className="btn btn-secondary min-h-8 cursor-pointer px-2 text-xs">
@@ -1065,11 +1301,12 @@ export default function ProductCostDetailPage() {
                 <input
                   type="file"
                   accept="image/*"
+                  multiple
                   className="hidden"
                   disabled={uploadingImage}
-                  onChange={(event) => {
-                    const file = event.target.files?.[0];
-                    if (file) uploadImage(file);
+                  onChange={async (event) => {
+                    const files = Array.from(event.target.files ?? []);
+                    for (const file of files) await uploadImage(file);
                     event.target.value = '';
                   }}
                 />
@@ -1099,6 +1336,15 @@ export default function ProductCostDetailPage() {
                           <Star size={13} />
                         </button>
                       )}
+                      <a
+                        href={normalizeImage(image)}
+                        download
+                        className="rounded bg-white p-1 text-slate-600 shadow"
+                        title="Görseli indir"
+                        onClick={e => e.stopPropagation()}
+                      >
+                        <Download size={13} />
+                      </a>
                       <button
                         type="button"
                         className="rounded bg-white p-1 text-red-600 shadow"
@@ -1112,13 +1358,13 @@ export default function ProductCostDetailPage() {
                 ))}
               </div>
             )}
-            <button
-              className="btn btn-primary mt-3 w-full justify-center"
-              onClick={pushImagesAndPriceToTrendyol}
-              disabled={sendingImagesAndPrice}
-            >
-              {sendingImagesAndPrice ? 'Gönderiliyor...' : 'Görselleri ve Fiyatı Trendyol\'a Gönder'}
-            </button>
+            {getPriceWarnings().length > 0 && (
+              <div className="mt-3 space-y-1">
+                {getPriceWarnings().map((w, i) => (
+                  <div key={i} className="rounded-md bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">{w}</div>
+                ))}
+              </div>
+            )}
             {pendingBatchId && (
               <button
                 className="btn btn-secondary mt-2 w-full justify-center"
@@ -1149,20 +1395,6 @@ export default function ProductCostDetailPage() {
                   {knowledgeLoading ? 'Analiz ediliyor...' : 'Reçete Getir'}
                 </button>
                 <button className="btn btn-secondary min-h-8 px-2 text-xs" onClick={() => setStoneModalOpen(true)}><Plus size={14} />Taş Ekle</button>
-                <button className="btn btn-secondary min-h-8 px-2 text-xs" onClick={() => {
-                  // Ürün adından anahtar kelimeleri çıkar (bambu, benjamin, saksı ölçüsü vs)
-                  const pn = variant?.productName ?? '';
-                  const sizeMatch = pn.match(/\d[\d×x\s]*cm/i);
-                  const keywords = [
-                    /bambu/i.test(pn) ? 'bambu' : '',
-                    /benjamin/i.test(pn) ? 'benjamin' : '',
-                    /saks/i.test(pn) ? 'saksı' : '',
-                    /yaprak/i.test(pn) ? 'yaprak' : '',
-                    sizeMatch ? sizeMatch[0] : '',
-                  ].filter(Boolean);
-                  setStockSearchQuery(keywords[0] ?? pn.split(' ')[0]);
-                  setStockSearchOpen(true);
-                }}>🔍 Addan Getir</button>
                 <button className="btn btn-primary min-h-8 px-2 text-xs" onClick={() => { setStockSearchQuery(''); setStockSearchOpen(o => !o); }}><Plus size={14} />Malzeme Ekle</button>
               </div>
             }
@@ -1232,7 +1464,9 @@ export default function ProductCostDetailPage() {
               branchCount={variant.branchCount}
               leavesPerBranch={variant.leavesPerBranch}
               leafCount={variant.leafCount}
-              onSaved={(specs) => setLivePhysicalSpecs(specs)}
+              onFormChange={setPhysicalSpecsForm}
+              productName={variant.productName}
+              pots={pots}
             />
           )}
 
@@ -1246,12 +1480,15 @@ export default function ProductCostDetailPage() {
               seoKeywords={variant.seoKeywords}
               knowledgeResult={knowledgeResult}
               materials={materials}
-              potSize={livePhysicalSpecs?.potSize ?? variant.potSize}
-              potType={livePhysicalSpecs?.potType ?? variant.potType}
-              productHeight={livePhysicalSpecs?.productHeight ?? variant.productHeight}
-              branchCount={livePhysicalSpecs?.branchCount ?? variant.branchCount}
-              leavesPerBranch={livePhysicalSpecs?.leavesPerBranch ?? variant.leavesPerBranch}
-              leafCount={livePhysicalSpecs?.leafCount ?? variant.leafCount}
+              stemCount={variant.stemCount}
+              branchCount={variant.branchCount}
+              leavesPerBranch={variant.leavesPerBranch}
+              leafCount={variant.leafCount}
+              potSize={variant.potSize}
+              potType={variant.potType}
+              physicalSpecsOverride={physicalSpecsForm}
+              onSeoChange={setPendingSeo}
+              salePrice={totals.marketplaceSalePrice}
             />
           )}
 
@@ -1354,7 +1591,9 @@ export default function ProductCostDetailPage() {
 
             <div className="mt-4 grid grid-cols-2 gap-2">
               <button className="btn btn-primary justify-center col-span-2" onClick={saveAndNext}><Save size={16} />Kaydet ve Sonraki Ürüne Geç</button>
-              <button className="btn btn-primary justify-center col-span-2" onClick={pushPriceToTrendyol}>Trendyol'a Gönder</button>
+              <button className="btn btn-primary justify-center col-span-2" onClick={pushToAllPlatforms} disabled={sendingAllPlatforms}>
+                <Send size={14} />{sendingAllPlatforms ? 'Gönderiliyor...' : 'Görsel & Fiyatı Tüm Platformlara Gönder'}
+              </button>
               <button className="btn btn-secondary justify-center" onClick={() => setCopyModalOpen(true)}><Copy size={16} />Reçeteyi Kopyala</button>
               <button className="btn btn-secondary justify-center" onClick={copySummary}><Copy size={16} />Özeti Kopyala</button>
               <button className="btn btn-secondary justify-center" onClick={copyRecipe}><Copy size={16} />Reçete Metni</button>
@@ -1946,7 +2185,7 @@ function Warning({ text }: { text: string }) {
   return <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">{text}</div>;
 }
 
-function PhysicalSpecsPanel({ productCenterId, productHeight, potType, potSize, stemCount, branchCount, leavesPerBranch, leafCount, onSaved }: {
+function PhysicalSpecsPanel({ productCenterId, productHeight, potType, potSize, stemCount, branchCount, leavesPerBranch, leafCount, onFormChange, productName, pots }: {
   productCenterId?: number | null;
   productHeight?: string | null;
   potType?: string | null;
@@ -1955,7 +2194,9 @@ function PhysicalSpecsPanel({ productCenterId, productHeight, potType, potSize, 
   branchCount?: number | null;
   leavesPerBranch?: number | null;
   leafCount?: number | null;
-  onSaved?: (specs: { productHeight?: string | null; potType?: string | null; potSize?: string | null; branchCount?: number | null; leavesPerBranch?: number | null; leafCount?: number | null }) => void;
+  onFormChange?: (form: { stemCount: string; branchCount: string; leavesPerBranch: string; leafCount: string; potW: string; potD: string; potH: string; potType: string }) => void;
+  productName?: string;
+  pots?: PotItem[];
 }) {
   const [form, setForm] = useState({
     productHeight: productHeight ?? '',
@@ -1991,6 +2232,50 @@ function PhysicalSpecsPanel({ productCenterId, productHeight, potType, potSize, 
     }));
   }, [productCenterId, productHeight, potType, potSize, stemCount, branchCount, leavesPerBranch, leafCount]);
 
+  useEffect(() => {
+    onFormChange?.({ stemCount: form.stemCount, branchCount: form.branchCount, leavesPerBranch: form.leavesPerBranch, leafCount: form.leafCount, potW: form.potW, potD: form.potD, potH: form.potH, potType: form.potType });
+  }, [form, onFormChange]);
+
+  // Ürün adından otomatik parse
+  useEffect(() => {
+    if (!productName) return;
+    const pn = productName;
+    // Boy: "70 Cm", "120cm", "1.2 M" vb.
+    const heightM = pn.match(/(\d+(?:[,.]\d+)?)\s*[Mm]\b/);
+    const heightCm = pn.match(/(\d+(?:[,.]\d+)?)\s*[Cc][Mm]/);
+    const parsedHeight = heightM ? `${parseFloat(heightM[1].replace(',', '.')) * 100} cm` : heightCm ? `${heightCm[1].replace(',', '.')} cm` : '';
+    // Gövde/adet sayısı: "10 Adet", "5li", "3 Gövde" vb.
+    const adetM = pn.match(/(\d+)\s*(?:adet|li\b|lü\b|lu\b|gövde)/i);
+    const parsedStem = adetM ? adetM[1] : '';
+    setForm((f) => ({
+      ...f,
+      productHeight: f.productHeight || parsedHeight,
+      stemCount: f.stemCount || parsedStem,
+    }));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [productName]);
+
+  // Saksı stok kartından ebat otomatik doldur
+  useEffect(() => {
+    if (!pots || pots.length === 0) return;
+    const pot = pots[0];
+    // sizeText örn: "15×15×13 cm" veya "15x15x13" veya "15 15 13"
+    const nums = pot.sizeText ? (pot.sizeText.match(/\d+(?:[,.]\d+)?/g)?.map((n) => n.replace(',', '.')) ?? []) : [];
+    if (nums.length >= 2) {
+      const [w, d, h] = nums;
+      const vol = w && d && h ? ((parseFloat(w) * parseFloat(d) * parseFloat(h)) / 1000).toFixed(1) : '';
+      setForm((f) => ({
+        ...f,
+        potW: f.potW || w || '',
+        potD: f.potD || d || '',
+        potH: f.potH || h || '',
+        potVolumeLitre: f.potVolumeLitre || vol,
+        potType: f.potType || pot.name || '',
+      }));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pots?.length]);
+
   function calcLeafCount(bc: string, lpb: string) {
     const b = parseInt(bc, 10);
     const l = parseInt(lpb, 10);
@@ -2018,15 +2303,6 @@ function PhysicalSpecsPanel({ productCenterId, productHeight, potType, potSize, 
           leavesPerBranch: form.leavesPerBranch ? Number(form.leavesPerBranch) : null,
           leafCount: form.leafCount ? Number(form.leafCount) : null,
         },
-      });
-      const potSizeValue2 = calcPotSize(form.potW, form.potD, form.potH);
-      onSaved?.({
-        productHeight: form.productHeight || null,
-        potType: form.potType || null,
-        potSize: potSizeValue2 || null,
-        branchCount: form.branchCount ? Number(form.branchCount) : null,
-        leavesPerBranch: form.leavesPerBranch ? Number(form.leavesPerBranch) : null,
-        leafCount: form.leafCount ? Number(form.leafCount) : null,
       });
       setMsg('Kaydedildi.');
     } catch {
@@ -2108,7 +2384,7 @@ function PhysicalSpecsPanel({ productCenterId, productHeight, potType, potSize, 
   );
 }
 
-function SeoPanel({ variantId, productName, detectedSize, seoProductName, seoLongDescription, seoKeywords, knowledgeResult, materials, potSize, potType, productHeight, branchCount, leavesPerBranch, leafCount }: {
+function SeoPanel({ variantId, productName, detectedSize, seoProductName, seoLongDescription, seoKeywords, knowledgeResult, materials, stemCount, branchCount, leavesPerBranch, leafCount, potSize, potType, physicalSpecsOverride, onSeoChange, salePrice }: {
   variantId: number;
   productName: string;
   detectedSize?: string | null;
@@ -2117,12 +2393,15 @@ function SeoPanel({ variantId, productName, detectedSize, seoProductName, seoLon
   seoKeywords?: string[] | null;
   knowledgeResult: KnowledgeAnalysis | null;
   materials: { name: string }[];
-  potSize?: string | null;
-  potType?: string | null;
-  productHeight?: string | null;
+  stemCount?: number | null;
   branchCount?: number | null;
   leavesPerBranch?: number | null;
   leafCount?: number | null;
+  potSize?: string | null;
+  potType?: string | null;
+  physicalSpecsOverride?: { stemCount: string; branchCount: string; leavesPerBranch: string; leafCount: string; potW: string; potD: string; potH: string; potType: string };
+  onSeoChange?: (seo: { name: string; desc: string; keywords: string }) => void;
+  salePrice?: number;
 }) {
   const [name, setName] = useState(seoProductName ?? '');
   const [desc, setDesc] = useState(seoLongDescription ?? '');
@@ -2130,46 +2409,80 @@ function SeoPanel({ variantId, productName, detectedSize, seoProductName, seoLon
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState('');
 
+  useEffect(() => {
+    onSeoChange?.({ name, desc, keywords });
+  }, [name, desc, keywords, onSeoChange]);
+
   function generate() {
     const pn = productName;
     const plant = knowledgeResult?.plantType?.name ?? '';
-    // productHeight prop öncelikli, sonra knowledgeResult, sonra detectedSize
-    const height = productHeight ?? (knowledgeResult?.heightCm ? `${knowledgeResult.heightCm}cm` : (detectedSize ?? ''));
+    const height = knowledgeResult?.heightCm ? `${knowledgeResult.heightCm}cm` : (detectedSize ?? '');
     const recipe = knowledgeResult?.recipeProfile?.name ?? '';
 
     const isSeprator = /seperat|speratör|seperatör/i.test(pn);
     const isBambu = /bambu/i.test(pn);
+    // Gerçek fiziksel özellikler önce (API'den), yoksa PhysicalSpecsPanel form değerleri, yoksa isimden parse et
     const stemMatch = pn.match(/(\d+)\s*(adet|li|lü|lu)\s*bambu/i) ?? pn.match(/bambu\s*(\d+)/i);
-    const stemCount = stemMatch ? stemMatch[1] : (branchCount ? String(branchCount) : '');
-    // Saksı bilgisini önce potSize/potType prop'larından, yoksa stok bileşenlerinden al
+    const oStem = physicalSpecsOverride?.stemCount ? Number(physicalSpecsOverride.stemCount) : null;
+    const oBranch = physicalSpecsOverride?.branchCount ? Number(physicalSpecsOverride.branchCount) : null;
+    const oLpb = physicalSpecsOverride?.leavesPerBranch ? Number(physicalSpecsOverride.leavesPerBranch) : null;
+    const oLeaf = physicalSpecsOverride?.leafCount ? Number(physicalSpecsOverride.leafCount) : null;
+    const oPotType = physicalSpecsOverride?.potType || null;
+    const oPotW = physicalSpecsOverride?.potW ? Number(physicalSpecsOverride.potW) : null;
+    const oPotD = physicalSpecsOverride?.potD ? Number(physicalSpecsOverride.potD) : null;
+    const oPotH = physicalSpecsOverride?.potH ? Number(physicalSpecsOverride.potH) : null;
+
+    const actualStemCount = stemCount ?? oStem ?? (stemMatch ? Number(stemMatch[1]) : null);
+    const actualBranchCount = branchCount ?? oBranch ?? null;
+    const actualLeavesPerBranch = leavesPerBranch ?? oLpb ?? null;
+    const actualLeafCount = leafCount ?? oLeaf ?? (actualBranchCount && actualLeavesPerBranch ? actualBranchCount * actualLeavesPerBranch : null);
+
+    // Saksı ölçülerini potSize string'inden parse et, yoksa form'daki potW/D/H kullan
+    const potNums = potSize ? (potSize.match(/\d+(\.\d+)?/g)?.map(Number) ?? []) : [];
+    const [apiPotW, apiPotD, apiPotH] = potNums;
+    const finalPotW = apiPotW ?? oPotW;
+    const finalPotD = apiPotD ?? oPotD;
+    const finalPotH = apiPotH ?? oPotH;
+    const potSizeStr = finalPotW && finalPotD && finalPotH ? `${finalPotW}×${finalPotD}×${finalPotH} cm (G×D×Y)` : finalPotW && finalPotD ? `${finalPotW}×${finalPotD} cm` : '';
+
+    // Saksı bilgisini stok bileşenlerinden al
     const potMaterial = materials.find((m) => /saks[iı]/i.test(m.name));
-    const hasPot = Boolean(potMaterial) || Boolean(potSize);
-    const potDesc = potMaterial ? potMaterial.name : (potSize ? `${potType ? potType + ' ' : ''}Saksı ${potSize}` : '');
+    const effectivePotType = potType ?? oPotType;
+    const hasPot = Boolean(potMaterial) || Boolean(effectivePotType) || Boolean(potSizeStr);
+    const potDesc = potMaterial ? potMaterial.name : (effectivePotType || '');
 
     // SEO adı
     const seoName = [
       height && `${height}`,
-      isBambu && stemCount ? `${stemCount} Adet Yapay Bambu` : plant ? `Yapay ${plant} Ağacı` : pn.split(' ').slice(0, 5).join(' '),
+      isBambu && actualStemCount ? `${actualStemCount} Adet Yapay Bambu` : plant ? `Yapay ${plant} Ağacı` : pn.split(' ').slice(0, 5).join(' '),
       hasPot ? `| ${potDesc}` : '',
       isSeprator ? '| Bambu Seperatör' : '',
       '| Dekoratif Yapay Bitki',
     ].filter(Boolean).join(' ');
+
     const sepNote = isSeprator && hasPot
       ? '\n🏠 MONTAJ BİLGİSİ:\n• Bambu çubuklar ve saksı AYRI gönderilir\n• Bambuları saksıya yerleştirmek 5 dakika sürer\n• Montaj talimatı pakete dahildir\n'
       : (isBambu && hasPot ? '\n📦 PAKET BİLGİSİ:\n• Bambu gövde(ler) ve saksı AYRI gönderilir\n• Kolay montaj, ek alet gerekmez\n' : '');
-    // Yaprak/dal bilgisi — prop'lardan oluştur
-    const leafLine = leafCount ? `• Toplam yaprak sayısı: ${leafCount} adet` : (recipe ? `• Yaprak/Demet: ${recipe}` : '');
-    const branchLine = branchCount ? `• Dal/şal sayısı: ${branchCount} adet${leavesPerBranch ? ` (dal başına ${leavesPerBranch} yaprak)` : ''}` : '';
-    const potLine = hasPot ? `• Saksı: ${potDesc}` : '';
+
+    // Dal & yaprak satırları
+    const leafLines: string[] = [];
+    if (actualStemCount) leafLines.push(`• Gövde sayısı: ${actualStemCount} adet`);
+    if (actualBranchCount) leafLines.push(`• Dal sayısı: ${actualBranchCount} adet`);
+    if (actualLeavesPerBranch) leafLines.push(`• Dal başına yaprak: ${actualLeavesPerBranch} yaprak`);
+    if (actualLeafCount) leafLines.push(`• Toplam yaprak: ${actualLeafCount} yaprak`);
+    if (recipe) leafLines.push(`• Yaprak/Demet: ${recipe}`);
+
+    // Saksı satırları
+    const potLines: string[] = [];
+    if (potDesc) potLines.push(`• Saksı tipi: ${potDesc}`);
+    if (potSizeStr) potLines.push(`• Saksı ölçüsü: ${potSizeStr}`);
 
     const seoDesc = `${pn}
 
 🌿 ÜRÜN ÖZELLİKLERİ:
 • Toplam yükseklik: ${height || 'Ürün adına bakınız'}
-• ${stemCount ? `Bambu gövde: ${stemCount} adet` : plant ? `Bitki türü: ${plant}` : ''}
-${branchLine}
-${leafLine}
-${potLine}
+${leafLines.join('\n')}
+${potLines.join('\n')}
 • Malzeme: Yüksek kaliteli yapay bitki
 • Renk: Doğal yeşil${sepNote}
 🧹 BAKIM VE TEMİZLİK:
@@ -2198,6 +2511,8 @@ ${potLine}
     setKeywords(kw);
   }
 
+  const [pushing, setPushing] = useState(false);
+
   async function save() {
     setSaving(true);
     setMsg('');
@@ -2208,6 +2523,33 @@ ${potLine}
       setMsg('Hata oluştu.');
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function pushDescription() {
+    if (!desc) { setMsg('Önce açıklama oluşturun.'); return; }
+    setPushing(true);
+    setMsg('');
+    try {
+      // ERP ürün adını da güncelle
+      if (name) {
+        await api(`/production-costs/variants/${variantId}/update-name`, { method: 'POST', json: { productName: name } });
+      }
+      const result = await api<{ results?: { platform: string; ok: boolean; errorMessage?: string }[] }>(
+        `/production-costs/variants/${variantId}/push-all-platforms`,
+        { method: 'POST', json: { salePrice: salePrice ?? 0, seoProductName: name, seoLongDescription: desc, seoKeywords: keywords } }
+      );
+      const failed = (result.results ?? []).filter((r) => !r.ok).map((r) => r.platform);
+      if (failed.length === 0) {
+        setMsg('Tüm platformlara gönderildi ✓');
+      } else {
+        const ok = (result.results ?? []).filter((r) => r.ok).map((r) => r.platform);
+        setMsg(`${ok.length > 0 ? ok.join(', ') + ' ✓' : ''} ${failed.join(', ')} hata`.trim());
+      }
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : 'Hata oluştu.');
+    } finally {
+      setPushing(false);
     }
   }
 
@@ -2222,7 +2564,7 @@ ${potLine}
     >
       <div className="space-y-3">
         <div>
-          <label className="mb-1 block text-[11px] font-semibold uppercase text-slate-400">SEO Ürün Adı <span className="text-slate-300 normal-case">(Trendyol'da görünen başlık)</span></label>
+          <label className="mb-1 block text-[11px] font-semibold uppercase text-slate-400">Ürün Adı <span className="text-slate-300 normal-case">(ERP + tüm platformlar)</span></label>
           <input
             className="input w-full text-sm"
             value={name}
@@ -2250,9 +2592,9 @@ ${potLine}
             placeholder="yapay bambu, dekoratif ağaç, salon bitkisi..."
           />
         </div>
-        <div className="flex items-center gap-3">
-          <button className="btn btn-primary min-h-8 px-3 text-xs" onClick={save} disabled={saving || !name}>
-            {saving ? 'Kaydediliyor...' : 'Kaydet'}
+        <div className="flex items-center gap-2 flex-wrap">
+          <button className="btn btn-primary min-h-8 px-3 text-xs" onClick={pushDescription} disabled={saving || pushing || !desc}>
+            {pushing ? 'Gönderiliyor...' : '📤 Tüm Platformlara Gönder'}
           </button>
           {msg && <span className="text-xs font-semibold text-emerald-600">{msg}</span>}
         </div>

@@ -8,7 +8,13 @@ export class ShopCategoriesService {
   async list() {
     const rows = await this.prisma.shopCategory.findMany({
       orderBy: [{ parentId: 'asc' }, { sortOrder: 'asc' }, { name: 'asc' }],
-      include: { children: { orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }] } },
+      include: {
+        category: { select: { id: true, name: true, codePrefix: true, startCode: true } },
+        children: {
+          orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+          include: { category: { select: { id: true, name: true, codePrefix: true, startCode: true } } },
+        },
+      },
     })
     // Sadece ana kategorileri döndür, alt kategoriler children içinde
     return rows.filter((r) => r.parentId === null)
@@ -23,6 +29,7 @@ export class ShopCategoriesService {
         parentId: body.parentId ? Number(body.parentId) : null,
         coverImageUrl: body.coverImageUrl ?? null,
         sortOrder: Number(body.sortOrder ?? 0),
+        categoryId: body.categoryId ? Number(body.categoryId) : null,
       },
     })
   }
@@ -34,6 +41,7 @@ export class ShopCategoriesService {
     if (body.coverImageUrl !== undefined) data.coverImageUrl = body.coverImageUrl
     if (body.sortOrder !== undefined) data.sortOrder = Number(body.sortOrder)
     if (body.status !== undefined) data.status = body.status
+    if (body.categoryId !== undefined) data.categoryId = body.categoryId ? Number(body.categoryId) : null
     return this.prisma.shopCategory.update({ where: { id }, data })
   }
 

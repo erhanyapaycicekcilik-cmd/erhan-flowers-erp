@@ -22,6 +22,7 @@ type Variant = {
   trendyolSalePrice?: number | string | null;
   trendyolProductUrl?: string | null;
   orderCount?: number;
+  status?: 'ACTIVE' | 'PASSIVE';
 };
 
 type ImportPreview = {
@@ -57,8 +58,10 @@ export default function ProductCostListPage() {
   const filtered = useMemo(() => {
     const needle = query.trim().toLocaleLowerCase('tr-TR');
     const result = variants.filter((item) => {
-      const status = item.productCostStatus || item.costStatus || 'Maliyet Girilmedi';
-      const statusOk = statusFilter === 'Tümü' || status === statusFilter;
+      const costStatus = item.productCostStatus || item.costStatus || 'Maliyet Girilmedi';
+      if (statusFilter === 'Arşiv') return item.status === 'PASSIVE';
+      if (statusFilter === 'Satışta') return item.status !== 'PASSIVE';
+      const statusOk = statusFilter === 'Tümü' || costStatus === statusFilter;
       const queryOk = !needle || [item.productName, item.barcode, item.currentModelCode, item.proposedModelCode, item.supplierStockCode]
         .filter(Boolean)
         .some((value) => String(value).toLocaleLowerCase('tr-TR').includes(needle));
@@ -136,9 +139,11 @@ export default function ProductCostListPage() {
             />
           </div>
           <div className="mt-3">
-            <label className="text-xs font-semibold text-slate-500">Maliyet durumu</label>
+            <label className="text-xs font-semibold text-slate-500">Filtre</label>
             <select className="mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
               <option>Tümü</option>
+              <option>Satışta</option>
+              <option>Arşiv</option>
               <option>Maliyet Girilmedi</option>
               <option>Taslak</option>
               <option>Kontrol Edilecek</option>
@@ -225,6 +230,7 @@ export default function ProductCostListPage() {
             </Link>
             <div className="flex items-center justify-between gap-2 p-4 pt-3">
               <div className="flex items-center gap-1.5 flex-wrap">
+                {variant.status === 'PASSIVE' && <span className="rounded bg-gray-200 px-2 py-1 text-xs font-semibold text-gray-600">Arşiv</span>}
                 <span className="rounded bg-slate-100 px-2 py-1 text-xs font-semibold">{variant.productCostStatus || variant.costStatus || 'Maliyet Girilmedi'}</span>
                 {(variant.orderCount ?? 0) > 0 && <span className="rounded bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700">{variant.orderCount} sipariş</span>}
               </div>

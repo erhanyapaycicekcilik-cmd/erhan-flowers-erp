@@ -564,7 +564,7 @@ export class TrendyolAdapter extends BaseIntegrationAdapter {
 
   private buildAttributes(data: Record<string, any>) {
     const attributes: Array<{ attributeId: number; attributeValueId?: number; customAttributeValue?: string }> = [];
-    const categoryId = Number(data.categoryId ?? 0);
+    const categoryId = Number(data.categoryId ?? 0) || 2995;
 
     const color = this.text(data.color) || 'Çok Renkli';
     attributes.push({ attributeId: TRENDYOL_COLOR_ATTRIBUTE_ID, customAttributeValue: color });
@@ -628,7 +628,7 @@ export class TrendyolAdapter extends BaseIntegrationAdapter {
       title: this.text(data.productName),
       productMainId: this.text(data.modelCode),
       brandId: Number(data.brandId ?? 0) || this.defaultBrandId,
-      categoryId: Number(data.categoryId ?? 0) || undefined,
+      categoryId: Number(data.categoryId ?? 0) || 2995,
       quantity: Number(data.stockQuantity ?? 0),
       stockCode: this.text(data.modelCode),
       dimensionalWeight: Number(data.desi ?? 1),

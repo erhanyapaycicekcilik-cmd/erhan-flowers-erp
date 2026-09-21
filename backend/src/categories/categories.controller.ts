@@ -34,6 +34,8 @@ export class CategoriesController {
     @Body()
     body: {
       trendyolCategoryId?: number | null;
+      n11CategoryId?: number | null;
+      hepsiburadaCategoryId?: number | null;
       platforms?: string[];
       hasBanner?: boolean;
       sortOrder?: number;
