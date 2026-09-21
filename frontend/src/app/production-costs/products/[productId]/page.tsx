@@ -1555,7 +1555,6 @@ export default function ProductCostDetailPage() {
               <button className="btn btn-primary justify-center col-span-2" onClick={pushToAllPlatforms} disabled={sendingAllPlatforms}>
                 <Send size={14} />{sendingAllPlatforms ? 'Gönderiliyor...' : 'Görsel & Fiyatı Tüm Platformlara Gönder'}
               </button>
-              <button className="btn btn-secondary justify-center col-span-2" onClick={pushPriceToTrendyol}>Sadece Trendyol'a Gönder</button>
               <button className="btn btn-secondary justify-center" onClick={() => setCopyModalOpen(true)}><Copy size={16} />Reçeteyi Kopyala</button>
               <button className="btn btn-secondary justify-center" onClick={copySummary}><Copy size={16} />Özeti Kopyala</button>
               <button className="btn btn-secondary justify-center" onClick={copyRecipe}><Copy size={16} />Reçete Metni</button>
