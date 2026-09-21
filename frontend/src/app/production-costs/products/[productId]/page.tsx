@@ -192,7 +192,7 @@ export default function ProductCostDetailPage() {
   const [shippingCost, setShippingCost] = useState(0);
   const [desi, setDesi] = useState(0);
   const [marketplaceMarkupPercent, setMarketplaceMarkupPercent] = useState(25);
-  const [campaignBufferPercent, setCampaignBufferPercent] = useState(10);
+  const [campaignBufferPercent, setCampaignBufferPercent] = useState(20);
   const [stockWarningAccepted, setStockWarningAccepted] = useState(false);
   const [knowledgeLoading, setKnowledgeLoading] = useState(false);
   const [knowledgeResult, setKnowledgeResult] = useState<KnowledgeAnalysis | null>(null);
