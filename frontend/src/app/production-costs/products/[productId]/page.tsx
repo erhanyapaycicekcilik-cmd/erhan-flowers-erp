@@ -1326,14 +1326,6 @@ export default function ProductCostDetailPage() {
                 ))}
               </div>
             )}
-            <button
-              className="btn btn-primary mt-3 w-full justify-center"
-              onClick={pushToAllPlatforms}
-              disabled={sendingAllPlatforms}
-            >
-              <Send size={14} />
-              {sendingAllPlatforms ? 'Gönderiliyor...' : 'Görsel & Fiyatı Tüm Platformlara Gönder'}
-            </button>
             {pendingBatchId && (
               <button
                 className="btn btn-secondary mt-2 w-full justify-center"
@@ -1560,7 +1552,10 @@ export default function ProductCostDetailPage() {
 
             <div className="mt-4 grid grid-cols-2 gap-2">
               <button className="btn btn-primary justify-center col-span-2" onClick={saveAndNext}><Save size={16} />Kaydet ve Sonraki Ürüne Geç</button>
-              <button className="btn btn-primary justify-center col-span-2" onClick={pushPriceToTrendyol}>Trendyol'a Gönder</button>
+              <button className="btn btn-primary justify-center col-span-2" onClick={pushToAllPlatforms} disabled={sendingAllPlatforms}>
+                <Send size={14} />{sendingAllPlatforms ? 'Gönderiliyor...' : 'Görsel & Fiyatı Tüm Platformlara Gönder'}
+              </button>
+              <button className="btn btn-secondary justify-center col-span-2" onClick={pushPriceToTrendyol}>Sadece Trendyol'a Gönder</button>
               <button className="btn btn-secondary justify-center" onClick={() => setCopyModalOpen(true)}><Copy size={16} />Reçeteyi Kopyala</button>
               <button className="btn btn-secondary justify-center" onClick={copySummary}><Copy size={16} />Özeti Kopyala</button>
               <button className="btn btn-secondary justify-center" onClick={copyRecipe}><Copy size={16} />Reçete Metni</button>
