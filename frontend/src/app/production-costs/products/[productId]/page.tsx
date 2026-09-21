@@ -1436,6 +1436,12 @@ export default function ProductCostDetailPage() {
               seoKeywords={variant.seoKeywords}
               knowledgeResult={knowledgeResult}
               materials={materials}
+              stemCount={variant.stemCount}
+              branchCount={variant.branchCount}
+              leavesPerBranch={variant.leavesPerBranch}
+              leafCount={variant.leafCount}
+              potSize={variant.potSize}
+              potType={variant.potType}
             />
           )}
 
@@ -2282,7 +2288,7 @@ function PhysicalSpecsPanel({ productCenterId, productHeight, potType, potSize, 
   );
 }
 
-function SeoPanel({ variantId, productName, detectedSize, seoProductName, seoLongDescription, seoKeywords, knowledgeResult, materials }: {
+function SeoPanel({ variantId, productName, detectedSize, seoProductName, seoLongDescription, seoKeywords, knowledgeResult, materials, stemCount, branchCount, leavesPerBranch, leafCount, potSize, potType }: {
   variantId: number;
   productName: string;
   detectedSize?: string | null;
@@ -2291,6 +2297,12 @@ function SeoPanel({ variantId, productName, detectedSize, seoProductName, seoLon
   seoKeywords?: string[] | null;
   knowledgeResult: KnowledgeAnalysis | null;
   materials: { name: string }[];
+  stemCount?: number | null;
+  branchCount?: number | null;
+  leavesPerBranch?: number | null;
+  leafCount?: number | null;
+  potSize?: string | null;
+  potType?: string | null;
 }) {
   const [name, setName] = useState(seoProductName ?? '');
   const [desc, setDesc] = useState(seoLongDescription ?? '');
@@ -2301,40 +2313,60 @@ function SeoPanel({ variantId, productName, detectedSize, seoProductName, seoLon
   function generate() {
     const pn = productName;
     const plant = knowledgeResult?.plantType?.name ?? '';
-    const pot = knowledgeResult?.potProfile?.name ?? '';
     const height = knowledgeResult?.heightCm ? `${knowledgeResult.heightCm}cm` : (detectedSize ?? '');
     const recipe = knowledgeResult?.recipeProfile?.name ?? '';
 
     const isSeprator = /seperat|speratör|seperatör/i.test(pn);
     const isBambu = /bambu/i.test(pn);
+    // Gerçek fiziksel özellikler önce, yoksa isimden parse et
     const stemMatch = pn.match(/(\d+)\s*(adet|li|lü|lu)\s*bambu/i) ?? pn.match(/bambu\s*(\d+)/i);
-    const stemCount = stemMatch ? stemMatch[1] : '';
+    const actualStemCount = stemCount ?? (stemMatch ? Number(stemMatch[1]) : null);
+    const actualBranchCount = branchCount ?? null;
+    const actualLeavesPerBranch = leavesPerBranch ?? null;
+    const actualLeafCount = leafCount ?? (actualBranchCount && actualLeavesPerBranch ? actualBranchCount * actualLeavesPerBranch : null);
+
+    // Saksı ölçülerini potSize string'inden parse et (format: "GxDxY" veya "G D Y")
+    const potNums = potSize ? (potSize.match(/\d+(\.\d+)?/g)?.map(Number) ?? []) : [];
+    const [potW, potD, potH] = potNums;
+    const potSizeStr = potW && potD && potH ? `${potW}×${potD}×${potH} cm (G×D×Y)` : potW && potD ? `${potW}×${potD} cm` : '';
+
     // Saksı bilgisini stok bileşenlerinden al
     const potMaterial = materials.find((m) => /saks[iı]/i.test(m.name));
-    const hasPot = Boolean(potMaterial);
-    const potDesc = potMaterial ? potMaterial.name : '';
+    const hasPot = Boolean(potMaterial) || Boolean(potType) || Boolean(potSizeStr);
+    const potDesc = potMaterial ? potMaterial.name : (potType || '');
 
     // SEO adı
     const seoName = [
       height && `${height}`,
-      isBambu && stemCount ? `${stemCount} Adet Yapay Bambu` : plant ? `Yapay ${plant} Ağacı` : pn.split(' ').slice(0, 5).join(' '),
+      isBambu && actualStemCount ? `${actualStemCount} Adet Yapay Bambu` : plant ? `Yapay ${plant} Ağacı` : pn.split(' ').slice(0, 5).join(' '),
       hasPot ? `| ${potDesc}` : '',
       isSeprator ? '| Bambu Seperatör' : '',
       '| Dekoratif Yapay Bitki',
     ].filter(Boolean).join(' ');
+
     const sepNote = isSeprator && hasPot
       ? '\n🏠 MONTAJ BİLGİSİ:\n• Bambu çubuklar ve saksı AYRI gönderilir\n• Bambuları saksıya yerleştirmek 5 dakika sürer\n• Montaj talimatı pakete dahildir\n'
       : (isBambu && hasPot ? '\n📦 PAKET BİLGİSİ:\n• Bambu gövde(ler) ve saksı AYRI gönderilir\n• Kolay montaj, ek alet gerekmez\n' : '');
-    const leafInfo = recipe ? `• Yaprak/Demet: ${recipe}` : '';
-    const potLine = hasPot ? `• Saksı: ${potDesc}` : '';
+
+    // Dal & yaprak satırları
+    const leafLines: string[] = [];
+    if (actualStemCount) leafLines.push(`• Gövde sayısı: ${actualStemCount} adet`);
+    if (actualBranchCount) leafLines.push(`• Dal sayısı: ${actualBranchCount} adet`);
+    if (actualLeavesPerBranch) leafLines.push(`• Dal başına yaprak: ${actualLeavesPerBranch} yaprak`);
+    if (actualLeafCount) leafLines.push(`• Toplam yaprak: ${actualLeafCount} yaprak`);
+    if (recipe) leafLines.push(`• Yaprak/Demet: ${recipe}`);
+
+    // Saksı satırları
+    const potLines: string[] = [];
+    if (potDesc) potLines.push(`• Saksı tipi: ${potDesc}`);
+    if (potSizeStr) potLines.push(`• Saksı ölçüsü: ${potSizeStr}`);
 
     const seoDesc = `${pn}
 
 🌿 ÜRÜN ÖZELLİKLERİ:
 • Toplam yükseklik: ${height || 'Ürün adına bakınız'}
-• ${stemCount ? `Bambu gövde: ${stemCount} adet` : plant ? `Bitki türü: ${plant}` : ''}
-${leafInfo}
-${potLine}
+${leafLines.join('\n')}
+${potLines.join('\n')}
 • Malzeme: Yüksek kaliteli yapay bitki
 • Renk: Doğal yeşil${sepNote}
 🧹 BAKIM VE TEMİZLİK:
