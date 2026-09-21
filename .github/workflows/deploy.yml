@@ -15,6 +15,7 @@ jobs:
           host: ${{ secrets.SSH_HOST }}
           username: root
           password: ${{ secrets.SSH_PASSWORD }}
+          command_timeout: 20m
           script: |
             if [ ! -d /opt/erp ]; then
               git clone https://${{ secrets.GH_TOKEN }}@github.com/erhanyapaycicekcilik-cmd/erhan-flowers-erp.git /opt/erp
