@@ -202,7 +202,16 @@ export abstract class HttpMarketplaceOrderAdapter extends BaseIntegrationAdapter
       cargoProvider: this.firstText(order.cargoProviderName, order.cargoCompany, order.shippingCompany) || undefined,
       cargoTrackingNumber: this.firstText(order.cargoTrackingNumber, order.trackingNumber, order.cargoCode) || undefined,
       orderDate: this.date(order.orderDate ?? order.createdDate ?? order.createdAt),
-      deliveryDueAt: this.date(order.deliveryDate ?? order.dueDate ?? order.estimatedDeliveryDate),
+      deliveryDueAt: this.date(
+        order.agreedDeliveryDate ??         // Trendyol: son kargolama tarihi
+        order.cargoDeliveryDate ??          // Trendyol alternatif
+        order.lastShippingDate ??           // HB/N11
+        order.shippingDeadline ??
+        order.mandatoryShippingDate ??
+        order.deliveryDate ??
+        order.dueDate ??
+        order.estimatedDeliveryDate
+      ),
       items: lines.map((line: Record<string, any>) => {
         const sku = this.firstText(line.merchantSku, line.sellerSku, line.sku, line.stockCode, line.supplierStockCode);
         return {
