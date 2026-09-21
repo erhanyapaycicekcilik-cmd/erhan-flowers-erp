@@ -305,7 +305,7 @@ export default function ProductCostDetailPage() {
         setShippingCost(Number(data.costDraft.shippingCost || 0));
         setDesi(Number(data.costDraft.desi || 0));
         setMarketplaceMarkupPercent(Number(data.costDraft.marketplaceMarkupPercent || 25));
-        setCampaignBufferPercent(Number(data.costDraft.campaignBufferPercent || 10));
+        setCampaignBufferPercent(Number(data.costDraft.campaignBufferPercent || 20));
         if (!data.hasSavedCostDraft && data.variant.productName) {
           setKnowledgeLoading(true);
           api<KnowledgeAnalysis>('/knowledge-base/analyze-product-name', {
@@ -1066,7 +1066,7 @@ export default function ProductCostDetailPage() {
     setProfitMarginPercent(Number(refreshed.costDraft.profitMarginPercent || 45));
     setVatPercent(Number(refreshed.costDraft.vatPercent || 20));
     setMarketplaceMarkupPercent(Number(refreshed.costDraft.marketplaceMarkupPercent || 25));
-    setCampaignBufferPercent(Number(refreshed.costDraft.campaignBufferPercent || 10));
+    setCampaignBufferPercent(Number(refreshed.costDraft.campaignBufferPercent || 20));
   }
 
   async function copyRecipeFromProduct() {
@@ -1457,6 +1457,7 @@ export default function ProductCostDetailPage() {
               potType={variant.potType}
               physicalSpecsOverride={physicalSpecsForm}
               onSeoChange={setPendingSeo}
+              salePrice={totals.marketplaceSalePrice}
             />
           )}
 
@@ -2350,7 +2351,7 @@ function PhysicalSpecsPanel({ productCenterId, productHeight, potType, potSize, 
   );
 }
 
-function SeoPanel({ variantId, productName, detectedSize, seoProductName, seoLongDescription, seoKeywords, knowledgeResult, materials, stemCount, branchCount, leavesPerBranch, leafCount, potSize, potType, physicalSpecsOverride, onSeoChange }: {
+function SeoPanel({ variantId, productName, detectedSize, seoProductName, seoLongDescription, seoKeywords, knowledgeResult, materials, stemCount, branchCount, leavesPerBranch, leafCount, potSize, potType, physicalSpecsOverride, onSeoChange, salePrice }: {
   variantId: number;
   productName: string;
   detectedSize?: string | null;
@@ -2367,6 +2368,7 @@ function SeoPanel({ variantId, productName, detectedSize, seoProductName, seoLon
   potType?: string | null;
   physicalSpecsOverride?: { stemCount: string; branchCount: string; leavesPerBranch: string; leafCount: string; potW: string; potD: string; potH: string; potType: string };
   onSeoChange?: (seo: { name: string; desc: string; keywords: string }) => void;
+  salePrice?: number;
 }) {
   const [name, setName] = useState(seoProductName ?? '');
   const [desc, setDesc] = useState(seoLongDescription ?? '');
@@ -2496,11 +2498,17 @@ ${potLines.join('\n')}
     setPushing(true);
     setMsg('');
     try {
-      // Önce kaydet
-      await api(`/production-costs/variants/${variantId}/seo`, { method: 'POST', json: { seoProductName: name, seoLongDescription: desc, seoKeywords: keywords } });
-      // Sonra Trendyol'a gönder (sadece content update)
-      const result = await api<{ ok: boolean; message?: string }>(`/production-costs/variants/${variantId}/push-description`, { method: 'POST' });
-      setMsg(result.ok ? 'Açıklama Trendyol\'a gönderildi ✓' : (result.message ?? 'Hata oluştu.'));
+      const result = await api<{ results?: { platform: string; ok: boolean; errorMessage?: string }[] }>(
+        `/production-costs/variants/${variantId}/push-all-platforms`,
+        { method: 'POST', json: { salePrice: salePrice ?? 0, seoProductName: name, seoLongDescription: desc, seoKeywords: keywords } }
+      );
+      const failed = (result.results ?? []).filter((r) => !r.ok).map((r) => r.platform);
+      if (failed.length === 0) {
+        setMsg('Tüm platformlara gönderildi ✓');
+      } else {
+        const ok = (result.results ?? []).filter((r) => r.ok).map((r) => r.platform);
+        setMsg(`${ok.length > 0 ? ok.join(', ') + ' ✓' : ''} ${failed.join(', ')} hata`.trim());
+      }
     } catch (e) {
       setMsg(e instanceof Error ? e.message : 'Hata oluştu.');
     } finally {
@@ -2549,7 +2557,7 @@ ${potLines.join('\n')}
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <button className="btn btn-primary min-h-8 px-3 text-xs" onClick={pushDescription} disabled={saving || pushing || !desc}>
-            {pushing ? 'Gönderiliyor...' : '📤 Trendyol\'a Gönder'}
+            {pushing ? 'Gönderiliyor...' : '📤 Tüm Platformlara Gönder'}
           </button>
           {msg && <span className="text-xs font-semibold text-emerald-600">{msg}</span>}
         </div>
