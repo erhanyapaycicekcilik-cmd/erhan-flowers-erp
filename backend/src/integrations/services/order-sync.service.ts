@@ -214,6 +214,8 @@ export class OrderSyncService {
           }
         }
 
+        // Deduct recipe components from stock
+        await this.deductRecipeStock(barcode, sku, qty, savedOrder.id, `TRENDYOL_ORDER_${savedOrder.id}`, `Trendyol siparis: ${orderNumber}`);
         // Also deduct Product.stockQuantity by barcode
         if (barcode) {
           await this.deductProductStock(barcode, qty, `TRENDYOL_ORDER_${savedOrder.id}`, `Trendyol siparis: ${orderNumber}`);
@@ -478,6 +480,8 @@ export class OrderSyncService {
           }
         }
 
+        // Deduct recipe components from stock
+        await this.deductRecipeStock(barcode, sku, qty, savedOrder.id, `N11_ORDER_${savedOrder.id}`, `N11 siparis: ${savedOrder.orderNumber}`);
         // Also deduct Product.stockQuantity by barcode
         if (barcode) {
           await this.deductProductStock(barcode, qty, `N11_ORDER_${savedOrder.id}`, `N11 siparis: ${savedOrder.orderNumber}`);
@@ -601,6 +605,8 @@ export class OrderSyncService {
             stockDeductions++;
           }
         }
+        // Deduct recipe components from stock
+        await this.deductRecipeStock(barcode, sku, qty, savedOrder.id, `HB_ORDER_${savedOrder.id}`, `Hepsiburada siparis: ${savedOrder.orderNumber}`);
       }
       await this.prisma.marketplaceOrder.update({ where: { id: savedOrder.id }, data: { stockDeducted: true } });
     }
@@ -815,6 +821,68 @@ export class OrderSyncService {
       errors,
       message: `${matched} SKU eşleştirildi, ${skipped} satır atlandı${errors.length ? `, ${errors.length} hata` : ''}.`,
     };
+  }
+
+  private async deductRecipeStock(barcode: string | null, sku: string | null, orderQty: number, orderId: number, orderPrefix: string, note: string): Promise<void> {
+    // Find the TrendyolProductVariant by barcode or proposedModelCode/currentModelCode
+    const variant = barcode
+      ? await this.prisma.trendyolProductVariant.findFirst({
+          where: { barcode },
+          select: { id: true },
+        })
+      : sku
+      ? await this.prisma.trendyolProductVariant.findFirst({
+          where: { OR: [{ proposedModelCode: sku }, { currentModelCode: sku }] },
+          select: { id: true },
+        })
+      : null;
+    if (!variant) return;
+
+    const draft = await this.prisma.productCostDraft.findUnique({
+      where: { variantId: variant.id },
+      select: {
+        items: { select: { stockCardId: true, quantity: true, name: true } },
+        pots: { select: { stockCardId: true, quantity: true, name: true } },
+      },
+    });
+    if (!draft) return;
+
+    const recipeLines = [
+      ...draft.items.filter((i) => i.stockCardId),
+      ...draft.pots.filter((p) => p.stockCardId),
+    ] as Array<{ stockCardId: number; quantity: unknown; name: string }>;
+
+    for (const line of recipeLines) {
+      const deductQty = Number(line.quantity) * orderQty;
+      if (deductQty <= 0) continue;
+      const card = await this.prisma.stockCard.findUnique({
+        where: { id: line.stockCardId },
+        select: { id: true, stockQuantity: true, unit: true },
+      });
+      if (!card) continue;
+      const eventKey = `${orderPrefix}_RECIPE_SC_${card.id}`;
+      const exists = await this.prisma.stockMovement.findUnique({ where: { eventKey } });
+      if (exists) continue;
+      const prev = Number(card.stockQuantity);
+      const next = prev - deductQty;
+      await this.prisma.$transaction([
+        this.prisma.stockCard.update({ where: { id: card.id }, data: { stockQuantity: next, lastMovementAt: new Date() } }),
+        this.prisma.stockMovement.create({
+          data: {
+            stockCardId: card.id,
+            type: 'OUT',
+            quantity: -deductQty,
+            unit: card.unit,
+            previousStock: prev,
+            nextStock: next,
+            note: `${note} - ${line.name}`,
+            referenceType: 'MARKETPLACE_ORDER',
+            referenceId: String(orderId),
+            eventKey,
+          },
+        }),
+      ]);
+    }
   }
 
   private async deductProductStock(barcode: string, qty: number, orderPrefix: string, note: string): Promise<void> {
