@@ -560,6 +560,22 @@ export default function StockCardsPage() {
     }
   }
 
+  async function hardDeleteStock(stockCard: StockCard) {
+    const confirmed = window.confirm(`"${stockCard.name}" kalıcı olarak silinecek. Bu işlem geri alınamaz. Emin misiniz?`);
+    if (!confirmed) return;
+    const confirmed2 = window.confirm('Son onay: Stok kartı ve tüm verileri kalıcı olarak silinecek.');
+    if (!confirmed2) return;
+    try {
+      await api(`/stock-cards/${stockCard.id}?hard=true`, { method: 'DELETE' });
+      setStockCards((current) => current.filter((item) => item.id !== stockCard.id));
+      setSelected(null);
+      setMessage('Stok kartı kalıcı olarak silindi.');
+      await load();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Stok kartı silinemedi.');
+    }
+  }
+
   function openStockForm(mode: 'create' | 'edit', stockCard?: StockCard) {
     if (mode === 'create') {
       setForm(emptyForm);
@@ -820,6 +836,7 @@ export default function StockCardsPage() {
                     onHistory={() => openHistory(item)}
                     onPassive={() => passiveStock(item)}
                     onDeleteTest={() => deleteTestStock(item)}
+                    onHardDelete={() => hardDeleteStock(item)}
                     onUpload={(files) => uploadImages(item, files)}
                     onSetMainImage={(imageId) => setMainImage(item, imageId)}
                     onTrendyol={() => openTrendyol(item)}
@@ -1319,6 +1336,7 @@ function StockVisualCard({
   onHistory,
   onPassive,
   onDeleteTest,
+  onHardDelete,
   onUpload,
   onSetMainImage,
   onTrendyol,
@@ -1332,6 +1350,7 @@ function StockVisualCard({
   onHistory: () => void;
   onPassive: () => void;
   onDeleteTest: () => void;
+  onHardDelete: () => void;
   onUpload: (files: FileList | null) => void;
   onSetMainImage: (imageId: number) => void;
   onTrendyol: () => void;
@@ -1427,6 +1446,16 @@ function StockVisualCard({
               <Trash2 size={16} />
               Test Kaydını Sil
             </button>
+          )}
+          {!isStaff && (
+            <details className="col-span-2 mt-1">
+              <summary className="cursor-pointer text-xs text-slate-400 select-none hover:text-slate-600">Gelişmiş seçenekler</summary>
+              <div className="mt-2">
+                <button type="button" className="btn btn-danger w-full min-h-10" onClick={onHardDelete}>
+                  <Trash2 size={16} /> Kalıcı Sil
+                </button>
+              </div>
+            </details>
           )}
         </div>
       </div>
