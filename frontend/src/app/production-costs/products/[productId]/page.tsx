@@ -243,7 +243,7 @@ export default function ProductCostDetailPage() {
   const [savingProductInfo, setSavingProductInfo] = useState(false);
   const [activating, setActivating] = useState(false);
   const [variantStatus, setVariantStatus] = useState<'ACTIVE' | 'PASSIVE'>('ACTIVE');
-  const [pendingSeo] = useState<{ name: string; desc: string; keywords: string } | null>(null);
+  const [pendingSeo, setPendingSeo] = useState<{ name: string; desc: string; keywords: string } | null>(null);
 
   useEffect(() => {
     const savedSettings = window.localStorage.getItem('ef_cost_price_settings');
@@ -1595,6 +1595,16 @@ export default function ProductCostDetailPage() {
             </div>
           </CompactPanel>
 
+          {variant && (
+            <SeoPanel
+              variantId={variant.id}
+              productName={variant.productName}
+              seoProductName={variant.seoProductName}
+              seoLongDescription={variant.seoLongDescription}
+              onSeoChange={setPendingSeo}
+              salePrice={totals.marketplaceSalePrice}
+            />
+          )}
 
           <KargoPanel onAdd={(amount) => {
             const existing = expenses.find((e) => e.name === 'Kargo');
@@ -2490,132 +2500,22 @@ function PhysicalSpecsPanel({ productCenterId, productHeight, potType, potSize, 
   );
 }
 
-function SeoPanel({ variantId, productName, detectedSize, seoProductName, seoLongDescription, seoKeywords, knowledgeResult, materials, stemCount, branchCount, leavesPerBranch, leafCount, potSize, potType, physicalSpecsOverride, onSeoChange, salePrice }: {
+function SeoPanel({ variantId, productName, seoProductName, seoLongDescription, onSeoChange, salePrice }: {
   variantId: number;
   productName: string;
-  detectedSize?: string | null;
   seoProductName?: string | null;
   seoLongDescription?: string | null;
-  seoKeywords?: string[] | null;
-  knowledgeResult: KnowledgeAnalysis | null;
-  materials: { name: string }[];
-  stemCount?: number | null;
-  branchCount?: number | null;
-  leavesPerBranch?: number | null;
-  leafCount?: number | null;
-  potSize?: string | null;
-  potType?: string | null;
-  physicalSpecsOverride?: { stemCount: string; branchCount: string; leavesPerBranch: string; leafCount: string; potW: string; potD: string; potH: string; potType: string };
   onSeoChange?: (seo: { name: string; desc: string; keywords: string }) => void;
   salePrice?: number;
 }) {
   const [name, setName] = useState(seoProductName ?? '');
   const [desc, setDesc] = useState(seoLongDescription ?? '');
-  const [keywords, setKeywords] = useState(Array.isArray(seoKeywords) ? seoKeywords.join(', ') : '');
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState('');
 
   useEffect(() => {
-    onSeoChange?.({ name, desc, keywords });
-  }, [name, desc, keywords, onSeoChange]);
-
-  function generate() {
-    const pn = productName;
-    const plant = knowledgeResult?.plantType?.name ?? '';
-    const height = knowledgeResult?.heightCm ? `${knowledgeResult.heightCm}cm` : (detectedSize ?? '');
-    const recipe = knowledgeResult?.recipeProfile?.name ?? '';
-
-    const isSeprator = /seperat|speratör|seperatör/i.test(pn);
-    const isBambu = /bambu/i.test(pn);
-    // Gerçek fiziksel özellikler önce (API'den), yoksa PhysicalSpecsPanel form değerleri, yoksa isimden parse et
-    const stemMatch = pn.match(/(\d+)\s*(adet|li|lü|lu)\s*bambu/i) ?? pn.match(/bambu\s*(\d+)/i);
-    const oStem = physicalSpecsOverride?.stemCount ? Number(physicalSpecsOverride.stemCount) : null;
-    const oBranch = physicalSpecsOverride?.branchCount ? Number(physicalSpecsOverride.branchCount) : null;
-    const oLpb = physicalSpecsOverride?.leavesPerBranch ? Number(physicalSpecsOverride.leavesPerBranch) : null;
-    const oLeaf = physicalSpecsOverride?.leafCount ? Number(physicalSpecsOverride.leafCount) : null;
-    const oPotType = physicalSpecsOverride?.potType || null;
-    const oPotW = physicalSpecsOverride?.potW ? Number(physicalSpecsOverride.potW) : null;
-    const oPotD = physicalSpecsOverride?.potD ? Number(physicalSpecsOverride.potD) : null;
-    const oPotH = physicalSpecsOverride?.potH ? Number(physicalSpecsOverride.potH) : null;
-
-    const actualStemCount = stemCount ?? oStem ?? (stemMatch ? Number(stemMatch[1]) : null);
-    const actualBranchCount = branchCount ?? oBranch ?? null;
-    const actualLeavesPerBranch = leavesPerBranch ?? oLpb ?? null;
-    const actualLeafCount = leafCount ?? oLeaf ?? (actualBranchCount && actualLeavesPerBranch ? actualBranchCount * actualLeavesPerBranch : null);
-
-    // Saksı ölçülerini potSize string'inden parse et, yoksa form'daki potW/D/H kullan
-    const potNums = potSize ? (potSize.match(/\d+(\.\d+)?/g)?.map(Number) ?? []) : [];
-    const [apiPotW, apiPotD, apiPotH] = potNums;
-    const finalPotW = apiPotW ?? oPotW;
-    const finalPotD = apiPotD ?? oPotD;
-    const finalPotH = apiPotH ?? oPotH;
-    const potSizeStr = finalPotW && finalPotD && finalPotH ? `${finalPotW}×${finalPotD}×${finalPotH} cm (G×D×Y)` : finalPotW && finalPotD ? `${finalPotW}×${finalPotD} cm` : '';
-
-    // Saksı bilgisini stok bileşenlerinden al
-    const potMaterial = materials.find((m) => /saks[iı]/i.test(m.name));
-    const effectivePotType = potType ?? oPotType;
-    const hasPot = Boolean(potMaterial) || Boolean(effectivePotType) || Boolean(potSizeStr);
-    const potDesc = potMaterial ? potMaterial.name : (effectivePotType || '');
-
-    // SEO adı
-    const seoName = [
-      height && `${height}`,
-      isBambu && actualStemCount ? `${actualStemCount} Adet Yapay Bambu` : plant ? `Yapay ${plant} Ağacı` : pn.split(' ').slice(0, 5).join(' '),
-      hasPot ? `| ${potDesc}` : '',
-      isSeprator ? '| Bambu Seperatör' : '',
-      '| Dekoratif Yapay Bitki',
-    ].filter(Boolean).join(' ');
-
-    const sepNote = isSeprator && hasPot
-      ? '\n🏠 MONTAJ BİLGİSİ:\n• Bambu çubuklar ve saksı AYRI gönderilir\n• Bambuları saksıya yerleştirmek 5 dakika sürer\n• Montaj talimatı pakete dahildir\n'
-      : (isBambu && hasPot ? '\n📦 PAKET BİLGİSİ:\n• Bambu gövde(ler) ve saksı AYRI gönderilir\n• Kolay montaj, ek alet gerekmez\n' : '');
-
-    // Dal & yaprak satırları
-    const leafLines: string[] = [];
-    if (actualStemCount) leafLines.push(`• Gövde sayısı: ${actualStemCount} adet`);
-    if (actualBranchCount) leafLines.push(`• Dal sayısı: ${actualBranchCount} adet`);
-    if (actualLeavesPerBranch) leafLines.push(`• Dal başına yaprak: ${actualLeavesPerBranch} yaprak`);
-    if (actualLeafCount) leafLines.push(`• Toplam yaprak: ${actualLeafCount} yaprak`);
-    if (recipe) leafLines.push(`• Yaprak/Demet: ${recipe}`);
-
-    // Saksı satırları
-    const potLines: string[] = [];
-    if (potDesc) potLines.push(`• Saksı tipi: ${potDesc}`);
-    if (potSizeStr) potLines.push(`• Saksı ölçüsü: ${potSizeStr}`);
-
-    const seoDesc = `${pn}
-
-🌿 ÜRÜN ÖZELLİKLERİ:
-• Toplam yükseklik: ${height || 'Ürün adına bakınız'}
-${leafLines.join('\n')}
-${potLines.join('\n')}
-• Malzeme: Yüksek kaliteli yapay bitki
-• Renk: Doğal yeşil${sepNote}
-🧹 BAKIM VE TEMİZLİK:
-• Islak bez ile kolayca temizlenir
-• Güneş ışığı gerekmez
-• Sulama gerekmez
-• Tüm mevsimlerde taze görünüm
-
-✅ NEDEN BİZİ SEÇMELİSİNİZ?
-• Hızlı ve güvenli kargo
-• Sağlam paketleme
-• Yüksek kalite garantisi
-• Depo stoktan anında kargolama`;
-
-    const kw = [
-      isBambu ? 'yapay bambu' : '',
-      plant ? `yapay ${plant}` : '',
-      height ? `${height} yapay ağaç` : '',
-      isSeprator ? 'bambu seperatör' : '',
-      hasPot && /mdf/i.test(potDesc) ? 'mdf saksılı yapay bitki' : '',
-      'dekoratif yapay bitki', 'salon bitkisi', 'ofis bitkisi', 'yapay ağaç',
-    ].filter(Boolean).join(', ');
-
-    setName(seoName);
-    setDesc(seoDesc);
-    setKeywords(kw);
-  }
+    onSeoChange?.({ name, desc, keywords: '' });
+  }, [name, desc, onSeoChange]);
 
   const [pushing, setPushing] = useState(false);
 
@@ -2623,7 +2523,7 @@ ${potLines.join('\n')}
     setSaving(true);
     setMsg('');
     try {
-      await api(`/production-costs/variants/${variantId}/seo`, { method: 'POST', json: { seoProductName: name, seoLongDescription: desc, seoKeywords: keywords } });
+      await api(`/production-costs/variants/${variantId}/seo`, { method: 'POST', json: { seoProductName: name, seoLongDescription: desc } });
       setMsg('Kaydedildi.');
     } catch {
       setMsg('Hata oluştu.');
@@ -2633,17 +2533,16 @@ ${potLines.join('\n')}
   }
 
   async function pushDescription() {
-    if (!desc) { setMsg('Önce açıklama oluşturun.'); return; }
+    if (!name && !desc) { setMsg('Ürün adı veya açıklaması girin.'); return; }
     setPushing(true);
     setMsg('');
     try {
-      // ERP ürün adını da güncelle
       if (name) {
         await api(`/production-costs/variants/${variantId}/update-name`, { method: 'POST', json: { productName: name } });
       }
       const result = await api<{ results?: { platform: string; ok: boolean; errorMessage?: string }[] }>(
         `/production-costs/variants/${variantId}/push-all-platforms`,
-        { method: 'POST', json: { salePrice: salePrice ?? 0, seoProductName: name, seoLongDescription: desc, seoKeywords: keywords } }
+        { method: 'POST', json: { salePrice: salePrice ?? 0, seoProductName: name, seoLongDescription: desc } }
       );
       const failed = (result.results ?? []).filter((r) => !r.ok).map((r) => r.platform);
       if (failed.length === 0) {
@@ -2660,47 +2559,34 @@ ${potLines.join('\n')}
   }
 
   return (
-    <CompactPanel
-      title="SEO Ürün Adı & Açıklama"
-      action={
-        <button className="btn btn-secondary min-h-8 px-2 text-xs" onClick={generate}>
-          ✨ Otomatik Oluştur
-        </button>
-      }
-    >
+    <CompactPanel title="Ürün Adı & Açıklama">
       <div className="space-y-3">
         <div>
-          <label className="mb-1 block text-[11px] font-semibold uppercase text-slate-400">Ürün Adı <span className="text-slate-300 normal-case">(ERP + tüm platformlar)</span></label>
+          <label className="mb-1 block text-[11px] font-semibold uppercase text-slate-400">Google / Platform Ürün Adı</label>
           <input
             className="input w-full text-sm"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="Otomatik oluştur veya manuel yaz..."
+            placeholder={productName}
           />
           <div className="mt-0.5 text-right text-[11px] text-slate-400">{name.length} / 100 karakter</div>
         </div>
         <div>
-          <label className="mb-1 block text-[11px] font-semibold uppercase text-slate-400">Ürün Açıklaması <span className="text-slate-300 normal-case">(saksı boyutu, yaprak sayısı, bakım, montaj)</span></label>
+          <label className="mb-1 block text-[11px] font-semibold uppercase text-slate-400">Ürün Açıklaması</label>
           <textarea
             className="input w-full text-sm"
-            rows={12}
+            rows={8}
             value={desc}
             onChange={(e) => setDesc(e.target.value)}
-            placeholder="Otomatik oluştur veya manuel yaz..."
-          />
-        </div>
-        <div>
-          <label className="mb-1 block text-[11px] font-semibold uppercase text-slate-400">Anahtar Kelimeler</label>
-          <input
-            className="input w-full text-sm"
-            value={keywords}
-            onChange={(e) => setKeywords(e.target.value)}
-            placeholder="yapay bambu, dekoratif ağaç, salon bitkisi..."
+            placeholder="Ürün açıklaması..."
           />
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <button className="btn btn-primary min-h-8 px-3 text-xs" onClick={pushDescription} disabled={saving || pushing || !desc}>
-            {pushing ? 'Gönderiliyor...' : '📤 Tüm Platformlara Gönder'}
+          <button className="btn btn-secondary min-h-8 px-3 text-xs" onClick={save} disabled={saving}>
+            {saving ? 'Kaydediliyor...' : 'Kaydet'}
+          </button>
+          <button className="btn btn-primary min-h-8 px-3 text-xs" onClick={pushDescription} disabled={pushing}>
+            {pushing ? 'Gönderiliyor...' : '📤 Platformlara Gönder'}
           </button>
           {msg && <span className="text-xs font-semibold text-emerald-600">{msg}</span>}
         </div>
