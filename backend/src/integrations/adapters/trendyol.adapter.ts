@@ -685,6 +685,12 @@ export class TrendyolAdapter extends BaseIntegrationAdapter {
       cargoProvider: order.cargoProviderName,
       cargoTrackingNumber: order.cargoTrackingNumber ? String(order.cargoTrackingNumber) : undefined,
       orderDate: this.date(order.orderDate ?? order.createdDate),
+      deliveryDueAt: this.date(
+        order.agreedDeliveryDate ??
+        order.cargoDeliveryDate ??
+        order.mandatoryShippingDate ??
+        order.lastShippingDate
+      ),
       items: lines.map((line: Record<string, any>) => ({
         externalLineId: String(line.id ?? line.lineItemId ?? ''),
         externalVariantId: line.merchantSku ? String(line.merchantSku) : undefined,
