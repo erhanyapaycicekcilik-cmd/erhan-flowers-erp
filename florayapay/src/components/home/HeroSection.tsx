@@ -6,28 +6,28 @@ import { useState, useEffect } from 'react'
 
 const slides = [
   {
-    image: 'https://images.unsplash.com/photo-1501004318641-b39e6451bec6?w=1600&q=90&fit=crop',
+    image: 'https://images.unsplash.com/photo-1585320806297-9794b3e4eeae?w=1600&q=90&fit=crop',
     tag: 'Yapay Ağaç Koleksiyonu',
     title: 'Doğanın Güzelliği,',
     accent: 'Ömür Boyu',
   },
   {
-    image: 'https://images.unsplash.com/photo-1416879595882-3373a0480b5b?w=1600&q=90&fit=crop',
-    tag: 'Yapay Çiçek & Dekorasyon',
-    title: 'Solmayan Renkler,',
-    accent: 'Canlı Dokunuşlar',
-  },
-  {
-    image: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=1600&q=90&fit=crop',
+    image: 'https://images.unsplash.com/photo-1558618047-3b9a27c2b67e?w=1600&q=90&fit=crop',
     tag: 'Dikey Bahçe Sistemleri',
     title: 'Duvarlarınıza',
     accent: 'Yeşil Hayat Katın',
   },
   {
-    image: 'https://images.unsplash.com/photo-1524247108137-732e0f642303?w=1600&q=90&fit=crop',
-    tag: 'Premium Dekorasyon',
-    title: 'Evinizi',
-    accent: 'Doğayla Buluşturun',
+    image: 'https://images.unsplash.com/photo-1600411833196-7c1f6b1a8b90?w=1600&q=90&fit=crop',
+    tag: 'Yapay Bitki Dekorasyonu',
+    title: 'Solmayan Renkler,',
+    accent: 'Canlı Dokunuşlar',
+  },
+  {
+    image: 'https://images.unsplash.com/photo-1483794344563-d27a8d18014e?w=1600&q=90&fit=crop',
+    tag: 'Premium Yeşil Dekor',
+    title: 'Ofis & Ev için',
+    accent: 'Doğal Atmosfer',
   },
 ]
 
@@ -44,7 +44,7 @@ export function HeroSection() {
   const slide = slides[current]
 
   return (
-    <section className="relative h-[80vh] min-h-[520px] max-h-[800px] overflow-hidden">
+    <section className="relative h-[55vh] min-h-[380px] max-h-[520px] overflow-hidden">
       {/* Görsel katmanı */}
       {slides.map((s, i) => (
         <div
