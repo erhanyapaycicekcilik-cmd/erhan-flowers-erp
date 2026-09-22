@@ -268,7 +268,7 @@ export default function ProductCostDetailPage() {
       api<{ id: number; name: string; codePrefix: string }[]>('/categories').catch(() => []),
     ])
       .then(([data, stockData, variantData, pcVariant, cats, erpCats]) => {
-        setErpCategories(erpCats ?? []);
+        setErpCategories((erpCats ?? []).filter((c) => c.codePrefix.startsWith('ERH')));
         setDetail(data);
         setStockCards(stockData);
         setVariants(variantData);
