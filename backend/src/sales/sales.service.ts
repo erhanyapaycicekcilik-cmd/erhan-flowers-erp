@@ -1465,7 +1465,7 @@ export class SalesService {
     }>>`
       SELECT p.sale_id, rs.sale_number, rs.customer_name, rs.channel,
              p.image_path, p.thumbnail_path, p.photo_type, p.taken_at AS created_at, p.expires_at,
-             STRING_AGG(DISTINCT rsi.product_name, ', ') AS product_names
+             STRING_AGG(DISTINCT rsi.product_name_snapshot, ', ') AS product_names
       FROM retail_sale_proof_photos p
       JOIN retail_sales rs ON rs.id = p.sale_id
       LEFT JOIN retail_sale_items rsi ON rsi.sale_id = rs.id
@@ -1474,7 +1474,7 @@ export class SalesService {
         AND rs.sale_number ILIKE ${saleFilter}
         AND p.taken_at >= ${dateFrom}
         AND p.taken_at <= ${dateTo}
-        AND (${productFilter}::text IS NULL OR rsi.product_name ILIKE ${productFilter})
+        AND (${productFilter}::text IS NULL OR rsi.product_name_snapshot ILIKE ${productFilter})
         AND (${barcodeFilter}::text IS NULL OR rsi.barcode ILIKE ${barcodeFilter})
       GROUP BY p.id, p.taken_at, rs.sale_number, rs.customer_name, rs.channel
       ORDER BY p.taken_at DESC
