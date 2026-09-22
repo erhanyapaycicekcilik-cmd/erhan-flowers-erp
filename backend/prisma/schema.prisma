@@ -431,6 +431,7 @@ model Product {
   modelCode            String                  @unique @map("model_code")
   categoryId           Int                     @map("category_id")
   barcode              String?                 @unique
+  trendyolBarcode      String?                 @map("trendyol_barcode")
   stockQuantity        Int                     @default(0) @map("stock_quantity")
   criticalStockLevel   Int                     @default(0) @map("critical_stock_level")
   costPrice            Float                   @default(0) @map("cost_price")

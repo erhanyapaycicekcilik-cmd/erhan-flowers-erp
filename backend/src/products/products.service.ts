@@ -211,6 +211,7 @@ export class ProductsService {
     if (hasKey('productName') || hasKey('product_name')) patch['productName'] = data.productName;
     if (hasKey('modelCode') || hasKey('model_code')) patch['modelCode'] = data.modelCode;
     if (hasKey('barcode')) patch['barcode'] = data.barcode;
+    if (hasKey('trendyolBarcode') || hasKey('trendyol_barcode')) patch['trendyolBarcode'] = (body['trendyolBarcode'] ?? body['trendyol_barcode'] ?? null) as string | null;
     if (hasKey('categoryId') || hasKey('category_id')) patch['categoryId'] = data.categoryId;
     if (hasKey('stockQuantity') || hasKey('stock_quantity')) patch['stockQuantity'] = data.stockQuantity;
     if (hasKey('criticalStockLevel') || hasKey('critical_stock_level')) patch['criticalStockLevel'] = data.criticalStockLevel;
@@ -324,13 +325,14 @@ export class ProductsService {
   // Arka planda çalışır — hata olursa ürün kaydını etkilemez.
   private async broadcastPriceStock(product: {
     barcode?: string | null;
+    trendyolBarcode?: string | null;
     modelCode?: string | null;
     marketPrice?: unknown;
     listPrice?: unknown;
     shopPrice?: unknown;
     stockQuantity?: unknown;
   }): Promise<void> {
-    if (!product.barcode && !product.modelCode) return;
+    if (!product.barcode && !product.modelCode && !product.trendyolBarcode) return;
 
     // Tüm platformlara aynı fiyat gider (kullanıcı tercihi: tek fiyat politikası)
     // marketPrice = platform satış fiyatı, listPrice = KDV dahil liste fiyatı
@@ -342,6 +344,7 @@ export class ProductsService {
     const listPrice = rawListPrice > salePrice ? rawListPrice : Math.ceil(salePrice * 1.1);
 
     const payload = {
+      trendyolBarcode: product.trendyolBarcode ?? null,
       barcode: product.barcode ?? product.modelCode ?? '',
       modelCode: product.modelCode ?? product.barcode ?? '',
       salePrice,
