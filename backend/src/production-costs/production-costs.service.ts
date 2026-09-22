@@ -2730,4 +2730,102 @@ export class ProductionCostsService {
       .replace(/ö/g, 'o')
       .replace(/ç/g, 'c');
   }
+
+
+  async updateVariantStockQuantity(variantId: number, stockQuantity: number) {
+    await this.prisma.trendyolProductVariant.update({
+      where: { id: variantId },
+      data: { stockQuantity: Math.max(0, Math.round(stockQuantity)) },
+    });
+    return { ok: true };
+  }
+
+  async syncVariantImagesFromTrendyol(variantId: number) {
+    const variant = await this.prisma.trendyolProductVariant.findUnique({ where: { id: variantId }, select: { barcode: true } });
+    if (!variant) throw new BadRequestException('Urun bulunamadi.');
+
+    const apiUrl = this.config.get<string>('TRENDYOL_API_URL')?.trim().replace(/\/+$/g, '');
+    const supplierId = this.config.get<string>('TRENDYOL_SUPPLIER_ID')?.trim();
+    const apiKey = this.config.get<string>('TRENDYOL_API_KEY')?.trim();
+    const apiSecret = this.config.get<string>('TRENDYOL_API_SECRET')?.trim();
+    if (!apiUrl || !supplierId || !apiKey || !apiSecret) {
+      throw new BadRequestException('Trendyol API bilgileri eksik.');
+    }
+
+    const auth = Buffer.from(`${apiKey}:${apiSecret}`).toString('base64');
+    const userAgent = this.config.get<string>('TRENDYOL_INTEGRATION_REFERENCE_CODE')?.trim() || 'erp';
+    const headers = { Authorization: `Basic ${auth}`, 'User-Agent': userAgent };
+    const url = `${apiUrl}/sapigw/suppliers/${supplierId}/products?barcode=${encodeURIComponent(variant.barcode)}&size=1`;
+    const resp = await fetch(url, { headers });
+    if (!resp.ok) throw new BadRequestException(`Trendyol API hatasi: ${resp.status}`);
+    const data = await resp.json() as { content?: Array<{ images?: Array<{ url?: string } | string> }> };
+    const trendyolProduct = data.content?.[0];
+    if (!trendyolProduct) return { ok: false, message: "Trendyol'da bu barkod bulunamadi." };
+
+    const imageUrls = (trendyolProduct.images ?? [])
+      .map((img: any) => (typeof img === 'string' ? img : img?.url))
+      .filter((u: any): u is string => Boolean(u));
+
+    if (imageUrls.length === 0) return { ok: false, message: "Trendyol'da gorsel bulunamadi." };
+
+    const updated = await this.prisma.trendyolProductVariant.update({
+      where: { id: variantId },
+      data: { images: imageUrls },
+      select: { images: true },
+    });
+    return { ok: true, images: updated.images, count: imageUrls.length };
+  }
+
+  async getRecipeReport() {
+    const variants = await this.prisma.trendyolProductVariant.findMany({
+      select: {
+        id: true, barcode: true, productName: true, currentModelCode: true, proposedModelCode: true,
+        stockQuantity: true, trendyolSalePrice: true, status: true,
+        productCostDraft: {
+          select: {
+            status: true, totalCost: true, salePrice: true,
+            items: {
+              select: {
+                name: true, group: true, quantity: true, unit: true, source: true,
+                manualUnitCost: true, automaticUnitCost: true, isActive: true,
+                stockCard: { select: { id: true, name: true, unit: true } },
+              },
+            },
+            pots: {
+              select: {
+                name: true, color: true, quantity: true,
+                manualUnitCost: true, automaticUnitCost: true,
+                stockCard: { select: { id: true, name: true } },
+              },
+            },
+          },
+        },
+      },
+      orderBy: { productName: 'asc' },
+    });
+
+    return variants.map((v) => {
+      const draft = v.productCostDraft;
+      const materials = (draft?.items ?? []).filter((i) => !['LABOR', 'OTHER', 'PACKAGING'].includes(i.group) || i.source === 'AUTO');
+      const expenses = (draft?.items ?? []).filter((i) => ['LABOR', 'OTHER', 'PACKAGING'].includes(i.group) && i.source === 'MANUAL');
+      const pots = draft?.pots ?? [];
+      const potColor = pots.map((p) => p.color).filter(Boolean).join(', ') || '-';
+      const stockLinks = [
+        ...materials.filter((m) => m.stockCard).map((m) => m.stockCard!.name),
+        ...pots.filter((p) => p.stockCard).map((p) => p.stockCard!.name),
+      ];
+      return {
+        id: v.id, barcode: v.barcode, productName: v.productName,
+        modelCode: v.proposedModelCode || v.currentModelCode || '',
+        stockQuantity: v.stockQuantity, trendyolSalePrice: Number(v.trendyolSalePrice ?? 0),
+        status: v.status, costStatus: draft?.status ?? 'YOK',
+        totalCost: Number(draft?.totalCost ?? 0), salePrice: Number(draft?.salePrice ?? 0),
+        potColor, stockLinks: stockLinks.join(' | '),
+        materials: materials.map((m) => `${m.name}x${m.quantity}${m.unit}`).join(' | '),
+        pots: pots.map((p) => `${p.name}${p.color ? ' ' + p.color : ''}x${p.quantity}`).join(' | '),
+        expenses: expenses.map((e) => `${e.name} ${Number(e.manualUnitCost).toFixed(2)}TL`).join(' | '),
+      };
+    });
+  }
+
 }

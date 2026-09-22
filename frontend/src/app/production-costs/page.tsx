@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { ChangeEvent, useEffect, useMemo, useState } from 'react';
-import { FileSpreadsheet, ImageIcon, RefreshCw, Search, Upload } from 'lucide-react';
+import { Download, FileSpreadsheet, ImageIcon, RefreshCw, Search, Upload } from 'lucide-react';
 import { AdminShell } from '@/components/AdminShell';
 import { api, apiFileUrl } from '@/lib/api';
 
@@ -45,6 +45,7 @@ export default function ProductCostListPage() {
   const [loadingImport, setLoadingImport] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [sortBy, setSortBy] = useState<'default' | 'orders'>('orders');
+  const [downloadingReport, setDownloadingReport] = useState(false);
 
   useEffect(() => {
     loadProducts();
@@ -136,6 +137,30 @@ export default function ProductCostListPage() {
     }
   }
 
+  async function downloadRecipeReport() {
+    setDownloadingReport(true);
+    try {
+      const data = await api<Array<Record<string, unknown>>>('/production-costs/recipe-report');
+      if (!data.length) { setMessage('Rapor için veri bulunamadı.'); return; }
+      const headers = ['Barkod', 'Ürün Adı', 'Model Kodu', 'Stok', 'Satış Fiyatı', 'Durum', 'Maliyet Durumu', 'Toplam Maliyet', 'Saksı Rengi', 'Stok Bağlantıları', 'Malzemeler', 'Saksılar', 'Giderler'];
+      const keys = ['barcode', 'productName', 'modelCode', 'stockQuantity', 'trendyolSalePrice', 'status', 'costStatus', 'totalCost', 'potColor', 'stockLinks', 'materials', 'pots', 'expenses'];
+      const rows = [headers, ...data.map((r) => keys.map((k) => String(r[k] ?? '')))];
+      const csv = rows.map((row) => row.map((cell) => `"${cell.replace(/"/g, '""')}"`).join(';')).join('\n');
+      const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `recete-raporu-${new Date().toISOString().slice(0, 10)}.csv`;
+      link.click();
+      URL.revokeObjectURL(url);
+      setMessage(`${data.length} ürün için reçete raporu indirildi.`);
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : 'Rapor indirilemedi.');
+    } finally {
+      setDownloadingReport(false);
+    }
+  }
+
   async function autoFillMissingCosts() {
     setSyncing(true);
     setMessage('');
@@ -202,6 +227,10 @@ export default function ProductCostListPage() {
             <button className="btn btn-secondary w-full justify-center" onClick={autoFillMissingCosts} disabled={syncing} title="Stok kartı olan ürünlerde maliyet otomatik doldur">
               <RefreshCw size={16} />
               Stok Kartından Otomatik Doldur
+            </button>
+            <button className="btn btn-secondary w-full justify-center" onClick={() => void downloadRecipeReport()} disabled={downloadingReport} title="Tüm ürünler: stok bağlantısı, saksı rengi, maliyet reçetesi">
+              <Download size={16} />
+              {downloadingReport ? 'Hazırlanıyor...' : 'Reçete Raporu İndir (CSV)'}
             </button>
           </div>
 

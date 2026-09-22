@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, ArrowRight, Brain, Check, Copy, Download, ExternalLink, ImageIcon, Pencil, Plus, Save, Search, Send, Star, Trash2, Upload, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Brain, Check, Copy, Download, ExternalLink, ImageIcon, Pencil, Plus, RefreshCw, Save, Search, Send, Star, Trash2, Upload, X } from 'lucide-react';
 import { AdminShell } from '@/components/AdminShell';
 import { api, apiFileUrl } from '@/lib/api';
 import type { StockCard } from '@/types';
@@ -233,6 +233,9 @@ export default function ProductCostDetailPage() {
   const [stockCodeInput, setStockCodeInput] = useState('');
   const [trendyolUrlInput, setTrendyolUrlInput] = useState('');
   const [savingCodes, setSavingCodes] = useState(false);
+  const [stockQuantityInput, setStockQuantityInput] = useState('');
+  const [savingStockQuantity, setSavingStockQuantity] = useState(false);
+  const [syncingImages, setSyncingImages] = useState(false);
   const [productDescription, setProductDescription] = useState('');
   const [shopCategoryId, setShopCategoryId] = useState('');
   const [categories, setCategories] = useState<{ id: number; name: string; children?: { id: number; name: string }[] }[]>([]);
@@ -271,6 +274,7 @@ export default function ProductCostDetailPage() {
         setVariantStatus((data.variant as any).status ?? 'ACTIVE');
         setModelCodeInput(data.variant.currentModelCode ?? data.variant.proposedModelCode ?? '');
         setStockCodeInput(data.variant.supplierStockCode ?? '');
+        setStockQuantityInput(String(data.variant.stockQuantity ?? 0));
         setTrendyolUrlInput(data.variant.trendyolProductUrl ?? '');
         if (pcVariant) {
           setProductDescription(pcVariant.productDescription ?? '');
@@ -897,6 +901,44 @@ export default function ProductCostDetailPage() {
     }
   }
 
+  async function saveStockQuantity() {
+    const qty = parseFloat(stockQuantityInput);
+    if (isNaN(qty) || qty < 0) { setMessage('Geçerli bir stok miktarı girin.'); return; }
+    setSavingStockQuantity(true);
+    try {
+      await api(`/production-costs/variants/${productId}/update-stock-quantity`, {
+        method: 'POST',
+        json: { stockQuantity: qty },
+      });
+      setMessage(`Stok miktarı ${qty} olarak güncellendi ✓`);
+    } catch {
+      setMessage('Stok miktarı kaydedilemedi.');
+    } finally {
+      setSavingStockQuantity(false);
+    }
+  }
+
+  async function syncImagesFromTrendyol() {
+    setSyncingImages(true);
+    setMessage("Trendyol'dan görseller çekiliyor...");
+    try {
+      const result = await api<{ ok: boolean; count?: number; images?: string[]; message?: string }>(
+        `/production-costs/variants/${productId}/sync-images-from-trendyol`,
+        { method: 'POST' },
+      );
+      if (result.ok) {
+        setImages(Array.isArray(result.images) ? result.images : []);
+        setMessage(`Trendyol'dan ${result.count} görsel çekildi ✓`);
+      } else {
+        setMessage(result.message ?? "Trendyol'dan görsel çekilemedi.");
+      }
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : "Trendyol'dan görsel çekilemedi.");
+    } finally {
+      setSyncingImages(false);
+    }
+  }
+
   async function saveProductName() {
     if (!nameInput.trim()) return;
     setSavingName(true);
@@ -1238,6 +1280,28 @@ export default function ProductCostDetailPage() {
             <button className="btn btn-primary w-full min-h-8 text-xs justify-center" onClick={saveCodes} disabled={savingCodes}>
               {savingCodes ? 'Kaydediliyor...' : 'Kodları Kaydet'}
             </button>
+            <div className="border-t border-slate-100 pt-2 mt-1">
+              <label className="block text-[10px] font-semibold uppercase text-slate-400 mb-0.5">Stok Miktarı</label>
+              <div className="flex gap-1">
+                <input
+                  className="input flex-1 text-xs"
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={stockQuantityInput}
+                  onChange={(e) => setStockQuantityInput(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && void saveStockQuantity()}
+                  placeholder="Adet"
+                />
+                <button
+                  className="btn btn-secondary min-h-8 px-2 text-xs"
+                  onClick={() => void saveStockQuantity()}
+                  disabled={savingStockQuantity}
+                >
+                  {savingStockQuantity ? '...' : 'Kaydet'}
+                </button>
+              </div>
+            </div>
           </div>
           {variant?.barcode && (
             <a
@@ -1295,22 +1359,33 @@ export default function ProductCostDetailPage() {
           <CompactPanel
             title="Görseller"
             action={
-              <label className="btn btn-secondary min-h-8 cursor-pointer px-2 text-xs">
-                <Upload size={14} />
-                {uploadingImage ? 'Yükleniyor...' : 'Görsel Yükle'}
-                <input
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  className="hidden"
-                  disabled={uploadingImage}
-                  onChange={async (event) => {
-                    const files = Array.from(event.target.files ?? []);
-                    for (const file of files) await uploadImage(file);
-                    event.target.value = '';
-                  }}
-                />
-              </label>
+              <div className="flex gap-2">
+                <button
+                  className="btn btn-secondary min-h-8 px-2 text-xs"
+                  onClick={() => void syncImagesFromTrendyol()}
+                  disabled={syncingImages}
+                  title="Trendyol'daki görselleri çekip ERP'ye kaydet"
+                >
+                  <RefreshCw size={14} className={syncingImages ? 'animate-spin' : ''} />
+                  {syncingImages ? 'Çekiliyor...' : "Trendyol'dan Çek"}
+                </button>
+                <label className="btn btn-secondary min-h-8 cursor-pointer px-2 text-xs">
+                  <Upload size={14} />
+                  {uploadingImage ? 'Yükleniyor...' : 'Görsel Yükle'}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    className="hidden"
+                    disabled={uploadingImage}
+                    onChange={async (event) => {
+                      const files = Array.from(event.target.files ?? []);
+                      for (const file of files) await uploadImage(file);
+                      event.target.value = '';
+                    }}
+                  />
+                </label>
+              </div>
             }
           >
             {images.length === 0 ? (
