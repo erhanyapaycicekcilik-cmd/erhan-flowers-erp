@@ -299,8 +299,9 @@ export class PublishingService {
     const trendyolPrice = Number(variant.trendyolSalePrice);
     return {
       barcode: variant.barcode,
+      trendyolBarcode: (variant.product as any)?.trendyolBarcode ?? null,
       contentId: this.extractContentId(variant.trendyolProductUrl),
-      modelCode: variant.currentModelCode,
+      modelCode: variant.proposedModelCode || variant.currentModelCode,
       productName,
       description: variant.seoLongDescription ?? variant.productDescription,
       shortDescription: variant.seoShortDescription,

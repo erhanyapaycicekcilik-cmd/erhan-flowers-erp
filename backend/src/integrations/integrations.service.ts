@@ -295,6 +295,15 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
     return result;
   }
 
+  async pushProduct(platformValue: string, payload: unknown) {
+    const platform = this.platform(platformValue);
+    const adapter = await this.adapter(platform);
+    const result = await adapter.pushProduct(payload);
+    const barcode = (payload as Record<string, unknown>)?.barcode as string | undefined;
+    await this.log(platform, 'PUSH_PRODUCT', result.ok ? 'SUCCESS' : 'FAILED', result.message, barcode ?? null, null, {});
+    return result;
+  }
+
   async importOrderExcel(platformValue: string, file: Express.Multer.File | undefined, userId: number) {
     const platform = this.platform(platformValue);
     if (platform !== 'TRENDYOL') {

@@ -160,6 +160,12 @@ export class ProductionCostsController {
     return this.productionCosts.copyVariantCostDraft(Number(id), body, request.user!.role, request.user!.id);
   }
 
+  @Post('variants/:id/push-to-platforms')
+  @UseGuards(OwnerGuard)
+  pushToPlatforms(@Param('id') id: string) {
+    return this.productionCosts.pushFullProductUpdate(Number(id));
+  }
+
   @Post('trendyol-import/preview')
   @UseInterceptors(FileInterceptor('file'))
   previewTrendyolImport(@UploadedFile() file: Express.Multer.File) {
