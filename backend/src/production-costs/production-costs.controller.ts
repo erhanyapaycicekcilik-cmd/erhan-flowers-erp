@@ -254,7 +254,7 @@ export class ProductionCostsController {
   }
 
   @Post('variants/:id/update-codes')
-  updateVariantCodes(@Param('id') id: string, @Body() body: { modelCode?: string; stockCode?: string; trendyolProductUrl?: string }) {
+  updateVariantCodes(@Param('id') id: string, @Body() body: { modelCode?: string; proposedModelCode?: string; stockCode?: string; trendyolProductUrl?: string }) {
     return this.productionCosts.updateVariantCodes(Number(id), body);
   }
 

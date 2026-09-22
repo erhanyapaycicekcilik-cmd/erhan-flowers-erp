@@ -231,6 +231,7 @@ export default function ProductCostDetailPage() {
   const [savingName, setSavingName] = useState(false);
   const [modelCodeInput, setModelCodeInput] = useState('');
   const [stockCodeInput, setStockCodeInput] = useState('');
+  const [proposedCodeInput, setProposedCodeInput] = useState('');
   const [trendyolUrlInput, setTrendyolUrlInput] = useState('');
   const [savingCodes, setSavingCodes] = useState(false);
   const [stockQuantityInput, setStockQuantityInput] = useState('');
@@ -242,11 +243,7 @@ export default function ProductCostDetailPage() {
   const [savingProductInfo, setSavingProductInfo] = useState(false);
   const [activating, setActivating] = useState(false);
   const [variantStatus, setVariantStatus] = useState<'ACTIVE' | 'PASSIVE'>('ACTIVE');
-  const [physicalSpecsForm, setPhysicalSpecsForm] = useState<{
-    stemCount: string; branchCount: string; leavesPerBranch: string; leafCount: string;
-    potW: string; potD: string; potH: string; potType: string;
-  }>({ stemCount: '', branchCount: '', leavesPerBranch: '', leafCount: '', potW: '', potD: '', potH: '', potType: '' });
-  const [pendingSeo, setPendingSeo] = useState<{ name: string; desc: string; keywords: string } | null>(null);
+  const [pendingSeo] = useState<{ name: string; desc: string; keywords: string } | null>(null);
 
   useEffect(() => {
     const savedSettings = window.localStorage.getItem('ef_cost_price_settings');
@@ -272,7 +269,8 @@ export default function ProductCostDetailPage() {
         setVariants(variantData);
         setImages(Array.isArray(data.variant.images) ? data.variant.images : []);
         setVariantStatus((data.variant as any).status ?? 'ACTIVE');
-        setModelCodeInput(data.variant.currentModelCode ?? data.variant.proposedModelCode ?? '');
+        setModelCodeInput(data.variant.currentModelCode ?? '');
+        setProposedCodeInput(data.variant.proposedModelCode ?? '');
         setStockCodeInput(data.variant.supplierStockCode ?? '');
         setStockQuantityInput(String(data.variant.stockQuantity ?? 0));
         setTrendyolUrlInput(data.variant.trendyolProductUrl ?? '');
@@ -919,9 +917,9 @@ export default function ProductCostDetailPage() {
     try {
       await api(`/production-costs/variants/${productId}/update-codes`, {
         method: 'POST',
-        json: { modelCode: modelCodeInput.trim() || undefined, stockCode: stockCodeInput.trim() || undefined, trendyolProductUrl: trendyolUrlInput.trim() || undefined },
+        json: { modelCode: modelCodeInput.trim() || undefined, proposedModelCode: proposedCodeInput.trim() || undefined, stockCode: stockCodeInput.trim() || undefined, trendyolProductUrl: trendyolUrlInput.trim() || undefined },
       });
-      setDetail((prev) => prev ? { ...prev, variant: { ...prev.variant, currentModelCode: modelCodeInput.trim() || null, proposedModelCode: modelCodeInput.trim() || null, supplierStockCode: stockCodeInput.trim() || null, trendyolProductUrl: trendyolUrlInput.trim() || null } } : prev);
+      setDetail((prev) => prev ? { ...prev, variant: { ...prev.variant, currentModelCode: modelCodeInput.trim() || null, proposedModelCode: proposedCodeInput.trim() || null, supplierStockCode: stockCodeInput.trim() || null, trendyolProductUrl: trendyolUrlInput.trim() || null } } : prev);
       setMessage('Kodlar kaydedildi ✓');
     } catch {
       setMessage('Kodlar kaydedilemedi.');
@@ -1333,7 +1331,11 @@ export default function ProductCostDetailPage() {
               <input className="input w-full text-xs" value={modelCodeInput} onChange={(e) => setModelCodeInput(e.target.value)} placeholder="ör. BA-6001" />
             </div>
             <div>
-              <label className="block text-[10px] font-semibold uppercase text-slate-400 mb-0.5">Stok Kodu</label>
+              <label className="block text-[10px] font-semibold uppercase text-slate-400 mb-0.5">Platform Stok Kodu</label>
+              <input className="input w-full text-xs" value={proposedCodeInput} onChange={(e) => setProposedCodeInput(e.target.value)} placeholder="ör. ERH-BT3030" />
+            </div>
+            <div>
+              <label className="block text-[10px] font-semibold uppercase text-slate-400 mb-0.5">Tedarikçi Stok Kodu</label>
               <input className="input w-full text-xs" value={stockCodeInput} onChange={(e) => setStockCodeInput(e.target.value)} placeholder="Tedarikçi stok kodu" />
             </div>
             <div>
@@ -1593,43 +1595,6 @@ export default function ProductCostDetailPage() {
             </div>
           </CompactPanel>
 
-          {variant && (
-            <PhysicalSpecsPanel
-              productCenterId={variant.productCenterId}
-              productHeight={variant.productHeight}
-              potType={variant.potType}
-              potSize={variant.potSize}
-              stemCount={variant.stemCount}
-              branchCount={variant.branchCount}
-              leavesPerBranch={variant.leavesPerBranch}
-              leafCount={variant.leafCount}
-              onFormChange={setPhysicalSpecsForm}
-              productName={variant.productName}
-              pots={pots}
-            />
-          )}
-
-          {variant && (
-            <SeoPanel
-              variantId={variant.id}
-              productName={variant.productName}
-              detectedSize={variant.detectedSize}
-              seoProductName={variant.seoProductName}
-              seoLongDescription={variant.seoLongDescription}
-              seoKeywords={variant.seoKeywords}
-              knowledgeResult={knowledgeResult}
-              materials={materials}
-              stemCount={variant.stemCount}
-              branchCount={variant.branchCount}
-              leavesPerBranch={variant.leavesPerBranch}
-              leafCount={variant.leafCount}
-              potSize={variant.potSize}
-              potType={variant.potType}
-              physicalSpecsOverride={physicalSpecsForm}
-              onSeoChange={setPendingSeo}
-              salePrice={totals.marketplaceSalePrice}
-            />
-          )}
 
           <KargoPanel onAdd={(amount) => {
             const existing = expenses.find((e) => e.name === 'Kargo');
