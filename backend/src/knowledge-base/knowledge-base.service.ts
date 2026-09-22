@@ -423,8 +423,8 @@ export class KnowledgeBaseService {
           actionJson: { leafStepCm: 10, leavesPerStep: 1 },
           items: {
             create: [
-              { componentType: 'TRUNK', displayName: 'Bambu Gövde', quantity: 1, unit: govdeCard?.unit ?? 'Adet', stockCardId: govdeCard?.id ?? null, source: govdeCard ? 'AUTO' : 'MANUAL', sortOrder: 1 },
-              { componentType: 'LEAF', displayName: 'Bambu Yaprak', quantity: 0, unit: yaprakCard?.unit ?? 'Adet', stockCardId: yaprakCard?.id ?? null, source: yaprakCard ? 'AUTO' : 'MANUAL', sortOrder: 2 },
+              { componentType: 'TRUNK', quantity: 1, unit: govdeCard?.unit ?? 'Adet', stockCardId: govdeCard?.id ?? null, source: govdeCard ? 'AUTO' : 'MANUAL', sortOrder: 1 },
+              { componentType: 'LEAF', quantity: 0, unit: yaprakCard?.unit ?? 'Adet', stockCardId: yaprakCard?.id ?? null, source: yaprakCard ? 'AUTO' : 'MANUAL', sortOrder: 2 },
             ],
           },
         },
