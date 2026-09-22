@@ -2787,14 +2787,14 @@ export class ProductionCostsService {
             items: {
               select: {
                 name: true, group: true, quantity: true, unit: true, source: true,
-                manualUnitCost: true, automaticUnitCost: true, isActive: true,
+                manualUnitCost: true, isActive: true,
                 stockCard: { select: { id: true, name: true, unit: true } },
               },
             },
             pots: {
               select: {
                 name: true, color: true, quantity: true,
-                manualUnitCost: true, automaticUnitCost: true,
+                manualUnitCost: true,
                 stockCard: { select: { id: true, name: true } },
               },
             },
@@ -2806,13 +2806,14 @@ export class ProductionCostsService {
 
     return variants.map((v) => {
       const draft = v.productCostDraft;
-      const materials = (draft?.items ?? []).filter((i) => !['LABOR', 'OTHER', 'PACKAGING'].includes(i.group) || i.source === 'AUTO');
-      const expenses = (draft?.items ?? []).filter((i) => ['LABOR', 'OTHER', 'PACKAGING'].includes(i.group) && i.source === 'MANUAL');
-      const pots = draft?.pots ?? [];
-      const potColor = pots.map((p) => p.color).filter(Boolean).join(', ') || '-';
+      const items = draft?.items ?? [];
+      const potItems = draft?.pots ?? [];
+      const materials = items.filter((i: typeof items[number]) => !['LABOR', 'OTHER', 'PACKAGING'].includes(i.group) || i.source === 'AUTO');
+      const expenses = items.filter((i: typeof items[number]) => ['LABOR', 'OTHER', 'PACKAGING'].includes(i.group) && i.source === 'MANUAL');
+      const potColor = potItems.map((p: typeof potItems[number]) => p.color).filter(Boolean).join(', ') || '-';
       const stockLinks = [
-        ...materials.filter((m) => m.stockCard).map((m) => m.stockCard!.name),
-        ...pots.filter((p) => p.stockCard).map((p) => p.stockCard!.name),
+        ...materials.filter((m: typeof materials[number]) => m.stockCard).map((m: typeof materials[number]) => m.stockCard!.name),
+        ...potItems.filter((p: typeof potItems[number]) => p.stockCard).map((p: typeof potItems[number]) => p.stockCard!.name),
       ];
       return {
         id: v.id, barcode: v.barcode, productName: v.productName,
@@ -2821,9 +2822,9 @@ export class ProductionCostsService {
         status: v.status, costStatus: draft?.status ?? 'YOK',
         totalCost: Number(draft?.totalCost ?? 0), salePrice: Number(draft?.salePrice ?? 0),
         potColor, stockLinks: stockLinks.join(' | '),
-        materials: materials.map((m) => `${m.name}x${m.quantity}${m.unit}`).join(' | '),
-        pots: pots.map((p) => `${p.name}${p.color ? ' ' + p.color : ''}x${p.quantity}`).join(' | '),
-        expenses: expenses.map((e) => `${e.name} ${Number(e.manualUnitCost).toFixed(2)}TL`).join(' | '),
+        materials: materials.map((m: typeof materials[number]) => `${m.name}x${m.quantity}${m.unit}`).join(' | '),
+        pots: potItems.map((p: typeof potItems[number]) => `${p.name}${p.color ? ' ' + p.color : ''}x${p.quantity}`).join(' | '),
+        expenses: expenses.map((e: typeof expenses[number]) => `${e.name} ${Number(e.manualUnitCost).toFixed(2)}TL`).join(' | '),
       };
     });
   }
