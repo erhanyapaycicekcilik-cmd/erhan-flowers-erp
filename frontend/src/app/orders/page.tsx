@@ -712,7 +712,15 @@ function OrderCard({
   const items = Array.isArray(order.items) ? order.items : [];
   const countdown = useCountdown(order.deliveryDueAt, order.status);
   return (
-    <article className={`grid gap-4 p-4 text-sm xl:grid-cols-[32px_1.1fr_1fr_1.5fr_80px_1fr_1fr_1fr_1fr_1.2fr] ${countdown?.isLate ? 'bg-red-50' : ''}`}>
+    <article className={`text-sm ${countdown?.isLate ? 'bg-red-50' : ''}`}>
+      {countdown && (
+        <div className={`flex items-center justify-between gap-3 px-4 py-2 text-sm font-bold ${countdown.isLate ? 'bg-red-600 text-white' : countdown.isUrgent ? 'bg-amber-400 text-amber-900' : 'bg-emerald-500 text-white'}`}>
+          <span>{countdown.isLate ? '🚨 GECİKTİ' : countdown.isUrgent ? '⚠️ ACİL' : '✅ Kargo'}</span>
+          <span className="font-mono text-base">{countdown.text}</span>
+          <span className="text-xs font-normal opacity-80">Son çıkış: {date(order.deliveryDueAt)}</span>
+        </div>
+      )}
+      <div className="grid gap-4 p-4 xl:grid-cols-[32px_1.1fr_1fr_1.5fr_80px_1fr_1fr_1fr_1fr_1.2fr]">
       <div><input type="checkbox" checked={selected} onChange={(event) => onSelect(event.target.checked)} /></div>
       <Cell title="Sipariş Bilgileri">
         <div className="font-black text-ink">{order.saleNumber}</div>
@@ -720,12 +728,7 @@ function OrderCard({
         <div className="text-xs text-slate-500">Paket: {order.externalOrderId || '-'}</div>
         <div className="mt-2 text-xs">Sipariş: {date(order.orderDate || order.createdAt)}</div>
         <div className="text-xs">Son çıkış: {date(order.deliveryDueAt)}</div>
-        {countdown ? (
-          <div className={`mt-1 flex items-center gap-1.5 rounded px-2 py-1 font-mono text-xs font-bold ${countdown.isLate ? 'bg-red-100 text-red-700' : countdown.isUrgent ? 'bg-amber-100 text-amber-700' : 'bg-emerald-50 text-emerald-700'}`}>
-            {countdown.isLate ? '🚨 +' : countdown.isUrgent ? '⚠️ ' : '✅ '}{countdown.text}
-            {countdown.isLate && <span className="ml-1 font-sans font-semibold">GECİKTİ</span>}
-          </div>
-        ) : (
+        {!countdown && (
           <div className={`mt-1 text-xs font-semibold ${isDelayed(order.deliveryDueAt, order.status) ? 'text-red-700' : 'text-emerald-700'}`}>{remainingText(order.deliveryDueAt, order.status)}</div>
         )}
       </Cell>
@@ -793,6 +796,7 @@ function OrderCard({
           <Link href={`/urun-hazirla/${order.id}`} className="btn btn-secondary min-h-9 px-3 text-xs flex items-center gap-1"><Camera size={15} /> Fotoğraf Yükle</Link>
         </div>
       </Cell>
+      </div>
     </article>
   );
 }
