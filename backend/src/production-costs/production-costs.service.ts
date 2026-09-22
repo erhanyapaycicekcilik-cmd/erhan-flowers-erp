@@ -1283,12 +1283,11 @@ export class ProductionCostsService {
     return { ok: true, productName: updated.productName };
   }
 
-  async updateVariantCodes(variantId: number, data: { modelCode?: string; stockCode?: string; trendyolProductUrl?: string }) {
+  async updateVariantCodes(variantId: number, data: { modelCode?: string; proposedModelCode?: string; stockCode?: string; trendyolProductUrl?: string }) {
     const updateData: Record<string, string> = {};
-    if (data.modelCode !== undefined) {
-      updateData.currentModelCode = data.modelCode;
-      updateData.proposedModelCode = data.modelCode;
-    }
+    if (data.modelCode !== undefined) updateData.currentModelCode = data.modelCode;
+    if (data.proposedModelCode !== undefined) updateData.proposedModelCode = data.proposedModelCode;
+    else if (data.modelCode !== undefined) updateData.proposedModelCode = data.modelCode;
     if (data.stockCode !== undefined) updateData.supplierStockCode = data.stockCode;
     if (data.trendyolProductUrl !== undefined) updateData.trendyolProductUrl = data.trendyolProductUrl;
     await this.prisma.trendyolProductVariant.update({ where: { id: variantId }, data: updateData });
