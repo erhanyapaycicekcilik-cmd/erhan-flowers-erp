@@ -626,11 +626,11 @@ export class TrendyolAdapter extends BaseIntegrationAdapter {
     return {
       barcode: this.text(data.barcode),
       title: this.text(data.productName),
-      productMainId: this.text(data.modelCode),
+      productMainId: this.text(data.modelCode) || this.text(data.barcode),
       brandId: Number(data.brandId ?? 0) || this.defaultBrandId,
       categoryId: Number(data.categoryId ?? 0) || 2995,
       quantity: Number(data.stockQuantity ?? 0),
-      stockCode: this.text(data.modelCode),
+      stockCode: this.text(data.modelCode) || this.text(data.barcode),
       dimensionalWeight: Number(data.desi ?? 1),
       description: this.text(data.description),
       currencyType: 'TRY',
