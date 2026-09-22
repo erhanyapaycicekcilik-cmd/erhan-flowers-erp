@@ -257,6 +257,21 @@ export class ProductionCostsController {
     return this.productionCosts.activateVariant(Number(id));
   }
 
+  @Post('variants/:id/update-stock-quantity')
+  updateStockQuantity(@Param('id') id: string, @Body() body: { stockQuantity: number }) {
+    return this.productionCosts.updateVariantStockQuantity(Number(id), body.stockQuantity);
+  }
+
+  @Post('variants/:id/sync-images-from-trendyol')
+  syncImagesFromTrendyol(@Param('id') id: string) {
+    return this.productionCosts.syncVariantImagesFromTrendyol(Number(id));
+  }
+
+  @Get('recipe-report')
+  getRecipeReport() {
+    return this.productionCosts.getRecipeReport();
+  }
+
   @Post('families')
   createFamily(@Body() body: unknown) {
     return this.productionCosts.createFamily(body);
