@@ -1464,7 +1464,7 @@ export class SalesService {
       product_names: string;
     }>>`
       SELECT p.sale_id, rs.sale_number, rs.customer_name, rs.channel,
-             p.image_path, p.thumbnail_path, p.photo_type, p.created_at, p.expires_at,
+             p.image_path, p.thumbnail_path, p.photo_type, p.taken_at AS created_at, p.expires_at,
              STRING_AGG(DISTINCT rsi.product_name, ', ') AS product_names
       FROM retail_sale_proof_photos p
       JOIN retail_sales rs ON rs.id = p.sale_id
@@ -1472,12 +1472,12 @@ export class SalesService {
       WHERE p.expires_at > NOW()
         AND rs.customer_name ILIKE ${nameFilter}
         AND rs.sale_number ILIKE ${saleFilter}
-        AND p.created_at >= ${dateFrom}
-        AND p.created_at <= ${dateTo}
+        AND p.taken_at >= ${dateFrom}
+        AND p.taken_at <= ${dateTo}
         AND (${productFilter}::text IS NULL OR rsi.product_name ILIKE ${productFilter})
         AND (${barcodeFilter}::text IS NULL OR rsi.barcode ILIKE ${barcodeFilter})
-      GROUP BY p.id, rs.sale_number, rs.customer_name, rs.channel
-      ORDER BY p.created_at DESC
+      GROUP BY p.id, p.taken_at, rs.sale_number, rs.customer_name, rs.channel
+      ORDER BY p.taken_at DESC
       LIMIT ${limit}
     `;
     return rows;
