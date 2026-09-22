@@ -25,6 +25,8 @@ type DashboardSummary = {
   totalProductCost?: number;
   criticalStocks: { id: number; productName: string; modelCode: string | null; stockQuantity: number; criticalStockLevel: number }[];
   recentlyAddedProducts: { id: number; productName: string; modelCode: string | null }[];
+  outOfStockCount: number;
+  outOfStockCards: { id: number; name: string; sku: string | null; barcode: string | null; stockQuantity: number }[];
 };
 
 type SalesPeriod = { orderCount: number; revenue: number; platforms: Record<string, number> };
@@ -162,6 +164,27 @@ export default function DashboardPage() {
                   {costProgress.total - costProgress.completed} ürünün maliyeti henüz girilmedi
                 </div>
               )}
+            </section>
+          )}
+
+          {/* Stok bitti uyarısı */}
+          {isOwner && (data?.outOfStockCount ?? 0) > 0 && (
+            <section className="panel overflow-hidden border-red-500">
+              <div className="flex items-center gap-2 border-b border-red-200 bg-red-50 px-5 py-4">
+                <AlertTriangle size={16} className="text-red-600" />
+                <h2 className="font-bold text-red-700">Stok Bitti — {data?.outOfStockCount} Ürün</h2>
+              </div>
+              <div className="divide-y divide-line">
+                {(data?.outOfStockCards ?? []).map((card) => (
+                  <div key={card.id} className="flex items-center justify-between gap-3 px-5 py-3 text-sm">
+                    <div>
+                      <div className="font-semibold">{card.name}</div>
+                      <div className="text-xs text-slate-400">{card.sku ?? card.barcode ?? ''}</div>
+                    </div>
+                    <div className="font-bold text-red-600">{card.stockQuantity}</div>
+                  </div>
+                ))}
+              </div>
             </section>
           )}
 
