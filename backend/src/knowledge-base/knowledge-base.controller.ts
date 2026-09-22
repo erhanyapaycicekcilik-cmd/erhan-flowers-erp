@@ -159,4 +159,10 @@ export class KnowledgeBaseController {
   analyzeProductName(@Body() body: { text?: string }, @Req() request: AuthenticatedRequest) {
     return this.analysis.analyzeProductName(body.text ?? '', request.user?.id);
   }
+
+  @Post('seed-bambu')
+  @UseGuards(OwnerGuard)
+  seedBambu() {
+    return this.knowledgeBase.seedBambu();
+  }
 }
