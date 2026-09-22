@@ -1079,6 +1079,11 @@ export default function ProductCostDetailPage() {
     setMessage('Kaydediliyor ve platformlara gönderiliyor...');
     try {
       await save(true);
+      // Kodları da kaydet (sol panel)
+      await api(`/production-costs/variants/${productId}/update-codes`, {
+        method: 'POST',
+        json: { modelCode: modelCodeInput.trim() || undefined, proposedModelCode: proposedCodeInput.trim() || undefined, stockCode: stockCodeInput.trim() || undefined, trendyolProductUrl: trendyolUrlInput.trim() || undefined },
+      });
       const result = await api<{ success: number; failed: number; results: Array<{ platform: string; ok: boolean; successMessage?: string | null; errorMessage?: string | null }> }>(`/production-costs/variants/${productId}/push-all-platforms`, {
         method: 'POST',
         json: {
