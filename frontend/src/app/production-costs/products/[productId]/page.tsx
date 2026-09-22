@@ -602,7 +602,7 @@ export default function ProductCostDetailPage() {
     if (recipePots.length > 0) {
       setPots(recipePots);
     } else if (result.potProfile) {
-      const stock = result.potProfile.stockCard ?? (result.potProfile.stockCardId ? findStockLike(result.potProfile.stockCardId) : undefined);
+      const stock = result.potProfile.stockCard ?? findStockLike(result.potProfile.stockCardId, result.potProfile.name);
       setPots([{
         key: crypto.randomUUID(),
         name: stock?.name ?? result.potProfile.name,
@@ -618,7 +618,7 @@ export default function ProductCostDetailPage() {
   }
 
   function knowledgeItemToMaterial(item: KnowledgeRecipeItem): MaterialItem {
-    const stock = item.stockCard ?? findStockLike(item.stockCardId);
+    const stock = item.stockCard ?? findStockLike(item.stockCardId, item.displayName);
     return {
       key: crypto.randomUUID(),
       name: stock?.name ?? item.displayName ?? knowledgeComponentLabel(item.componentType),
@@ -633,7 +633,7 @@ export default function ProductCostDetailPage() {
   }
 
   function knowledgeItemToPot(item: KnowledgeRecipeItem, fallbackName: string): PotItem {
-    const stock = item.stockCard ?? findStockLike(item.stockCardId);
+    const stock = item.stockCard ?? findStockLike(item.stockCardId, item.displayName);
     return {
       key: crypto.randomUUID(),
       name: stock?.name ?? fallbackName,
@@ -661,9 +661,24 @@ export default function ProductCostDetailPage() {
     };
   }
 
-  function findStockLike(id: number | null | undefined): StockCard | undefined {
-    if (!id) return undefined;
-    return stockCards.find((stock) => stock.id === Number(id));
+  function findStockLike(id: number | null | undefined, name?: string | null): StockCard | undefined {
+    if (id) {
+      const byId = stockCards.find((stock) => stock.id === Number(id));
+      if (byId) return byId;
+    }
+    if (name) {
+      const needle = name.toLocaleLowerCase('tr-TR').trim();
+      // exact name match first
+      const exact = stockCards.find((s) => s.name.toLocaleLowerCase('tr-TR').trim() === needle);
+      if (exact) return exact;
+      // contains match
+      return stockCards.find(
+        (s) =>
+          s.name.toLocaleLowerCase('tr-TR').includes(needle) ||
+          needle.includes(s.name.toLocaleLowerCase('tr-TR')),
+      );
+    }
+    return undefined;
   }
 
   async function save(approve = false) {
