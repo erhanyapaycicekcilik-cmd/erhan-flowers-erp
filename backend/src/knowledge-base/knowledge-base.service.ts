@@ -420,7 +420,6 @@ export class KnowledgeBaseService {
           plantTypeId: plantType.id,
           isDefault: true,
           priority: 10,
-          actionJson: { leafStepCm: 10, leavesPerStep: 1 },
           items: {
             create: [
               { componentType: 'TRUNK', quantity: 1, unit: govdeCard?.unit ?? 'Adet', stockCardId: govdeCard?.id ?? null, sortOrder: 1 },
