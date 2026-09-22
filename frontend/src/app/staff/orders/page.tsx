@@ -648,13 +648,20 @@ function OrderCard({ order, onStatusChange, readySection }: { order: OrderRow; o
             <Printer size={13} /> Yazdır
           </button>
 
+          <input ref={videoRef} type="file" accept="video/*,image/*" capture="environment" multiple className="hidden" onChange={handlePhoto} />
           {isReady ? (
-            <div className="flex-1 flex items-center justify-center gap-1 text-xs px-2 py-2 rounded-lg bg-green-100 text-green-700 font-bold">
-              <CheckCircle size={13} /> Kargoya Hazır
-            </div>
+            <>
+              <div className="flex-1 flex items-center justify-center gap-1 text-xs px-2 py-2 rounded-lg bg-green-100 text-green-700 font-bold">
+                <CheckCircle size={13} /> Kargoya Hazır
+              </div>
+              <button onClick={() => videoRef.current?.click()} disabled={uploading}
+                title="Ek fotoğraf/video ekle"
+                className="flex items-center justify-center gap-1 text-xs px-2 py-2 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-100 transition disabled:opacity-60">
+                <Video size={13} /> {uploading ? '…' : 'Ekle'}
+              </button>
+            </>
           ) : (
             <>
-              <input ref={videoRef} type="file" accept="video/*" capture="environment" multiple className="hidden" onChange={handlePhoto} />
               <button onClick={() => void markReadyWithoutPhoto()} disabled={uploading}
                 title="Videosuz hazır yap"
                 className="flex items-center justify-center p-2 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-100 transition">
