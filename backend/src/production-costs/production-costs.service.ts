@@ -801,6 +801,7 @@ export class ProductionCostsService {
           const platformPrice = marketplaceSalePrice > 0 ? marketplaceSalePrice : salePrice;
           this.broadcastApprovedCost({
             barcode: product.barcode,
+            trendyolBarcode: product.trendyolBarcode,
             modelCode: product.modelCode,
             salePrice: platformPrice,
             listPrice: platformPrice,
@@ -821,10 +822,64 @@ export class ProductionCostsService {
     return { ok: true, costDraft: this.serializeCostDraft(draft) };
   }
 
-  private async broadcastApprovedCost(product: { barcode?: string | null; modelCode?: string | null; salePrice: number; listPrice: number; stockQuantity: number }): Promise<void> {
-    if (!product.barcode && !product.modelCode) return;
+  async pushFullProductUpdate(variantId: number): Promise<{ results: Array<{ platform: string; ok: boolean; message: string }> }> {
+    const variant = await this.prisma.trendyolProductVariant.findUnique({
+      where: { id: variantId },
+      include: { product: true, shopCategory: true, productCostDraft: true },
+    });
+    if (!variant) throw new NotFoundException('Ürün bulunamadı.');
+
+    // Stok kodu: proposedModelCode > currentModelCode > barcode
+    const stockCode = variant.proposedModelCode || variant.currentModelCode || variant.barcode;
+    const salePrice = variant.productCostDraft
+      ? Number(variant.productCostDraft.salePrice ?? variant.trendyolSalePrice)
+      : Number(variant.trendyolSalePrice);
+    const listPrice = salePrice > 0 ? Math.ceil(salePrice * 1.1) : salePrice;
+
+    const images: string[] = Array.isArray(variant.images) ? (variant.images as string[]) : [];
+
+    const payload = {
+      barcode: variant.barcode,
+      trendyolBarcode: variant.product?.trendyolBarcode ?? null,
+      modelCode: stockCode,
+      productName: variant.seoManualProductName || variant.seoProductName || variant.productName,
+      description: variant.seoLongDescription || variant.productDescription || '',
+      salePrice,
+      listPrice,
+      stockQuantity: variant.stockQuantity,
+      images,
+      vatRate: 20,
+      desi: 1,
+      brandId: 0,
+      categoryId: 0,
+    };
+
+    const connections = await this.prisma.$queryRaw<Array<{ platform: string }>>`
+      SELECT platform FROM integration_connections
+      WHERE status = 'CONNECTED' AND platform IN ('TRENDYOL', 'N11', 'HEPSIBURADA')
+    `.catch(() => [] as Array<{ platform: string }>);
+
+    const results: Array<{ platform: string; ok: boolean; message: string }> = [];
+    await Promise.allSettled(
+      connections.map(async ({ platform }) => {
+        const r = await this.integrations.pushProduct(platform, payload).catch((err) => ({
+          ok: false as const,
+          status: 'FAILED' as const,
+          message: String(err),
+        }));
+        results.push({ platform, ok: r.ok, message: r.message ?? '' });
+        if (!r.ok) this.logger.warn(`${platform} tam güncelleme başarısız: ${r.message}`);
+        else this.logger.log(`${platform} tam güncelleme tamam: ${stockCode}`);
+      }),
+    );
+    return { results };
+  }
+
+  private async broadcastApprovedCost(product: { barcode?: string | null; modelCode?: string | null; trendyolBarcode?: string | null; salePrice: number; listPrice: number; stockQuantity: number }): Promise<void> {
+    if (!product.barcode && !product.modelCode && !product.trendyolBarcode) return;
     if (!product.salePrice) return;
     const payload = {
+      trendyolBarcode: product.trendyolBarcode ?? null,
       barcode: product.barcode ?? product.modelCode ?? '',
       modelCode: product.modelCode ?? product.barcode ?? '',
       salePrice: product.salePrice,

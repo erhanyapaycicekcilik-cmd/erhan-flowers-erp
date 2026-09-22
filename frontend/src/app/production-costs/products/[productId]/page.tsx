@@ -1055,6 +1055,40 @@ export default function ProductCostDetailPage() {
     if (detail?.nextIncompleteProductId) router.push(`/production-costs/products/${detail.nextIncompleteProductId}`);
   }
 
+  async function sendAndNext() {
+    setSendingAllPlatforms(true);
+    setMessage('Kaydediliyor ve platformlara gönderiliyor...');
+    try {
+      await save(true);
+      const result = await api<{ success: number; failed: number; results: Array<{ platform: string; ok: boolean; successMessage?: string | null; errorMessage?: string | null }> }>(`/production-costs/variants/${productId}/push-all-platforms`, {
+        method: 'POST',
+        json: {
+          salePrice: totals.marketplaceSalePrice,
+          seoLongDescription: pendingSeo?.desc || undefined,
+          seoProductName: pendingSeo?.name || undefined,
+          seoKeywords: pendingSeo?.keywords || undefined,
+        },
+      });
+      const platforms = result.results ?? [];
+      const okList = platforms.filter(r => r.ok).map(r => r.platform).join(', ');
+      const failList = platforms.filter(r => !r.ok).map(r => `${r.platform}: ${r.errorMessage ?? 'hata'}`).join('; ');
+      setMessage(
+        result.failed === 0
+          ? `Gönderildi ✓ (${okList || 'Trendyol, N11, HB'}) — sonraki ürüne geçiliyor...`
+          : `Kısmen başarılı — OK: ${okList || '-'} | Hata: ${failList}`,
+      );
+      if (result.failed === 0 && detail?.nextIncompleteProductId) {
+        setTimeout(() => router.push(`/production-costs/products/${detail.nextIncompleteProductId}`), 800);
+      } else if (detail?.nextIncompleteProductId) {
+        setTimeout(() => router.push(`/production-costs/products/${detail.nextIncompleteProductId}`), 1500);
+      }
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Gönderilemedi.');
+    } finally {
+      setSendingAllPlatforms(false);
+    }
+  }
+
   function seoSearchName() {
     const parts = [
       variant?.productName,
@@ -1694,15 +1728,16 @@ export default function ProductCostDetailPage() {
               <PriceLine label="N11 Fiyatı" value={totals.marketplaceSalePrice} />
             </div>
 
-            <div className="mt-4 grid grid-cols-2 gap-2">
-              <button className="btn btn-primary justify-center col-span-2" onClick={saveAndNext}><Save size={16} />Kaydet ve Sonraki Ürüne Geç</button>
-              <button className="btn btn-primary justify-center col-span-2" onClick={pushToAllPlatforms} disabled={sendingAllPlatforms}>
-                <Send size={14} />{sendingAllPlatforms ? 'Gönderiliyor...' : 'Görsel & Fiyatı Tüm Platformlara Gönder'}
+            <div className="mt-4 flex flex-col gap-2">
+              <button className="btn btn-primary justify-center w-full text-base py-3" onClick={sendAndNext} disabled={sendingAllPlatforms}>
+                <Send size={18} />{sendingAllPlatforms ? 'Gönderiliyor...' : 'Platformlara Gönder → Sonraki'}
               </button>
-              <button className="btn btn-secondary justify-center" onClick={() => setCopyModalOpen(true)}><Copy size={16} />Reçeteyi Kopyala</button>
-              <button className="btn btn-secondary justify-center" onClick={copySummary}><Copy size={16} />Özeti Kopyala</button>
-              <button className="btn btn-secondary justify-center" onClick={copyRecipe}><Copy size={16} />Reçete Metni</button>
-              <button className="btn btn-secondary justify-center" onClick={exportPriceUpdateFile}>Fiyat Dosyası</button>
+              <div className="grid grid-cols-2 gap-2">
+                <button className="btn btn-secondary justify-center text-xs" onClick={saveAndNext}><Save size={14} />Sadece Kaydet → Sonraki</button>
+                <button className="btn btn-secondary justify-center text-xs" onClick={() => setCopyModalOpen(true)}><Copy size={14} />Reçeteyi Kopyala</button>
+                <button className="btn btn-secondary justify-center text-xs" onClick={copySummary}><Copy size={14} />Özeti Kopyala</button>
+                <button className="btn btn-secondary justify-center text-xs" onClick={copyRecipe}><Copy size={14} />Reçete Metni</button>
+              </div>
             </div>
           </section>
         </aside>
