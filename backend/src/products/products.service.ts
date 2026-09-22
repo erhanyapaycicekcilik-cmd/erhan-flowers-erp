@@ -304,18 +304,18 @@ export class ProductsService {
         include: { productCostDraft: true },
         take: 5,
       });
+      const cardFallbackPrice = Number(Number(card.salePrice) > 0 ? card.salePrice : card.purchasePrice ?? 0);
       if (variants.length > 0) {
         for (const variant of variants) {
           const salePrice = Number(
             (variant.productCostDraft as any)?.marketplaceSalePrice > 0
               ? (variant.productCostDraft as any).marketplaceSalePrice
               : variant.trendyolSalePrice ?? variant.productCostDraft?.salePrice ?? 0
-          );
+          ) || cardFallbackPrice;
           await this.broadcastPriceStock({ barcode: variant.barcode, modelCode: variant.currentModelCode, marketPrice: salePrice, stockQuantity: Number(card.stockQuantity) }).catch(() => undefined);
         }
       } else {
-        const salePrice = Number(Number(card.salePrice) > 0 ? card.salePrice : card.purchasePrice ?? 0);
-        await this.broadcastPriceStock({ barcode: card.barcode, modelCode: card.sku ?? card.oldModelCode, marketPrice: salePrice, stockQuantity: Number(card.stockQuantity) }).catch(() => undefined);
+        await this.broadcastPriceStock({ barcode: card.barcode, modelCode: card.sku ?? card.oldModelCode, marketPrice: cardFallbackPrice, stockQuantity: Number(card.stockQuantity) }).catch(() => undefined);
       }
     }
   }
@@ -335,6 +335,7 @@ export class ProductsService {
     // Tüm platformlara aynı fiyat gider (kullanıcı tercihi: tek fiyat politikası)
     // marketPrice = platform satış fiyatı, listPrice = KDV dahil liste fiyatı
     const salePrice = Number(product.marketPrice ?? product.shopPrice ?? 0);
+    const stockQuantity = Number(product.stockQuantity ?? 0);
     if (!salePrice) return;
     const rawListPrice = Number(product.listPrice ?? product.marketPrice ?? 0);
     // listPrice her zaman salePrice'dan büyük olmalı (platform kuralı)
@@ -345,7 +346,7 @@ export class ProductsService {
       modelCode: product.modelCode ?? product.barcode ?? '',
       salePrice,
       listPrice,
-      stockQuantity: Number(product.stockQuantity ?? 0),
+      stockQuantity,
     };
 
     // Cache'den bağlı platformları al (5dk TTL, DB sorgusu atmaz)

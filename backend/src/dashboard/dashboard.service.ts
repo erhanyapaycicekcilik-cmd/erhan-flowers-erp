@@ -6,7 +6,7 @@ export class DashboardService {
   constructor(private readonly prisma: PrismaService) {}
 
   async summary(userRole?: string) {
-    const [totalProducts, totalImages, totalBarcodes, stockProducts, recentlyAddedProducts, stockCards] =
+    const [totalProducts, totalImages, totalBarcodes, stockProducts, recentlyAddedProducts, stockCards, outOfStockCards] =
       await Promise.all([
         this.prisma.product.count({ where: { status: 'ACTIVE' } }),
         this.prisma.mediaFile.count(),
@@ -27,6 +27,14 @@ export class DashboardService {
               select: { purchasePrice: true, stockQuantity: true },
             })
           : Promise.resolve([]),
+        userRole === 'OWNER'
+          ? this.prisma.stockCard.findMany({
+              where: { status: 'ACTIVE', stockQuantity: { lte: 0 } },
+              select: { id: true, name: true, sku: true, barcode: true, stockQuantity: true },
+              orderBy: { updatedAt: 'desc' },
+              take: 20,
+            })
+          : Promise.resolve([]),
       ]);
 
     const allCriticalStocks = stockProducts.filter((product) => product.stockQuantity <= product.criticalStockLevel);
@@ -42,6 +50,8 @@ export class DashboardService {
       criticalStockCount: userRole === 'OWNER' ? allCriticalStocks.length : 0,
       criticalStocks: userRole === 'OWNER' ? criticalStocks : [],
       recentlyAddedProducts: userRole === 'OWNER' ? recentlyAddedProducts : [],
+      outOfStockCount: userRole === 'OWNER' ? outOfStockCards.length : 0,
+      outOfStockCards: userRole === 'OWNER' ? outOfStockCards : [],
     };
 
     return userRole === 'OWNER'
