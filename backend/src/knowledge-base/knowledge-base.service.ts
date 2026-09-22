@@ -387,6 +387,54 @@ export class KnowledgeBaseService {
     if (!item) throw new NotFoundException('Bitki türü bulunamadı.');
   }
 
+  async seedBambu() {
+    const allCards = await this.prisma.stockCard.findMany({ where: { status: 'ACTIVE' } });
+    const yaprakCard = allCards.find((c) => c.name === 'Bambu Yaprağı')
+      ?? allCards.find((c) => c.name.toLowerCase().includes('bambu') && c.name.toLowerCase().includes('yaprak'));
+    const govdeCard = allCards.find((c) => c.name.toLowerCase().includes('bambu') && c.name.toLowerCase().includes('gövde'))
+      ?? allCards.find((c) => c.name.toLowerCase().includes('bambu') && c.name.toLowerCase().includes('govde'))
+      ?? allCards.find((c) => c.name.toLowerCase().includes('bambu') && !c.name.toLowerCase().includes('yaprak'));
+
+    let plantType = await this.prisma.knowledgePlantType.findFirst({ where: { normalizedName: 'bambu' } });
+    if (!plantType) {
+      plantType = await this.prisma.knowledgePlantType.create({
+        data: { name: 'Bambu', normalizedName: 'bambu', defaultLeafStockCardId: yaprakCard?.id ?? null, defaultTrunkStockCardId: govdeCard?.id ?? null },
+      });
+    } else {
+      await this.prisma.knowledgePlantType.update({
+        where: { id: plantType.id },
+        data: { isActive: true, defaultLeafStockCardId: yaprakCard?.id ?? plantType.defaultLeafStockCardId, defaultTrunkStockCardId: govdeCard?.id ?? plantType.defaultTrunkStockCardId },
+      });
+    }
+
+    const existingAlias = await this.prisma.knowledgeAlias.findFirst({ where: { normalizedAlias: 'bambu', plantTypeId: plantType.id } });
+    if (!existingAlias) {
+      await this.prisma.knowledgeAlias.create({ data: { alias: 'Bambu', normalizedAlias: 'bambu', entityType: 'PLANT_TYPE', plantTypeId: plantType.id, priority: 10 } });
+    }
+
+    let recipe = await this.prisma.knowledgeRecipeProfile.findFirst({ where: { plantTypeId: plantType.id, isDefault: true } });
+    if (!recipe) {
+      recipe = await this.prisma.knowledgeRecipeProfile.create({
+        data: {
+          name: 'Bambu Demeti',
+          plantTypeId: plantType.id,
+          isDefault: true,
+          priority: 10,
+          actionJson: { leafStepCm: 10, leavesPerStep: 1 },
+          items: {
+            create: [
+              { componentType: 'TRUNK', displayName: 'Bambu Gövde', quantity: 1, unit: govdeCard?.unit ?? 'Adet', stockCardId: govdeCard?.id ?? null, source: govdeCard ? 'AUTO' : 'MANUAL', sortOrder: 1 },
+              { componentType: 'LEAF', displayName: 'Bambu Yaprak', quantity: 0, unit: yaprakCard?.unit ?? 'Adet', stockCardId: yaprakCard?.id ?? null, source: yaprakCard ? 'AUTO' : 'MANUAL', sortOrder: 2 },
+            ],
+          },
+        },
+      });
+    }
+
+    await this.prisma.knowledgePlantType.update({ where: { id: plantType.id }, data: { defaultRecipeId: recipe.id } });
+    return { ok: true, plantTypeId: plantType.id, recipeId: recipe.id, yaprakCard: yaprakCard?.name ?? null, govdeCard: govdeCard?.name ?? null };
+  }
+
   private async ensureAlias(id: number) {
     const item = await this.prisma.knowledgeAlias.findUnique({ where: { id } });
     if (!item) throw new NotFoundException('Eş anlamlı kayıt bulunamadı.');

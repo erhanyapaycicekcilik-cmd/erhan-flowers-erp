@@ -158,6 +158,7 @@ export default function ProductKnowledgePage() {
 function PlantTypesTab({ plantTypes, onSaved }: { plantTypes: PlantType[]; onSaved: () => Promise<void> }) {
   const [form, setForm] = useState({ name: '', description: '', isActive: true });
   const [saving, setSaving] = useState(false);
+  const [seedMsg, setSeedMsg] = useState('');
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -171,6 +172,17 @@ function PlantTypesTab({ plantTypes, onSaved }: { plantTypes: PlantType[]; onSav
     }
   }
 
+  async function seedBambu() {
+    setSeedMsg('');
+    try {
+      const result = await api<{ ok: boolean; yaprakCard: string | null; govdeCard: string | null }>('/knowledge-base/seed-bambu', { method: 'POST' });
+      setSeedMsg(`Bambu eklendi ✓ Yaprak: ${result.yaprakCard ?? '?'} | Gövde: ${result.govdeCard ?? '?'}`);
+      await onSaved();
+    } catch (err) {
+      setSeedMsg(err instanceof Error ? err.message : 'Hata oluştu.');
+    }
+  }
+
   return (
     <Section title="Bitki Türleri" count={plantTypes.length}>
       <form className="grid gap-3 md:grid-cols-[1fr_1.5fr_120px]" onSubmit={submit}>
@@ -181,6 +193,12 @@ function PlantTypesTab({ plantTypes, onSaved }: { plantTypes: PlantType[]; onSav
           Ekle
         </button>
       </form>
+      <div className="flex items-center gap-3 border-t pt-3">
+        <button type="button" className="btn btn-secondary text-sm" onClick={seedBambu}>
+          🎋 Bambu Ekle
+        </button>
+        {seedMsg && <span className="text-sm text-emerald-600">{seedMsg}</span>}
+      </div>
       <SimpleTable
         headers={['Ad', 'Arama adı', 'Aile', 'Yaprak', 'Gövde', 'Durum']}
         rows={plantTypes.map((item) => [
