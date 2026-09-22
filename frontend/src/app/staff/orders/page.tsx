@@ -648,7 +648,7 @@ function OrderCard({ order, onStatusChange, readySection }: { order: OrderRow; o
             <Printer size={13} /> Yazdır
           </button>
 
-          <input ref={videoRef} type="file" accept="video/*,image/*" capture="environment" multiple className="hidden" onChange={handlePhoto} />
+          <input ref={videoRef} type="file" accept="video/*,image/*" multiple className="hidden" onChange={handlePhoto} />
           {isReady ? (
             <>
               <div className="flex-1 flex items-center justify-center gap-1 text-xs px-2 py-2 rounded-lg bg-green-100 text-green-700 font-bold">

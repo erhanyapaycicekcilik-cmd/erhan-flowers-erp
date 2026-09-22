@@ -1449,7 +1449,7 @@ export class SalesService {
     const productFilter = query.productName ? `%${query.productName}%` : null;
     const barcodeFilter = query.barcode ? `%${query.barcode}%` : null;
     const dateFrom = query.dateFrom ? new Date(query.dateFrom) : new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
-    const dateTo = query.dateTo ? new Date(query.dateTo) : new Date();
+    const dateTo = query.dateTo ? new Date(new Date(query.dateTo).getTime() + 24 * 60 * 60 * 1000) : new Date();
 
     const rows = await this.prisma.$queryRaw<Array<{
       sale_id: number;
