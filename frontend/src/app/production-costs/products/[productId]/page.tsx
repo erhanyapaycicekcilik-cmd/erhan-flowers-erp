@@ -244,6 +244,9 @@ export default function ProductCostDetailPage() {
   const [activating, setActivating] = useState(false);
   const [variantStatus, setVariantStatus] = useState<'ACTIVE' | 'PASSIVE'>('ACTIVE');
   const [pendingSeo, setPendingSeo] = useState<{ name: string; desc: string; keywords: string } | null>(null);
+  const [erpCategories, setErpCategories] = useState<{ id: number; name: string; codePrefix: string }[]>([]);
+  const [selectedCategoryId, setSelectedCategoryId] = useState('');
+  const [generatingCode, setGeneratingCode] = useState(false);
 
   useEffect(() => {
     const savedSettings = window.localStorage.getItem('ef_cost_price_settings');
@@ -262,8 +265,10 @@ export default function ProductCostDetailPage() {
       api<VariantListItem[]>('/production-costs/variants').catch(() => []),
       api<any>(`/product-center/variants/${productId}`).catch(() => null),
       api<any[]>('/shop-categories').catch(() => []),
+      api<{ id: number; name: string; codePrefix: string }[]>('/categories').catch(() => []),
     ])
-      .then(([data, stockData, variantData, pcVariant, cats]) => {
+      .then(([data, stockData, variantData, pcVariant, cats, erpCats]) => {
+        setErpCategories(erpCats ?? []);
         setDetail(data);
         setStockCards(stockData);
         setVariants(variantData);
@@ -912,6 +917,22 @@ export default function ProductCostDetailPage() {
     }
   }
 
+  async function generateCode() {
+    if (!selectedCategoryId) return;
+    setGeneratingCode(true);
+    try {
+      const res = await api<{ modelCode: string }>('/model-codes/generate', {
+        method: 'POST',
+        json: { categoryId: Number(selectedCategoryId) },
+      });
+      setProposedCodeInput(res.modelCode);
+    } catch {
+      setMessage('Stok kodu oluşturulamadı.');
+    } finally {
+      setGeneratingCode(false);
+    }
+  }
+
   async function saveCodes() {
     setSavingCodes(true);
     try {
@@ -1329,6 +1350,20 @@ export default function ProductCostDetailPage() {
             <div>
               <label className="block text-[10px] font-semibold uppercase text-slate-400 mb-0.5">Model Kodu</label>
               <input className="input w-full text-xs" value={modelCodeInput} onChange={(e) => setModelCodeInput(e.target.value)} placeholder="ör. BA-6001" />
+            </div>
+            <div>
+              <label className="block text-[10px] font-semibold uppercase text-slate-400 mb-0.5">Kategori (Stok Kodu)</label>
+              <div className="flex gap-1">
+                <select className="input flex-1 text-xs" value={selectedCategoryId} onChange={(e) => setSelectedCategoryId(e.target.value)}>
+                  <option value="">Kategori seç...</option>
+                  {erpCategories.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name} ({c.codePrefix})</option>
+                  ))}
+                </select>
+                <button className="btn btn-secondary min-h-8 px-2 text-xs whitespace-nowrap" onClick={() => void generateCode()} disabled={generatingCode || !selectedCategoryId}>
+                  {generatingCode ? '...' : 'Oluştur'}
+                </button>
+              </div>
             </div>
             <div>
               <label className="block text-[10px] font-semibold uppercase text-slate-400 mb-0.5">Platform Stok Kodu</label>
