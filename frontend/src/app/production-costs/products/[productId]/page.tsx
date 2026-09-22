@@ -325,7 +325,14 @@ export default function ProductCostDetailPage() {
           }).then((result) => {
             setKnowledgeResult(result);
             applyKnowledgeToForm(result);
-            setMessage('Ürün adı otomatik analiz edildi. Reçete forma getirildi; henüz kaydedilmedi.');
+            const hasRecipe = (result.recipeProfile?.items?.length ?? 0) > 0;
+            const hasFallback = result.defaultTrunkStockCard || result.defaultLeafStockCard;
+            if (!hasRecipe && !hasFallback) {
+              const warns = result.warnings?.join(' ') ?? '';
+              setMessage(`Bilgi Bankası'nda bu ürüne uygun reçete bulunamadı. ${warns} Lütfen Reçete Getir butonuyla tekrar deneyin veya malzemeleri manuel girin.`);
+            } else {
+              setMessage('Ürün adı otomatik analiz edildi. Reçete forma getirildi; henüz kaydedilmedi.');
+            }
           }).catch((error) => {
             setMessage(error instanceof Error ? error.message : 'Ürün Bilgi Motoru otomatik analizi yapılamadı.');
           }).finally(() => setKnowledgeLoading(false));
@@ -573,7 +580,14 @@ export default function ProductCostDetailPage() {
       });
       setKnowledgeResult(result);
       applyKnowledgeToForm(result);
-      setMessage('Ürün adı analiz edildi. Önerilen reçete forma getirildi; henüz kaydedilmedi.');
+      const hasRecipe = (result.recipeProfile?.items?.length ?? 0) > 0;
+      const hasFallback = result.defaultTrunkStockCard || result.defaultLeafStockCard;
+      if (!hasRecipe && !hasFallback) {
+        const warns = result.warnings?.join(' ') ?? '';
+        setMessage(`Ürün adı analiz edildi ama Bilgi Bankası'nda eşleşen reçete bulunamadı. ${warns}`);
+      } else {
+        setMessage('Ürün adı analiz edildi. Önerilen reçete forma getirildi; henüz kaydedilmedi.');
+      }
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Ürün Bilgi Motoru analizi yapılamadı.');
     } finally {
