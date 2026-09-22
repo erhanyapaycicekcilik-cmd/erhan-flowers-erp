@@ -595,6 +595,14 @@ export default function IntegrationsPage() {
           <Link href="/integrations/sku-mapping" className="btn btn-primary text-sm">Eşleştirmeye Git →</Link>
         </section>
 
+        <section className="panel p-4 flex items-center justify-between">
+          <div>
+            <div className="font-bold flex items-center gap-2"><Link2 size={16} className="text-orange-500" /> Trendyol Barkod Eşleştir</div>
+            <div className="text-sm text-slate-500 mt-0.5">Her ürüne Trendyol barkodunu gir — fiyat/stok güncellemesi bu kodla gönderilir</div>
+          </div>
+          <Link href="/integrations/trendyol-barcode" className="btn btn-primary text-sm">Eşleştirmeye Git →</Link>
+        </section>
+
         {/* FloraYapayCiçek site fiyat senkronizasyonu */}
         <section className="panel p-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
