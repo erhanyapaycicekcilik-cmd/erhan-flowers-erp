@@ -335,4 +335,26 @@ export class ProductionCostsController {
   autoAssignModelCodes() {
     return this.productionCosts.autoAssignModelCodes();
   }
+
+  @Post('by-barcode')
+  upsertByBarcode(@Body() body: {
+    barcode: string;
+    totalCost?: number;
+    salePrice?: number;
+    components?: { name: string; stockCardId?: number | null; quantity: number; unit: string; unitCost: number }[];
+  }) {
+    return this.productionCosts.upsertDraftByBarcode(body);
+  }
+
+  @Post('bulk-by-barcode')
+  bulkUpsertByBarcode(@Body() body: {
+    items: {
+      barcode: string;
+      totalCost?: number;
+      salePrice?: number;
+      components?: { name: string; stockCardId?: number | null; quantity: number; unit: string; unitCost: number }[];
+    }[];
+  }) {
+    return this.productionCosts.bulkUpsertDraftByBarcode(body.items);
+  }
 }

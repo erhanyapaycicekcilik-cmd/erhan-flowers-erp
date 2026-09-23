@@ -2884,3 +2884,66 @@ export class ProductionCostsService {
   }
 
 }
+
+  // ── Maliyet tablosundan toplu aktarım ──────────────────────────────────────
+  async upsertDraftByBarcode(input: {
+    barcode: string;
+    totalCost?: number;
+    salePrice?: number;
+    components?: { name: string; stockCardId?: number | null; quantity: number; unit: string; unitCost: number }[];
+  }): Promise<{ ok: boolean; variantId?: number; error?: string }> {
+    const variant = await this.prisma.trendyolProductVariant.findFirst({
+      where: { OR: [{ barcode: input.barcode }, { trendyolBarcode: input.barcode }] },
+      select: { id: true },
+    });
+    if (!variant) return { ok: false, error: 'Ürün bulunamadı: ' + input.barcode };
+
+    let draft = await this.prisma.productCostDraft.findUnique({ where: { variantId: variant.id } });
+    if (!draft) {
+      draft = await this.prisma.productCostDraft.create({
+        data: { variantId: variant.id, salePrice: input.salePrice ?? 0, totalCost: input.totalCost ?? 0 },
+      });
+    } else {
+      await this.prisma.productCostDraft.update({
+        where: { id: draft.id },
+        data: {
+          ...(input.salePrice != null && { salePrice: input.salePrice }),
+          ...(input.totalCost != null && { totalCost: input.totalCost }),
+        },
+      });
+    }
+
+    if (input.components?.length) {
+      await this.prisma.productCostItem.deleteMany({
+        where: { draftId: draft.id, isDefaultExpense: false },
+      });
+      await this.prisma.productCostItem.createMany({
+        data: input.components.map(c => ({
+          draftId: draft!.id,
+          name: c.name,
+          stockCardId: c.stockCardId ?? null,
+          quantity: c.quantity,
+          unit: c.unit,
+          manualUnitCost: c.unitCost,
+          group: 'MATERIAL' as const,
+          source: (c.stockCardId ? 'AUTO' : 'MANUAL') as 'AUTO' | 'MANUAL',
+        })),
+      });
+    }
+
+    return { ok: true, variantId: variant.id };
+  }
+
+  async bulkUpsertDraftByBarcode(
+    items: { barcode: string; totalCost?: number; salePrice?: number; components?: { name: string; stockCardId?: number | null; quantity: number; unit: string; unitCost: number }[] }[],
+  ): Promise<{ sent: number; errors: { barcode: string; error: string }[] }> {
+    let sent = 0;
+    const errors: { barcode: string; error: string }[] = [];
+    for (const item of items) {
+      const result = await this.upsertDraftByBarcode(item);
+      if (result.ok) sent++;
+      else errors.push({ barcode: item.barcode, error: result.error ?? 'Bilinmeyen hata' });
+    }
+    return { sent, errors };
+  }
+}
