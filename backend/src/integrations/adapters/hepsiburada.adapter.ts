@@ -370,4 +370,25 @@ export class HepsiburadaAdapter extends HttpMarketplaceOrderAdapter {
       message: `Hepsiburada API testi basarisiz. HTTP ${response.status}: ${await this.safeErrorText(response)}`,
     };
   }
+
+  async deleteListing(sku: string): Promise<AdapterConnectionResult> {
+    const merchantId = this.env('MERCHANT_ID');
+    const secretKey = this.env('SECRET_KEY') || this.env('PASSWORD') || this.env('API_SECRET');
+    if (!merchantId || !secretKey) return this.missing(['HEPSIBURADA_MERCHANT_ID', 'HEPSIBURADA_SECRET_KEY']);
+    const auth = Buffer.from(`${merchantId}:${secretKey}`).toString('base64');
+    const userAgent = this.env('USER_AGENT') || 'ErhanFlowersERP-HB';
+    const listingBase = this.env('LISTING_API_URL') || 'https://listingapi.hepsiburada.com';
+    const url = `${listingBase}/listings/merchantid/${encodeURIComponent(merchantId)}/sku/${encodeURIComponent(sku)}`;
+    try {
+      const response = await fetch(url, {
+        method: 'DELETE',
+        headers: { Accept: 'application/json', Authorization: `Basic ${auth}`, 'User-Agent': userAgent },
+      });
+      if (response.ok || response.status === 204) return { ok: true, status: 'CONNECTED', message: `Silindi: ${sku}` };
+      const txt = await response.text().catch(() => '');
+      return { ok: false, status: 'FAILED', message: `HTTP ${response.status}: ${txt.slice(0, 200)}` };
+    } catch (e) {
+      return { ok: false, status: 'FAILED', message: String(e) };
+    }
+  }
 }
