@@ -444,6 +444,29 @@ export class ProductsService {
     return { checked: products.length, created, skipped };
   }
 
+  async bulkSetModelCodes(items: { barcode: string; modelCode: string }[]): Promise<{ updated: number; notFound: string[]; conflict: string[] }> {
+    let updated = 0;
+    const notFound: string[] = [];
+    const conflict: string[] = [];
+
+    for (const item of items) {
+      const existing = await this.prisma.product.findFirst({ where: { modelCode: item.modelCode } });
+      if (existing) {
+        const byBarcode = await this.prisma.product.findFirst({ where: { barcode: item.barcode } });
+        if (byBarcode && byBarcode.id === existing.id) { updated++; continue; }
+        conflict.push(`${item.modelCode} → başka üründe`);
+        continue;
+      }
+      const product = await this.prisma.product.findFirst({
+        where: { OR: [{ barcode: item.barcode }, { trendyolBarcode: item.barcode }] },
+      });
+      if (!product) { notFound.push(item.barcode); continue; }
+      await this.prisma.product.update({ where: { id: product.id }, data: { modelCode: item.modelCode } });
+      updated++;
+    }
+    return { updated, notFound, conflict };
+  }
+
   async broadcastAll(): Promise<{ total: number; sent: number; skipped: number; errors: number }> {
     this.invalidatePlatformCache();
     const platformNames = await this.getConnectedPlatforms();
