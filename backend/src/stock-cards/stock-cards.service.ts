@@ -129,6 +129,14 @@ export class StockCardsService {
     private readonly products: ProductsService,
   ) {}
 
+  async namesList() {
+    return this.prisma.stockCard.findMany({
+      where: { status: 'ACTIVE' },
+      select: { id: true, name: true, barcode: true, unit: true },
+      orderBy: { name: 'asc' },
+    });
+  }
+
   async list(userRole?: string) {
     const stockCards = await this.prisma.stockCard.findMany({
       select: stockCardListSelect,

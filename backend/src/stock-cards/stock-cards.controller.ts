@@ -19,6 +19,11 @@ export class StockCardsController {
     return this.stockCards.list(request.user?.role);
   }
 
+  @Get('names')
+  names() {
+    return this.stockCards.namesList();
+  }
+
   @Get('export/excel')
   exportExcel() {
     return this.stockCards.exportExcel();
