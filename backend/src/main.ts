@@ -39,6 +39,7 @@ async function bootstrap() {
     'http://erp.florayapaycicek.com',
     'http://florayapaycicek.com',
     'http://www.florayapaycicek.com',
+    'https://claude.ai',
   ].filter(Boolean) as string[]);
 
   app.enableCors({
