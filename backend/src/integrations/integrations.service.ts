@@ -1336,6 +1336,35 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
     return { ok: true, created, updated, message: `${created} yeni stok karti olusturuldu, ${updated} gorsel guncellendi.` };
   }
 
+  async deleteAllProducts(platform: 'N11' | 'HEPSIBURADA'): Promise<{ deleted: number; failed: number; errors: string[] }> {
+    const variants = await this.prisma.$queryRaw<{ barcode: string; model_code: string | null }[]>`
+      SELECT barcode, model_code FROM trendyol_product_variants WHERE barcode IS NOT NULL AND barcode <> ''
+    `;
+    const adapter = await this.adapter(platform as IntegrationPlatform);
+    let deleted = 0;
+    let failed = 0;
+    const errors: string[] = [];
+    for (const v of variants) {
+      const sku = v.barcode || v.model_code || '';
+      if (!sku) continue;
+      try {
+        let result: import('./adapters/integration-adapter.interface').AdapterConnectionResult;
+        if (platform === 'N11') {
+          result = await (adapter as import('./adapters/n11.adapter').N11Adapter).deleteProduct(sku);
+        } else {
+          result = await (adapter as import('./adapters/hepsiburada.adapter').HepsiburadaAdapter).deleteListing(sku);
+        }
+        if (result.ok) deleted++;
+        else { failed++; if (errors.length < 20) errors.push(`${sku}: ${result.message}`); }
+      } catch (e) {
+        failed++;
+        if (errors.length < 20) errors.push(`${sku}: ${e instanceof Error ? e.message : String(e)}`);
+      }
+      await new Promise(r => setTimeout(r, 100));
+    }
+    return { deleted, failed, errors };
+  }
+
   private async adapter(platform: IntegrationPlatform, companyCode = 'ERHAN'): Promise<IntegrationAdapter> {
     if (platform === 'TRENDYOL') return new TrendyolAdapter(await this.integrationCenter.runtimeCredentials(platform, companyCode));
     if (platform === 'HEPSIBURADA') return new HepsiburadaAdapter(await this.integrationCenter.runtimeCredentials(platform, companyCode));

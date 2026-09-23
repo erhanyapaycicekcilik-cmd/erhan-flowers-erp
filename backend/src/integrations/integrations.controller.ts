@@ -304,4 +304,12 @@ export class IntegrationsController {
     return this.integrations.syncTrendyolStockCards();
   }
 
+  @Post(':platform/delete-all')
+  @UseGuards(OwnerGuard)
+  deleteAllProducts(@Param('platform') platform: string) {
+    const p = platform.toUpperCase();
+    if (p !== 'N11' && p !== 'HEPSIBURADA') throw new Error('Sadece N11 ve HEPSIBURADA destekleniyor.');
+    return this.integrations.deleteAllProducts(p as 'N11' | 'HEPSIBURADA');
+  }
+
 }

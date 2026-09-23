@@ -219,6 +219,25 @@ export class N11Adapter extends HttpMarketplaceOrderAdapter {
     }
   }
 
+  async deleteProduct(stockCode: string): Promise<AdapterConnectionResult> {
+    const appKey = this.env('API_KEY') || this.env('USERNAME');
+    const appSecret = this.env('API_SECRET') || this.env('PASSWORD');
+    if (!appKey || !appSecret) return this.missing(['N11_API_KEY', 'N11_API_SECRET']);
+    const apiUrl = this.env('API_URL') || 'https://api.n11.com';
+    try {
+      const response = await fetch(new URL('/ms/product/tasks/delete-product', apiUrl), {
+        method: 'POST',
+        headers: { Accept: 'application/json', 'Content-Type': 'application/json', appkey: appKey, appsecret: appSecret, 'User-Agent': 'ErhanFlowersERP-N11' },
+        body: JSON.stringify({ payload: { stockCode } }),
+      });
+      if (response.ok) return { ok: true, status: 'CONNECTED', message: `Silindi: ${stockCode}` };
+      const txt = await response.text().catch(() => '');
+      return { ok: false, status: 'FAILED', message: `HTTP ${response.status}: ${txt.slice(0, 200)}` };
+    } catch (e) {
+      return { ok: false, status: 'FAILED', message: String(e) };
+    }
+  }
+
   async testConnection(): Promise<AdapterConnectionResult> {
     const appKey = this.env('API_KEY') || this.env('USERNAME');
     const appSecret = this.env('API_SECRET') || this.env('PASSWORD');
