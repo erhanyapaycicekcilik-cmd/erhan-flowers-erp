@@ -46,6 +46,11 @@ export class ProductsController {
     return this.products.broadcastAll();
   }
 
+  @Post('bulk-set-model-codes')
+  bulkSetModelCodes(@Body() body: { items: { barcode: string; modelCode: string }[] }) {
+    return this.products.bulkSetModelCodes(body.items);
+  }
+
   @Post('backfill-cost-drafts')
   backfillCostDrafts() {
     return this.products.backfillCostDrafts();
