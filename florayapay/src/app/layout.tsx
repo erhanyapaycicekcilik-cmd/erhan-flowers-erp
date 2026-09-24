@@ -12,6 +12,7 @@ const dmSans = DM_Sans({
   subsets: ['latin'],
   display: 'swap',
   variable: '--font-sans',
+  preload: false,
 })
 
 const cormorant = Cormorant_Garamond({
@@ -20,6 +21,7 @@ const cormorant = Cormorant_Garamond({
   style: ['normal', 'italic'],
   display: 'swap',
   variable: '--font-display',
+  preload: false,
 })
 
 const SITE_URL = process.env.SITE_URL || 'https://erhanflowers.com'
