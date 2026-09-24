@@ -2883,8 +2883,6 @@ export class ProductionCostsService {
     });
   }
 
-}
-
   // ── Maliyet tablosundan toplu aktarım ──────────────────────────────────────
   async upsertDraftByBarcode(input: {
     barcode: string;
