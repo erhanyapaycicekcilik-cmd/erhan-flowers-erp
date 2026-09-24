@@ -132,7 +132,7 @@ export class StockCardsService {
   async namesList() {
     return this.prisma.stockCard.findMany({
       where: { status: 'ACTIVE' },
-      select: { id: true, name: true, barcode: true, unit: true },
+      select: { id: true, name: true, barcode: true, unit: true, purchasePrice: true },
       orderBy: { name: 'asc' },
     });
   }
