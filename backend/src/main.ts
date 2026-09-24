@@ -46,6 +46,7 @@ async function bootstrap() {
     origin: (origin, callback) => {
       if (!origin) { callback(null, true); return; } // server-to-server
       if (allowedOrigins.has(origin)) { callback(null, true); return; }
+      if (/^https:\/\/([a-z0-9-]+\.)?claude\.ai$/.test(origin)) { callback(null, true); return; }
       if (!isProduction && /^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin)) {
         callback(null, true); return;
       }
