@@ -1348,11 +1348,11 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
       const sku = v.barcode || v.model_code || '';
       if (!sku) continue;
       try {
-        let result: import('./adapters/integration-adapter.interface').AdapterConnectionResult;
+        let result: { ok: boolean; message?: string };
         if (platform === 'N11') {
-          result = await (adapter as import('./adapters/n11.adapter').N11Adapter).deleteProduct(sku);
+          result = await (adapter as N11Adapter).deleteProduct(sku);
         } else {
-          result = await (adapter as import('./adapters/hepsiburada.adapter').HepsiburadaAdapter).deleteListing(sku);
+          result = await (adapter as HepsiburadaAdapter).deleteListing(sku);
         }
         if (result.ok) deleted++;
         else { failed++; if (errors.length < 20) errors.push(`${sku}: ${result.message}`); }
