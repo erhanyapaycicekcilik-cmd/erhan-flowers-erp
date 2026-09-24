@@ -2923,8 +2923,8 @@ export class ProductionCostsService {
           quantity: c.quantity,
           unit: c.unit,
           manualUnitCost: c.unitCost,
-          group: 'MATERIAL' as const,
-          source: (c.stockCardId ? 'AUTO' : 'MANUAL') as 'AUTO' | 'MANUAL',
+          group: 'OTHER' as any,
+          source: (c.stockCardId ? 'AUTO' : 'MANUAL') as any,
         })),
       });
     }
