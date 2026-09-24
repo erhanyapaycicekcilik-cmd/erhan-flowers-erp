@@ -2891,7 +2891,7 @@ export class ProductionCostsService {
     components?: { name: string; stockCardId?: number | null; quantity: number; unit: string; unitCost: number }[];
   }): Promise<{ ok: boolean; variantId?: number; error?: string }> {
     const variant = await this.prisma.trendyolProductVariant.findFirst({
-      where: { OR: [{ barcode: input.barcode }, { trendyolBarcode: input.barcode }] },
+      where: { barcode: input.barcode },
       select: { id: true },
     });
     if (!variant) return { ok: false, error: 'Ürün bulunamadı: ' + input.barcode };
