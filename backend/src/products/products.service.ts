@@ -323,6 +323,16 @@ export class ProductsService {
 
   // Ürün kaydedilince tüm aktif platform entegrasyonlarına fiyat/stok gönderir.
   // Arka planda çalışır — hata olursa ürün kaydını etkilemez.
+  async broadcastPriceStockPublic(product: {
+    barcode?: string | null;
+    modelCode?: string | null;
+    marketPrice?: unknown;
+    shopPrice?: unknown;
+    stockQuantity?: unknown;
+  }): Promise<void> {
+    return this.broadcastPriceStock(product);
+  }
+
   private async broadcastPriceStock(product: {
     barcode?: string | null;
     trendyolBarcode?: string | null;
