@@ -2,6 +2,7 @@ import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '../auth/auth.guard';
 import { OwnerGuard } from '../auth/owner.guard';
 import { PrismaService } from '../prisma/prisma.service';
+import { ProductsService } from '../products/products.service';
 import { TrendyolProductSyncService } from '../public-catalog/trendyol-product-sync.service';
 import { CostsService } from './costs.service';
 
@@ -12,6 +13,7 @@ export class CostsController {
     private readonly costs: CostsService,
     private readonly prisma: PrismaService,
     private readonly trendyolSync: TrendyolProductSyncService,
+    private readonly products: ProductsService,
   ) {}
 
   @Get('products')
@@ -33,7 +35,7 @@ export class CostsController {
     const result = await this.costs.saveRecipe(Number(productId), body);
 
     if (result?.costs?.sitePrice > 0) {
-      await this.prisma.product.update({
+      const updated = await this.prisma.product.update({
         where: { id: Number(productId) },
         data: {
           sitePrice: result.costs.sitePrice,
@@ -41,6 +43,16 @@ export class CostsController {
           marketPrice: result.costs.marketplacePrice,
           status: 'ACTIVE',
         },
+        select: { barcode: true, modelCode: true, marketPrice: true, shopPrice: true, stockQuantity: true },
+      });
+
+      // Platformlara fiyat gönder (arka planda)
+      void this.products.broadcastPriceStockPublic({
+        barcode: updated.barcode,
+        modelCode: updated.modelCode,
+        marketPrice: updated.marketPrice,
+        shopPrice: updated.shopPrice,
+        stockQuantity: updated.stockQuantity,
       });
 
       // Siteyi arka planda revalidate et (hata olursa sessizce geç)

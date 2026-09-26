@@ -103,7 +103,9 @@ export default function CostsPage() {
     });
 
     setServerCosts(result.costs);
-    setMessage('Reçete kaydedildi. Alış fiyatları stok kartlarından otomatik okunuyor.');
+    setMessage(result.costs.sitePrice > 0
+      ? `✓ Kaydedildi. Dükkan: ₺${result.costs.shopPrice} · Site: ₺${result.costs.sitePrice} · Platform: ₺${result.costs.marketplacePrice} — Trendyol/N11/HB'ye gönderildi.`
+      : 'Reçete kaydedildi. Stok kartı alış fiyatları eksik olduğundan platform güncellemesi yapılmadı.');
   }
 
   function addItem() {
