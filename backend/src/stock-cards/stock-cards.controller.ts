@@ -1,6 +1,6 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, UploadedFile, UploadedFiles, UseGuards, UseInterceptors } from '@nestjs/common';
 import { Request } from 'express';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import * as fs from 'fs';
 import { extname, join } from 'path';
@@ -97,6 +97,25 @@ export class StockCardsController {
   @Post('merge')
   mergeStockCards(@Body() body: { sourceId: number; targetId: number }) {
     return this.stockCards.mergeStockCards(Number(body.sourceId), Number(body.targetId));
+  }
+
+  @Post('bulk-upload-images')
+  @UseInterceptors(
+    FilesInterceptor('files', 400, {
+      storage: diskStorage({
+        destination: (_req, _file, callback) => {
+          const destination = join(process.cwd(), 'uploads', 'stock-cards', '_bulk_temp');
+          fs.mkdirSync(destination, { recursive: true });
+          callback(null, destination);
+        },
+        filename: (_req, file, callback) => {
+          callback(null, file.originalname);
+        },
+      }),
+    }),
+  )
+  bulkUploadImages(@UploadedFiles() files: Express.Multer.File[]) {
+    return this.stockCards.bulkUploadImages(files ?? []);
   }
 
   @Post(':id/sync-platforms')
