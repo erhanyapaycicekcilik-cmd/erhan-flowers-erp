@@ -499,6 +499,64 @@ export class StockCardsService {
     return this.serialize(updatedStockCard ?? stockCard);
   }
 
+  async bulkUploadImages(files: Express.Multer.File[]) {
+    const allCards = await this.prisma.stockCard.findMany({
+      where: { status: 'ACTIVE' },
+      select: { id: true, name: true, sku: true, barcode: true, model: true, oldModelCode: true, imagePath: true },
+    });
+
+    // Build lookup: code → stockCard
+    const lookup = new Map<string, (typeof allCards)[0]>();
+    for (const sc of allCards) {
+      for (const field of [sc.sku, sc.barcode, sc.model, sc.oldModelCode]) {
+        if (field) lookup.set(field.trim().toLowerCase(), sc);
+      }
+    }
+
+    const matched: string[] = [];
+    const unmatched: string[] = [];
+
+    for (const file of files) {
+      const basename = file.originalname.replace(/\.[^.]+$/, '').trim();
+      const sc = lookup.get(basename.toLowerCase());
+
+      if (!sc) {
+        unmatched.push(file.originalname);
+        fs.unlinkSync(file.path);
+        continue;
+      }
+
+      const folderName = this.stockImageFolderName(sc as Record<string, unknown>);
+      const destination = join(stockImageRoot(), folderName);
+      fs.mkdirSync(destination, { recursive: true });
+      const extension = extname(file.originalname).toLowerCase() || '.jpg';
+      const safeName = this.safeLegacyPathSegment(String(sc.name ?? 'stok'));
+      const finalFileName = `${safeName}-bulk${extension}`;
+      const finalPath = join(destination, finalFileName);
+      fs.copyFileSync(file.path, finalPath);
+      fs.unlinkSync(file.path);
+      const publicPath = `/stock-images/${folderName}/${finalFileName}`;
+
+      await this.prisma.stockCard.update({
+        where: { id: sc.id },
+        data: { imagePath: publicPath },
+      });
+
+      const existing = await this.prisma.stockCardImage.findFirst({ where: { stockCardId: sc.id, fileName: finalFileName } });
+      if (!existing) {
+        await this.prisma.stockCardImage.create({
+          data: { stockCardId: sc.id, fileName: finalFileName, filePath: publicPath, folderName: destination, fileType: file.mimetype, isMain: true },
+        });
+      } else {
+        await this.prisma.stockCardImage.update({ where: { id: existing.id }, data: { filePath: publicPath, isMain: true } });
+      }
+
+      matched.push(file.originalname);
+    }
+
+    return { matched: matched.length, unmatched: unmatched.length, matchedFiles: matched, unmatchedFiles: unmatched };
+  }
+
   async setMainImage(id: number, imageId: number) {
     const image = await this.prisma.stockCardImage.findFirst({
       where: { id: imageId, stockCardId: id },
