@@ -1,0 +1,45 @@
+{
+  "slides": [
+    {
+      "id": "1",
+      "image": "https://images.unsplash.com/photo-1585320806297-9794b3e4eeae?w=1600&q=90&fit=crop",
+      "tag": "Yapay Ağaç Koleksiyonu",
+      "title": "Doğanın Güzelliği,",
+      "accent": "Ömür Boyu",
+      "description": "Solmayan yapay çiçek ve bitkilerle evinize ya da ofisinize doğal dokunuş katın.",
+      "active": true
+    },
+    {
+      "id": "2",
+      "image": "https://images.unsplash.com/photo-1558618047-3b9a27c2b67e?w=1600&q=90&fit=crop",
+      "tag": "Dikey Bahçe Sistemleri",
+      "title": "Duvarlarınıza",
+      "accent": "Yeşil Hayat Katın",
+      "description": "Dikey bahçe sistemleriyle mekânınıza doğal yeşil dokunuş katın.",
+      "active": true
+    },
+    {
+      "id": "3",
+      "image": "https://images.unsplash.com/photo-1600411833196-7c1f6b1a8b90?w=1600&q=90&fit=crop",
+      "tag": "Yapay Bitki Dekorasyonu",
+      "title": "Solmayan Renkler,",
+      "accent": "Canlı Dokunuşlar",
+      "description": "Mevsim geçmez, bakım gerektirmez, her zaman taze görünür.",
+      "active": true
+    },
+    {
+      "id": "4",
+      "image": "https://images.unsplash.com/photo-1483794344563-d27a8d18014e?w=1600&q=90&fit=crop",
+      "tag": "Premium Yeşil Dekor",
+      "title": "Ofis & Ev için",
+      "accent": "Doğal Atmosfer",
+      "description": "Profesyonel mekânlar için premium yapay bitki çözümleri.",
+      "active": true
+    }
+  ],
+  "konsept": {
+    "ay": "Eylül 2026",
+    "tema": "Sonbahar Yeşili",
+    "aciklama": "Sonbahar renklerini evinize taşıyan özel koleksiyon"
+  }
+}
