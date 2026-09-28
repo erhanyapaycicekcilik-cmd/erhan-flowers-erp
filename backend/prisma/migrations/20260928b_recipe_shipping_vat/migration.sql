@@ -1,0 +1,3 @@
+ALTER TABLE product_recipes
+  ADD COLUMN shipping_cost DECIMAL(10,2) NOT NULL DEFAULT 0,
+  ADD COLUMN vat_percent   DECIMAL(5,2)  NOT NULL DEFAULT 20;

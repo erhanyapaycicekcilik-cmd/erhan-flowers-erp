@@ -6,6 +6,8 @@ type RecipePayload = {
   shopMarginPercent?: number;
   siteMarginPercent?: number;
   marketplaceMarginPercent?: number;
+  shippingCost?: number;
+  vatPercent?: number;
   items?: Array<{ stockCardId?: number; quantity?: number; unit?: string }>;
   extraCosts?: Array<{ type?: RecipeCostType; name?: string; amount?: number }>;
 };
@@ -153,11 +155,15 @@ export class CostsService {
         shopMarginPercent: data.shopMarginPercent ?? 30,
         siteMarginPercent: data.siteMarginPercent ?? 45,
         marketplaceMarginPercent: data.marketplaceMarginPercent ?? 65,
+        shippingCost: data.shippingCost ?? 0,
+        vatPercent: data.vatPercent ?? 20,
       },
       update: {
         shopMarginPercent: data.shopMarginPercent ?? 30,
         siteMarginPercent: data.siteMarginPercent ?? 45,
         marketplaceMarginPercent: data.marketplaceMarginPercent ?? 65,
+        shippingCost: data.shippingCost ?? 0,
+        vatPercent: data.vatPercent ?? 20,
       },
     });
     const recipe = await this.prisma.productRecipe.findUniqueOrThrow({ where: { productId } });
@@ -204,6 +210,8 @@ export class CostsService {
     shopMarginPercent: Prisma.Decimal;
     siteMarginPercent: Prisma.Decimal;
     marketplaceMarginPercent: Prisma.Decimal;
+    shippingCost: Prisma.Decimal;
+    vatPercent: Prisma.Decimal;
     items: Array<{ quantity: Prisma.Decimal; stockCard: { purchasePrice: Prisma.Decimal; packageContent: Prisma.Decimal; automaticUnitCost: Prisma.Decimal } }>;
     extraCosts: Array<{ amount: Prisma.Decimal }>;
   }) {
@@ -212,13 +220,16 @@ export class CostsService {
     }, 0);
     const extraTotal = recipe.extraCosts.reduce((sum, item) => sum + Number(item.amount), 0);
     const totalCost = componentTotal + extraTotal;
+    const shipping = Number(recipe.shippingCost);
+    const vat = Number(recipe.vatPercent);
+    const vatMult = 1 + vat / 100;
     return {
       componentTotal: this.round(componentTotal),
       extraTotal: this.round(extraTotal),
       totalCost: this.round(totalCost),
-      shopPrice: this.applyMargin(totalCost, Number(recipe.shopMarginPercent)),
-      sitePrice: this.applyMargin(totalCost, Number(recipe.siteMarginPercent)),
-      marketplacePrice: this.applyMargin(totalCost, Number(recipe.marketplaceMarginPercent)),
+      shopPrice: this.round(totalCost * (1 + Number(recipe.shopMarginPercent) / 100) * vatMult),
+      sitePrice: this.round((totalCost + shipping) * vatMult),
+      marketplacePrice: this.round((totalCost + shipping) * (1 + Number(recipe.marketplaceMarginPercent) / 100) * vatMult),
       warnings: this.stockWarnings(recipe.items.map((item) => item.stockCard)),
     };
   }
@@ -229,6 +240,8 @@ export class CostsService {
     shopMarginPercent: Prisma.Decimal;
     siteMarginPercent: Prisma.Decimal;
     marketplaceMarginPercent: Prisma.Decimal;
+    shippingCost: Prisma.Decimal;
+    vatPercent: Prisma.Decimal;
     items: Array<{
       id: number;
       stockCardId: number;
@@ -244,6 +257,8 @@ export class CostsService {
       shopMarginPercent: Number(recipe.shopMarginPercent),
       siteMarginPercent: Number(recipe.siteMarginPercent),
       marketplaceMarginPercent: Number(recipe.marketplaceMarginPercent),
+      shippingCost: Number(recipe.shippingCost),
+      vatPercent: Number(recipe.vatPercent),
       items: recipe.items.map((item) => ({
         id: item.id,
         stockCardId: item.stockCardId,
@@ -272,6 +287,8 @@ export class CostsService {
       shopMarginPercent: this.numberOrDefault(body.shopMarginPercent, 30),
       siteMarginPercent: this.numberOrDefault(body.siteMarginPercent, 45),
       marketplaceMarginPercent: this.numberOrDefault(body.marketplaceMarginPercent, 65),
+      shippingCost: this.numberOrDefault(body.shippingCost, 0),
+      vatPercent: this.numberOrDefault(body.vatPercent, 20),
       items: (body.items ?? []).map((item) => ({
         stockCardId: Number(item.stockCardId),
         quantity: this.numberOrDefault(item.quantity, 0),

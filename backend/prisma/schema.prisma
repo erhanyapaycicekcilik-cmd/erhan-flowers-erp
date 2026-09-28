@@ -1089,6 +1089,8 @@ model ProductRecipe {
   shopMarginPercent        Decimal           @default(30) @map("shop_margin_percent") @db.Decimal(5, 2)
   siteMarginPercent        Decimal           @default(45) @map("site_margin_percent") @db.Decimal(5, 2)
   marketplaceMarginPercent Decimal           @default(65) @map("marketplace_margin_percent") @db.Decimal(5, 2)
+  shippingCost             Decimal           @default(0) @map("shipping_cost") @db.Decimal(10, 2)
+  vatPercent               Decimal           @default(20) @map("vat_percent") @db.Decimal(5, 2)
   createdAt                DateTime          @default(now()) @map("created_at")
   updatedAt                DateTime          @updatedAt @map("updated_at")
   product                  Product           @relation(fields: [productId], references: [id])

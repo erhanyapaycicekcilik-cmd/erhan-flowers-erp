@@ -126,6 +126,8 @@ export default function CostDetailPage({ params }: { params: { id: string } }) {
   const [siteMarginPercent, setSiteMarginPercent] = useState(45);
   const [marketplaceMarginPercent, setMarketplaceMarginPercent] = useState(65);
   const [commissionPercent, setCommissionPercent] = useState(20);
+  const [shippingCost, setShippingCost] = useState(0);
+  const [vatPercent, setVatPercent] = useState(20);
   const [serverCosts, setServerCosts] = useState<CostCalculation>(emptyCosts);
   const [message, setMessage] = useState('');
 
@@ -154,6 +156,8 @@ export default function CostDetailPage({ params }: { params: { id: string } }) {
         setShopMarginPercent(result.recipe?.shopMarginPercent ?? 30);
         setSiteMarginPercent(result.recipe?.siteMarginPercent ?? 45);
         setMarketplaceMarginPercent(result.recipe?.marketplaceMarginPercent ?? 65);
+        setShippingCost((result.recipe as any)?.shippingCost ?? 0);
+        setVatPercent((result.recipe as any)?.vatPercent ?? 20);
         setServerCosts(result.costs);
       })
       .catch(() => null);
@@ -166,24 +170,27 @@ export default function CostDetailPage({ params }: { params: { id: string } }) {
     }, 0);
     const extraTotal = extraCosts.reduce((sum, item) => sum + Number(item.amount || 0), 0);
     const totalCost = componentTotal + extraTotal;
-    const marketplacePrice = round(totalCost * (1 + marketplaceMarginPercent / 100));
+    const vatMult = 1 + vatPercent / 100;
+    const shopPrice = round(totalCost * (1 + shopMarginPercent / 100) * vatMult);
+    const sitePrice = round((totalCost + shippingCost) * vatMult);
+    const marketplacePrice = round((totalCost + shippingCost) * (1 + marketplaceMarginPercent / 100) * vatMult);
     const netAfterCommission = round(marketplacePrice * (1 - commissionPercent / 100));
     return {
       componentTotal: round(componentTotal),
       extraTotal: round(extraTotal),
       totalCost: round(totalCost),
-      shopPrice: round(totalCost * (1 + shopMarginPercent / 100)),
-      sitePrice: round(totalCost * (1 + siteMarginPercent / 100)),
+      shopPrice,
+      sitePrice,
       marketplacePrice,
       netAfterCommission,
     };
-  }, [extraCosts, items, marketplaceMarginPercent, shopMarginPercent, siteMarginPercent, stockCards, commissionPercent]);
+  }, [extraCosts, items, marketplaceMarginPercent, shopMarginPercent, siteMarginPercent, stockCards, commissionPercent, shippingCost, vatPercent]);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
     const result = await api<{ costs: CostCalculation }>(`/costs/products/${productId}/recipe`, {
       method: 'POST',
-      json: { productName, description, catalogCategory: catalogCategory || null, shopMarginPercent, siteMarginPercent, marketplaceMarginPercent, items, extraCosts },
+      json: { productName, description, catalogCategory: catalogCategory || null, shopMarginPercent, siteMarginPercent, marketplaceMarginPercent, shippingCost, vatPercent, items, extraCosts },
     });
     setServerCosts(result.costs);
     setMessage(result.costs.sitePrice > 0
@@ -356,6 +363,14 @@ export default function CostDetailPage({ params }: { params: { id: string } }) {
               <label className="block space-y-1.5">
                 <span className="label">Platform Komisyon %</span>
                 <input className="field" type="number" value={commissionPercent} onChange={(e) => setCommissionPercent(Number(e.target.value))} />
+              </label>
+              <label className="block space-y-1.5">
+                <span className="label">Kargo ₺ (site + platform)</span>
+                <input className="field" type="number" step="0.01" value={shippingCost} onChange={(e) => setShippingCost(Number(e.target.value))} />
+              </label>
+              <label className="block space-y-1.5">
+                <span className="label">KDV %</span>
+                <input className="field" type="number" value={vatPercent} onChange={(e) => setVatPercent(Number(e.target.value))} />
               </label>
             </div>
           </section>
