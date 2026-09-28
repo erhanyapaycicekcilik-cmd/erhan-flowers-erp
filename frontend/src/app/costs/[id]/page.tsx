@@ -172,7 +172,7 @@ export default function CostDetailPage({ params }: { params: { id: string } }) {
     const totalCost = componentTotal + extraTotal;
     const vatMult = 1 + vatPercent / 100;
     const shopPrice = round(totalCost * (1 + shopMarginPercent / 100) * vatMult);
-    const sitePrice = round((totalCost + shippingCost) * vatMult);
+    const sitePrice = round((totalCost + shippingCost) * (1 + siteMarginPercent / 100) * vatMult);
     const marketplacePrice = round((totalCost + shippingCost) * (1 + marketplaceMarginPercent / 100) * vatMult);
     const netAfterCommission = round(marketplacePrice * (1 - commissionPercent / 100));
     return {
