@@ -48,7 +48,7 @@ export default function CostsListPage() {
   const withoutCost = rows.filter((r) => r.costs.totalCost === 0).length;
 
   return (
-    <AdminShell title="Toplu Maliyet Girişi">
+    <AdminShell title="Satılan Ürün Maliyeti">
       <div className="mb-6 grid grid-cols-3 gap-4 sm:grid-cols-3">
         <StatCard label="Toplam Ürün" value={rows.length} />
         <StatCard label="Reçetesi Olan" value={withCost} color="green" />

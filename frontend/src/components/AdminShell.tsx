@@ -67,7 +67,7 @@ const navGroups: { section: string; icon: LucideIcon; items: NavItem[] }[] = [
     icon: Factory,
     items: [
       { href: '/production-costs', label: 'Ürün Maliyeti', icon: Factory, roles: OWNER_ONLY },
-      { href: '/costs', label: 'Stoktan Maliyet', icon: Factory, roles: OWNER_ONLY },
+      { href: '/costs', label: 'Satılan Ürün Maliyeti', icon: Factory, roles: OWNER_ONLY },
       { href: '/hesap-makinesi', label: 'Hesap Makinesi', icon: Calculator, roles: OWNER_MANAGER },
     ],
   },
