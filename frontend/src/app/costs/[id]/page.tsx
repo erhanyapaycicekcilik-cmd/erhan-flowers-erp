@@ -37,6 +37,7 @@ export default function CostDetailPage({ params }: { params: { id: string } }) {
   const [shopMarginPercent, setShopMarginPercent] = useState(30);
   const [siteMarginPercent, setSiteMarginPercent] = useState(45);
   const [marketplaceMarginPercent, setMarketplaceMarginPercent] = useState(65);
+  const [commissionPercent, setCommissionPercent] = useState(20);
   const [serverCosts, setServerCosts] = useState<CostCalculation>(emptyCosts);
   const [message, setMessage] = useState('');
 
@@ -76,15 +77,18 @@ export default function CostDetailPage({ params }: { params: { id: string } }) {
     }, 0);
     const extraTotal = extraCosts.reduce((sum, item) => sum + Number(item.amount || 0), 0);
     const totalCost = componentTotal + extraTotal;
+    const marketplacePrice = round(totalCost * (1 + marketplaceMarginPercent / 100));
+    const netAfterCommission = round(marketplacePrice * (1 - commissionPercent / 100));
     return {
       componentTotal: round(componentTotal),
       extraTotal: round(extraTotal),
       totalCost: round(totalCost),
       shopPrice: round(totalCost * (1 + shopMarginPercent / 100)),
       sitePrice: round(totalCost * (1 + siteMarginPercent / 100)),
-      marketplacePrice: round(totalCost * (1 + marketplaceMarginPercent / 100)),
+      marketplacePrice,
+      netAfterCommission,
     };
-  }, [extraCosts, items, marketplaceMarginPercent, shopMarginPercent, siteMarginPercent, stockCards]);
+  }, [extraCosts, items, marketplaceMarginPercent, shopMarginPercent, siteMarginPercent, stockCards, commissionPercent]);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -98,6 +102,12 @@ export default function CostDetailPage({ params }: { params: { id: string } }) {
       : 'Reçete kaydedildi. Stok kartı alış fiyatları eksik — platform güncellemesi yapılmadı.');
   }
 
+  const trendyolUrl = product?.barcode
+    ? `https://www.trendyol.com/sr?q=${product.barcode}`
+    : product?.modelCode
+    ? `https://www.trendyol.com/sr?q=${product.modelCode}`
+    : null;
+
   return (
     <AdminShell title={product ? `${product.productName} — Reçete` : 'Reçete'}>
       <div className="mb-4">
@@ -110,13 +120,14 @@ export default function CostDetailPage({ params }: { params: { id: string } }) {
         <div className="mb-5 flex items-center gap-3">
           {imageUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={imageUrl} alt={product.productName} width={80} height={80} className="rounded-xl object-cover bg-slate-100 flex-shrink-0 w-20 h-20" />
+            <img src={imageUrl} alt={product.productName} width={96} height={96} className="rounded-xl object-cover bg-slate-100 flex-shrink-0 w-24 h-24" />
           ) : (
-            <div className="w-20 h-20 rounded-xl bg-slate-100 flex-shrink-0 flex items-center justify-center"><Calculator size={24} className="text-slate-400" /></div>
+            <div className="w-24 h-24 rounded-xl bg-slate-100 flex-shrink-0 flex items-center justify-center"><Calculator size={28} className="text-slate-400" /></div>
           )}
           <div>
-            <h1 className="font-bold text-lg">{product.productName}</h1>
-            <p className="text-sm text-slate-500">{product.modelCode}</p>
+            <h1 className="font-bold text-xl">{product.productName}</h1>
+            <p className="text-sm text-slate-500">{product.modelCode}{product.barcode ? ` · ${product.barcode}` : ''}</p>
+            <p className="text-sm text-slate-500">Stok: <span className="font-semibold text-slate-700">{product.stockQuantity} adet</span></p>
           </div>
         </div>
       )}
@@ -127,12 +138,12 @@ export default function CostDetailPage({ params }: { params: { id: string } }) {
           <section className="panel p-5 space-y-4">
             <h2 className="font-bold">Ürün Bilgileri</h2>
             <label className="block space-y-1.5">
-              <span className="label">Ürün Adı</span>
+              <span className="label">Ürün Adı <span className="text-slate-400 font-normal">(platformlara gönderilir)</span></span>
               <input className="field" value={productName} onChange={(e) => setProductName(e.target.value)} placeholder="Ürün adını girin..." />
             </label>
             <label className="block space-y-1.5">
-              <span className="label">Açıklama</span>
-              <textarea className="field min-h-24 resize-y" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Ürün açıklaması (platformlara gönderilir)..." />
+              <span className="label">Açıklama <span className="text-slate-400 font-normal">(SEO — platformlara gönderilir)</span></span>
+              <textarea className="field min-h-28 resize-y" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Ürün açıklaması..." />
             </label>
           </section>
 
@@ -140,7 +151,7 @@ export default function CostDetailPage({ params }: { params: { id: string } }) {
             <div className="flex items-center justify-between gap-3 border-b border-line px-5 py-4">
               <div>
                 <h2 className="font-bold">Bileşenler</h2>
-                <p className="text-sm text-slate-500">Alış fiyatı stok kartından otomatik gelir.</p>
+                <p className="text-sm text-slate-500">Alış fiyatı stok kartından otomatik gelir. Sipariş gelince buradan stok düşer.</p>
               </div>
               <button type="button" className="btn btn-secondary" onClick={() => setItems((c) => [...c, { stockCardId: 0, quantity: 1, unit: 'adet' }])}>
                 <Plus size={17} /> Bileşen
@@ -216,6 +227,23 @@ export default function CostDetailPage({ params }: { params: { id: string } }) {
         </div>
 
         <aside className="space-y-6">
+          {product && (
+            <section className="panel p-5 space-y-2">
+              <h2 className="font-bold mb-3 text-sm text-slate-500 uppercase tracking-wide">Ürün Bilgisi</h2>
+              <InfoRow label="Model Kodu" value={product.modelCode} />
+              {product.barcode && <InfoRow label="Barkod" value={product.barcode} />}
+              <InfoRow label="Stok" value={`${product.stockQuantity} adet`} />
+              {product.shopPrice > 0 && <InfoRow label="Güncel Dükkan" value={`₺${product.shopPrice.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}`} />}
+              {product.sitePrice > 0 && <InfoRow label="Güncel Site" value={`₺${product.sitePrice.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}`} />}
+              {product.marketPrice > 0 && <InfoRow label="Güncel Platform" value={`₺${product.marketPrice.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}`} />}
+              {trendyolUrl && (
+                <a href={trendyolUrl} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-1 text-xs text-brand">
+                  <ExternalLink size={12} /> Trendyol'da ara
+                </a>
+              )}
+            </section>
+          )}
+
           <section className="panel p-5">
             <h2 className="font-bold mb-4">Kar Marjları</h2>
             <div className="space-y-3">
@@ -229,6 +257,10 @@ export default function CostDetailPage({ params }: { params: { id: string } }) {
                   <input className="field" type="number" value={value} onChange={(e) => set(Number(e.target.value))} />
                 </label>
               ))}
+              <label className="block space-y-1.5">
+                <span className="label">Platform Komisyon %</span>
+                <input className="field" type="number" value={commissionPercent} onChange={(e) => setCommissionPercent(Number(e.target.value))} />
+              </label>
             </div>
           </section>
 
@@ -242,6 +274,16 @@ export default function CostDetailPage({ params }: { params: { id: string } }) {
               <CostLine label="Site" value={liveCosts.sitePrice} highlight />
               <CostLine label="Pazaryeri" value={liveCosts.marketplacePrice} highlight />
             </div>
+            {liveCosts.marketplacePrice > 0 && (
+              <div className="mt-3 border-t border-line pt-3">
+                <div className="flex items-center justify-between gap-3 py-1 text-xs text-slate-500">
+                  <span>Komisyon sonrası net ({commissionPercent}%)</span>
+                  <span className={liveCosts.netAfterCommission >= liveCosts.totalCost ? 'text-emerald-600 font-semibold' : 'text-red-600 font-semibold'}>
+                    ₺{liveCosts.netAfterCommission.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+              </div>
+            )}
             <button className="btn btn-primary mt-5 w-full">
               <Save size={17} /> Kaydet &amp; Platformlara Gönder
             </button>
@@ -258,6 +300,15 @@ export default function CostDetailPage({ params }: { params: { id: string } }) {
         </aside>
       </form>
     </AdminShell>
+  );
+}
+
+function InfoRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3 text-sm">
+      <span className="text-slate-500">{label}</span>
+      <span className="font-medium text-right">{value}</span>
+    </div>
   );
 }
 
