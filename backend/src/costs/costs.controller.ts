@@ -26,27 +26,32 @@ export class CostsController {
     return this.costs.getProductRecipe(Number(productId));
   }
 
-  /**
-   * Reçete kaydedilince hesaplanan sitePrice ürüne yazılır,
-   * ürün ACTIVE yapılır ve florayapay sitesi anında revalidate edilir.
-   */
   @Post('products/:productId/recipe')
   async saveRecipe(@Param('productId') productId: string, @Body() body: unknown) {
+    const b = (body ?? {}) as Record<string, unknown>;
+    const productName = typeof b.productName === 'string' ? b.productName.trim() : null;
+    const description = typeof b.description === 'string' ? b.description.trim() : null;
+
     const result = await this.costs.saveRecipe(Number(productId), body);
+
+    // Ürün adı / açıklaması güncelleme
+    const nameUpdateData: Record<string, unknown> = {};
+    if (productName) nameUpdateData.productName = productName;
+    if (description !== null) nameUpdateData.description = description;
 
     if (result?.costs?.sitePrice > 0) {
       const updated = await this.prisma.product.update({
         where: { id: Number(productId) },
         data: {
+          ...nameUpdateData,
           sitePrice: result.costs.sitePrice,
           shopPrice: result.costs.shopPrice,
           marketPrice: result.costs.marketplacePrice,
           status: 'ACTIVE',
         },
-        select: { barcode: true, modelCode: true, marketPrice: true, shopPrice: true, stockQuantity: true },
+        select: { barcode: true, modelCode: true, marketPrice: true, shopPrice: true, stockQuantity: true, productName: true, description: true },
       });
 
-      // Platformlara fiyat gönder (arka planda)
       void this.products.broadcastPriceStockPublic({
         barcode: updated.barcode,
         modelCode: updated.modelCode,
@@ -55,8 +60,13 @@ export class CostsController {
         stockQuantity: updated.stockQuantity,
       });
 
-      // Siteyi arka planda revalidate et (hata olursa sessizce geç)
       void this.trendyolSync.revalidateSite();
+    } else if (Object.keys(nameUpdateData).length > 0) {
+      // Fiyat yoksa sadece ad/açıklama güncelle
+      await this.prisma.product.update({
+        where: { id: Number(productId) },
+        data: nameUpdateData,
+      });
     }
 
     return result;
