@@ -228,7 +228,7 @@ export class CostsService {
       extraTotal: this.round(extraTotal),
       totalCost: this.round(totalCost),
       shopPrice: this.round(totalCost * (1 + Number(recipe.shopMarginPercent) / 100) * vatMult),
-      sitePrice: this.round((totalCost + shipping) * vatMult),
+      sitePrice: this.round((totalCost + shipping) * (1 + Number(recipe.siteMarginPercent) / 100) * vatMult),
       marketplacePrice: this.round((totalCost + shipping) * (1 + Number(recipe.marketplaceMarginPercent) / 100) * vatMult),
       warnings: this.stockWarnings(recipe.items.map((item) => item.stockCard)),
     };
