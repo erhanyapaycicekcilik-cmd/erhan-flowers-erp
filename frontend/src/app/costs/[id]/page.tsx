@@ -379,22 +379,34 @@ export default function CostDetailPage({ params }: { params: { id: string } }) {
             <h2 className="font-bold mb-3">Anlık Hesap</h2>
             <CostLine label="Bileşen Toplamı" value={liveCosts.componentTotal} />
             <CostLine label="Gider Toplamı" value={liveCosts.extraTotal} />
-            <CostLine label="Toplam Maliyet" value={liveCosts.totalCost} strong />
-            <div className="mt-3 border-t border-line pt-3">
-              <CostLine label="Dükkan" value={liveCosts.shopPrice} highlight />
-              <CostLine label="Site" value={liveCosts.sitePrice} highlight />
-              <CostLine label="Pazaryeri" value={liveCosts.marketplacePrice} highlight />
+            <CostLine label="Net Maliyet" value={liveCosts.totalCost} strong />
+
+            {/* Dükkan */}
+            <div className="mt-4 border-t border-line pt-4 space-y-1">
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Dükkan Fiyatı</p>
+              <FormulaLine label={`Net Maliyet × (1 + ${shopMarginPercent}% kar)`} value={round(liveCosts.totalCost * (1 + shopMarginPercent / 100))} />
+              <FormulaLine label={`× (1 + ${vatPercent}% KDV)`} value={liveCosts.shopPrice} highlight />
             </div>
-            {liveCosts.marketplacePrice > 0 && (
-              <div className="mt-3 border-t border-line pt-3">
-                <div className="flex items-center justify-between gap-3 py-1 text-xs text-slate-500">
-                  <span>Komisyon sonrası net ({commissionPercent}%)</span>
-                  <span className={liveCosts.netAfterCommission >= liveCosts.totalCost ? 'text-emerald-600 font-semibold' : 'text-red-600 font-semibold'}>
-                    ₺{liveCosts.netAfterCommission.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}
-                  </span>
-                </div>
-              </div>
-            )}
+
+            {/* Site */}
+            <div className="mt-4 border-t border-line pt-4 space-y-1">
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Site Fiyatı</p>
+              <FormulaLine label={`Net Maliyet + ${shippingCost > 0 ? shippingCost + ' ₺ kargo' : '0 ₺ kargo'}`} value={round(liveCosts.totalCost + shippingCost)} />
+              <FormulaLine label={`× (1 + ${siteMarginPercent}% kar)`} value={round((liveCosts.totalCost + shippingCost) * (1 + siteMarginPercent / 100))} />
+              <FormulaLine label={`× (1 + ${vatPercent}% KDV)`} value={liveCosts.sitePrice} highlight />
+            </div>
+
+            {/* Platform */}
+            <div className="mt-4 border-t border-line pt-4 space-y-1">
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Platform Fiyatı</p>
+              <FormulaLine label={`Net Maliyet + ${shippingCost > 0 ? shippingCost + ' ₺ kargo' : '0 ₺ kargo'}`} value={round(liveCosts.totalCost + shippingCost)} />
+              <FormulaLine label={`× (1 + ${marketplaceMarginPercent}% kar)`} value={round((liveCosts.totalCost + shippingCost) * (1 + marketplaceMarginPercent / 100))} />
+              <FormulaLine label={`× (1 + ${vatPercent}% KDV)`} value={liveCosts.marketplacePrice} highlight />
+              {liveCosts.marketplacePrice > 0 && (
+                <FormulaLine label={`Komisyon düşünce (${commissionPercent}%)`} value={liveCosts.netAfterCommission} dimValue={liveCosts.netAfterCommission < liveCosts.totalCost} />
+              )}
+            </div>
+
             <button className="btn btn-primary mt-5 w-full">
               <Save size={17} /> Kaydet &amp; Platformlara Gönder
             </button>
@@ -428,6 +440,17 @@ function CostLine({ label, value, strong = false, highlight = false }: { label: 
     <div className={`flex items-center justify-between gap-3 py-1.5 text-sm ${strong ? 'font-bold' : ''}`}>
       <span className="text-slate-500">{label}</span>
       <span className={highlight ? 'font-semibold text-brand' : ''}>{value.toLocaleString('tr-TR', { minimumFractionDigits: 2 })} ₺</span>
+    </div>
+  );
+}
+
+function FormulaLine({ label, value, highlight = false, dimValue = false }: { label: string; value: number; highlight?: boolean; dimValue?: boolean }) {
+  return (
+    <div className="flex items-center justify-between gap-2 py-0.5 text-sm">
+      <span className="text-slate-400 text-xs">{label}</span>
+      <span className={`tabular-nums ${highlight ? 'font-bold text-brand' : dimValue ? 'font-semibold text-red-600' : 'text-slate-600'}`}>
+        {value.toLocaleString('tr-TR', { minimumFractionDigits: 2 })} ₺
+      </span>
     </div>
   );
 }
