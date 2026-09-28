@@ -824,35 +824,62 @@ export class OrderSyncService {
   }
 
   private async deductRecipeStock(barcode: string | null, sku: string | null, orderQty: number, orderId: number, orderPrefix: string, note: string): Promise<void> {
-    // Find the TrendyolProductVariant by barcode or proposedModelCode/currentModelCode
+    // 1) Yeni ProductRecipe sisteminden reçete satırlarını bul (barcode veya modelCode üzerinden Product eşleştir)
+    let newRecipeLines: Array<{ stockCardId: number; quantity: unknown; stockCard: { name: string; unit: string } }> = [];
+    if (barcode || sku) {
+      const product = await this.prisma.product.findFirst({
+        where: {
+          OR: [
+            ...(barcode ? [{ barcode }, { trendyolBarcode: barcode }] : []),
+            ...(sku ? [{ modelCode: sku }] : []),
+          ],
+        },
+        select: {
+          recipe: {
+            select: {
+              items: {
+                select: { stockCardId: true, quantity: true, stockCard: { select: { name: true, unit: true } } },
+              },
+            },
+          },
+        },
+      });
+      if (product?.recipe?.items?.length) {
+        newRecipeLines = product.recipe.items.filter((i) => i.stockCardId);
+      }
+    }
+
+    // 2) Eski productCostDraft sisteminden de al (geriye dönük uyumluluk)
     const variant = barcode
-      ? await this.prisma.trendyolProductVariant.findFirst({
-          where: { barcode },
-          select: { id: true },
-        })
+      ? await this.prisma.trendyolProductVariant.findFirst({ where: { barcode }, select: { id: true } })
       : sku
-      ? await this.prisma.trendyolProductVariant.findFirst({
-          where: { OR: [{ proposedModelCode: sku }, { currentModelCode: sku }] },
-          select: { id: true },
-        })
+      ? await this.prisma.trendyolProductVariant.findFirst({ where: { OR: [{ proposedModelCode: sku }, { currentModelCode: sku }] }, select: { id: true } })
       : null;
-    if (!variant) return;
 
-    const draft = await this.prisma.productCostDraft.findUnique({
-      where: { variantId: variant.id },
-      select: {
-        items: { select: { stockCardId: true, quantity: true, name: true } },
-        pots: { select: { stockCardId: true, quantity: true, name: true } },
-      },
-    });
-    if (!draft) return;
+    let legacyLines: Array<{ stockCardId: number; quantity: unknown; name: string }> = [];
+    if (variant) {
+      const draft = await this.prisma.productCostDraft.findUnique({
+        where: { variantId: variant.id },
+        select: {
+          items: { select: { stockCardId: true, quantity: true, name: true } },
+          pots: { select: { stockCardId: true, quantity: true, name: true } },
+        },
+      });
+      if (draft) {
+        legacyLines = [
+          ...draft.items.filter((i) => i.stockCardId),
+          ...draft.pots.filter((p) => p.stockCardId),
+        ] as Array<{ stockCardId: number; quantity: unknown; name: string }>;
+      }
+    }
 
-    const recipeLines = [
-      ...draft.items.filter((i) => i.stockCardId),
-      ...draft.pots.filter((p) => p.stockCardId),
-    ] as Array<{ stockCardId: number; quantity: unknown; name: string }>;
+    // Yeni reçete varsa onu kullan, yoksa eskiye bak
+    const useNew = newRecipeLines.length > 0;
+    const allLines: Array<{ stockCardId: number; quantity: unknown; lineName: string }> = useNew
+      ? newRecipeLines.map((l) => ({ stockCardId: l.stockCardId, quantity: l.quantity, lineName: l.stockCard.name }))
+      : legacyLines.map((l) => ({ stockCardId: l.stockCardId, quantity: l.quantity, lineName: l.name }));
 
-    for (const line of recipeLines) {
+    for (const line of allLines) {
       const deductQty = Number(line.quantity) * orderQty;
       if (deductQty <= 0) continue;
       const card = await this.prisma.stockCard.findUnique({
@@ -875,7 +902,7 @@ export class OrderSyncService {
             unit: card.unit,
             previousStock: prev,
             nextStock: next,
-            note: `${note} - ${line.name}`,
+            note: `${note} - ${line.lineName}`,
             referenceType: 'MARKETPLACE_ORDER',
             referenceId: String(orderId),
             eventKey,
