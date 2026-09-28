@@ -275,6 +275,8 @@ export default function CostDetailPage({ params }: { params: { id: string } }) {
               <InfoRow label="Model Kodu" value={product.modelCode} />
               {product.barcode && <InfoRow label="Barkod" value={product.barcode} />}
               <InfoRow label="Stok" value={`${product.stockQuantity} adet`} />
+              {(product as any).potType && <InfoRow label="Saksı Tipi" value={(product as any).potType} />}
+              {(product as any).potSize && <InfoRow label="Saksı Ebatı" value={(product as any).potSize} />}
               {product.shopPrice > 0 && <InfoRow label="Güncel Dükkan" value={`₺${product.shopPrice.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}`} />}
               {product.sitePrice > 0 && <InfoRow label="Güncel Site" value={`₺${product.sitePrice.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}`} />}
               {product.marketPrice > 0 && <InfoRow label="Güncel Platform" value={`₺${product.marketPrice.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}`} />}
