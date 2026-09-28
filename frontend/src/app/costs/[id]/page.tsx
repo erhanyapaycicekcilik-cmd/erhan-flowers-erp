@@ -155,9 +155,9 @@ export default function CostDetailPage({ params }: { params: { id: string } }) {
         <div className="mb-5 flex items-center gap-3">
           {imageUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={imageUrl} alt={product.productName} width={96} height={96} className="rounded-xl object-cover bg-slate-100 flex-shrink-0 w-24 h-24" />
+            <img src={imageUrl} alt={product.productName} width={160} height={160} className="rounded-xl object-cover bg-slate-100 flex-shrink-0 w-40 h-40" />
           ) : (
-            <div className="w-24 h-24 rounded-xl bg-slate-100 flex-shrink-0 flex items-center justify-center"><Calculator size={28} className="text-slate-400" /></div>
+            <div className="w-40 h-40 rounded-xl bg-slate-100 flex-shrink-0 flex items-center justify-center"><Calculator size={40} className="text-slate-400" /></div>
           )}
           <div>
             <h1 className="font-bold text-xl">{product.productName}</h1>
