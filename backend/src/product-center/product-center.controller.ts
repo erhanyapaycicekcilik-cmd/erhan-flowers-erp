@@ -112,8 +112,8 @@ export class ProductCenterController {
   }
 
   @Get('next-model-code')
-  nextModelCodePreview(@Query('shopCategoryId') shopCategoryId?: string) {
-    return this.productCenter.previewNextModelCode(shopCategoryId ? Number(shopCategoryId) : undefined);
+  nextModelCodePreview(@Query('shopCategoryId') shopCategoryId?: string, @Query('catalogCategory') catalogCategory?: string) {
+    return this.productCenter.previewNextModelCode(shopCategoryId ? Number(shopCategoryId) : undefined, catalogCategory);
   }
 
   @Get('variants/:id')

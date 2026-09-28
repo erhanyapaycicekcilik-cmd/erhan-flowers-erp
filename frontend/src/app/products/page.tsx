@@ -555,15 +555,19 @@ export default function ProductsPage() {
   }, []);
 
   useEffect(() => {
+    const catalogCat = (form as any).catalogCategory;
     const shopCatId = (form as any).shopCategoryId;
-    if (!shopCatId) { setErhCodePreview(''); return; }
-    api<{ modelCode: string }>(`/product-center/next-model-code?shopCategoryId=${shopCatId}`)
+    if (!catalogCat && !shopCatId) { setErhCodePreview(''); return; }
+    const params = catalogCat
+      ? `catalogCategory=${encodeURIComponent(catalogCat)}`
+      : `shopCategoryId=${shopCatId}`;
+    api<{ modelCode: string }>(`/product-center/next-model-code?${params}`)
       .then((r) => {
         setErhCodePreview(r.modelCode);
         if (!form.modelCode) setForm((c) => ({ ...c, modelCode: r.modelCode }));
       })
       .catch(() => setErhCodePreview(''));
-  }, [(form as any).shopCategoryId]);
+  }, [(form as any).catalogCategory, (form as any).shopCategoryId]);
 
   useEffect(() => {
     if (form.variantId || !form.productName.trim() || !form.categoryId) return;

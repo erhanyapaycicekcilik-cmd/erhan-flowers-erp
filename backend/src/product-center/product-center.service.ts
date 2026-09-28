@@ -1235,9 +1235,44 @@ export class ProductCenterService {
     return words.map(w => w[0]).join('').slice(0, 3);
   }
 
-  async previewNextModelCode(shopCategoryId?: number): Promise<{ modelCode: string; prefix: string }> {
+  private static readonly CATALOG_CATEGORY_PREFIXES: Record<string, string> = {
+    'Bambular > Bambu Ağaçlar': 'BA',
+    'Bambular > Bambu Seperatör': 'BS',
+    'Bambular > Bambu Tekli': 'BT',
+    'Bitkiler > Mini Masa Bitkileri': 'BMB',
+    'Bitkiler > Renkli Bitkiler': 'BRB',
+    'Bitkiler > Yeşil Bitkiler': 'BYB',
+    'Demet Çiçekler': 'DC',
+    'Dikey Bahçe & Panel > Çiçekli Panel': 'DCP',
+    'Dikey Bahçe & Panel > Yeşil Panel': 'DYP',
+    'Duvar Dekorları > Çiçekli Duvar Paneli': 'DDP',
+    'Kuru Çiçek & Doğal > Pamuk Dalları': 'KPD',
+    'Saksı Aranjmanları': 'SA',
+    'Saksılar & Vazolar > Dekoratif Vazolar': 'SDV',
+    'Saksılar & Vazolar > MDF Saksı': 'SMS',
+    'Saksılar & Vazolar > Metal Saksı': 'SMT',
+    'Saksılar & Vazolar > Plastik Saksı': 'SPS',
+    'Yapay Ağaçlar > Ficus Ağaçlar': 'YFA',
+    'Yapay Ağaçlar > Hazır Gövde Ağaçlar': 'YHG',
+    'Yapay Ağaçlar > Palmiye Ağaçlar': 'YPA',
+    'Yapay Ağaçlar > Renkli Ağaçlar': 'YRA',
+    'Yapay Ağaçlar > Yeşil Ağaçlar': 'YYA',
+    'Yapay Ağaçlar > Zeytin & Meyve Ağaçları': 'YZM',
+    'Yapay Çiçekler > Güller': 'YCG',
+    'Yapay Çiçekler > Karma Çiçekler': 'YCK',
+    'Yapay Çiçekler > Orkideler': 'YCO',
+    'Yapay Çiçekler > Papatyalar': 'YCP',
+    'Yapay Dal & Yaprak > Tek Dal Çiçekler': 'YDT',
+    'Yapay Dal & Yaprak > Yapraklı Dallar': 'YDY',
+    'Yapay Sarmaşıklar > Renkli Sarmaşık': 'YSR',
+    'Yapay Sarmaşıklar > Yeşil Sarmaşık': 'YSY',
+  };
+
+  async previewNextModelCode(shopCategoryId?: number, catalogCategory?: string): Promise<{ modelCode: string; prefix: string }> {
     let prefix = 'ERH';
-    if (shopCategoryId) {
+    if (catalogCategory && ProductCenterService.CATALOG_CATEGORY_PREFIXES[catalogCategory]) {
+      prefix = `ERH-${ProductCenterService.CATALOG_CATEGORY_PREFIXES[catalogCategory]}`;
+    } else if (shopCategoryId) {
       const cat = await this.prisma.shopCategory.findUnique({
         where: { id: shopCategoryId },
         include: { parent: true },
