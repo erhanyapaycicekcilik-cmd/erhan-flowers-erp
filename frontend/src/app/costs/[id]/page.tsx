@@ -29,6 +29,8 @@ export default function CostDetailPage({ params }: { params: { id: string } }) {
   const productId = params.id;
   const [product, setProduct] = useState<Product | null>(null);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [productName, setProductName] = useState('');
+  const [description, setDescription] = useState('');
   const [stockCards, setStockCards] = useState<StockCard[]>([]);
   const [items, setItems] = useState<RecipeItem[]>([]);
   const [extraCosts, setExtraCosts] = useState<RecipeExtraCost[]>([]);
@@ -47,6 +49,8 @@ export default function CostDetailPage({ params }: { params: { id: string } }) {
         setStockCards(stockData);
         setProduct(result.product);
         setImageUrl(result.imageUrl ?? null);
+        setProductName((result.product as any).productName ?? '');
+        setDescription((result.product as any).description ?? '');
         setItems(result.recipe?.items.map((item) => ({
           stockCardId: item.stockCardId,
           quantity: item.quantity,
@@ -86,7 +90,7 @@ export default function CostDetailPage({ params }: { params: { id: string } }) {
     event.preventDefault();
     const result = await api<{ costs: CostCalculation }>(`/costs/products/${productId}/recipe`, {
       method: 'POST',
-      json: { shopMarginPercent, siteMarginPercent, marketplaceMarginPercent, items, extraCosts },
+      json: { productName, description, shopMarginPercent, siteMarginPercent, marketplaceMarginPercent, items, extraCosts },
     });
     setServerCosts(result.costs);
     setMessage(result.costs.sitePrice > 0
@@ -119,6 +123,19 @@ export default function CostDetailPage({ params }: { params: { id: string } }) {
 
       <form onSubmit={submit} className="grid gap-6 xl:grid-cols-[1fr_360px]">
         <div className="space-y-6">
+
+          <section className="panel p-5 space-y-4">
+            <h2 className="font-bold">Ürün Bilgileri</h2>
+            <label className="block space-y-1.5">
+              <span className="label">Ürün Adı</span>
+              <input className="field" value={productName} onChange={(e) => setProductName(e.target.value)} placeholder="Ürün adını girin..." />
+            </label>
+            <label className="block space-y-1.5">
+              <span className="label">Açıklama</span>
+              <textarea className="field min-h-24 resize-y" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Ürün açıklaması (platformlara gönderilir)..." />
+            </label>
+          </section>
+
           <section className="panel overflow-hidden">
             <div className="flex items-center justify-between gap-3 border-b border-line px-5 py-4">
               <div>
