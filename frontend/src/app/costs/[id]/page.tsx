@@ -152,18 +152,10 @@ export default function CostDetailPage({ params }: { params: { id: string } }) {
       </div>
 
       {product && (
-        <div className="mb-5 flex items-center gap-3">
-          {imageUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={imageUrl} alt={product.productName} width={160} height={160} className="rounded-xl object-cover bg-slate-100 flex-shrink-0 w-40 h-40" />
-          ) : (
-            <div className="w-40 h-40 rounded-xl bg-slate-100 flex-shrink-0 flex items-center justify-center"><Calculator size={40} className="text-slate-400" /></div>
-          )}
-          <div>
-            <h1 className="font-bold text-xl">{product.productName}</h1>
-            <p className="text-sm text-slate-500">{product.modelCode}{product.barcode ? ` · ${product.barcode}` : ''}</p>
-            <p className="text-sm text-slate-500">Stok: <span className="font-semibold text-slate-700">{product.stockQuantity} adet</span></p>
-          </div>
+        <div className="mb-5">
+          <h1 className="font-bold text-xl">{product.productName}</h1>
+          <p className="text-sm text-slate-500 mt-0.5">{product.modelCode}{product.barcode ? ` · ${product.barcode}` : ''}</p>
+          <p className="text-sm text-slate-500">Stok: <span className="font-semibold text-slate-700">{product.stockQuantity} adet</span></p>
         </div>
       )}
 
@@ -269,6 +261,12 @@ export default function CostDetailPage({ params }: { params: { id: string } }) {
         </div>
 
         <aside className="space-y-6">
+          {imageUrl && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <div className="panel overflow-hidden">
+              <img src={imageUrl} alt={product?.productName ?? ''} className="w-full object-contain bg-slate-50" style={{ maxHeight: 320 }} />
+            </div>
+          )}
           {product && (
             <section className="panel p-5 space-y-2">
               <h2 className="font-bold mb-3 text-sm text-slate-500 uppercase tracking-wide">Ürün Bilgisi</h2>
