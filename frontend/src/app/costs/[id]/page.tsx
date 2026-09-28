@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, Calculator, ExternalLink, Plus, Save, Trash2 } from 'lucide-react';
 
 const CATALOG_CATEGORIES = [
@@ -57,6 +57,60 @@ const emptyCosts: CostCalculation = {
   sitePrice: 0,
   marketplacePrice: 0,
 };
+
+function StockCardPicker({ value, stockCards, onChange }: {
+  value: number;
+  stockCards: StockCard[];
+  onChange: (id: number, unit: string) => void;
+}) {
+  const [q, setQ] = useState('');
+  const [open, setOpen] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const selected = stockCards.find((s) => s.id === value);
+
+  const filtered = q.length >= 1
+    ? stockCards.filter((s) => s.name.toLocaleLowerCase('tr-TR').includes(q.toLocaleLowerCase('tr-TR')))
+    : stockCards;
+
+  useEffect(() => {
+    if (open) inputRef.current?.focus();
+  }, [open]);
+
+  if (selected && !open) {
+    return (
+      <button type="button" className="field w-full text-left truncate" onClick={() => { setOpen(true); setQ(''); }}>
+        {selected.name}
+      </button>
+    );
+  }
+
+  return (
+    <div className="relative">
+      <input
+        ref={inputRef}
+        autoFocus
+        className="field w-full"
+        placeholder="Stok adı ara..."
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+      />
+      {filtered.length > 0 && (
+        <ul className="absolute z-50 mt-1 max-h-56 w-full overflow-auto rounded border border-slate-200 bg-white shadow-lg text-sm">
+          {filtered.slice(0, 50).map((s) => (
+            <li
+              key={s.id}
+              className="cursor-pointer px-3 py-2 hover:bg-slate-100"
+              onMouseDown={() => { onChange(s.id, s.unit ?? 'adet'); setOpen(false); setQ(''); }}
+            >
+              {s.name}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
 
 export default function CostDetailPage({ params }: { params: { id: string } }) {
   const productId = params.id;
@@ -213,11 +267,11 @@ export default function CostDetailPage({ params }: { params: { id: string } }) {
                     return (
                       <tr key={index} className="border-t border-line">
                         <td className="px-5 py-3">
-                          <select className="field" value={item.stockCardId}
-                            onChange={(e) => setItems((c) => c.map((r, i) => i === index ? { ...r, stockCardId: Number(e.target.value), unit: stockCards.find((s) => s.id === Number(e.target.value))?.unit ?? r.unit } : r))}>
-                            <option value={0}>Seçiniz</option>
-                            {stockCards.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-                          </select>
+                          <StockCardPicker
+                            value={item.stockCardId}
+                            stockCards={stockCards}
+                            onChange={(id, unit) => setItems((c) => c.map((r, i) => i === index ? { ...r, stockCardId: id, unit } : r))}
+                          />
                           {sc && <Link href={`/stock-cards?stockCardId=${sc.id}`} target="_blank" className="mt-1 inline-flex items-center gap-1 text-xs text-brand"><ExternalLink size={12} /> Stok kartı</Link>}
                         </td>
                         <td className="px-5 py-3"><input className="field" type="number" step="0.001" value={item.quantity} onChange={(e) => setItems((c) => c.map((r, i) => i === index ? { ...r, quantity: Number(e.target.value) } : r))} /></td>
