@@ -11,6 +11,7 @@ type ProductCostRow = {
   productName: string;
   modelCode: string | null;
   status: string;
+  imageUrl: string | null;
   costs: {
     totalCost: number;
     shopPrice: number;
@@ -98,8 +99,24 @@ export default function CostsListPage() {
                 {filtered.map((row) => (
                   <tr key={row.id} className="border-t border-line hover:bg-slate-50 transition-colors">
                     <td className="px-5 py-3">
-                      <div className="font-medium">{row.productName}</div>
-                      {row.modelCode && <div className="text-xs text-slate-400">{row.modelCode}</div>}
+                      <div className="flex items-center gap-3">
+                        {row.imageUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={row.imageUrl}
+                            alt={row.productName}
+                            width={40}
+                            height={40}
+                            className="rounded-md object-cover bg-slate-100 flex-shrink-0 w-10 h-10"
+                          />
+                        ) : (
+                          <div className="w-10 h-10 rounded-md bg-slate-100 flex-shrink-0" />
+                        )}
+                        <div>
+                          <div className="font-medium">{row.productName}</div>
+                          {row.modelCode && <div className="text-xs text-slate-400">{row.modelCode}</div>}
+                        </div>
+                      </div>
                     </td>
                     <td className="px-5 py-3 text-right tabular-nums">
                       {row.costs.totalCost > 0 ? <>{fmt(row.costs.totalCost)} ₺</> : <span className="text-slate-300">—</span>}
