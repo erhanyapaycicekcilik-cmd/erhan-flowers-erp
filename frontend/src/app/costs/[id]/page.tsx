@@ -3,6 +3,39 @@
 import Link from 'next/link';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, Calculator, ExternalLink, Plus, Save, Trash2 } from 'lucide-react';
+
+const CATALOG_CATEGORIES = [
+  'Bambular > Bambu Ağaçlar',
+  'Bambular > Bambu Seperatör',
+  'Bambular > Bambu Tekli',
+  'Bitkiler > Mini Masa Bitkileri',
+  'Bitkiler > Renkli Bitkiler',
+  'Bitkiler > Yeşil Bitkiler',
+  'Demet Çiçekler',
+  'Dikey Bahçe & Panel > Çiçekli Panel',
+  'Dikey Bahçe & Panel > Yeşil Panel',
+  'Duvar Dekorları > Çiçekli Duvar Paneli',
+  'Kuru Çiçek & Doğal > Pamuk Dalları',
+  'Saksı Aranjmanları',
+  'Saksılar & Vazolar > Dekoratif Vazolar',
+  'Saksılar & Vazolar > MDF Saksı',
+  'Saksılar & Vazolar > Metal Saksı',
+  'Saksılar & Vazolar > Plastik Saksı',
+  'Yapay Ağaçlar > Ficus Ağaçlar',
+  'Yapay Ağaçlar > Hazır Gövde Ağaçlar',
+  'Yapay Ağaçlar > Palmiye Ağaçlar',
+  'Yapay Ağaçlar > Renkli Ağaçlar',
+  'Yapay Ağaçlar > Yeşil Ağaçlar',
+  'Yapay Ağaçlar > Zeytin & Meyve Ağaçları',
+  'Yapay Çiçekler > Güller',
+  'Yapay Çiçekler > Karma Çiçekler',
+  'Yapay Çiçekler > Orkideler',
+  'Yapay Çiçekler > Papatyalar',
+  'Yapay Dal & Yaprak > Tek Dal Çiçekler',
+  'Yapay Dal & Yaprak > Yapraklı Dallar',
+  'Yapay Sarmaşıklar > Renkli Sarmaşık',
+  'Yapay Sarmaşıklar > Yeşil Sarmaşık',
+];
 import { AdminShell } from '@/components/AdminShell';
 import { api } from '@/lib/api';
 import type { CostCalculation, Product, ProductRecipe, RecipeCostType, RecipeExtraCost, RecipeItem, StockCard } from '@/types';
@@ -31,6 +64,7 @@ export default function CostDetailPage({ params }: { params: { id: string } }) {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [productName, setProductName] = useState('');
   const [description, setDescription] = useState('');
+  const [catalogCategory, setCatalogCategory] = useState('');
   const [stockCards, setStockCards] = useState<StockCard[]>([]);
   const [items, setItems] = useState<RecipeItem[]>([]);
   const [extraCosts, setExtraCosts] = useState<RecipeExtraCost[]>([]);
@@ -52,6 +86,7 @@ export default function CostDetailPage({ params }: { params: { id: string } }) {
         setImageUrl(result.imageUrl ?? null);
         setProductName((result.product as any).productName ?? '');
         setDescription((result.product as any).description ?? '');
+        setCatalogCategory((result.product as any).catalogCategory ?? '');
         setItems(result.recipe?.items.map((item) => ({
           stockCardId: item.stockCardId,
           quantity: item.quantity,
@@ -94,7 +129,7 @@ export default function CostDetailPage({ params }: { params: { id: string } }) {
     event.preventDefault();
     const result = await api<{ costs: CostCalculation }>(`/costs/products/${productId}/recipe`, {
       method: 'POST',
-      json: { productName, description, shopMarginPercent, siteMarginPercent, marketplaceMarginPercent, items, extraCosts },
+      json: { productName, description, catalogCategory: catalogCategory || null, shopMarginPercent, siteMarginPercent, marketplaceMarginPercent, items, extraCosts },
     });
     setServerCosts(result.costs);
     setMessage(result.costs.sitePrice > 0
@@ -140,6 +175,13 @@ export default function CostDetailPage({ params }: { params: { id: string } }) {
             <label className="block space-y-1.5">
               <span className="label">Ürün Adı <span className="text-slate-400 font-normal">(platformlara gönderilir)</span></span>
               <input className="field" value={productName} onChange={(e) => setProductName(e.target.value)} placeholder="Ürün adını girin..." />
+            </label>
+            <label className="block space-y-1.5">
+              <span className="label">Katalog Kategorisi</span>
+              <select className="field" value={catalogCategory} onChange={(e) => setCatalogCategory(e.target.value)}>
+                <option value="">— Seçiniz —</option>
+                {CATALOG_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
             </label>
             <label className="block space-y-1.5">
               <span className="label">Açıklama <span className="text-slate-400 font-normal">(SEO — platformlara gönderilir)</span></span>
