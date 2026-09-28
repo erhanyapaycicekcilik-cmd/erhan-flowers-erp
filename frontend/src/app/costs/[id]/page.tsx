@@ -28,6 +28,7 @@ const emptyCosts: CostCalculation = {
 export default function CostDetailPage({ params }: { params: { id: string } }) {
   const productId = params.id;
   const [product, setProduct] = useState<Product | null>(null);
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [stockCards, setStockCards] = useState<StockCard[]>([]);
   const [items, setItems] = useState<RecipeItem[]>([]);
   const [extraCosts, setExtraCosts] = useState<RecipeExtraCost[]>([]);
@@ -40,11 +41,12 @@ export default function CostDetailPage({ params }: { params: { id: string } }) {
   useEffect(() => {
     Promise.all([
       api<StockCard[]>('/stock-cards'),
-      api<{ product: Product; recipe: ProductRecipe | null; costs: CostCalculation }>(`/costs/products/${productId}`),
+      api<{ product: Product; imageUrl: string | null; recipe: ProductRecipe | null; costs: CostCalculation }>(`/costs/products/${productId}`),
     ])
       .then(([stockData, result]) => {
         setStockCards(stockData);
         setProduct(result.product);
+        setImageUrl(result.imageUrl ?? null);
         setItems(result.recipe?.items.map((item) => ({
           stockCardId: item.stockCardId,
           quantity: item.quantity,
@@ -102,7 +104,12 @@ export default function CostDetailPage({ params }: { params: { id: string } }) {
 
       {product && (
         <div className="mb-5 flex items-center gap-3">
-          <Calculator size={20} />
+          {imageUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={imageUrl} alt={product.productName} width={56} height={56} className="rounded-lg object-cover bg-slate-100 flex-shrink-0 w-14 h-14" />
+          ) : (
+            <div className="w-14 h-14 rounded-lg bg-slate-100 flex-shrink-0 flex items-center justify-center"><Calculator size={20} className="text-slate-400" /></div>
+          )}
           <div>
             <h1 className="font-bold text-lg">{product.productName}</h1>
             <p className="text-sm text-slate-500">{product.modelCode}</p>
