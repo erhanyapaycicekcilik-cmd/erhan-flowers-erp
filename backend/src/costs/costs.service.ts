@@ -223,13 +223,15 @@ export class CostsService {
     const shipping = Number(recipe.shippingCost);
     const vat = Number(recipe.vatPercent);
     const vatMult = 1 + vat / 100;
+    const basePrice = this.round(totalCost * (1 + Number(recipe.shopMarginPercent) / 100));
     return {
       componentTotal: this.round(componentTotal),
       extraTotal: this.round(extraTotal),
       totalCost: this.round(totalCost),
-      shopPrice: this.round(totalCost * (1 + Number(recipe.shopMarginPercent) / 100) * vatMult),
-      sitePrice: this.round((totalCost + shipping) * (1 + Number(recipe.siteMarginPercent) / 100) * vatMult),
-      marketplacePrice: this.round((totalCost + shipping) * (1 + Number(recipe.marketplaceMarginPercent) / 100) * vatMult),
+      basePrice: this.round(basePrice),
+      shopPrice: this.round(basePrice * vatMult),
+      sitePrice: this.round((basePrice + shipping) * vatMult),
+      marketplacePrice: this.round((basePrice + shipping) * (1 + Number(recipe.marketplaceMarginPercent) / 100) * vatMult),
       warnings: this.stockWarnings(recipe.items.map((item) => item.stockCard)),
     };
   }

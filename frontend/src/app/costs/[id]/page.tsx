@@ -171,14 +171,16 @@ export default function CostDetailPage({ params }: { params: { id: string } }) {
     const extraTotal = extraCosts.reduce((sum, item) => sum + Number(item.amount || 0), 0);
     const totalCost = componentTotal + extraTotal;
     const vatMult = 1 + vatPercent / 100;
-    const shopPrice = round(totalCost * (1 + shopMarginPercent / 100) * vatMult);
-    const sitePrice = round((totalCost + shippingCost) * (1 + siteMarginPercent / 100) * vatMult);
-    const marketplacePrice = round((totalCost + shippingCost) * (1 + marketplaceMarginPercent / 100) * vatMult);
-    const netAfterCommission = round(marketplacePrice * (1 - commissionPercent / 100));
+    const basePrice = round(totalCost * (1 + shopMarginPercent / 100));
+    const shopPrice = round(basePrice * vatMult);
+    const sitePrice = round((basePrice + shippingCost) * vatMult);
+    const marketplacePrice = round((basePrice + shippingCost) * (1 + commissionPercent / 100) * vatMult);
+    const netAfterCommission = round(marketplacePrice / vatMult / (1 + commissionPercent / 100) - shippingCost);
     return {
       componentTotal: round(componentTotal),
       extraTotal: round(extraTotal),
       totalCost: round(totalCost),
+      basePrice,
       shopPrice,
       sitePrice,
       marketplacePrice,
@@ -350,16 +352,10 @@ export default function CostDetailPage({ params }: { params: { id: string } }) {
           <section className="panel p-5">
             <h2 className="font-bold mb-4">Kar Marjları</h2>
             <div className="space-y-3">
-              {[
-                { label: 'Dükkan Kar %', value: shopMarginPercent, set: setShopMarginPercent },
-                { label: 'Site Kar %', value: siteMarginPercent, set: setSiteMarginPercent },
-                { label: 'Pazaryeri Kar %', value: marketplaceMarginPercent, set: setMarketplaceMarginPercent },
-              ].map(({ label, value, set }) => (
-                <label key={label} className="block space-y-1.5">
-                  <span className="label">{label}</span>
-                  <input className="field" type="number" value={value} onChange={(e) => set(Number(e.target.value))} />
-                </label>
-              ))}
+              <label className="block space-y-1.5">
+                <span className="label">Kar %</span>
+                <input className="field" type="number" value={shopMarginPercent} onChange={(e) => setShopMarginPercent(Number(e.target.value))} />
+              </label>
               <label className="block space-y-1.5">
                 <span className="label">Platform Komisyon %</span>
                 <input className="field" type="number" value={commissionPercent} onChange={(e) => setCommissionPercent(Number(e.target.value))} />
@@ -381,29 +377,37 @@ export default function CostDetailPage({ params }: { params: { id: string } }) {
             <CostLine label="Gider Toplamı" value={liveCosts.extraTotal} />
             <CostLine label="Net Maliyet" value={liveCosts.totalCost} strong />
 
+            {/* Ortak baz fiyat */}
+            {liveCosts.totalCost > 0 && (
+              <div className="mt-3 border-t border-line pt-3 space-y-1">
+                <FormulaLine label={`Net Maliyet × (1 + ${shopMarginPercent}% kar) = Baz Fiyat`} value={liveCosts.basePrice} />
+              </div>
+            )}
+
             {/* Dükkan */}
             <div className="mt-4 border-t border-line pt-4 space-y-1">
               <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Dükkan Fiyatı</p>
-              <FormulaLine label={`Net Maliyet × (1 + ${shopMarginPercent}% kar)`} value={round(liveCosts.totalCost * (1 + shopMarginPercent / 100))} />
-              <FormulaLine label={`× (1 + ${vatPercent}% KDV)`} value={liveCosts.shopPrice} highlight />
+              <FormulaLine label="Baz Fiyat" value={liveCosts.basePrice} />
+              <FormulaLine label={`+ %${vatPercent} KDV`} value={liveCosts.shopPrice} highlight />
             </div>
 
             {/* Site */}
             <div className="mt-4 border-t border-line pt-4 space-y-1">
               <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Site Fiyatı</p>
-              <FormulaLine label={`Net Maliyet + ${shippingCost > 0 ? shippingCost + ' ₺ kargo' : '0 ₺ kargo'}`} value={round(liveCosts.totalCost + shippingCost)} />
-              <FormulaLine label={`× (1 + ${siteMarginPercent}% kar)`} value={round((liveCosts.totalCost + shippingCost) * (1 + siteMarginPercent / 100))} />
-              <FormulaLine label={`× (1 + ${vatPercent}% KDV)`} value={liveCosts.sitePrice} highlight />
+              <FormulaLine label="Baz Fiyat" value={liveCosts.basePrice} />
+              {shippingCost > 0 && <FormulaLine label={`+ ${shippingCost.toLocaleString('tr-TR')} ₺ kargo`} value={round(liveCosts.basePrice + shippingCost)} />}
+              <FormulaLine label={`+ %${vatPercent} KDV`} value={liveCosts.sitePrice} highlight />
             </div>
 
             {/* Platform */}
             <div className="mt-4 border-t border-line pt-4 space-y-1">
               <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Platform Fiyatı</p>
-              <FormulaLine label={`Net Maliyet + ${shippingCost > 0 ? shippingCost + ' ₺ kargo' : '0 ₺ kargo'}`} value={round(liveCosts.totalCost + shippingCost)} />
-              <FormulaLine label={`× (1 + ${marketplaceMarginPercent}% kar)`} value={round((liveCosts.totalCost + shippingCost) * (1 + marketplaceMarginPercent / 100))} />
-              <FormulaLine label={`× (1 + ${vatPercent}% KDV)`} value={liveCosts.marketplacePrice} highlight />
-              {liveCosts.marketplacePrice > 0 && (
-                <FormulaLine label={`Komisyon düşünce (${commissionPercent}%)`} value={liveCosts.netAfterCommission} dimValue={liveCosts.netAfterCommission < liveCosts.totalCost} />
+              <FormulaLine label="Baz Fiyat" value={liveCosts.basePrice} />
+              {shippingCost > 0 && <FormulaLine label={`+ ${shippingCost.toLocaleString('tr-TR')} ₺ kargo`} value={round(liveCosts.basePrice + shippingCost)} />}
+              <FormulaLine label={`+ %${commissionPercent} komisyon`} value={round((liveCosts.basePrice + shippingCost) * (1 + commissionPercent / 100))} />
+              <FormulaLine label={`+ %${vatPercent} KDV`} value={liveCosts.marketplacePrice} highlight />
+              {liveCosts.netAfterCommission > 0 && (
+                <FormulaLine label="Elinde kalan (KDV+komisyon düşünce)" value={liveCosts.netAfterCommission} dimValue={liveCosts.netAfterCommission < liveCosts.totalCost} />
               )}
             </div>
 
