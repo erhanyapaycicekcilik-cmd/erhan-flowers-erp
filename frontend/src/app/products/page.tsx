@@ -264,6 +264,7 @@ const emptyForm = {
   potD: '',
   potH: '',
   potVolumeLitre: '',
+  catalogCategory: '',
 };
 
 const emptyQuickForm: QuickForm = {
@@ -300,6 +301,39 @@ const compositeProductKinds: Array<{ key: CompositeProductKind; label: string }>
   { key: 'TREE', label: 'Ağaç Gövde' },
   { key: 'PLANT', label: 'Bitki / Çiçek' },
   { key: 'BAMBOO', label: 'Bambu' },
+];
+
+const CATALOG_CATEGORIES = [
+  'Bambular > Bambu Ağaçlar',
+  'Bambular > Bambu Seperatör',
+  'Bambular > Bambu Tekli',
+  'Bitkiler > Mini Masa Bitkileri',
+  'Bitkiler > Renkli Bitkiler',
+  'Bitkiler > Yeşil Bitkiler',
+  'Demet Çiçekler',
+  'Dikey Bahçe & Panel > Çiçekli Panel',
+  'Dikey Bahçe & Panel > Yeşil Panel',
+  'Duvar Dekorları > Çiçekli Duvar Paneli',
+  'Kuru Çiçek & Doğal > Pamuk Dalları',
+  'Saksı Aranjmanları',
+  'Saksılar & Vazolar > Dekoratif Vazolar',
+  'Saksılar & Vazolar > MDF Saksı',
+  'Saksılar & Vazolar > Metal Saksı',
+  'Saksılar & Vazolar > Plastik Saksı',
+  'Yapay Ağaçlar > Ficus Ağaçlar',
+  'Yapay Ağaçlar > Hazır Gövde Ağaçlar',
+  'Yapay Ağaçlar > Palmiye Ağaçlar',
+  'Yapay Ağaçlar > Renkli Ağaçlar',
+  'Yapay Ağaçlar > Yeşil Ağaçlar',
+  'Yapay Ağaçlar > Zeytin & Meyve Ağaçları',
+  'Yapay Çiçekler > Güller',
+  'Yapay Çiçekler > Karma Çiçekler',
+  'Yapay Çiçekler > Orkideler',
+  'Yapay Çiçekler > Papatyalar',
+  'Yapay Dal & Yaprak > Tek Dal Çiçekler',
+  'Yapay Dal & Yaprak > Yapraklı Dallar',
+  'Yapay Sarmaşıklar > Renkli Sarmaşık',
+  'Yapay Sarmaşıklar > Yeşil Sarmaşık',
 ];
 
 const steps = ['Ürün Bilgileri', 'Reçete/Malzeme', 'Maliyet/Fiyat', 'Görsel/SEO', 'Kanallara Gönder'];
@@ -932,6 +966,7 @@ export default function ProductsPage() {
           potVolumeLitre: w&&d&&h ? ((w*d*h)/1000).toFixed(1) : '',
         };
       })(),
+      catalogCategory: (entry as any).catalogCategory || '',
     });
     setStep(0);
     loadCost(entry.variantId).catch(() => setCostDetail(null));
@@ -964,6 +999,7 @@ export default function ProductsPage() {
         branchCount: (form as any).branchCount ? Number((form as any).branchCount) : undefined,
         leavesPerBranch: (form as any).leavesPerBranch ? Number((form as any).leavesPerBranch) : undefined,
         leafCount: (form as any).leafCount ? Number((form as any).leafCount) : undefined,
+        catalogCategory: (form as any).catalogCategory || null,
       },
     });
     const costSaved = costDetail ? await saveCostDraftForVariant(result.entry.variantId, false) : false;
@@ -2196,6 +2232,18 @@ export default function ProductsPage() {
                     </div>
                   )}
                 </div>
+                <Field label="Katalog Kategorisi">
+                  <select
+                    className="field"
+                    value={(form as any).catalogCategory || ''}
+                    onChange={(e) => setForm((c) => ({ ...c, catalogCategory: e.target.value }))}
+                  >
+                    <option value="">— Seçin —</option>
+                    {CATALOG_CATEGORIES.map((cat) => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
+                  </select>
+                </Field>
                 <Field label="Renk / çeşit"><input className="field" value={form.colorVariant} onChange={(event) => update('colorVariant', event.target.value)} /></Field>
                 {/* Fiziksel özellikler */}
                 <Field label="Ürün boyu"><input className="field" value={(form as any).productHeight || ''} onChange={(e) => update('productHeight' as any, e.target.value)} placeholder="180 cm" /></Field>

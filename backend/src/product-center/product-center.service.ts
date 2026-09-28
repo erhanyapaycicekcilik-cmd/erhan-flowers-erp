@@ -156,6 +156,7 @@ export class ProductCenterService {
         description: this.text(payload.description),
         stockQuantity: this.optionalInt(payload.stockQuantity) ?? 0,
         status,
+        catalogCategory: this.text((payload as any).catalogCategory) || undefined,
       });
 
       const data: any = {
@@ -626,6 +627,7 @@ export class ProductCenterService {
     description?: string;
     stockQuantity: number;
     status: 'ACTIVE' | 'PASSIVE';
+    catalogCategory?: string;
   }) {
     const payload = {
       productName: data.productName,
@@ -652,6 +654,7 @@ export class ProductCenterService {
       warrantyType: 'Uretici',
       status: data.status,
       description: data.description,
+      catalogCategory: data.catalogCategory ?? undefined,
     };
 
     if (data.productId) return tx.product.update({ where: { id: data.productId }, data: payload });
@@ -707,6 +710,7 @@ export class ProductCenterService {
       seoApprovalStatus: variant.seoApprovalStatus,
       status: variant.status,
       updatedAt: variant.updatedAt,
+      catalogCategory: product?.catalogCategory ?? null,
     });
   }
 
