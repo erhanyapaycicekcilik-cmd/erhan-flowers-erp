@@ -10,6 +10,7 @@ type ProductCostRow = {
   id: number;
   productName: string;
   modelCode: string | null;
+  catalogCategory: string | null;
   status: string;
   imageUrl: string | null;
   costs: {
@@ -25,6 +26,7 @@ export default function CostsListPage() {
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<'all' | 'with' | 'without'>('all');
+  const [categoryFilter, setCategoryFilter] = useState('');
 
   useEffect(() => {
     api<ProductCostRow[]>('/costs/products')
@@ -32,6 +34,12 @@ export default function CostsListPage() {
       .catch(() => null)
       .finally(() => setLoading(false));
   }, []);
+
+  const categories = useMemo(() => {
+    const set = new Set<string>();
+    rows.forEach((r) => { if (r.catalogCategory) set.add(r.catalogCategory); });
+    return Array.from(set).sort();
+  }, [rows]);
 
   const filtered = useMemo(() => {
     let list = rows;
@@ -41,8 +49,9 @@ export default function CostsListPage() {
     }
     if (filter === 'with') list = list.filter((r) => r.costs.totalCost > 0);
     if (filter === 'without') list = list.filter((r) => r.costs.totalCost === 0);
+    if (categoryFilter) list = list.filter((r) => r.catalogCategory === categoryFilter);
     return list;
-  }, [rows, query, filter]);
+  }, [rows, query, filter, categoryFilter]);
 
   const withCost = rows.filter((r) => r.costs.totalCost > 0).length;
   const withoutCost = rows.filter((r) => r.costs.totalCost === 0).length;
@@ -65,6 +74,12 @@ export default function CostsListPage() {
             onChange={(e) => setQuery(e.target.value)}
           />
         </div>
+        {categories.length > 0 && (
+          <select className="field" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
+            <option value="">Tüm Kategoriler</option>
+            {categories.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+        )}
         <div className="flex rounded-lg border border-line overflow-hidden text-sm">
           {(['all', 'with', 'without'] as const).map((f) => (
             <button
@@ -87,9 +102,9 @@ export default function CostsListPage() {
               <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
                 <tr>
                   <th className="px-5 py-3">Ürün</th>
+                  <th className="px-5 py-3">Kategori</th>
                   <th className="px-5 py-3 text-right">Maliyet</th>
                   <th className="px-5 py-3 text-right">Dükkan</th>
-                  <th className="px-5 py-3 text-right">Site</th>
                   <th className="px-5 py-3 text-right">Platform</th>
                   <th className="px-5 py-3 text-right">Durum</th>
                   <th className="px-3 py-3"></th>
@@ -118,14 +133,18 @@ export default function CostsListPage() {
                         </div>
                       </div>
                     </td>
+                    <td className="px-5 py-3">
+                      {row.catalogCategory ? (
+                        <span className="text-xs bg-slate-100 text-slate-600 px-2 py-1 rounded-full">{row.catalogCategory}</span>
+                      ) : (
+                        <span className="text-xs text-slate-300">—</span>
+                      )}
+                    </td>
                     <td className="px-5 py-3 text-right tabular-nums">
                       {row.costs.totalCost > 0 ? <>{fmt(row.costs.totalCost)} ₺</> : <span className="text-slate-300">—</span>}
                     </td>
                     <td className="px-5 py-3 text-right tabular-nums font-medium">
                       {row.costs.shopPrice > 0 ? <>{fmt(row.costs.shopPrice)} ₺</> : <span className="text-slate-300">—</span>}
-                    </td>
-                    <td className="px-5 py-3 text-right tabular-nums font-medium">
-                      {row.costs.sitePrice > 0 ? <>{fmt(row.costs.sitePrice)} ₺</> : <span className="text-slate-300">—</span>}
                     </td>
                     <td className="px-5 py-3 text-right tabular-nums font-medium text-brand">
                       {row.costs.marketplacePrice > 0 ? <>{fmt(row.costs.marketplacePrice)} ₺</> : <span className="text-slate-300">—</span>}

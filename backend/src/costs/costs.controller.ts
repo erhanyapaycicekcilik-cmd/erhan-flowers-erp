@@ -26,11 +26,58 @@ export class CostsController {
     return this.costs.getProductRecipe(Number(productId));
   }
 
+  @Get('catalog-categories')
+  getCatalogCategories() {
+    return this.prisma.product.findMany({
+      where: { catalogCategory: { not: null } },
+      select: { catalogCategory: true },
+      distinct: ['catalogCategory'],
+      orderBy: { catalogCategory: 'asc' },
+    }).then(rows => rows.map(r => r.catalogCategory).filter(Boolean));
+  }
+
+  @Post('products/:productId/catalog-category')
+  async setCatalogCategory(@Param('productId') productId: string, @Body() body: unknown) {
+    const b = (body ?? {}) as Record<string, unknown>;
+    const catalogCategory = typeof b.catalogCategory === 'string' ? b.catalogCategory.trim() || null : null;
+    await this.prisma.product.update({
+      where: { id: Number(productId) },
+      data: { catalogCategory },
+    });
+    return { ok: true };
+  }
+
+  @Post('bulk-set-categories')
+  async bulkSetCategories(@Body() body: unknown) {
+    const items = Array.isArray(body) ? body as { barcode?: string; sku?: string; category: string }[] : [];
+    let updated = 0;
+    for (const item of items) {
+      if (!item.category) continue;
+      try {
+        if (item.barcode) {
+          const r = await this.prisma.product.updateMany({
+            where: { OR: [{ barcode: item.barcode }, { trendyolBarcode: item.barcode }] },
+            data: { catalogCategory: item.category },
+          });
+          updated += r.count;
+        } else if (item.sku) {
+          const r = await this.prisma.product.updateMany({
+            where: { modelCode: item.sku },
+            data: { catalogCategory: item.category },
+          });
+          updated += r.count;
+        }
+      } catch {}
+    }
+    return { updated };
+  }
+
   @Post('products/:productId/recipe')
   async saveRecipe(@Param('productId') productId: string, @Body() body: unknown) {
     const b = (body ?? {}) as Record<string, unknown>;
     const productName = typeof b.productName === 'string' ? b.productName.trim() : null;
     const description = typeof b.description === 'string' ? b.description.trim() : null;
+    const catalogCategory = typeof b.catalogCategory === 'string' ? b.catalogCategory.trim() || null : undefined;
 
     const result = await this.costs.saveRecipe(Number(productId), body);
 
@@ -38,6 +85,7 @@ export class CostsController {
     const nameUpdateData: Record<string, unknown> = {};
     if (productName) nameUpdateData.productName = productName;
     if (description !== null) nameUpdateData.description = description;
+    if (catalogCategory !== undefined) nameUpdateData.catalogCategory = catalogCategory;
 
     if (result?.costs?.sitePrice > 0) {
       const updated = await this.prisma.product.update({
