@@ -298,7 +298,10 @@ export default function StockCardsPage() {
 
   async function downloadImagesZip() {
     try {
-      const token = localStorage.getItem('auth_token') ?? '';
+      const hostname = window.location.hostname;
+      const port = window.location.port || 'default';
+      const tokenKey = `auth_token_${hostname}_${port}`;
+      const token = localStorage.getItem(tokenKey) ?? localStorage.getItem('auth_token') ?? '';
       const res = await fetch(`${apiBaseUrl}/stock-cards/export/images-zip`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
         credentials: 'include',
