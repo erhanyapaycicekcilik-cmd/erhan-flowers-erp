@@ -1,5 +1,5 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, UploadedFile, UploadedFiles, UseGuards, UseInterceptors } from '@nestjs/common';
-import { Request } from 'express';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, Res, UploadedFile, UploadedFiles, UseGuards, UseInterceptors } from '@nestjs/common';
+import { Request, Response } from 'express';
 import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import * as fs from 'fs';
@@ -32,6 +32,11 @@ export class StockCardsController {
   @Get('export/pdf')
   exportPdf() {
     return this.stockCards.exportPdf();
+  }
+
+  @Get('export/images-zip')
+  exportImagesZip(@Res() res: Response) {
+    return this.stockCards.exportImagesZip(res);
   }
 
   @Post()

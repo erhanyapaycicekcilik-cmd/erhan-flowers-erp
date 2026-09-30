@@ -2,6 +2,8 @@ import { BadRequestException, Injectable, Logger, NotFoundException } from '@nes
 import { Prisma } from '../generated/prisma-client';
 import * as fs from 'fs';
 import { extname, join } from 'path';
+import { ZipArchive } from 'archiver';
+import { Response } from 'express';
 import * as XLSX from 'xlsx';
 import PDFDocument = require('pdfkit');
 import { cleanMojibakeDeep } from '../common/mojibake';
@@ -263,6 +265,52 @@ export class StockCardsService {
       mimeType: 'application/pdf',
       contentBase64: buffer.toString('base64'),
     };
+  }
+
+  async exportImagesZip(res: Response) {
+    const cards = await this.prisma.stockCard.findMany({
+      select: {
+        id: true,
+        sku: true,
+        imagePath: true,
+        images: { orderBy: [{ isMain: 'desc' }, { id: 'asc' }], take: 1 },
+      },
+    });
+
+    const date = new Date().toISOString().slice(0, 10);
+    res.set({
+      'Content-Type': 'application/zip',
+      'Content-Disposition': `attachment; filename="stok-resimleri-${date}.zip"`,
+    });
+
+    const archive = new ZipArchive();
+    archive.pipe(res);
+
+    for (const card of cards) {
+      const img = card.images[0] ?? null;
+      let diskPath: string | null = null;
+
+      if (img) {
+        diskPath = join(img.folderName, img.fileName);
+      } else if (card.imagePath) {
+        diskPath = this.publicPathToDisk(card.imagePath);
+      }
+
+      if (!diskPath || !fs.existsSync(diskPath)) continue;
+      const ext = extname(diskPath);
+      const safeName = (card.sku ?? String(card.id)).replace(/[/\\:*?"<>|]/g, '_');
+      archive.file(diskPath, { name: `${safeName}${ext}` });
+    }
+
+    await archive.finalize();
+  }
+
+  private publicPathToDisk(publicPath: string): string | null {
+    const normalized = publicPath.replace(/\\/g, '/');
+    const prefix = '/stock-images/';
+    if (!normalized.startsWith(prefix)) return null;
+    const relative = normalized.slice(prefix.length);
+    return join(stockImageRoot(), '..', relative);
   }
 
   async create(payload: unknown) {

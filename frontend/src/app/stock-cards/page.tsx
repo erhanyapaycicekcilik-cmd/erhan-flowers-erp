@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { Edit3, ExternalLink, FileText, History, ImagePlus, Minus, Plus, Printer, Save, Send, Trash2, X } from 'lucide-react';
 import { AdminShell } from '@/components/AdminShell';
-import { api, apiFileUrl } from '@/lib/api';
+import { api, apiBaseUrl, apiFileUrl } from '@/lib/api';
 import type { Category, CurrentUser, Status, StockCard } from '@/types';
 
 type PanelMode = 'create' | 'edit' | 'in' | 'out' | 'history' | 'trendyol' | null;
@@ -294,6 +294,26 @@ export default function StockCardsPage() {
 
   async function load() {
     setStockCards(await api<StockCard[]>('/stock-cards'));
+  }
+
+  async function downloadImagesZip() {
+    try {
+      const token = localStorage.getItem('auth_token') ?? '';
+      const res = await fetch(`${apiBaseUrl}/stock-cards/export/images-zip`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        credentials: 'include',
+      });
+      if (!res.ok) throw new Error('İndirme başarısız');
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `stok-resimleri-${new Date().toISOString().slice(0, 10)}.zip`;
+      link.click();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Resimler indirilemedi.');
+    }
   }
 
   async function downloadStockExport(format: 'excel' | 'pdf') {
@@ -757,6 +777,10 @@ export default function StockCardsPage() {
           <button className="btn btn-secondary" type="button" onClick={() => downloadStockExport('pdf')}>
             <Printer size={18} />
             A4 Fiyat Listesi
+          </button>
+          <button className="btn btn-secondary" type="button" onClick={downloadImagesZip}>
+            <FileText size={18} />
+            Resimleri İndir (ZIP)
           </button>
           <button className="btn btn-primary" onClick={() => openStockForm('create')}>
             <Plus size={18} />
