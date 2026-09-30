@@ -1445,7 +1445,7 @@ export default function ProductCostDetailPage() {
               <div>
                 <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Site Kategorisi</label>
                 <select
-                  className="mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand"
+                  className="mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-base outline-none focus:ring-2 focus:ring-brand"
                   value={shopCategoryId}
                   onChange={e => setShopCategoryId(e.target.value)}
                 >
