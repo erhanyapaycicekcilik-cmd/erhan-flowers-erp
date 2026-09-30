@@ -1160,10 +1160,30 @@ export class SalesService {
 
   private async deductRecipeStock(tx: Prisma.TransactionClient, saleId: number, items: Array<Record<string, unknown>>, userId: number) {
     for (const item of items) {
-      const variantId = item.variant_id ? Number(item.variant_id) : null;
+      let variantId = item.variant_id ? Number(item.variant_id) : null;
       const saleItemId = Number(item.id);
       const saleQuantity = Number(item.quantity ?? 0);
-      if (!variantId || !saleItemId || saleQuantity <= 0) continue;
+      if (!saleItemId || saleQuantity <= 0) continue;
+
+      // Stok kartıyla eklenen satış kalemlerinde variantı barkod üzerinden bul
+      if (!variantId && item.stock_card_id) {
+        const sc = await tx.stockCard.findUnique({
+          where: { id: Number(item.stock_card_id) },
+          select: { barcode: true, sku: true, oldModelCode: true },
+        });
+        if (sc) {
+          const codes = [sc.barcode, sc.sku, sc.oldModelCode].filter(Boolean) as string[];
+          if (codes.length > 0) {
+            const v = await tx.trendyolProductVariant.findFirst({
+              where: { OR: codes.map((c) => ({ barcode: c })) },
+              select: { id: true },
+            });
+            if (v) variantId = v.id;
+          }
+        }
+      }
+
+      if (!variantId) continue;
 
       const draft = await tx.productCostDraft.findUnique({
         where: { variantId },
