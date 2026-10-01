@@ -60,9 +60,9 @@ export default function ProductCostListPage() {
     const needle = query.trim().toLocaleLowerCase('tr-TR');
     const result = variants.filter((item) => {
       const costStatus = item.productCostStatus || item.costStatus || 'Maliyet Girilmedi';
-      if (statusFilter === 'Arşiv') return item.status === 'PASSIVE' && costStatus !== 'Tamamlandı';
-      if (statusFilter === 'Satışta') return item.status !== 'PASSIVE' || costStatus === 'Tamamlandı';
-      const statusOk = statusFilter === 'Tümü' || costStatus === statusFilter;
+      if (statusFilter === 'Tamamlandı') return costStatus === 'Tamamlandı';
+      if (statusFilter === 'Tamamlanmadı') return costStatus !== 'Tamamlandı';
+      const statusOk = statusFilter === 'Tümü';
       const queryOk = !needle || [item.productName, item.barcode, item.currentModelCode, item.proposedModelCode, item.supplierStockCode]
         .filter(Boolean)
         .some((value) => String(value).toLocaleLowerCase('tr-TR').includes(needle));
@@ -195,12 +195,8 @@ export default function ProductCostListPage() {
             <label className="text-xs font-semibold text-slate-500">Filtre</label>
             <select className="mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
               <option>Tümü</option>
-              <option>Satışta</option>
-              <option>Arşiv</option>
-              <option>Maliyet Girilmedi</option>
-              <option>Taslak</option>
-              <option>Kontrol Edilecek</option>
               <option>Tamamlandı</option>
+              <option>Tamamlanmadı</option>
             </select>
           </div>
         </section>
