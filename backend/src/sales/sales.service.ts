@@ -1232,6 +1232,23 @@ export class SalesService {
             userId,
           },
         });
+
+        await tx.stockMovement.create({
+          data: {
+            stockCardId: row.stockCardId,
+            variantId,
+            type: 'OUT',
+            quantity: row.quantity,
+            unit: row.unit,
+            previousStock,
+            nextStock: Number(updated.stockQuantity),
+            reason: 'Reçete kullanımı (satış)',
+            referenceType: 'SALE',
+            referenceId: String(saleId),
+            eventKey: `SM_${eventKey}`,
+            createdById: userId,
+          },
+        });
       }
     }
   }
