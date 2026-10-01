@@ -192,6 +192,24 @@ export class ProductCenterService {
             create: data,
           });
 
+      // Maliyet taslağı yoksa otomatik oluştur — "Maliyet Girilmedi" göstermemek için
+      const existingDraft = await tx.productCostDraft.findUnique({ where: { variantId: variant.id } });
+      if (!existingDraft) {
+        await tx.productCostDraft.create({
+          data: {
+            variantId: variant.id,
+            salePrice: new Prisma.Decimal(salePrice),
+            profitMarginPercent: new Prisma.Decimal(45),
+            vatPercent: new Prisma.Decimal(20),
+            marketplaceMarkupPercent: new Prisma.Decimal(25),
+            campaignBufferPercent: new Prisma.Decimal(10),
+            shippingCost: new Prisma.Decimal(0),
+            desi: new Prisma.Decimal(1),
+            status: 'DRAFT',
+          },
+        });
+      }
+
       const result = { ok: true, entry: await this.findEntry(tx, variant.id) };
       // sitePrice > 0 ise site cache'ini anında sıfırla
       void revalidateSite();
