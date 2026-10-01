@@ -34,6 +34,7 @@ import { EftModule } from './eft/eft.module';
 import { CustomerQuestionsModule } from './customer-questions/customer-questions.module';
 import { ShopCategoriesModule } from './shop-categories/shop-categories.module';
 import { ProjectReferencesModule } from './project-references/project-references.module';
+import { VisitorLogsModule } from './visitor-logs/visitor-logs.module';
 
 @Module({
   imports: [
@@ -78,6 +79,7 @@ import { ProjectReferencesModule } from './project-references/project-references
     CustomerQuestionsModule,
     ShopCategoriesModule,
     ProjectReferencesModule,
+    VisitorLogsModule,
   ],
   controllers: [AppController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

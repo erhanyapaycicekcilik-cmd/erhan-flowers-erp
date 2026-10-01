@@ -1,11 +1,9 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'erhan2024'
-const COOKIE_NAME = 'admin_auth'
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.florayapaycicek.com'
 
-const SKIP_PREFIXES = ['/_next/', '/favicon', '/images/', '/icons/', '/api/']
+const SKIP_PREFIXES = ['/_next/', '/favicon', '/api/', '/auth/']
 
 function trackVisit(request: NextRequest) {
   const { pathname } = request.nextUrl
@@ -21,23 +19,13 @@ function trackVisit(request: NextRequest) {
   fetch(`${API_URL}/visitor-logs`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ site: 'shop', path: pathname, ipAddress: ip, userAgent }),
+    body: JSON.stringify({ site: 'erp', path: pathname, ipAddress: ip, userAgent }),
   }).catch(() => {})
 }
 
 export function middleware(request: NextRequest) {
   trackVisit(request)
-
-  const { pathname } = request.nextUrl
-  if (!pathname.startsWith('/admin')) return NextResponse.next()
-  if (pathname === '/admin/login') return NextResponse.next()
-
-  const auth = request.cookies.get(COOKIE_NAME)?.value
-  if (auth === ADMIN_PASSWORD) return NextResponse.next()
-
-  const loginUrl = new URL('/admin/login', request.url)
-  loginUrl.searchParams.set('from', pathname)
-  return NextResponse.redirect(loginUrl)
+  return NextResponse.next()
 }
 
 export const config = {
