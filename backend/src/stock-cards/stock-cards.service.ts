@@ -716,7 +716,7 @@ export class StockCardsService {
         sm.reference_type AS "referenceType",
         sm.reference_id AS "referenceId",
         sm.created_at AS "createdAt",
-        COALESCE(sc.name, p.product_name, tv.name) AS "itemName",
+        COALESCE(sc.name, p.product_name, tv.product_name) AS "itemName",
         COALESCE(sc.barcode, p.barcode, tv.barcode) AS "barcode",
         sc.id AS "stockCardId",
         p.id AS "productId",
@@ -728,7 +728,7 @@ export class StockCardsService {
       LEFT JOIN stock_cards sc ON sc.id = sm.stock_card_id
       LEFT JOIN products p ON p.id = sm.product_id
       LEFT JOIN trendyol_product_variants tv ON tv.id = sm.variant_id
-      LEFT JOIN retail_sales rs ON rs.id::text = sm.reference_id AND sm.reference_type = 'RETAIL_SALE'
+      LEFT JOIN retail_sales rs ON sm.reference_type IN ('SALE','RETAIL_SALE') AND rs.id::text = sm.reference_id
       LEFT JOIN users u ON u.id = sm.created_by_id
     `;
 
