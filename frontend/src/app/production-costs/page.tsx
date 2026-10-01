@@ -37,7 +37,7 @@ type ImportPreview = {
 export default function ProductCostListPage() {
   const [variants, setVariants] = useState<Variant[]>([]);
   const [query, setQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState('Tümü');
+  const [statusFilter, setStatusFilter] = useState('Tamamlanmadı');
   const [progress, setProgress] = useState<{ completed: number; total: number } | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<ImportPreview | null>(null);
