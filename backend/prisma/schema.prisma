@@ -2445,3 +2445,19 @@ model ProjectReference {
 
   @@map("project_references")
 }
+
+model PageView {
+  id          Int      @id @default(autoincrement())
+  site        String
+  path        String
+  ipAddress   String   @map("ip_address")
+  userAgent   String?  @map("user_agent")
+  deviceBrand String?  @map("device_brand")
+  deviceType  String?  @map("device_type")
+  browser     String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([createdAt])
+  @@index([site, createdAt])
+  @@map("page_views")
+}
