@@ -87,6 +87,7 @@ const navGroups: { section: string; icon: LucideIcon; items: NavItem[] }[] = [
       { href: '/urun-duzenle', label: 'Ürün Düzenle', icon: Edit3, roles: OWNER_MANAGER },
       { href: '/referanslar', label: 'Referans Projeler', icon: LayoutGrid, roles: OWNER_MANAGER },
       { href: '/ziyaretciler', label: 'Ziyaretçiler', icon: Users, roles: OWNER_ONLY },
+      { href: '/kullanicilar', label: 'Kullanıcı Yönetimi', icon: Users, roles: OWNER_ONLY },
     ],
   },
   {
