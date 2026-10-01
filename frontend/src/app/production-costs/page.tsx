@@ -194,9 +194,9 @@ export default function ProductCostListPage() {
           <div className="mt-3">
             <label className="text-xs font-semibold text-slate-500">Filtre</label>
             <select className="mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
-              <option>Tümü</option>
-              <option>Tamamlandı</option>
-              <option>Tamamlanmadı</option>
+              <option value="Tümü">Tümü</option>
+              <option value="Tamamlandı">Tamamlandı</option>
+              <option value="Tamamlanmadı">Tamamlanmadı</option>
             </select>
           </div>
         </section>
