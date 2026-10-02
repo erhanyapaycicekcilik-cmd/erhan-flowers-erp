@@ -104,6 +104,7 @@ const navGroups: { section: string; icon: LucideIcon; items: NavItem[] }[] = [
     items: [
       { href: '/harcama', label: 'Günlük Harcama', icon: Wallet, roles: OWNER_MANAGER },
       { href: '/finance', label: 'Finans', icon: CircleDollarSign, roles: OWNER_ONLY },
+      { href: '/faturalar', label: 'Faturalar', icon: CircleDollarSign, roles: OWNER_ONLY },
       { href: '/borclar', label: 'Tedarikçi Borçları', icon: Warehouse, roles: OWNER_ONLY },
       { href: '/reports', label: 'Raporlar', icon: BarChart3, roles: OWNER_MANAGER },
       { href: '/staff/tasks', label: 'Personel Görev', icon: ListChecks, roles: OWNER_MANAGER, enabled: process.env.NEXT_PUBLIC_ENABLE_SALES_CENTER === 'true' },
