@@ -1189,7 +1189,7 @@ export class SalesService {
         where: { variantId },
         include: { items: true, pots: true },
       });
-      if (!draft || draft.status !== 'APPROVED') continue;
+      if (!draft) continue;
 
       const recipeRows = [...draft.items, ...draft.pots]
         .filter((row) => row.source !== 'MANUAL' && row.stockCardId && Number(row.quantity) > 0)
