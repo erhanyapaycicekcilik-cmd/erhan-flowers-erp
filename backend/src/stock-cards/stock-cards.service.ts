@@ -721,14 +721,15 @@ export class StockCardsService {
         sc.id AS "stockCardId",
         p.id AS "productId",
         rs.sale_number AS "saleNumber",
-        rs.customer_name AS "customerName",
+        rc.name AS "customerName",
         rs.channel AS "channel",
         u.name AS "createdByName"
       FROM stock_movements sm
       LEFT JOIN stock_cards sc ON sc.id = sm.stock_card_id
       LEFT JOIN products p ON p.id = sm.product_id
       LEFT JOIN trendyol_product_variants tv ON tv.id = sm.variant_id
-      LEFT JOIN retail_sales rs ON sm.reference_type IN ('SALE','RETAIL_SALE') AND rs.id::text = sm.reference_id
+      LEFT JOIN retail_sales rs ON rs.id::text = sm.reference_id AND sm.reference_type IN ('SALE','RETAIL_SALE')
+      LEFT JOIN retail_customers rc ON rc.id = rs.customer_id
       LEFT JOIN users u ON u.id = sm.created_by_id
     `;
 
