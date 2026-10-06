@@ -712,7 +712,7 @@ export class StockCardsService {
         sm.unit,
         sm.previous_stock::float AS "previousStock",
         sm.next_stock::float AS "nextStock",
-        sm.reason,
+        COALESCE(sm.note, sm.reason) AS reason,
         sm.reference_type AS "referenceType",
         sm.reference_id AS "referenceId",
         sm.created_at AS "createdAt",
@@ -728,7 +728,7 @@ export class StockCardsService {
       LEFT JOIN stock_cards sc ON sc.id = sm.stock_card_id
       LEFT JOIN products p ON p.id = sm.product_id
       LEFT JOIN trendyol_product_variants tv ON tv.id = sm.variant_id
-      LEFT JOIN retail_sales rs ON rs.id::text = sm.reference_id AND sm.reference_type IN ('SALE','RETAIL_SALE')
+      LEFT JOIN retail_sales rs ON sm.reference_type IN ('SALE','RETAIL_SALE') AND sm.reference_id ~ '^[0-9]+$' AND rs.id = sm.reference_id::bigint
       LEFT JOIN retail_customers rc ON rc.id = rs.customer_id
       LEFT JOIN users u ON u.id = sm.created_by_id
     `;

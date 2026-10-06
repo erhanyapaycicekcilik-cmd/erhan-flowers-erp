@@ -199,9 +199,9 @@ export class OrderSyncService {
               stockDeductions++;
             }
           }
-        } else if (stockCard && Number(stockCard.stockQuantity) > 0) {
+        } else if (stockCard) {
           const prevStock = Number(stockCard.stockQuantity);
-          const deductQty = Math.min(qty, prevStock);
+          const deductQty = qty;
           const nextStock = prevStock - deductQty;
           const eventKey = `TRENDYOL_ORDER_${savedOrder.id}_SC_${stockCard.id}`;
           const alreadyExists = await this.prisma.stockMovement.findUnique({ where: { eventKey } });
@@ -465,9 +465,9 @@ export class OrderSyncService {
           data: { orderId: savedOrder.id, productName: String(line.productName ?? 'Bilinmeyen Urun'), sku, barcode, quantity: qty, unitPrice, totalPrice: qty * unitPrice, stockCardId: stockCard?.id ?? null },
         });
 
-        if (stockCard && Number(stockCard.stockQuantity) > 0) {
+        if (stockCard) {
           const prev = Number(stockCard.stockQuantity);
-          const deduct = Math.min(qty, prev);
+          const deduct = qty;
           const next = prev - deduct;
           const eventKey = `N11_ORDER_${savedOrder.id}_SC_${stockCard.id}`;
           const exists = await this.prisma.stockMovement.findUnique({ where: { eventKey } });
@@ -591,9 +591,9 @@ export class OrderSyncService {
           data: { orderId: savedOrder.id, productName: String(line.productName ?? line.name ?? 'Bilinmeyen Urun'), sku, barcode, quantity: qty, unitPrice, totalPrice: qty * unitPrice, stockCardId: stockCard?.id ?? null },
         });
 
-        if (stockCard && Number(stockCard.stockQuantity) > 0) {
+        if (stockCard) {
           const prev = Number(stockCard.stockQuantity);
-          const deduct = Math.min(qty, prev);
+          const deduct = qty;
           const next = prev - deduct;
           const eventKey = `HB_ORDER_${savedOrder.id}_SC_${stockCard.id}`;
           const exists = await this.prisma.stockMovement.findUnique({ where: { eventKey } });
@@ -1077,9 +1077,9 @@ export class OrderSyncService {
               ]);
             }
           }
-        } else if (stockCard && Number(stockCard.stockQuantity) > 0) {
+        } else if (stockCard) {
           const prevStock = Number(stockCard.stockQuantity);
-          const deductQty = Math.min(qty, prevStock);
+          const deductQty = qty;
           const nextStock = prevStock - deductQty;
           const eventKey = `FLORA_TRENDYOL_ORDER_${savedFloraOrder.id}_SC_${stockCard.id}`;
           const alreadyExists = await this.prisma.stockMovement.findUnique({ where: { eventKey } });
