@@ -276,6 +276,7 @@ export default function StockCardsPage() {
     barcode: '',
     modelCode: '',
   });
+  const [trendyolCompany, setTrendyolCompany] = useState<'ERHAN' | 'FLORA' | 'BOTH'>('ERHAN');
   const [trendyolResult, setTrendyolResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [trendyolSending, setTrendyolSending] = useState(false);
   const [trendyolCategories, setTrendyolCategories] = useState<Array<{ id: number; name: string; parentId: number | null; leaf: boolean }>>([]);
@@ -687,38 +688,52 @@ export default function StockCardsPage() {
     setPanelMode('trendyol');
   }
 
+  async function submitTrendyolForCompany(companyCode: 'ERHAN' | 'FLORA') {
+    if (!selected) return;
+    const json = {
+      categoryId: Number(trendyolForm.categoryId),
+      salePrice: Number(trendyolForm.salePrice),
+      listPrice: Number(trendyolForm.listPrice || trendyolForm.salePrice),
+      description: trendyolForm.description,
+      color: trendyolForm.color,
+      flowerType: trendyolForm.flowerType,
+      vatRate: Number(trendyolForm.vatRate),
+      desi: Number(trendyolForm.desi),
+      barcode: trendyolForm.barcode || undefined,
+      modelCode: trendyolForm.modelCode || undefined,
+      companyCode,
+    };
+    const result = await api<{ ok: boolean; message: string; status: string; batchRequestId?: string }>(`/stock-cards/${selected.id}/trendyol-publish`, { method: 'POST', json });
+    if (result.ok && result.batchRequestId) {
+      await new Promise(r => setTimeout(r, 4000));
+      try {
+        const br = await api<{ ok: boolean; message: string }>(`/product-center/trendyol-batch/${result.batchRequestId}`);
+        return { ok: br.ok, message: `[${companyCode}] ${br.message}` };
+      } catch {
+        return { ok: result.ok, message: `[${companyCode}] ${result.message}` };
+      }
+    }
+    return { ok: result.ok, message: `[${companyCode}] ${result.message}` };
+  }
+
   async function submitTrendyol(event: FormEvent) {
     event.preventDefault();
     if (!selected) return;
     setTrendyolSending(true);
     setTrendyolResult(null);
     try {
-      const result = await api<{ ok: boolean; message: string; status: string; batchRequestId?: string }>(`/stock-cards/${selected.id}/trendyol-publish`, {
-        method: 'POST',
-        json: {
-          categoryId: Number(trendyolForm.categoryId),
-          salePrice: Number(trendyolForm.salePrice),
-          listPrice: Number(trendyolForm.listPrice || trendyolForm.salePrice),
-          description: trendyolForm.description,
-          color: trendyolForm.color,
-          flowerType: trendyolForm.flowerType,
-          vatRate: Number(trendyolForm.vatRate),
-          desi: Number(trendyolForm.desi),
-          barcode: trendyolForm.barcode || undefined,
-          modelCode: trendyolForm.modelCode || undefined,
-        },
-      });
-      if (result.ok && result.batchRequestId) {
-        setTrendyolResult({ ok: true, message: 'Trendyol kuyruğa alındı, sonuç bekleniyor...' });
-        await new Promise(r => setTimeout(r, 4000));
-        try {
-          const batchResult = await api<{ ok: boolean; message: string; batchStatus?: string }>(`/product-center/trendyol-batch/${result.batchRequestId}`);
-          setTrendyolResult({ ok: batchResult.ok, message: batchResult.message });
-        } catch {
-          setTrendyolResult({ ok: result.ok, message: result.message });
-        }
+      if (trendyolCompany === 'BOTH') {
+        const [r1, r2] = await Promise.all([
+          submitTrendyolForCompany('ERHAN'),
+          submitTrendyolForCompany('FLORA'),
+        ]);
+        setTrendyolResult({
+          ok: r1.ok && r2.ok,
+          message: `${r1.message}\n${r2.message}`,
+        });
       } else {
-        setTrendyolResult({ ok: result.ok, message: result.message });
+        const result = await submitTrendyolForCompany(trendyolCompany);
+        setTrendyolResult(result);
       }
     } catch (error) {
       setTrendyolResult({ ok: false, message: error instanceof Error ? error.message : 'Trendyol gönderimi başarısız.' });
@@ -989,6 +1004,22 @@ export default function StockCardsPage() {
                     ))}
                   </div>
                 )}
+
+                <div className="mb-3">
+                  <div className="mb-1 text-xs font-semibold text-slate-500">Hesap Seçimi</div>
+                  <div className="flex gap-2">
+                    {([['ERHAN', 'Erhan Flowers'], ['FLORA', 'Florayapaycicek'], ['BOTH', 'Her İkisi']] as const).map(([code, label]) => (
+                      <button
+                        key={code}
+                        type="button"
+                        onClick={() => setTrendyolCompany(code)}
+                        className={`flex-1 rounded-md border px-2 py-1.5 text-xs font-semibold transition-colors ${trendyolCompany === code ? 'border-brand bg-brand text-white' : 'border-line bg-white text-slate-600 hover:border-brand/40'}`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
 
                 <div className="mb-3 rounded-md bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700">
                   Trendyol'a göndermek için aşağıdaki alanları doldurun. Barkod ve stok miktarı stok kartından otomatik alınır.
