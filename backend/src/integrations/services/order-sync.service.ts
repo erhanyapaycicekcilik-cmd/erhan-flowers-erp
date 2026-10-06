@@ -1024,12 +1024,13 @@ export class OrderSyncService {
       const invoiceAddress = (order.invoiceAddress ?? {}) as Record<string, unknown>;
       const customerName = [shipmentAddress.firstName, shipmentAddress.lastName].filter(Boolean).join(' ') ||
         this.text(shipmentAddress.fullName) || this.text(invoiceAddress.fullName) || '';
+      const floraOrderNumber = this.text(order.orderNumber ?? order.id);
 
-      await this.prisma.marketplaceOrder.create({
+      const savedFloraOrder = await this.prisma.marketplaceOrder.create({
         data: {
           platform: 'TRENDYOL',
           externalOrderId: `FLORA_${externalOrderId}`,
-          orderNumber: this.text(order.orderNumber ?? order.id),
+          orderNumber: floraOrderNumber,
           status: this.text(order.status) || 'CREATED',
           customerName: customerName || null,
           totalAmount: Number(order.totalPrice ?? order.grossAmount ?? 0),
@@ -1039,10 +1040,62 @@ export class OrderSyncService {
           cargoTrackingNumber: order.cargoTrackingNumber ? String(order.cargoTrackingNumber) : null,
           cargoProvider: order.cargoProviderName ? String(order.cargoProviderName) : null,
           rawPayload: { ...order as object, _company: 'FLORA' },
-          stockDeducted: true,
+          stockDeducted: false,
         },
       });
       newOrders++;
+
+      // Stok düşümü — aynı depo, ERHAN ile aynı stok kartları kullanılır
+      const floraLines: TrendyolOrderLine[] = Array.isArray(order.lines) ? order.lines : [];
+      for (const line of floraLines) {
+        const barcode = line.barcode ? String(line.barcode) : null;
+        const sku = line.merchantSku ? String(line.merchantSku) : null;
+        const qty = Number(line.quantity ?? 1);
+
+        let stockCard: { id: number; stockQuantity: unknown; unit: string } | null = null;
+        if (barcode) stockCard = await this.prisma.stockCard.findFirst({ where: { barcode, status: 'ACTIVE' }, select: { id: true, stockQuantity: true, unit: true } });
+        if (!stockCard && sku) stockCard = await this.prisma.stockCard.findFirst({ where: { sku, status: 'ACTIVE' }, select: { id: true, stockQuantity: true, unit: true } });
+
+        const components = sku ? await this.prisma.$queryRaw<Array<{ stock_card_id: number; quantity: number }>>`
+          SELECT stock_card_id, quantity FROM marketplace_sku_components
+          WHERE platform = 'TRENDYOL' AND external_sku = ${sku}
+        ` : [];
+
+        if (components.length > 0) {
+          for (const comp of components) {
+            const compCard = await this.prisma.stockCard.findFirst({ where: { id: comp.stock_card_id }, select: { id: true, stockQuantity: true, unit: true } });
+            if (!compCard) continue;
+            const deductQty = Number(comp.quantity) * qty;
+            const prev = Number(compCard.stockQuantity);
+            const next = prev - deductQty;
+            const eventKey = `FLORA_TRENDYOL_ORDER_${savedFloraOrder.id}_SC_${compCard.id}`;
+            const exists = await this.prisma.stockMovement.findUnique({ where: { eventKey } });
+            if (!exists) {
+              await this.prisma.$transaction([
+                this.prisma.stockCard.update({ where: { id: compCard.id }, data: { stockQuantity: next, lastMovementAt: new Date() } }),
+                this.prisma.stockMovement.create({ data: { stockCardId: compCard.id, type: 'OUT', quantity: -deductQty, unit: compCard.unit, previousStock: prev, nextStock: next, note: `Flora Trendyol siparis: ${floraOrderNumber}`, referenceType: 'MARKETPLACE_ORDER', referenceId: String(savedFloraOrder.id), eventKey } }),
+              ]);
+            }
+          }
+        } else if (stockCard && Number(stockCard.stockQuantity) > 0) {
+          const prevStock = Number(stockCard.stockQuantity);
+          const deductQty = Math.min(qty, prevStock);
+          const nextStock = prevStock - deductQty;
+          const eventKey = `FLORA_TRENDYOL_ORDER_${savedFloraOrder.id}_SC_${stockCard.id}`;
+          const alreadyExists = await this.prisma.stockMovement.findUnique({ where: { eventKey } });
+          if (!alreadyExists) {
+            await this.prisma.$transaction([
+              this.prisma.stockCard.update({ where: { id: stockCard.id }, data: { stockQuantity: nextStock, lastMovementAt: new Date() } }),
+              this.prisma.stockMovement.create({ data: { stockCardId: stockCard.id, type: 'OUT', quantity: -deductQty, unit: stockCard.unit, previousStock: prevStock, nextStock, note: `Flora Trendyol siparis: ${floraOrderNumber}`, referenceType: 'MARKETPLACE_ORDER', referenceId: String(savedFloraOrder.id), eventKey } }),
+            ]);
+          }
+        }
+
+        await this.deductRecipeStock(barcode, sku, qty, savedFloraOrder.id, `FLORA_TRENDYOL_ORDER_${savedFloraOrder.id}`, `Flora Trendyol siparis: ${floraOrderNumber}`);
+        if (barcode) await this.deductProductStock(barcode, qty, `FLORA_TRENDYOL_ORDER_${savedFloraOrder.id}`, `Flora Trendyol siparis: ${floraOrderNumber}`);
+      }
+
+      await this.prisma.marketplaceOrder.update({ where: { id: savedFloraOrder.id }, data: { stockDeducted: true } });
     }
 
     this.logger.log(`FLORA Trendyol sync tamamlandi: ${newOrders} yeni siparis.`);
