@@ -289,8 +289,9 @@ export default function StockCardsPage() {
       .catch(() => {});
   }, []);
 
+  const normTr = (s: string) => s.toLowerCase().replace(/ç/g,'c').replace(/ş/g,'s').replace(/ı/g,'i').replace(/ğ/g,'g').replace(/ü/g,'u').replace(/ö/g,'o');
   const filteredCategories = categorySearch.length >= 2
-    ? trendyolCategories.filter((c) => c.leaf && c.name.toLowerCase().includes(categorySearch.toLowerCase())).slice(0, 20)
+    ? trendyolCategories.filter((c) => c.leaf && normTr(c.name).includes(normTr(categorySearch))).slice(0, 30)
     : [];
 
   async function load() {
