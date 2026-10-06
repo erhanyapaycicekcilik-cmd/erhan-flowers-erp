@@ -386,6 +386,7 @@ export default function ProductsPage() {
   const [openingTrendyolPanel, setOpeningTrendyolPanel] = useState(false);
   const [productTrendyolEntry, setProductTrendyolEntry] = useState<Entry | null>(null);
   const [productTrendyolForm, setProductTrendyolForm] = useState({ categoryId: '', salePrice: '', listPrice: '', description: '', color: '', flowerType: '', vatRate: '20', desi: '1', barcode: '', modelCode: '' });
+  const [productTrendyolCompany, setProductTrendyolCompany] = useState<'ERHAN' | 'FLORA' | 'BOTH'>('ERHAN');
   const [productTrendyolResult, setProductTrendyolResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [productTrendyolSending, setProductTrendyolSending] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -1691,28 +1692,41 @@ export default function ProductsPage() {
     });
   }
 
+  async function submitProductTrendyolForCompany(companyCode: 'ERHAN' | 'FLORA') {
+    if (!productTrendyolEntry) return { ok: false, message: 'Ürün seçilmedi.' };
+    const json = {
+      categoryId: Number(productTrendyolForm.categoryId),
+      salePrice: Number(productTrendyolForm.salePrice),
+      listPrice: Number(productTrendyolForm.listPrice || productTrendyolForm.salePrice),
+      description: productTrendyolForm.description,
+      color: productTrendyolForm.color,
+      flowerType: productTrendyolForm.flowerType,
+      vatRate: Number(productTrendyolForm.vatRate),
+      desi: Number(productTrendyolForm.desi),
+      barcode: productTrendyolForm.barcode || undefined,
+      modelCode: productTrendyolForm.modelCode || undefined,
+      companyCode,
+    };
+    const result = await api<{ ok: boolean; message: string }>(`/product-center/entries/${productTrendyolEntry.variantId}/trendyol-publish`, { method: 'POST', json });
+    return { ok: result.ok, message: `[${companyCode}] ${result.message}` };
+  }
+
   async function submitProductTrendyol(event: FormEvent) {
     event.preventDefault();
     if (!productTrendyolEntry) return;
     setProductTrendyolSending(true);
     setProductTrendyolResult(null);
     try {
-      const result = await api<{ ok: boolean; message: string }>(`/product-center/entries/${productTrendyolEntry.variantId}/trendyol-publish`, {
-        method: 'POST',
-        json: {
-          categoryId: Number(productTrendyolForm.categoryId),
-          salePrice: Number(productTrendyolForm.salePrice),
-          listPrice: Number(productTrendyolForm.listPrice || productTrendyolForm.salePrice),
-          description: productTrendyolForm.description,
-          color: productTrendyolForm.color,
-          flowerType: productTrendyolForm.flowerType,
-          vatRate: Number(productTrendyolForm.vatRate),
-          desi: Number(productTrendyolForm.desi),
-          barcode: productTrendyolForm.barcode || undefined,
-          modelCode: productTrendyolForm.modelCode || undefined,
-        },
-      });
-      setProductTrendyolResult({ ok: result.ok, message: result.message });
+      if (productTrendyolCompany === 'BOTH') {
+        const [r1, r2] = await Promise.all([
+          submitProductTrendyolForCompany('ERHAN'),
+          submitProductTrendyolForCompany('FLORA'),
+        ]);
+        setProductTrendyolResult({ ok: r1.ok && r2.ok, message: `${r1.message}\n${r2.message}` });
+      } else {
+        const result = await submitProductTrendyolForCompany(productTrendyolCompany);
+        setProductTrendyolResult(result);
+      }
     } catch (error) {
       setProductTrendyolResult({ ok: false, message: error instanceof Error ? error.message : 'Trendyol gönderimi başarısız.' });
     } finally {
@@ -3074,8 +3088,24 @@ export default function ProductsPage() {
                 )}
               </div>
 
+              <div className="mt-4">
+                <div className="mb-1 text-xs font-semibold text-slate-500">Hesap Seçimi</div>
+                <div className="flex gap-2">
+                  {([['ERHAN', 'Erhan Flowers'], ['FLORA', 'Florayapaycicek'], ['BOTH', 'Her İkisi']] as const).map(([code, label]) => (
+                    <button
+                      key={code}
+                      type="button"
+                      onClick={() => setProductTrendyolCompany(code)}
+                      className={`flex-1 rounded-md border px-2 py-1.5 text-xs font-semibold transition-colors ${productTrendyolCompany === code ? 'border-brand bg-brand text-white' : 'border-line bg-white text-slate-600 hover:border-brand/40'}`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               {productTrendyolResult && (
-                <div className={`mt-4 rounded-md px-3 py-2 text-sm font-semibold ${productTrendyolResult.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
+                <div className={`mt-4 rounded-md px-3 py-2 text-sm font-semibold whitespace-pre-line ${productTrendyolResult.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
                   {productTrendyolResult.message}
                 </div>
               )}
