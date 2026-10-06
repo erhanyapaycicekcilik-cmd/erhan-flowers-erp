@@ -136,6 +136,7 @@ export class StockCardsController {
 
   @Post(':id/trendyol-publish')
   trendyolPublish(@Param('id') id: string, @Body() body: unknown) {
-    return this.stockCards.trendyolPublish(Number(id), body);
+    const { companyCode = 'ERHAN', ...rest } = (body ?? {}) as Record<string, unknown>;
+    return this.stockCards.trendyolPublish(Number(id), rest, String(companyCode));
   }
 }

@@ -806,7 +806,7 @@ export class StockCardsService {
     return adapter.fetchCategories();
   }
 
-  async trendyolPublish(id: number, body: unknown) {
+  async trendyolPublish(id: number, body: unknown, companyCode = 'ERHAN') {
     const stockCard = await this.ensureStockCard(id);
     const data = (body ?? {}) as Record<string, unknown>;
 
@@ -849,7 +849,7 @@ export class StockCardsService {
     }
 
 
-    const credentials = await this.integrationCenter.runtimeCredentials('TRENDYOL');
+    const credentials = await this.integrationCenter.runtimeCredentials('TRENDYOL', companyCode);
     const adapter = new TrendyolAdapter(credentials);
     return adapter.pushProduct(payload);
   }
