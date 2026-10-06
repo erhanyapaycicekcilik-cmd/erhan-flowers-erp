@@ -1119,7 +1119,7 @@ export class ProductCenterService {
     });
   }
 
-  async trendyolPublish(variantId: number, body: unknown) {
+  async trendyolPublish(variantId: number, body: unknown, companyCode = 'ERHAN') {
     const entry = await this.prisma.trendyolProductVariant.findUnique({ where: { id: variantId } });
     if (!entry) throw new NotFoundException('Ürün merkezi kaydı bulunamadı.');
 
@@ -1169,7 +1169,7 @@ export class ProductCenterService {
       });
     }
 
-    const credentials = await this.integrationCenter.runtimeCredentials('TRENDYOL');
+    const credentials = await this.integrationCenter.runtimeCredentials('TRENDYOL', companyCode);
     const adapter = new TrendyolAdapter(credentials);
     return adapter.pushProduct(payload);
   }

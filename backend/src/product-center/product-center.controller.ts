@@ -85,7 +85,8 @@ export class ProductCenterController {
   @Post('entries/:id/trendyol-publish')
   @UseGuards(OwnerGuard)
   trendyolPublish(@Param('id') id: string, @Body() body: unknown) {
-    return this.productCenter.trendyolPublish(Number(id), body);
+    const { companyCode = 'ERHAN', ...rest } = (body ?? {}) as Record<string, unknown>;
+    return this.productCenter.trendyolPublish(Number(id), rest, String(companyCode));
   }
 
   @Get('trendyol-batch/:batchId')
