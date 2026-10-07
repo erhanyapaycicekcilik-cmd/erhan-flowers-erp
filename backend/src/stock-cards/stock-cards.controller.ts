@@ -15,8 +15,8 @@ export class StockCardsController {
   constructor(private readonly stockCards: StockCardsService) {}
 
   @Get()
-  list(@Req() request: AuthenticatedRequest) {
-    return this.stockCards.list(request.user?.role);
+  list(@Req() request: AuthenticatedRequest, @Query('search') search?: string, @Query('limit') limit?: string) {
+    return this.stockCards.list(request.user?.role, search, limit ? Number(limit) : undefined);
   }
 
   @Get('names')

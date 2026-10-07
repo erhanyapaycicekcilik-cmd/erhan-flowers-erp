@@ -139,10 +139,21 @@ export class StockCardsService {
     });
   }
 
-  async list(userRole?: string) {
+  async list(userRole?: string, search?: string, limit?: number) {
+    const where = search
+      ? {
+          OR: [
+            { name: { contains: search, mode: 'insensitive' as const } },
+            { sku: { contains: search, mode: 'insensitive' as const } },
+            { barcode: { contains: search, mode: 'insensitive' as const } },
+          ],
+        }
+      : undefined;
     const stockCards = await this.prisma.stockCard.findMany({
+      where,
       select: stockCardListSelect,
       orderBy: { createdAt: 'desc' },
+      ...(limit ? { take: limit } : {}),
     });
 
     return stockCards.map((item) => this.serialize(item, userRole));
