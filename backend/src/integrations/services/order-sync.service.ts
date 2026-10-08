@@ -96,6 +96,18 @@ export class OrderSyncService {
             data: { status: newStatus, updatedAt: new Date() },
           });
         }
+        // Retry stock deduction if it was skipped previously
+        if (!existing.stockDeducted) {
+          const lines: TrendyolOrderLine[] = Array.isArray(order.lines) ? order.lines : [];
+          for (const line of lines) {
+            const barcode = line.barcode ? String(line.barcode) : null;
+            const sku = line.merchantSku ? String(line.merchantSku) : null;
+            const qty = Number(line.quantity ?? 1);
+            const orderNumber = this.text(order.orderNumber ?? order.id);
+            await this.deductRecipeStock(barcode, sku, qty, existing.id, `TRENDYOL_ORDER_${existing.id}`, `Trendyol siparis: ${orderNumber}`);
+          }
+          await this.prisma.marketplaceOrder.update({ where: { id: existing.id }, data: { stockDeducted: true } });
+        }
         continue;
       }
 
