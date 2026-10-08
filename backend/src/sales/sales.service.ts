@@ -1479,12 +1479,13 @@ export class SalesService {
     return (Math.round(value * 1000) / 1000).toLocaleString('tr-TR', { maximumFractionDigits: 3 });
   }
 
-  async searchProofPhotoArchive(query: { customerName?: string; saleNumber?: string; productName?: string; barcode?: string; dateFrom?: string; dateTo?: string; limit?: number }) {
+  async searchProofPhotoArchive(query: { customerName?: string; saleNumber?: string; productName?: string; barcode?: string; channel?: string; dateFrom?: string; dateTo?: string; limit?: number }) {
     const limit = Math.min(Number(query.limit ?? 50), 200);
     const nameFilter = query.customerName ? `%${query.customerName}%` : '%';
     const saleFilter = query.saleNumber ? `%${query.saleNumber}%` : '%';
     const productFilter = query.productName ? `%${query.productName}%` : null;
     const barcodeFilter = query.barcode ? `%${query.barcode}%` : null;
+    const channelFilter = query.channel ? query.channel.toUpperCase() : null;
     const dateFrom = query.dateFrom ? new Date(query.dateFrom) : new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
     const dateTo = query.dateTo ? new Date(new Date(query.dateTo).getTime() + 24 * 60 * 60 * 1000) : new Date();
 
@@ -1513,6 +1514,7 @@ export class SalesService {
         AND p.taken_at <= ${dateTo}
         AND (${productFilter}::text IS NULL OR rsi.product_name_snapshot ILIKE ${productFilter})
         AND (${barcodeFilter}::text IS NULL OR rsi.barcode ILIKE ${barcodeFilter})
+        AND (${channelFilter}::text IS NULL OR rs.channel::text = ${channelFilter})
       GROUP BY p.id, p.taken_at, rs.sale_number, rs.customer_name, rs.channel
       ORDER BY p.taken_at DESC
       LIMIT ${limit}
