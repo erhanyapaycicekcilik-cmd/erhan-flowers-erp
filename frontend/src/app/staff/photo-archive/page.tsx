@@ -38,6 +38,7 @@ export default function PhotoArchivePage() {
   const [saleNumber, setSaleNumber] = useState('');
   const [productName, setProductName] = useState('');
   const [barcode, setBarcode] = useState('');
+  const [channel, setChannel] = useState('');
   const [dateFrom, setDateFrom] = useState(() => {
     const d = new Date();
     d.setDate(d.getDate() - 45);
@@ -55,6 +56,7 @@ export default function PhotoArchivePage() {
       if (saleNumber) params.set('saleNumber', saleNumber);
       if (productName) params.set('productName', productName);
       if (barcode) params.set('barcode', barcode);
+      if (channel) params.set('channel', channel);
       if (dateFrom) params.set('dateFrom', dateFrom);
       if (dateTo) params.set('dateTo', dateTo);
       params.set('limit', '100');
@@ -67,7 +69,7 @@ export default function PhotoArchivePage() {
     } finally {
       setLoading(false);
     }
-  }, [customerName, saleNumber, productName, barcode, dateFrom, dateTo]);
+  }, [customerName, saleNumber, productName, barcode, channel, dateFrom, dateTo]);
 
   useEffect(() => { void search(); }, []);
 
@@ -123,6 +125,14 @@ export default function PhotoArchivePage() {
             </div>
           </div>
           <div className="flex gap-3 flex-wrap items-center">
+            <select className="field text-sm" value={channel} onChange={(e) => setChannel(e.target.value)}>
+              <option value="">Tüm Kanallar</option>
+              <option value="TRENDYOL">Trendyol</option>
+              <option value="N11">N11</option>
+              <option value="HEPSIBURADA">Hepsiburada</option>
+              <option value="SHOP">Dükkan</option>
+              <option value="WEB">Site</option>
+            </select>
             <div className="flex items-center gap-2">
               <Calendar size={14} className="text-slate-400" />
               <input type="date" className="field text-sm" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />

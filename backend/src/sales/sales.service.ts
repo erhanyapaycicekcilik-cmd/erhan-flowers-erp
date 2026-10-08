@@ -1498,12 +1498,13 @@ export class SalesService {
     return (Math.round(value * 1000) / 1000).toLocaleString('tr-TR', { maximumFractionDigits: 3 });
   }
 
-  async searchProofPhotoArchive(query: { customerName?: string; saleNumber?: string; productName?: string; barcode?: string; dateFrom?: string; dateTo?: string; limit?: number }) {
+  async searchProofPhotoArchive(query: { customerName?: string; saleNumber?: string; productName?: string; barcode?: string; channel?: string; dateFrom?: string; dateTo?: string; limit?: number }) {
     const limit = Math.min(Number(query.limit ?? 50), 200);
     const nameFilter = query.customerName ? `%${query.customerName}%` : '%';
     const saleFilter = query.saleNumber ? `%${query.saleNumber}%` : '%';
     const productFilter = query.productName ? `%${query.productName}%` : null;
     const barcodeFilter = query.barcode ? `%${query.barcode}%` : null;
+    const channelFilter = query.channel ? query.channel.toUpperCase() : null;
     const dateFrom = query.dateFrom ? new Date(query.dateFrom) : new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
     const dateTo = query.dateTo ? new Date(new Date(query.dateTo).getTime() + 24 * 60 * 60 * 1000) : new Date();
 
@@ -1519,28 +1520,21 @@ export class SalesService {
       expires_at: Date;
       product_names: string;
     }>>`
-      SELECT p.sale_id,
-             COALESCE(rs.sale_number, mo.order_number) AS sale_number,
-             COALESCE(rs.customer_name, mo.customer_name) AS customer_name,
-             COALESCE(rs.channel, mo.platform) AS channel,
+      SELECT p.sale_id, rs.sale_number, rs.customer_name, rs.channel::text AS channel,
              p.image_path, p.thumbnail_path, p.photo_type, p.taken_at AS created_at, p.expires_at,
-             COALESCE(
-               STRING_AGG(DISTINCT rsi.product_name_snapshot, ', '),
-               STRING_AGG(DISTINCT moi.product_name, ', ')
-             ) AS product_names
+             STRING_AGG(DISTINCT rsi.product_name_snapshot, ', ') AS product_names
       FROM retail_sale_proof_photos p
-      LEFT JOIN retail_sales rs ON rs.id = p.sale_id
-      LEFT JOIN marketplace_orders mo ON mo.id = p.marketplace_order_id
-      LEFT JOIN retail_sale_items rsi ON rsi.sale_id = p.sale_id
-      LEFT JOIN marketplace_order_items moi ON moi.order_id = p.marketplace_order_id
+      JOIN retail_sales rs ON rs.id = p.sale_id
+      LEFT JOIN retail_sale_items rsi ON rsi.sale_id = rs.id
       WHERE p.expires_at > NOW()
-        AND COALESCE(rs.customer_name, mo.customer_name, '') ILIKE ${nameFilter}
-        AND COALESCE(rs.sale_number, mo.order_number, '') ILIKE ${saleFilter}
+        AND rs.customer_name ILIKE ${nameFilter}
+        AND rs.sale_number ILIKE ${saleFilter}
         AND p.taken_at >= ${dateFrom}
         AND p.taken_at <= ${dateTo}
-        AND (${productFilter}::text IS NULL OR rsi.product_name_snapshot ILIKE ${productFilter} OR moi.product_name ILIKE ${productFilter})
-        AND (${barcodeFilter}::text IS NULL OR rsi.barcode ILIKE ${barcodeFilter} OR moi.barcode ILIKE ${barcodeFilter})
-      GROUP BY p.id, p.taken_at, rs.sale_number, mo.order_number, rs.customer_name, mo.customer_name, rs.channel, mo.platform
+        AND (${productFilter}::text IS NULL OR rsi.product_name_snapshot ILIKE ${productFilter})
+        AND (${barcodeFilter}::text IS NULL OR rsi.barcode ILIKE ${barcodeFilter})
+        AND (${channelFilter}::text IS NULL OR rs.channel::text = ${channelFilter})
+      GROUP BY p.id, p.taken_at, rs.sale_number, rs.customer_name, rs.channel
       ORDER BY p.taken_at DESC
       LIMIT ${limit}
     `;

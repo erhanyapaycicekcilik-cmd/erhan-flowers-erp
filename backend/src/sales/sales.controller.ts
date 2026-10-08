@@ -205,7 +205,7 @@ export class SalesController {
   }
 
   @Get('proof-photos/archive')
-  proofPhotoArchive(@Query() query: { customerName?: string; saleNumber?: string; productName?: string; barcode?: string; dateFrom?: string; dateTo?: string; limit?: string }) {
+  proofPhotoArchive(@Query() query: { customerName?: string; saleNumber?: string; productName?: string; barcode?: string; channel?: string; dateFrom?: string; dateTo?: string; limit?: string }) {
     return this.sales.searchProofPhotoArchive({ ...query, limit: query.limit ? Number(query.limit) : undefined });
   }
 
