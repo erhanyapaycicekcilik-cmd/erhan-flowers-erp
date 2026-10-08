@@ -1,11 +1,12 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Search, RefreshCw, Image, Calendar, Video, Download, X } from 'lucide-react';
+import { Search, RefreshCw, Image, Calendar, Video, Download, X, Trash2 } from 'lucide-react';
 import { AdminShell } from '@/components/AdminShell';
 import { api, apiBaseUrl } from '@/lib/api';
 
 type PhotoRow = {
+  id: number;
   sale_id: number;
   sale_number: string;
   customer_name: string;
@@ -46,6 +47,21 @@ export default function PhotoArchivePage() {
   });
   const [dateTo, setDateTo] = useState(() => new Date().toISOString().slice(0, 10));
   const [selected, setSelected] = useState<PhotoRow | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  async function deletePhoto(photo: PhotoRow) {
+    if (!confirm('Bu medyayı silmek istediğinizden emin misiniz?')) return;
+    setDeleting(true);
+    try {
+      await api(`/sales/proof-photos/${photo.id}`, { method: 'DELETE' });
+      setRows(prev => prev.filter(r => r.id !== photo.id));
+      setSelected(null);
+    } catch {
+      alert('Silme başarısız, tekrar deneyin.');
+    } finally {
+      setDeleting(false);
+    }
+  }
 
   const search = useCallback(async () => {
     setLoading(true);
@@ -272,6 +288,13 @@ export default function PhotoArchivePage() {
                   >
                     <Download size={13} /> İndir
                   </a>
+                  <button
+                    onClick={() => void deletePhoto(selected)}
+                    disabled={deleting}
+                    className="btn text-sm flex-1 flex items-center justify-center gap-1 bg-red-600 hover:bg-red-700 text-white"
+                  >
+                    <Trash2 size={13} /> {deleting ? 'Siliniyor...' : 'Sil'}
+                  </button>
                   <button onClick={() => setSelected(null)} className="btn btn-primary text-sm flex-1 flex items-center justify-center gap-1">
                     <X size={13} /> Kapat
                   </button>

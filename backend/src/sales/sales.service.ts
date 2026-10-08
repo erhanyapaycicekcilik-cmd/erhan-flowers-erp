@@ -1491,6 +1491,7 @@ export class SalesService {
     const dateTo = query.dateTo ? new Date(new Date(query.dateTo).getTime() + 24 * 60 * 60 * 1000) : new Date();
 
     const rows = await this.prisma.$queryRaw<Array<{
+      id: number;
       sale_id: number | null;
       sale_number: string;
       customer_name: string;
@@ -1502,7 +1503,7 @@ export class SalesService {
       expires_at: Date;
       product_names: string;
     }>>`
-      SELECT p.sale_id, rs.sale_number, rc.display_name AS customer_name, rs.channel::text AS channel,
+      SELECT p.id, p.sale_id, rs.sale_number, rc.display_name AS customer_name, rs.channel::text AS channel,
              p.image_path, p.thumbnail_path, p.photo_type, p.taken_at AS created_at, p.expires_at,
              STRING_AGG(DISTINCT rsi.product_name_snapshot, ', ') AS product_names
       FROM retail_sale_proof_photos p
@@ -1522,5 +1523,21 @@ export class SalesService {
       LIMIT ${limit}
     `;
     return rows;
+  }
+
+  async deleteProofPhoto(photoId: number) {
+    const rows = await this.prisma.$queryRaw<Array<{ image_path: string; thumbnail_path: string | null }>>`
+      SELECT image_path, thumbnail_path FROM retail_sale_proof_photos WHERE id = ${photoId}
+    `;
+    if (!rows[0]) throw new Error('Fotoğraf bulunamadı');
+    const { image_path, thumbnail_path } = rows[0];
+    await this.prisma.$executeRaw`DELETE FROM retail_sale_proof_photos WHERE id = ${photoId}`;
+    // Fiziksel dosyaları sil
+    const fs = await import('fs');
+    const path = await import('path');
+    for (const p of [image_path, thumbnail_path].filter(Boolean)) {
+      try { fs.unlinkSync(path.join(process.cwd(), p as string)); } catch { /* dosya yoksa geç */ }
+    }
+    return { deleted: true };
   }
 }
