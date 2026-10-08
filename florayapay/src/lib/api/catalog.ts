@@ -84,7 +84,7 @@ export async function getProductBySlug(slug: string): Promise<PublicProduct | nu
 }
 
 export function getImageUrl(path: string | null): string {
-  if (!path) return '/placeholder-product.jpg'
+  if (!path) return '/placeholder-product.svg'
   if (path.startsWith('http')) return path
   return `${API_URL}/${path.replace(/^\//, '')}`
 }
