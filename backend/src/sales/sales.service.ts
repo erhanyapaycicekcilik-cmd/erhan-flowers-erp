@@ -1502,7 +1502,7 @@ export class SalesService {
       expires_at: Date;
       product_names: string;
     }>>`
-      SELECT p.sale_id, rs.sale_number, rc.name AS customer_name, rs.channel::text AS channel,
+      SELECT p.sale_id, rs.sale_number, rc.display_name AS customer_name, rs.channel::text AS channel,
              p.image_path, p.thumbnail_path, p.photo_type, p.taken_at AS created_at, p.expires_at,
              STRING_AGG(DISTINCT rsi.product_name_snapshot, ', ') AS product_names
       FROM retail_sale_proof_photos p
@@ -1510,14 +1510,14 @@ export class SalesService {
       JOIN retail_customers rc ON rc.id = rs.customer_id
       LEFT JOIN retail_sale_items rsi ON rsi.sale_id = rs.id
       WHERE p.expires_at > NOW()
-        AND rc.name ILIKE ${nameFilter}
+        AND rc.display_name ILIKE ${nameFilter}
         AND rs.sale_number ILIKE ${saleFilter}
         AND p.taken_at >= ${dateFrom}
         AND p.taken_at <= ${dateTo}
         AND (${productFilter}::text IS NULL OR rsi.product_name_snapshot ILIKE ${productFilter})
         AND (${barcodeFilter}::text IS NULL OR rsi.barcode ILIKE ${barcodeFilter})
         AND (${channelFilter}::text IS NULL OR rs.channel::text = ${channelFilter})
-      GROUP BY p.id, p.taken_at, rs.sale_number, rc.name, rs.channel
+      GROUP BY p.id, p.taken_at, rs.sale_number, rc.display_name, rs.channel
       ORDER BY p.taken_at DESC
       LIMIT ${limit}
     `;
