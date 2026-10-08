@@ -33,6 +33,10 @@ COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
+# Banner config — volume mount noktası (florayapay_banner:/app/data)
+RUN mkdir -p /app/data && chown nextjs:nodejs /app/data
+COPY --from=builder --chown=nextjs:nodejs /app/src/lib/banner-config.json ./data/banner-config.json
+
 USER nextjs
 EXPOSE 3200
 ENV PORT=3200
