@@ -705,10 +705,29 @@ export class SalesService {
     const thumbnailPath = thumbPath ? 'uploads/proof-photos/' + thumbPath.split(/[\\/]/).pop() : null;
     const expiresAt = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000); // 90 gün
     const safeType = ['BARCODE', 'PACKAGE'].includes(photoType) ? photoType : 'BARCODE';
-    await this.prisma.$executeRaw`
-      INSERT INTO retail_sale_proof_photos (sale_id, image_path, thumbnail_path, photo_type, expires_at, taken_by_id)
-      VALUES (${id}, ${imagePath}, ${thumbnailPath}, ${safeType}, ${expiresAt}, ${userId})
+    // Marketplace order mu, retail sale mi?
+    const marketplaceOrder = await this.prisma.$queryRaw<{ id: number; status: string; order_number: string; customer_name: string }[]>`
+      SELECT id, status, order_number, customer_name FROM marketplace_orders WHERE id = ${id}
     `;
+    const isMarketplace = marketplaceOrder.length > 0;
+
+    await this.prisma.$executeRaw`
+      INSERT INTO retail_sale_proof_photos (sale_id, image_path, thumbnail_path, photo_type, expires_at, taken_by_id, marketplace_order_id)
+      VALUES (
+        ${isMarketplace ? null : id},
+        ${imagePath}, ${thumbnailPath}, ${safeType}, ${expiresAt}, ${userId},
+        ${isMarketplace ? id : null}
+      )
+    `;
+
+    if (isMarketplace) {
+      const alreadyReady = ['READY', 'DELIVERED', 'COMPLETED'].includes(marketplaceOrder[0].status);
+      if (!alreadyReady) {
+        await this.prisma.$executeRaw`UPDATE marketplace_orders SET status = 'READY', updated_at = NOW() WHERE id = ${id}`;
+      }
+      return { uploaded: true, photoType: safeType, readyTriggered: !alreadyReady };
+    }
+
     // Herhangi bir fotoğraf yüklenince HAZIR durumuna geç (tek fotoğraf yeterli)
     const currentStatus = await this.prisma.$queryRaw<{ status: string }[]>`
       SELECT status FROM retail_sales WHERE id = ${id}
@@ -1489,7 +1508,7 @@ export class SalesService {
     const dateTo = query.dateTo ? new Date(new Date(query.dateTo).getTime() + 24 * 60 * 60 * 1000) : new Date();
 
     const rows = await this.prisma.$queryRaw<Array<{
-      sale_id: number;
+      sale_id: number | null;
       sale_number: string;
       customer_name: string;
       channel: string;
@@ -1500,20 +1519,28 @@ export class SalesService {
       expires_at: Date;
       product_names: string;
     }>>`
-      SELECT p.sale_id, rs.sale_number, rs.customer_name, rs.channel,
+      SELECT p.sale_id,
+             COALESCE(rs.sale_number, mo.order_number) AS sale_number,
+             COALESCE(rs.customer_name, mo.customer_name) AS customer_name,
+             COALESCE(rs.channel, mo.platform) AS channel,
              p.image_path, p.thumbnail_path, p.photo_type, p.taken_at AS created_at, p.expires_at,
-             STRING_AGG(DISTINCT rsi.product_name_snapshot, ', ') AS product_names
+             COALESCE(
+               STRING_AGG(DISTINCT rsi.product_name_snapshot, ', '),
+               STRING_AGG(DISTINCT moi.product_name, ', ')
+             ) AS product_names
       FROM retail_sale_proof_photos p
-      JOIN retail_sales rs ON rs.id = p.sale_id
-      LEFT JOIN retail_sale_items rsi ON rsi.sale_id = rs.id
+      LEFT JOIN retail_sales rs ON rs.id = p.sale_id
+      LEFT JOIN marketplace_orders mo ON mo.id = p.marketplace_order_id
+      LEFT JOIN retail_sale_items rsi ON rsi.sale_id = p.sale_id
+      LEFT JOIN marketplace_order_items moi ON moi.order_id = p.marketplace_order_id
       WHERE p.expires_at > NOW()
-        AND rs.customer_name ILIKE ${nameFilter}
-        AND rs.sale_number ILIKE ${saleFilter}
+        AND COALESCE(rs.customer_name, mo.customer_name, '') ILIKE ${nameFilter}
+        AND COALESCE(rs.sale_number, mo.order_number, '') ILIKE ${saleFilter}
         AND p.taken_at >= ${dateFrom}
         AND p.taken_at <= ${dateTo}
-        AND (${productFilter}::text IS NULL OR rsi.product_name_snapshot ILIKE ${productFilter})
-        AND (${barcodeFilter}::text IS NULL OR rsi.barcode ILIKE ${barcodeFilter})
-      GROUP BY p.id, p.taken_at, rs.sale_number, rs.customer_name, rs.channel
+        AND (${productFilter}::text IS NULL OR rsi.product_name_snapshot ILIKE ${productFilter} OR moi.product_name ILIKE ${productFilter})
+        AND (${barcodeFilter}::text IS NULL OR rsi.barcode ILIKE ${barcodeFilter} OR moi.barcode ILIKE ${barcodeFilter})
+      GROUP BY p.id, p.taken_at, rs.sale_number, mo.order_number, rs.customer_name, mo.customer_name, rs.channel, mo.platform
       ORDER BY p.taken_at DESC
       LIMIT ${limit}
     `;
