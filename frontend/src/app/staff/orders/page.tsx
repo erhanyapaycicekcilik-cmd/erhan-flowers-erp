@@ -182,6 +182,8 @@ export default function StaffOrdersPage() {
   const [statusTab, setStatusTab] = useState('all');
   const [category, setCategory] = useState('all');
   const [search, setSearch] = useState('');
+  const [toastMsg, setToastMsg] = useState('');
+  const readySectionRef = useRef<HTMLDivElement>(null);
 
   async function syncHB() {
     setSyncing(true);
@@ -199,6 +201,11 @@ export default function StaffOrdersPage() {
 
   function handleStatusChange(id: number, status: string) {
     setOrders(prev => prev.map(o => o.id === id ? { ...o, status } : o));
+    if (status === 'READY') {
+      setToastMsg('✅ Video yüklendi! Sipariş Kargo Bekleniyor bölümüne taşındı.');
+      setTimeout(() => setToastMsg(''), 4000);
+      setTimeout(() => readySectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150);
+    }
   }
 
   const load = useCallback(async () => {
@@ -276,6 +283,13 @@ export default function StaffOrdersPage() {
             </button>
           </div>
         </div>
+
+        {/* Video yükleme başarı toast */}
+        {toastMsg && (
+          <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[60] bg-emerald-600 text-white text-sm font-semibold px-5 py-3 rounded-2xl shadow-2xl flex items-center gap-2 animate-bounce">
+            {toastMsg}
+          </div>
+        )}
 
         {/* Bugün/Yarın acil uyarı banner */}
         {urgentToday.length > 0 && (
@@ -374,7 +388,7 @@ export default function StaffOrdersPage() {
 
         {/* Hazır — Kargo Bekleniyor */}
         {(filteredReady.length > 0 || readyOrders.length > 0) && (
-          <section className="mt-6">
+          <section ref={readySectionRef} className="mt-6">
             <div className="flex items-center gap-3 mb-3">
               <div className="h-1 flex-1 bg-emerald-200 rounded-full" />
               <h2 className="text-base font-bold text-emerald-700 flex items-center gap-2">
@@ -458,6 +472,7 @@ function OrderCard({ order, onStatusChange, readySection }: { order: OrderRow; o
         body: form,
       });
       if (res.ok) {
+        if (videoRef.current) videoRef.current.value = '';
         onStatusChange(order.id, 'READY');
       } else if (res.status === 413) {
         alert('Dosya çok büyük. Video 500MB altında olmalı.');
