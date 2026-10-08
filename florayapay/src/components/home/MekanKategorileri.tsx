@@ -5,7 +5,7 @@ const mekanlar = [
   {
     slug: 'ofis-lobi',
     label: 'Ofis & Lobi',
-    desc: 'Kurumsal alanlara şık ve bakımsız yeşillik',
+    desc: 'Kurumsal alanlara şık, bakım gerektirmeyen yeşillik',
     image: 'https://images.unsplash.com/photo-1497366216548-37526070297c?w=600&q=85&fit=crop',
   },
   {
