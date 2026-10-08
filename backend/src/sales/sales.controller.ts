@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, Req, UploadedFile, UploadedFiles, UseGuards, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, UploadedFile, UploadedFiles, UseGuards, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname, join } from 'path';
@@ -207,6 +207,11 @@ export class SalesController {
   @Get('proof-photos/archive')
   proofPhotoArchive(@Query() query: { customerName?: string; saleNumber?: string; productName?: string; barcode?: string; channel?: string; dateFrom?: string; dateTo?: string; limit?: string }) {
     return this.sales.searchProofPhotoArchive({ ...query, limit: query.limit ? Number(query.limit) : undefined });
+  }
+
+  @Delete('proof-photos/:photoId')
+  deleteProofPhoto(@Param('photoId') photoId: string) {
+    return this.sales.deleteProofPhoto(Number(photoId));
   }
 
 }
