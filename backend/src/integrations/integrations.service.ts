@@ -670,7 +670,11 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
         const prevInvoiceStatus = prevRows[0]?.invoice_status;
         await tx.$executeRaw`
           UPDATE retail_sales
-          SET status = COALESCE(${status}::"RetailSaleStatus", status),
+          SET status = CASE
+                WHEN status::text IN ('READY','OUT_FOR_DELIVERY','DELIVERED','COMPLETED','CANCELLED')
+                THEN status
+                ELSE COALESCE(${status}::"RetailSaleStatus", status)
+              END,
               invoice_status = COALESCE(${invoiceStatus}::"RetailInvoiceStatus", invoice_status),
               order_date = COALESCE(${order.orderDate ?? null}, order_date),
               delivery_due_at = COALESCE(${order.deliveryDueAt ?? null}, delivery_due_at),
