@@ -850,11 +850,12 @@ export class OrderSyncService {
     }
 
     // 2) Eski productCostDraft sisteminden de al (geriye dönük uyumluluk)
-    const variant = barcode
+    let variant = barcode
       ? await this.prisma.trendyolProductVariant.findFirst({ where: { barcode }, select: { id: true } })
-      : sku
-      ? await this.prisma.trendyolProductVariant.findFirst({ where: { OR: [{ proposedModelCode: sku }, { currentModelCode: sku }] }, select: { id: true } })
       : null;
+    if (!variant && sku) {
+      variant = await this.prisma.trendyolProductVariant.findFirst({ where: { OR: [{ proposedModelCode: sku }, { currentModelCode: sku }] }, select: { id: true } });
+    }
 
     let legacyLines: Array<{ stockCardId: number; quantity: unknown; name: string }> = [];
     if (variant) {
