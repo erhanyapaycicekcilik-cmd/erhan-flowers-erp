@@ -88,7 +88,12 @@ const nextConfig = {
         protocol: 'https',
         hostname: '**.dsmcdn.com',
       },
-      // ERP upload server
+      // ERP API (production)
+      {
+        protocol: 'https',
+        hostname: 'api.florayapaycicek.com',
+      },
+      // ERP upload server (local dev)
       {
         protocol: 'http',
         hostname: 'localhost',

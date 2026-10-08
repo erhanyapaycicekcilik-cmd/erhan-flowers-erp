@@ -705,10 +705,29 @@ export class SalesService {
     const thumbnailPath = thumbPath ? 'uploads/proof-photos/' + thumbPath.split(/[\\/]/).pop() : null;
     const expiresAt = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000); // 90 gün
     const safeType = ['BARCODE', 'PACKAGE'].includes(photoType) ? photoType : 'BARCODE';
-    await this.prisma.$executeRaw`
-      INSERT INTO retail_sale_proof_photos (sale_id, image_path, thumbnail_path, photo_type, expires_at, taken_by_id)
-      VALUES (${id}, ${imagePath}, ${thumbnailPath}, ${safeType}, ${expiresAt}, ${userId})
+    // Marketplace order mu, retail sale mi?
+    const marketplaceOrder = await this.prisma.$queryRaw<{ id: number; status: string; order_number: string; customer_name: string }[]>`
+      SELECT id, status, order_number, customer_name FROM marketplace_orders WHERE id = ${id}
     `;
+    const isMarketplace = marketplaceOrder.length > 0;
+
+    await this.prisma.$executeRaw`
+      INSERT INTO retail_sale_proof_photos (sale_id, image_path, thumbnail_path, photo_type, expires_at, taken_by_id, marketplace_order_id)
+      VALUES (
+        ${isMarketplace ? null : id},
+        ${imagePath}, ${thumbnailPath}, ${safeType}, ${expiresAt}, ${userId},
+        ${isMarketplace ? id : null}
+      )
+    `;
+
+    if (isMarketplace) {
+      const alreadyReady = ['READY', 'DELIVERED', 'COMPLETED'].includes(marketplaceOrder[0].status);
+      if (!alreadyReady) {
+        await this.prisma.$executeRaw`UPDATE marketplace_orders SET status = 'READY', updated_at = NOW() WHERE id = ${id}`;
+      }
+      return { uploaded: true, photoType: safeType, readyTriggered: !alreadyReady };
+    }
+
     // Herhangi bir fotoğraf yüklenince HAZIR durumuna geç (tek fotoğraf yeterli)
     const currentStatus = await this.prisma.$queryRaw<{ status: string }[]>`
       SELECT status FROM retail_sales WHERE id = ${id}
@@ -1490,7 +1509,7 @@ export class SalesService {
     const dateTo = query.dateTo ? new Date(new Date(query.dateTo).getTime() + 24 * 60 * 60 * 1000) : new Date();
 
     const rows = await this.prisma.$queryRaw<Array<{
-      sale_id: number;
+      sale_id: number | null;
       sale_number: string;
       customer_name: string;
       channel: string;
