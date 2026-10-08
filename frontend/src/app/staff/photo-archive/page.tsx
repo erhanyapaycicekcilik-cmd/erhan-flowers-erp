@@ -130,8 +130,8 @@ export default function PhotoArchivePage() {
               <option value="TRENDYOL">Trendyol</option>
               <option value="N11">N11</option>
               <option value="HEPSIBURADA">Hepsiburada</option>
-              <option value="SHOP">Dükkan</option>
-              <option value="WEB">Site</option>
+              <option value="STORE">Dükkan</option>
+              <option value="WEBSITE">Site</option>
             </select>
             <div className="flex items-center gap-2">
               <Calendar size={14} className="text-slate-400" />
