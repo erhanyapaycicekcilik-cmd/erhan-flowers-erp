@@ -648,16 +648,17 @@ function OrderCard({ order, onStatusChange, readySection }: { order: OrderRow; o
             <Printer size={13} /> Yazdır
           </button>
 
-          <input ref={videoRef} type="file" accept="video/*,image/*" multiple className="hidden" onChange={handlePhoto} />
+          {/* Kameradan direkt video çekimi */}
+          <input ref={videoRef} type="file" accept="video/*" capture="environment" className="hidden" onChange={handlePhoto} />
           {isReady ? (
             <>
               <div className="flex-1 flex items-center justify-center gap-1 text-xs px-2 py-2 rounded-lg bg-green-100 text-green-700 font-bold">
                 <CheckCircle size={13} /> Kargoya Hazır
               </div>
               <button onClick={() => videoRef.current?.click()} disabled={uploading}
-                title="Ek fotoğraf/video ekle"
+                title="Ek video çek"
                 className="flex items-center justify-center gap-1 text-xs px-2 py-2 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-100 transition disabled:opacity-60">
-                <Video size={13} /> {uploading ? '…' : 'Ekle'}
+                <Video size={13} /> {uploading ? '…' : 'Video Ekle'}
               </button>
             </>
           ) : (
@@ -669,7 +670,7 @@ function OrderCard({ order, onStatusChange, readySection }: { order: OrderRow; o
               </button>
               <button onClick={() => videoRef.current?.click()} disabled={uploading}
                 className="flex-1 flex items-center justify-center gap-1 text-sm px-3 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition disabled:opacity-60 font-bold">
-                <Video size={14} /> {uploading ? 'Yükleniyor...' : 'Video + Hazır Yap'}
+                <Video size={14} /> {uploading ? 'Yükleniyor...' : '🎥 Video Çek + Hazır'}
               </button>
             </>
           )}
