@@ -27,7 +27,7 @@ const categories = [
     image: 'https://images.unsplash.com/photo-1416879595882-3373a0480b5b?w=600&q=85&fit=crop',
   },
   {
-    slug: 'sarmасик',
+    slug: 'sarmasik',
     label: 'Yapay Sarmaşıklar',
     desc: 'Tavandan sarkan, duvarı kaplayan yeşillik',
     image: 'https://images.unsplash.com/photo-1545239351-1141bd82e8a6?w=600&q=85&fit=crop',

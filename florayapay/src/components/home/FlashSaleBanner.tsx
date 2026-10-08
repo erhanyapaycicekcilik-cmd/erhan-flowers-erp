@@ -28,7 +28,7 @@ export function FlashSaleBanner() {
 
   return (
     <section className="bg-gradient-to-r from-[#7B2D2D] to-[#B03A2E] text-white py-5 px-4">
-      <div className="max-w-screen-xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
+      <div className="max-w-screen-2xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <span className="text-2xl">🔥</span>
           <div>
@@ -47,7 +47,7 @@ export function FlashSaleBanner() {
           </div>
           <Link
             href="/urunler?sirala=indirimli"
-            className="bg-white text-[#B03A2E] px-5 py-2.5 rounded-xl font-bold text-sm hover:bg-[#FFF5F5] transition-colors whitespace-nowrap"
+            className="bg-white text-[#B03A2E] px-5 py-2.5 rounded-full font-bold text-sm hover:bg-[#FFF5F5] transition-colors whitespace-nowrap"
           >
             Fırsatları Gör →
           </Link>

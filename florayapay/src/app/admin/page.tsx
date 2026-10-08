@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { getProducts, getCategories } from '@/lib/api/catalog'
 import { TrendyolSyncButton } from '@/components/admin/TrendyolSyncButton'
+import { RecategorizeButton } from '@/components/admin/RecategorizeButton'
 
 export default async function AdminDashboard() {
   const [res, categories] = await Promise.all([
@@ -33,8 +34,13 @@ export default async function AdminDashboard() {
       </div>
 
       {/* Trendyol Sync */}
-      <div className="mb-6">
+      <div className="mb-4">
         <TrendyolSyncButton />
+      </div>
+
+      {/* Kategori düzenleme */}
+      <div className="mb-6">
+        <RecategorizeButton />
       </div>
 
       {/* Hızlı işlemler */}

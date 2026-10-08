@@ -80,10 +80,10 @@ export function Footer() {
                   ✉️ erhanyapaycicekcilik@gmail.com
                 </a>
               </li>
-              <li className="text-gray-400 leading-relaxed">
+              <li className="text-[#8C8A82] leading-relaxed">
                 📍 Sarılar Mah. Cumhuriyet Cd. 2038 Sk. No:52/1/2, Manavgat/Antalya
               </li>
-              <li className="text-gray-400">
+              <li className="text-[#8C8A82]">
                 🕐 Hafta içi 09:00–18:00
               </li>
             </ul>
@@ -91,7 +91,7 @@ export function Footer() {
         </div>
 
         {/* Alt bar */}
-        <div className="border-t border-[#1E3A28] mt-10 pt-6 flex flex-col md:flex-row justify-between items-center gap-4 text-sm text-gray-500">
+        <div className="border-t border-[#1E3A28] mt-10 pt-6 flex flex-col md:flex-row justify-between items-center gap-4 text-sm text-[#8C8A82]">
           <p>© {year} Erhan Flowers. Tüm hakları saklıdır.</p>
           <div className="flex items-center gap-4">
             <span className="flex items-center gap-1 text-xs">

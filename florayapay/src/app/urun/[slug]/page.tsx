@@ -158,7 +158,7 @@ export default async function ProductDetailPage({ params }: PageProps) {
                   )}
                 </div>
                 <p className="text-xs text-[#8C8A82] mt-1">
-                  KDV dahil. Kargo bedava (300₺ ve üzeri).
+                  KDV dahil. Kargo bedava (1.000₺ ve üzeri).
                 </p>
               </div>
 
