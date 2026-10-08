@@ -71,6 +71,15 @@ export class PublicCatalogController {
     return this.catalog.bulkSyncSitePriceFromTrendyol();
   }
 
+  // Admin: Ürün adına göre otomatik kategori ataması
+  // Bambu → Bambu, Sarmaşık → Sarmaşık, Ağaç → Yapay Ağaç Yeşil vb.
+  @Post('admin/recategorize')
+  recategorizeByName(@Query('secret') secret?: string) {
+    const expected = process.env.REVALIDATE_SECRET || 'dev-secret-local';
+    if (secret !== expected) return { error: 'Unauthorized' };
+    return this.catalog.recategorizeByName();
+  }
+
   // Admin: Trendyol ürünlerini anında çek
   // REVALIDATE_SECRET ile korunur — JWT gerekmez, florayapay admin panelinden çağrılabilir
   @Post('admin/trendyol-sync')

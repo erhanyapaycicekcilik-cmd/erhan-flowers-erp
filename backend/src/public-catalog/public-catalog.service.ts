@@ -291,6 +291,65 @@ export class PublicCatalogService {
     };
   }
 
+  // Ürün adına göre otomatik kategori ataması.
+  // Öncelik sırası önemli: "Bambu Ağacı" → Bambu (ağaç değil).
+  async recategorizeByName(): Promise<{ updated: number; skipped: number; details: string[] }> {
+    // Anahtar kelime → kategori adı (DB'deki tam ad ile eşleşmeli)
+    const RULES: Array<{ keywords: string[]; categoryName: string }> = [
+      { keywords: ['bambu'],                          categoryName: 'Bambu' },
+      { keywords: ['sarmaşık', 'sarmasik'],           categoryName: 'Sarmaşık' },
+      { keywords: ['dikey bahçe', 'dikey bahce', 'yosun duvar', 'panel'],  categoryName: 'Dikey Bahçe' },
+      { keywords: ['demet', 'buket'],                 categoryName: 'Demet Çiçek' },
+      { keywords: ['saksı', 'saksi', 'vazo', 'saksılı', 'saksili'], categoryName: 'Saksılı' },
+      { keywords: ['renkli ağaç', 'renkli agac', 'renk', 'çiçekli ağaç', 'cicekli agac', 'pembe', 'kırmızı', 'kiraz', 'erik', 'bahar dalı', 'bahar dali'], categoryName: 'Yapay Ağaç Renkli' },
+      { keywords: ['yapay ağaç', 'yapay agac', 'ağaç', 'agac'],    categoryName: 'Yapay Ağaç Yeşil' },
+      { keywords: ['çiçek', 'cicek', 'orkide', 'gül', 'gul', 'lale', 'kasımpatı'], categoryName: 'Çiçekler' },
+    ];
+
+    const allCategories = await this.prisma.category.findMany({ select: { id: true, name: true } });
+    const catMap = new Map(allCategories.map((c) => [c.name.toLocaleLowerCase('tr-TR'), c.id]));
+
+    const products = await this.prisma.product.findMany({
+      where: { status: 'ACTIVE' },
+      select: { id: true, productName: true, categoryId: true },
+    });
+
+    let updated = 0;
+    let skipped = 0;
+    const details: string[] = [];
+
+    for (const product of products) {
+      const nameLower = product.productName.toLocaleLowerCase('tr-TR');
+      let targetCategoryId: number | null = null;
+      let targetCategoryName = '';
+
+      for (const rule of RULES) {
+        if (rule.keywords.some((kw) => nameLower.includes(kw.toLocaleLowerCase('tr-TR')))) {
+          const catId = catMap.get(rule.categoryName.toLocaleLowerCase('tr-TR'));
+          if (catId) {
+            targetCategoryId = catId;
+            targetCategoryName = rule.categoryName;
+          }
+          break;
+        }
+      }
+
+      if (!targetCategoryId || targetCategoryId === product.categoryId) {
+        skipped++;
+        continue;
+      }
+
+      await this.prisma.product.update({
+        where: { id: product.id },
+        data: { categoryId: targetCategoryId },
+      });
+      details.push(`[${product.id}] ${product.productName} → ${targetCategoryName}`);
+      updated++;
+    }
+
+    return { updated, skipped, details };
+  }
+
   private toPublicProduct(product: {
     id: number;
     productName: string;
