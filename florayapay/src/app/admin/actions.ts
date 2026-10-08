@@ -65,6 +65,22 @@ export async function deleteProduct(id: number) {
   return { ok: true }
 }
 
+/** Ürün adına göre otomatik kategori ataması */
+export async function triggerRecategorize(): Promise<{ error?: string; data?: unknown }> {
+  try {
+    const secret = process.env.REVALIDATE_SECRET || 'dev-secret-local'
+    const res = await fetch(`${API_URL}/public/catalog/admin/recategorize?secret=${secret}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    })
+    if (!res.ok) return { error: `Backend hatası (${res.status})` }
+    const data = await res.json()
+    return { data }
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : 'Bağlantı hatası' }
+  }
+}
+
 /** Trendyol'dan ürünleri çek ve siteyi revalidate et */
 export async function triggerTrendyolSync(): Promise<{ error?: string; data?: unknown }> {
   try {
