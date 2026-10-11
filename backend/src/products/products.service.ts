@@ -362,6 +362,13 @@ export class ProductsService {
       stockQuantity,
     };
 
+    // Katalog stratejisi ekranından satışa kapatılan (PASSIVE) ürün, ürün kaydı
+    // sırasında stokla tekrar satışa açılmasın.
+    if (product.barcode) {
+      const closed = await this.prisma.trendyolProductVariant.findFirst({ where: { barcode: product.barcode, status: 'PASSIVE' }, select: { id: true } });
+      if (closed) return;
+    }
+
     // Cache'den bağlı platformları al (5dk TTL, DB sorgusu atmaz)
     const platforms = await this.getConnectedPlatforms();
     if (!platforms.length) return;

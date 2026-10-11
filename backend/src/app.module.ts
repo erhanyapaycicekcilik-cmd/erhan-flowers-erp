@@ -27,6 +27,7 @@ import { IntegrationsModule } from './integrations/integrations.module';
 import { StaffTasksModule } from './staff-tasks/staff-tasks.module';
 import { ProductCenterModule } from './product-center/product-center.module';
 import { MarketIntelligenceModule } from './market-intelligence/market-intelligence.module';
+import { CatalogStrategyModule } from './catalog-strategy/catalog-strategy.module';
 import { PublicCatalogModule } from './public-catalog/public-catalog.module';
 import { WebOrdersModule } from './web-orders/web-orders.module';
 import { SuppliersModule } from './suppliers/suppliers.module';
@@ -73,6 +74,7 @@ import { BillAccountsModule } from './bill-accounts/bill-accounts.module';
     IntegrationsModule,
     ProductCenterModule,
     MarketIntelligenceModule,
+    CatalogStrategyModule,
     PublicCatalogModule,
     WebOrdersModule,
     SuppliersModule,
