@@ -188,7 +188,7 @@ type QuickResult = {
   initialStockQuantity: number;
   shopPrice: number;
   sitePrice: number;
-  publishResult?: { success: number; failed: number; results: Array<{ platform: string; ok: boolean; errorMessage?: string | null; batchRequestId?: string | null }> };
+  publishResult?: { success: number; failed: number; results: Array<{ platform: string; ok: boolean; errorMessage?: string | null; batchRequestId?: string | null; listingUploadId?: string | null }> };
 };
 
 type PriceResearch = {
@@ -409,7 +409,7 @@ export default function ProductsPage() {
   const [familySearch, setFamilySearch] = useState('');
   const [message, setMessage] = useState('');
   const [sendMessage, setSendMessage] = useState('');
-  const [sendResults, setSendResults] = useState<Array<{ platform: string; ok: boolean; message: string }>>([]);
+  const [sendResults, setSendResults] = useState<Array<{ platform: string; rawPlatform: string; ok: boolean; message: string; batchId: string | null }>>([]);
   const [sendingChannels, setSendingChannels] = useState(false);
   const [quickForm, setQuickForm] = useState(emptyQuickForm);
   const [quickResult, setQuickResult] = useState<QuickResult | null>(null);
@@ -862,7 +862,7 @@ export default function ProductsPage() {
       let publishResult: QuickResult['publishResult'] | undefined;
       if (sendNow && quickForm.platforms.length > 0) {
         try {
-          const pub = await api<{ success: number; failed: number; results: Array<{ platform: string; ok: boolean; errorMessage?: string | null; batchRequestId?: string | null }> }>('/publishing/send', {
+          const pub = await api<{ success: number; failed: number; results: Array<{ platform: string; ok: boolean; errorMessage?: string | null; batchRequestId?: string | null; listingUploadId?: string | null }> }>('/publishing/send', {
             method: 'POST',
             json: { variantIds: [result.variantId], platforms: quickForm.platforms, allowIncomplete: true },
           });
@@ -1647,14 +1647,16 @@ export default function ProductsPage() {
     try {
       const entry = form.variantId ? null : await saveEntry();
       const variantId = Number(form.variantId || entry?.variantId);
-      const result = await api<{ success: number; failed: number; results: Array<{ ok: boolean; platform?: string; errorMessage?: string | null; successMessage?: string | null }> }>('/publishing/send', {
+      const result = await api<{ success: number; failed: number; results: Array<{ ok: boolean; platform?: string; errorMessage?: string | null; successMessage?: string | null; batchRequestId?: string | null; listingUploadId?: string | null }> }>('/publishing/send', {
         method: 'POST',
         json: { variantIds: [variantId], platforms, allowIncomplete },
       });
       const rows = result.results.map((item) => ({
         platform: channelLabel(item.platform ?? '?'),
+        rawPlatform: item.platform ?? '',
         ok: item.ok,
         message: item.ok ? (item.successMessage ?? 'Gönderildi') : (item.errorMessage ?? 'Hata'),
+        batchId: item.batchRequestId || item.listingUploadId || null,
       }));
       const text = `Gönderim tamamlandı. Başarılı: ${result.success}, Hatalı: ${result.failed}.`;
       setMessage(text);
@@ -1956,9 +1958,12 @@ export default function ProductsPage() {
                 <div className="mb-2 text-sm font-semibold text-slate-700">Kanal Gönderim Sonucu</div>
                 <div className="flex flex-wrap gap-2">
                   {quickResult.publishResult.results.map((r) => (
-                    <div key={r.platform} className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold ${r.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
-                      {r.ok ? <CheckCircle2 size={15} /> : <XCircle size={15} />}
-                      {channelLabel(r.platform)}: {r.ok ? (r.batchRequestId ? 'Kuyruğa alındı' : 'Gönderildi') : (r.errorMessage ?? 'Hata')}
+                    <div key={r.platform} className={`flex flex-col gap-1 rounded-md px-3 py-2 text-sm font-semibold ${r.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
+                      <div className="flex items-center gap-2">
+                        {r.ok ? <CheckCircle2 size={15} /> : <XCircle size={15} />}
+                        {channelLabel(r.platform)}: {r.ok ? (r.batchRequestId ? 'Kuyruğa alındı' : 'Gönderildi') : (r.errorMessage ?? 'Hata')}
+                      </div>
+                      {r.ok && <TrendyolBatchStatus platform={r.platform} batchId={r.batchRequestId || r.listingUploadId} />}
                     </div>
                   ))}
                 </div>
@@ -2706,6 +2711,7 @@ export default function ProductsPage() {
                     {sendResults.map((r) => (
                       <div key={r.platform} className={`rounded-md px-3 py-2 text-xs font-semibold break-all ${r.ok ? 'bg-emerald-50 text-emerald-800' : 'bg-red-50 text-red-800'}`}>
                         <span className="font-bold">{r.platform}:</span> {r.message}
+                        {r.ok && <TrendyolBatchStatus platform={r.rawPlatform} batchId={r.batchId} />}
                       </div>
                     ))}
                   </div>
@@ -4511,6 +4517,41 @@ function filterStockCardOptions(stockCards: StockCard[], search: string, product
     .filter((item) => !needle || item.score > 0)
     .sort((a, b) => b.score - a.score || a.stockCard.name.localeCompare(b.stockCard.name, 'tr'))
     .map((item) => item.stockCard);
+}
+
+// Trendyol gönderimi asenkron işlenir; "kuyruğa alındı" gerçek sonuç değildir.
+// Bu buton Trendyol'a ürünün kabul edilip edilmediğini ve ret sebebini sorar.
+function TrendyolBatchStatus({ platform, batchId }: { platform: string; batchId?: string | null }) {
+  const [checking, setChecking] = useState(false);
+  const [status, setStatus] = useState<{ ok: boolean; message: string; batchStatus?: string } | null>(null);
+  if (!batchId || (platform !== 'TRENDYOL' && platform !== 'TRENDYOL_FLORA')) return null;
+  const company = platform === 'TRENDYOL_FLORA' ? 'FLORA' : 'ERHAN';
+
+  async function check() {
+    setChecking(true);
+    try {
+      const result = await api<{ ok: boolean; message: string; batchStatus?: string }>(`/integrations/products/TRENDYOL/batch-status/${encodeURIComponent(batchId!)}?company=${company}`);
+      setStatus(result);
+    } catch (error) {
+      setStatus({ ok: false, message: error instanceof Error ? error.message : 'Durum sorgulanamadı.' });
+    } finally {
+      setChecking(false);
+    }
+  }
+
+  const pending = status?.ok && status.batchStatus && status.batchStatus !== 'COMPLETED';
+  return (
+    <div className="mt-1 flex flex-col gap-1">
+      <button type="button" className="btn btn-secondary min-h-8 w-fit px-3 text-xs" onClick={check} disabled={checking}>
+        <RefreshCw size={13} className={checking ? 'animate-spin' : ''} /> {checking ? 'Sorgulanıyor…' : 'Trendyol durumunu kontrol et'}
+      </button>
+      {status && (
+        <div className={`rounded-md px-2 py-1 text-xs font-semibold break-words ${pending ? 'bg-amber-50 text-amber-800' : status.ok ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'}`}>
+          {pending ? '⏳ ' : status.ok ? '✓ ' : '✗ Reddedildi: '}{status.message}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function channelLabel(value: string) {

@@ -298,9 +298,11 @@ export class TrendyolAdapter extends BaseIntegrationAdapter {
     const batchStatus = this.text(body.status);
     const failedItemCount = Number(body.failedItemCount ?? 0);
     const items = Array.isArray(body.items) ? (body.items as Array<Record<string, unknown>>) : [];
-    const failureReasons = items
-      .flatMap((item) => (Array.isArray(item.failureReasons) ? (item.failureReasons as string[]) : []))
-      .filter(Boolean);
+    // failureReasons bazen düz metin, bazen { message } nesnesi olarak gelir.
+    const failureReasons = Array.from(new Set(items
+      .flatMap((item) => (Array.isArray(item.failureReasons) ? (item.failureReasons as unknown[]) : []))
+      .map((reason) => (typeof reason === 'string' ? reason : this.text((reason as Record<string, unknown>)?.message ?? (reason as Record<string, unknown>)?.description ?? JSON.stringify(reason))))
+      .filter(Boolean)));
 
     if (batchStatus !== 'COMPLETED') {
       return { ok: true, status: 'CONNECTED', message: 'Trendyol henüz işlemi tamamlamadı, kuyrukta bekliyor.', batchStatus, failedItemCount };
