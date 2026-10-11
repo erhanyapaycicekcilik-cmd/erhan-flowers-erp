@@ -24,6 +24,8 @@ const DEFAULT_STORES: Required<StorePublishOption>[] = [
   { companyCode: 'FLORA', barcodePrefix: 'FL-', priceMultiplier: 0.97 },
 ];
 
+export const FLORA_TRENDYOL_CHANNEL = 'TRENDYOL_FLORA';
+
 @Injectable()
 export class PublishingService {
   constructor(
@@ -93,7 +95,11 @@ export class PublishingService {
 
   async send(variantIds: number[], userId: number, options: { allowIncomplete?: boolean; platforms?: IntegrationPlatform[] } = {}) {
     const ids = Array.from(new Set(variantIds.map(Number).filter((id) => Number.isFinite(id))));
-    const platforms = this.cleanPlatforms(options.platforms);
+    // "TRENDYOL_FLORA" = aynı ürünü Flora mağazasının Trendyol hesabına da aç.
+    const requested = Array.isArray(options.platforms) ? options.platforms.map((item) => String(item).toUpperCase()) : [];
+    const includeFlora = requested.includes(FLORA_TRENDYOL_CHANNEL);
+    const mainRequested = requested.filter((item) => item !== FLORA_TRENDYOL_CHANNEL);
+    const platforms = includeFlora && mainRequested.length === 0 ? [] : this.cleanPlatforms(mainRequested as IntegrationPlatform[]);
     const allowIncomplete = options.allowIncomplete === true;
     if (ids.length === 0) throw new BadRequestException('Gönderilecek ürün seçilmelidir.');
 
@@ -101,11 +107,26 @@ export class PublishingService {
     for (const id of ids) {
       const variant = await this.getVariant(id);
       const payload = this.buildPayload(variant);
+      if (includeFlora) {
+        const floraPayload = this.storePayload(payload, DEFAULT_STORES.find((store) => store.companyCode === 'FLORA')!);
+        const missingFields = this.missingFields(variant, floraPayload, 'TRENDYOL');
+        if (missingFields.length > 0 && !allowIncomplete) {
+          const log = await this.createLog(variant.id, userId, 'LIVE_SEND', 'BLOCKED', floraPayload, null, missingFields, 'FLORA: eksik alanlar var.');
+          results.push({ id, platform: FLORA_TRENDYOL_CHANNEL, ok: false, missingFields, errorMessage: `Eksik alanlar: ${missingFields.join(', ')}`, logId: log.id });
+        } else {
+          try {
+            const result = await this.sendToPlatform('TRENDYOL', variant.id, userId, 'LIVE_SEND', floraPayload, missingFields, allowIncomplete, 'FLORA');
+            results.push({ id, platform: FLORA_TRENDYOL_CHANNEL, ...result });
+          } catch (error) {
+            results.push({ id, platform: FLORA_TRENDYOL_CHANNEL, ok: false, missingFields, errorMessage: error instanceof Error ? error.message : String(error) });
+          }
+        }
+      }
       for (const platform of platforms) {
         const missingFields = this.missingFields(variant, payload, platform);
         if (missingFields.length > 0 && !allowIncomplete) {
           const log = await this.createLog(variant.id, userId, 'LIVE_SEND', 'BLOCKED', payload, null, missingFields, 'Eksik alanlar var.');
-          results.push({ id, ok: false, missingFields, logId: log.id });
+          results.push({ id, platform, ok: false, missingFields, errorMessage: `Eksik alanlar: ${missingFields.join(', ')}`, logId: log.id });
           continue;
         }
         const result = await this.sendToPlatform(platform, variant.id, userId, 'LIVE_SEND', payload, missingFields, allowIncomplete);
@@ -114,7 +135,7 @@ export class PublishingService {
     }
 
     return {
-      total: ids.length * platforms.length,
+      total: results.length,
       success: results.filter((item) => item.ok).length,
       failed: results.filter((item) => !item.ok).length,
       results,

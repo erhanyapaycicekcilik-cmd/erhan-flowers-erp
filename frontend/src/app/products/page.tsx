@@ -276,7 +276,7 @@ const emptyQuickForm: QuickForm = {
   sitePrice: 0,
   initialStockQuantity: 0,
   mainImageUrl: '',
-  platforms: ['TRENDYOL'],
+  platforms: ['TRENDYOL', 'TRENDYOL_FLORA'],
 };
 
 const emptyPriceResearch: PriceResearch = {
@@ -338,7 +338,9 @@ const CATALOG_CATEGORIES = [
 
 const steps = ['Ürün Bilgileri', 'Reçete/Malzeme', 'Maliyet/Fiyat', 'Görsel/SEO', 'Kanallara Gönder'];
 const visibleStepIndexes = [0, 1, 2, 3, 4] as const;
-const channels = ['SHOP', 'SITE', 'TRENDYOL', 'HEPSIBURADA', 'N11', 'TICIMAX'] as const;
+const channels = ['SHOP', 'SITE', 'TRENDYOL', 'TRENDYOL_FLORA', 'HEPSIBURADA', 'N11', 'TICIMAX'] as const;
+// Aynı ürünü Flora mağazasının Trendyol hesabına da açar (barkod FL- ön ekli).
+const FLORA_TRENDYOL_CHANNEL = 'TRENDYOL_FLORA';
 const publishableChannels = ['TRENDYOL', 'HEPSIBURADA', 'N11', 'TICIMAX'] as const;
 const treeVisualSlots = [
   { title: '01 Beyaz ana görsel', detail: 'Pazaryeri ana fotoğrafı: beyaz fon, ürün ortada, tam boy.' },
@@ -400,7 +402,7 @@ export default function ProductsPage() {
   const [step, setStep] = useState(0);
   const [sourceRecipeId, setSourceRecipeId] = useState('');
   const [costDetail, setCostDetail] = useState<CostDetail | null>(null);
-  const [selectedChannels, setSelectedChannels] = useState<string[]>(['SHOP', 'SITE', 'TRENDYOL', 'HEPSIBURADA', 'N11']);
+  const [selectedChannels, setSelectedChannels] = useState<string[]>(['SHOP', 'SITE', 'TRENDYOL', 'TRENDYOL_FLORA', 'HEPSIBURADA', 'N11']);
   const [allowIncomplete, setAllowIncomplete] = useState(true);
   const [query, setQuery] = useState('');
   const [familyPickerOpen, setFamilyPickerOpen] = useState(false);
@@ -1632,7 +1634,7 @@ export default function ProductsPage() {
       setMissingPanelOpen(true);
       return;
     }
-    const platforms = selectedChannels.filter((item) => (publishableChannels as readonly string[]).includes(item));
+    const platforms = selectedChannels.filter((item) => (publishableChannels as readonly string[]).includes(item) || item === FLORA_TRENDYOL_CHANNEL);
     if (platforms.length === 0) {
       const text = 'Dükkan ve web sitesi kontrolleri hazır. Pazaryeri gönderimi için Trendyol, Hepsiburada, N11 veya Ticimax seçin.';
       setMessage(text);
@@ -1650,7 +1652,7 @@ export default function ProductsPage() {
         json: { variantIds: [variantId], platforms, allowIncomplete },
       });
       const rows = result.results.map((item) => ({
-        platform: item.platform ?? '?',
+        platform: channelLabel(item.platform ?? '?'),
         ok: item.ok,
         message: item.ok ? (item.successMessage ?? 'Gönderildi') : (item.errorMessage ?? 'Hata'),
       }));
@@ -1920,7 +1922,7 @@ export default function ProductsPage() {
           <div className="lg:col-span-4">
             <div className="mb-3 flex flex-wrap items-center gap-3">
               <span className="text-sm font-semibold text-slate-600">Kanallara gönder:</span>
-              {[{ value: 'TRENDYOL', label: 'Trendyol' }, { value: 'N11', label: 'N11' }, { value: 'HEPSIBURADA', label: 'Hepsiburada' }].map((p) => (
+              {[{ value: 'TRENDYOL', label: 'Trendyol (Erhan Flowers)' }, { value: 'TRENDYOL_FLORA', label: 'Trendyol (Flora)' }, { value: 'N11', label: 'N11' }, { value: 'HEPSIBURADA', label: 'Hepsiburada' }].map((p) => (
                 <label key={p.value} className="flex cursor-pointer items-center gap-1.5 rounded-md border border-line bg-white px-3 py-1.5 text-sm font-semibold">
                   <input type="checkbox" checked={quickForm.platforms.includes(p.value)} onChange={() => toggleQuickPlatform(p.value)} />
                   {p.label}
@@ -1930,7 +1932,7 @@ export default function ProductsPage() {
             <div className="flex flex-wrap gap-2">
               <button className="btn btn-secondary" type="submit" disabled={quickSaving}><Save size={16} /> {quickSaving ? 'Kaydediliyor…' : 'Sadece Kaydet'}</button>
               <button className="btn btn-primary" type="button" disabled={quickSaving || quickForm.platforms.length === 0} onClick={(e) => saveQuickEntry(e as any, true)}>
-                <Send size={16} /> {quickSaving ? 'Gönderiliyor…' : `Kaydet ve ${quickForm.platforms.length > 0 ? quickForm.platforms.join('+') : 'Kanallara'} Gönder`}
+                <Send size={16} /> {quickSaving ? 'Gönderiliyor…' : `Kaydet ve ${quickForm.platforms.length > 0 ? quickForm.platforms.map(channelLabel).join(' + ') : 'Kanallara'} Gönder`}
               </button>
               <button className="btn btn-secondary" type="button" onClick={newQuickEntry}><PackagePlus size={16} /> Yeni Ürün Ekle</button>
             </div>
@@ -1956,7 +1958,7 @@ export default function ProductsPage() {
                   {quickResult.publishResult.results.map((r) => (
                     <div key={r.platform} className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold ${r.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
                       {r.ok ? <CheckCircle2 size={15} /> : <XCircle size={15} />}
-                      {r.platform}: {r.ok ? (r.batchRequestId ? 'Kuyruğa alındı' : 'Gönderildi') : (r.errorMessage ?? 'Hata')}
+                      {channelLabel(r.platform)}: {r.ok ? (r.batchRequestId ? 'Kuyruğa alındı' : 'Gönderildi') : (r.errorMessage ?? 'Hata')}
                     </div>
                   ))}
                 </div>
@@ -4515,7 +4517,8 @@ function channelLabel(value: string) {
   const labels: Record<string, string> = {
     SHOP: 'Dükkan',
     SITE: 'Web sitesi',
-    TRENDYOL: 'Trendyol',
+    TRENDYOL: 'Trendyol (Erhan Flowers)',
+    TRENDYOL_FLORA: 'Trendyol (Flora)',
     HEPSIBURADA: 'Hepsiburada',
     N11: 'N11',
     TICIMAX: 'Diğer / Ticimax',
