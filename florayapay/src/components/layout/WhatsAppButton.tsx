@@ -3,7 +3,7 @@
 import { useState } from 'react'
 
 const WA_NUMBER = '905446546220'
-const WA_MESSAGE = 'Merhaba! Erhan Flowers hakkında bilgi almak istiyorum.'
+const WA_MESSAGE = 'Merhaba! Flora Yapay Çiçek hakkında bilgi almak istiyorum.'
 
 export function WhatsAppButton() {
   const [hovered, setHovered] = useState(false)

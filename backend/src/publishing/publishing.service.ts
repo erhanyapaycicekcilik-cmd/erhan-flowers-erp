@@ -12,6 +12,18 @@ import { TrendyolAdapter } from '../integrations/adapters/trendyol.adapter';
 import { IntegrationCenterService } from '../integrations/services/integration-center.service';
 import { PrismaService } from '../prisma/prisma.service';
 
+export type StorePublishOption = {
+  companyCode: string;
+  barcodePrefix?: string;
+  priceMultiplier?: number;
+};
+
+// Varsayılan: Erhan Flowers ana mağaza (barkod aynen), Flora "FL-" ön ekli ve %3 farklı fiyatlı.
+const DEFAULT_STORES: Required<StorePublishOption>[] = [
+  { companyCode: 'ERHAN', barcodePrefix: '', priceMultiplier: 1 },
+  { companyCode: 'FLORA', barcodePrefix: 'FL-', priceMultiplier: 0.97 },
+];
+
 @Injectable()
 export class PublishingService {
   constructor(
@@ -109,6 +121,47 @@ export class PublishingService {
     };
   }
 
+  // Aynı ürün kartını birden fazla mağazaya (Erhan Flowers + Flora) aynı anda açar.
+  // Her mağaza kendi API hesabına, kendi barkod ön ekiyle ve kendi fiyat çarpanıyla gider;
+  // böylece pazaryerinde mükerrer barkod/ürün çakışması olmaz.
+  async sendToStores(variantIds: number[], userId: number, options: { platforms?: IntegrationPlatform[]; stores?: StorePublishOption[]; allowIncomplete?: boolean } = {}) {
+    const ids = Array.from(new Set(variantIds.map(Number).filter((id) => Number.isFinite(id))));
+    if (ids.length === 0) throw new BadRequestException('Gönderilecek ürün seçilmelidir.');
+    const platforms = this.cleanPlatforms(options.platforms);
+    const stores = this.cleanStores(options.stores);
+    const allowIncomplete = options.allowIncomplete === true;
+
+    const results = [];
+    for (const id of ids) {
+      const variant = await this.getVariant(id);
+      const basePayload = this.buildPayload(variant);
+      for (const store of stores) {
+        const payload = this.storePayload(basePayload, store);
+        for (const platform of platforms) {
+          const missingFields = this.missingFields(variant, payload, platform);
+          if (missingFields.length > 0 && !allowIncomplete) {
+            const log = await this.createLog(variant.id, userId, 'LIVE_SEND', 'BLOCKED', payload, null, missingFields, `${store.companyCode}: eksik alanlar var.`);
+            results.push({ id, companyCode: store.companyCode, platform, barcode: payload.barcode, ok: false, missingFields, errorMessage: 'Eksik alanlar var.', logId: log.id });
+            continue;
+          }
+          try {
+            const result = await this.sendToPlatform(platform, variant.id, userId, 'LIVE_SEND', payload, missingFields, allowIncomplete, store.companyCode);
+            results.push({ id, companyCode: store.companyCode, platform, barcode: payload.barcode, salePrice: payload.salePrice, ...result });
+          } catch (error) {
+            results.push({ id, companyCode: store.companyCode, platform, barcode: payload.barcode, ok: false, missingFields, errorMessage: error instanceof Error ? error.message : String(error) });
+          }
+        }
+      }
+    }
+
+    return {
+      total: results.length,
+      success: results.filter((item) => item.ok).length,
+      failed: results.filter((item) => !item.ok).length,
+      results,
+    };
+  }
+
   async exportExcel(variantIds: number[], userId: number, platform?: IntegrationPlatform) {
     const ids = Array.from(new Set(variantIds.map(Number).filter((id) => Number.isFinite(id))));
     if (ids.length === 0) throw new BadRequestException('Excel icin urun secilmelidir.');
@@ -200,16 +253,16 @@ export class PublishingService {
     }
   }
 
-  private async sendToPlatform(platform: IntegrationPlatform, variantId: number, userId: number, actionType: PublishingActionType, payload: Record<string, unknown>, missingFields: string[], allowIncomplete: boolean) {
+  private async sendToPlatform(platform: IntegrationPlatform, variantId: number, userId: number, actionType: PublishingActionType, payload: Record<string, unknown>, missingFields: string[], allowIncomplete: boolean, companyCode = 'ERHAN') {
     const platformPrice = platform === 'N11' ? (payload.n11SalePrice ?? payload.salePrice)
       : platform === 'HEPSIBURADA' ? (payload.hepsiburadaSalePrice ?? payload.salePrice)
       : payload.salePrice;
     const platformPayload = { ...payload, salePrice: platformPrice, listPrice: platformPrice, platform, allowIncomplete };
-    if (platform === 'TRENDYOL' && this.useLegacyTrendyolPublisher()) {
+    if (platform === 'TRENDYOL' && companyCode === 'ERHAN' && this.useLegacyTrendyolPublisher()) {
       return this.sendToTrendyol(variantId, userId, actionType, platformPayload, missingFields);
     }
 
-    const adapter = await this.adapter(platform);
+    const adapter = await this.adapter(platform, companyCode);
     const result = await adapter.pushProduct(platformPayload);
     const log = await this.createLog(
       variantId,
@@ -217,7 +270,7 @@ export class PublishingService {
       actionType,
       result.ok ? 'SUCCESS' : 'FAILED',
       platformPayload,
-      { platform, status: result.status, message: result.message, missingKeys: result.missingKeys ?? [], batchRequestId: result.batchRequestId ?? null, listingUploadId: result.listingUploadId ?? null },
+      { platform, companyCode, status: result.status, message: result.message, missingKeys: result.missingKeys ?? [], batchRequestId: result.batchRequestId ?? null, listingUploadId: result.listingUploadId ?? null },
       missingFields,
       result.ok ? null : result.message,
     );
@@ -231,12 +284,61 @@ export class PublishingService {
     };
   }
 
-  private async adapter(platform: IntegrationPlatform): Promise<IntegrationAdapter> {
-    if (platform === 'TRENDYOL') return new TrendyolAdapter(await this.integrationCenter.runtimeCredentials(platform));
-    if (platform === 'HEPSIBURADA') return new HepsiburadaAdapter(await this.integrationCenter.runtimeCredentials(platform));
-    if (platform === 'N11') return new N11Adapter(await this.integrationCenter.runtimeCredentials(platform));
-    if (platform === 'TICIMAX') return new TicimaxAdapter(await this.integrationCenter.ticimaxRuntimeCredentials());
+  private async adapter(platform: IntegrationPlatform, companyCode = 'ERHAN'): Promise<IntegrationAdapter> {
+    if (platform === 'TRENDYOL') return new TrendyolAdapter(await this.integrationCenter.storeCredentials(platform, companyCode));
+    if (platform === 'HEPSIBURADA') return new HepsiburadaAdapter(await this.integrationCenter.storeCredentials(platform, companyCode));
+    if (platform === 'N11') return new N11Adapter(await this.integrationCenter.storeCredentials(platform, companyCode));
+    if (platform === 'TICIMAX') {
+      if (companyCode !== 'ERHAN') throw new BadRequestException('Ticimax yalnızca Erhan Flowers mağazası için tanımlı.');
+      return new TicimaxAdapter(await this.integrationCenter.ticimaxRuntimeCredentials());
+    }
     throw new BadRequestException(`${platform} urun gonderimi desteklenmiyor.`);
+  }
+
+  private cleanStores(value?: StorePublishOption[]): Required<StorePublishOption>[] {
+    const input = Array.isArray(value) && value.length > 0 ? value : DEFAULT_STORES;
+    const seen = new Set<string>();
+    const stores: Required<StorePublishOption>[] = [];
+    for (const item of input) {
+      const companyCode = String(item?.companyCode ?? '').trim().toUpperCase();
+      if (!/^[A-Z0-9_]{2,20}$/.test(companyCode) || seen.has(companyCode)) continue;
+      seen.add(companyCode);
+      const fallback = DEFAULT_STORES.find((store) => store.companyCode === companyCode);
+      const multiplier = Number(item.priceMultiplier ?? fallback?.priceMultiplier ?? 1);
+      stores.push({
+        companyCode,
+        barcodePrefix: String(item.barcodePrefix ?? fallback?.barcodePrefix ?? '').trim().toUpperCase().replace(/[^A-Z0-9-]/g, ''),
+        priceMultiplier: Number.isFinite(multiplier) && multiplier >= 0.5 && multiplier <= 2 ? multiplier : 1,
+      });
+    }
+    if (stores.length === 0) throw new BadRequestException('En az bir mağaza seçilmelidir.');
+    return stores;
+  }
+
+  private storePayload(base: Record<string, any>, store: Required<StorePublishOption>) {
+    const prefix = (value: unknown) => {
+      const text = String(value ?? '').trim();
+      if (!text || !store.barcodePrefix || text.startsWith(store.barcodePrefix)) return text || null;
+      return `${store.barcodePrefix}${text}`;
+    };
+    const price = (value: unknown) => {
+      const amount = Number(value ?? 0);
+      return amount > 0 ? Math.round(amount * store.priceMultiplier * 100) / 100 : amount;
+    };
+    const isMainStore = store.companyCode === 'ERHAN';
+    return {
+      ...base,
+      barcode: prefix(base.barcode),
+      modelCode: prefix(base.modelCode),
+      // Ana mağazanın Trendyol içerik kimliği/barkodu diğer mağazada geçersizdir; yeni ürün olarak açılır.
+      trendyolBarcode: isMainStore ? base.trendyolBarcode : null,
+      contentId: isMainStore ? base.contentId : null,
+      salePrice: price(base.salePrice),
+      listPrice: price(base.listPrice),
+      n11SalePrice: price(base.n11SalePrice),
+      hepsiburadaSalePrice: price(base.hepsiburadaSalePrice),
+      companyCode: store.companyCode,
+    };
   }
 
   private cleanPlatforms(value?: IntegrationPlatform[]): IntegrationPlatform[] {

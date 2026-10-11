@@ -411,6 +411,61 @@ export class TrendyolAdapter extends BaseIntegrationAdapter {
     };
   }
 
+  // Satıcının satıştaki (onaylı) ürünlerini sayfa sayfa listeler.
+  async fetchSellerProducts(maxPages = 50): Promise<Array<Record<string, unknown>>> {
+    const missing = this.missingKeys();
+    if (missing.length) throw new Error(`Trendyol API bilgileri eksik: ${missing.join(', ')}`);
+    const supplierId = this.env('SUPPLIER_ID');
+    const apiBaseUrl = this.env('API_URL').replace(/\/+$/, '');
+    const all: Array<Record<string, unknown>> = [];
+    for (let page = 0; page < maxPages; page += 1) {
+      const response = await fetch(`${apiBaseUrl}/product/sellers/${supplierId}/products?approved=true&archived=false&page=${page}&size=200`, {
+        headers: this.productHeaders(supplierId),
+      });
+      if (!response.ok) throw new Error(`Trendyol urun listesi alinamadi. HTTP ${response.status}: ${await this.safeErrorText(response)}`);
+      const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+      const content = Array.isArray(body.content) ? (body.content as Array<Record<string, unknown>>) : [];
+      all.push(...content);
+      const totalPages = Number(body.totalPages ?? 1);
+      if (content.length === 0 || page + 1 >= totalPages) break;
+    }
+    return all;
+  }
+
+  // Birden çok barkodun stok/fiyatını tek istekte (en fazla 1000) günceller.
+  async pushInventoryBatch(items: Array<{ barcode: string; quantity: number; salePrice: number; listPrice: number }>): Promise<AdapterConnectionResult> {
+    const missing = this.missingKeys();
+    if (missing.length) return this.missing(missing);
+    const supplierId = this.env('SUPPLIER_ID');
+    const apiBaseUrl = this.env('API_URL').replace(/\/+$/, '');
+    const batchIds: string[] = [];
+    for (let index = 0; index < items.length; index += 500) {
+      const chunk = items.slice(index, index + 500);
+      const response = await fetch(`${apiBaseUrl}/inventory/sellers/${supplierId}/products/price-and-inventory`, {
+        method: 'POST',
+        headers: this.productHeaders(supplierId),
+        body: JSON.stringify({ items: chunk }),
+      });
+      if (!response.ok) {
+        return {
+          ok: false,
+          status: response.status === 401 || response.status === 403 ? 'MISSING_CREDENTIALS' : 'FAILED',
+          message: `Trendyol toplu stok guncellemesi basarisiz (${index}-${index + chunk.length}). HTTP ${response.status}: ${await this.safeErrorText(response)}`,
+          batchRequestId: batchIds.join(','),
+        };
+      }
+      const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+      const batchId = this.text(body.batchRequestId);
+      if (batchId) batchIds.push(batchId);
+    }
+    return {
+      ok: true,
+      status: 'CONNECTED',
+      message: `Trendyol ${items.length} urun icin stok/fiyat guncellemesi kuyruga alindi.`,
+      batchRequestId: batchIds.join(','),
+    };
+  }
+
   private missingKeys() {
     return [
       !this.env('SUPPLIER_ID') ? 'TRENDYOL_SUPPLIER_ID' : '',

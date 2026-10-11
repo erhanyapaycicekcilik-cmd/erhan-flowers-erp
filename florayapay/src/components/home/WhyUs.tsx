@@ -30,7 +30,7 @@ export function WhyUs() {
             id="whyus-heading"
             className="font-display text-3xl font-light text-[#0D1510] mb-2"
           >
-            Neden Erhan Flowers?
+            Neden Flora Yapay Çiçek?
           </h2>
           <p className="text-[#8C8A82] max-w-xl mx-auto">
             Binlerce mutlu müşteri ve yıllarca süren deneyimle kaliteyi en uygun fiyata sunuyoruz.

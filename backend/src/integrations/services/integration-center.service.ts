@@ -170,32 +170,8 @@ export class IntegrationCenterService {
   async runtimeCredentials(platformValue: unknown, companyCode = 'ERHAN') {
     await this.ensureManagedIntegrationSeed();
     const platform = this.managedPlatform(platformValue);
-    const [account] = await this.prisma.$queryRaw<Array<Record<string, unknown>>>`
-      SELECT a.id, a.external_account_id AS "externalAccountId"
-      FROM channel_accounts a
-      JOIN sales_channels sc ON sc.id = a.sales_channel_id
-      JOIN companies c ON c.id = a.company_id
-      WHERE sc.code = ${platform} AND c.code = ${companyCode} AND a.is_active = true
-      ORDER BY a.id ASC
-      LIMIT 1
-    `;
-    if (!account) return {};
-
-    const rows = await this.prisma.$queryRaw<Array<Record<string, unknown>>>`
-      SELECT credential_type AS "credentialType", encrypted_value AS "encryptedValue"
-      FROM channel_credentials
-      WHERE channel_account_id = ${Number(account.id)} AND is_active = true
-    `;
-    const values: Record<string, string> = {};
-    for (const row of rows) {
-      const key = this.runtimeCredentialField(platform, String(row.credentialType));
-      const encryptedValue = this.text(row.encryptedValue);
-      if (key && encryptedValue) {
-        try { values[key] = this.credentialVault.decrypt(encryptedValue); } catch { /* şifreli değer okunamadı, env'den alınacak */ }
-      }
-    }
-    const externalAccountId = this.text(account.externalAccountId);
-    if (externalAccountId && !values.MERCHANT_ID) values.MERCHANT_ID = externalAccountId;
+    const values = await this.accountCredentials(platform, companyCode);
+    if (!values) return {};
 
     // DB'de credential yoksa veya decrypt başarısızsa process.env'den fallback
     const prefix = platform === 'HEPSIBURADA' ? 'HEPSIBURADA' : platform === 'N11' ? 'N11' : platform === 'TRENDYOL' ? 'TRENDYOL' : platform;
@@ -212,6 +188,62 @@ export class IntegrationCenterService {
     for (const [key, envVal] of Object.entries(envFallbacks)) {
       if (envVal && !values[key]) values[key] = envVal;
     }
+    return values;
+  }
+
+  // Mağazaya özel (ERHAN dışı, ör. FLORA) işlemler için: yalnızca o mağazanın
+  // kendi kayıtlı API bilgilerini döner. Eksik anahtarlar ERHAN'ın .env
+  // değerleriyle doldurulmaz; aksi halde FLORA işlemi Erhan mağazasına gider.
+  async storeCredentials(platformValue: unknown, companyCode = 'ERHAN'): Promise<Record<string, string>> {
+    if (companyCode === 'ERHAN') return this.runtimeCredentials(platformValue, companyCode);
+    await this.ensureManagedIntegrationSeed();
+    const platform = this.managedPlatform(platformValue);
+    const values = (await this.accountCredentials(platform, companyCode)) ?? {};
+    // Adaptörler alternatif anahtar adlarına (USERNAME/API_KEY, PASSWORD/API_SECRET) bakıyor;
+    // boş kalan her anahtar .env'e düşeceği için mağazanın kendi değerleriyle doldur.
+    values.API_KEY = values.API_KEY || values.USERNAME || '';
+    values.USERNAME = values.USERNAME || values.API_KEY || values.MERCHANT_ID || '';
+    values.API_SECRET = values.API_SECRET || values.PASSWORD || '';
+    values.PASSWORD = values.PASSWORD || values.API_SECRET || '';
+    const required: Record<string, string[]> = {
+      TRENDYOL: ['SUPPLIER_ID', 'API_KEY', 'API_SECRET'],
+      N11: ['API_KEY', 'API_SECRET'],
+      HEPSIBURADA: ['MERCHANT_ID', 'PASSWORD'],
+    };
+    const missing = (required[platform] ?? []).filter((key) => !values[key]);
+    if (missing.length) {
+      throw new BadRequestException(`${companyCode} mağazasının ${platform} API bilgileri eksik (${missing.join(', ')}). Entegrasyon ekranından girilmeli.`);
+    }
+    return values;
+  }
+
+  private async accountCredentials(platform: string, companyCode: string): Promise<Record<string, string> | null> {
+    const [account] = await this.prisma.$queryRaw<Array<Record<string, unknown>>>`
+      SELECT a.id, a.external_account_id AS "externalAccountId"
+      FROM channel_accounts a
+      JOIN sales_channels sc ON sc.id = a.sales_channel_id
+      JOIN companies c ON c.id = a.company_id
+      WHERE sc.code = ${platform} AND c.code = ${companyCode} AND a.is_active = true
+      ORDER BY a.id ASC
+      LIMIT 1
+    `;
+    if (!account) return null;
+
+    const rows = await this.prisma.$queryRaw<Array<Record<string, unknown>>>`
+      SELECT credential_type AS "credentialType", encrypted_value AS "encryptedValue"
+      FROM channel_credentials
+      WHERE channel_account_id = ${Number(account.id)} AND is_active = true
+    `;
+    const values: Record<string, string> = {};
+    for (const row of rows) {
+      const key = this.runtimeCredentialField(platform, String(row.credentialType));
+      const encryptedValue = this.text(row.encryptedValue);
+      if (key && encryptedValue) {
+        try { values[key] = this.credentialVault.decrypt(encryptedValue); } catch { /* şifreli değer okunamadı, env'den alınacak */ }
+      }
+    }
+    const externalAccountId = this.text(account.externalAccountId);
+    if (externalAccountId && !values.MERCHANT_ID) values.MERCHANT_ID = externalAccountId;
     return values;
   }
 

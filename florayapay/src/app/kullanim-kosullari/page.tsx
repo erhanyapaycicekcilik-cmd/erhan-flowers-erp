@@ -4,13 +4,13 @@ import { Footer } from '@/components/layout/Footer'
 
 export const metadata: Metadata = {
   title: 'Kullanım Koşulları',
-  description: 'Erhan Flowers web sitesi kullanım koşulları ve hizmet şartları.',
+  description: 'Flora Yapay Çiçek web sitesi kullanım koşulları ve hizmet şartları.',
 }
 
 const sections = [
   {
     title: '1. Genel Hükümler',
-    content: `Bu web sitesini kullanan her ziyaretçi aşağıdaki koşulları kabul etmiş sayılır. Erhan Flowers, bu koşulları önceden haber vermeksizin değiştirme hakkını saklı tutar. Değişiklikler yayınlandığı anda yürürlüğe girer.`,
+    content: `Bu web sitesini kullanan her ziyaretçi aşağıdaki koşulları kabul etmiş sayılır. Flora Yapay Çiçek, bu koşulları önceden haber vermeksizin değiştirme hakkını saklı tutar. Değişiklikler yayınlandığı anda yürürlüğe girer.`,
   },
   {
     title: '2. Siteye Erişim',
@@ -18,7 +18,7 @@ const sections = [
   },
   {
     title: '3. Fikri Mülkiyet',
-    content: `Sitedeki tüm içerikler (metin, görsel, logo, tasarım) Erhan Flowers'ın mülkiyetindedir ve telif hakkı yasalarıyla korunmaktadır. İzin alınmadan kopyalanamaz, dağıtılamaz veya ticari amaçla kullanılamaz.`,
+    content: `Sitedeki tüm içerikler (metin, görsel, logo, tasarım) Flora Yapay Çiçek'ın mülkiyetindedir ve telif hakkı yasalarıyla korunmaktadır. İzin alınmadan kopyalanamaz, dağıtılamaz veya ticari amaçla kullanılamaz.`,
   },
   {
     title: '4. Ürün Bilgileri',
@@ -26,11 +26,11 @@ const sections = [
   },
   {
     title: '5. Fiyatlar',
-    content: `Tüm fiyatlar Türk Lirası (TL) cinsinden ve KDV dahil olarak gösterilmektedir. Kargo ücreti sipariş tutarına göre ayrıca hesaplanır. Erhan Flowers, teknik hatalar nedeniyle oluşan yanlış fiyatlandırma için siparişi iptal etme hakkına sahiptir; bu durumda Alıcı bilgilendirilir ve ödeme iade edilir.`,
+    content: `Tüm fiyatlar Türk Lirası (TL) cinsinden ve KDV dahil olarak gösterilmektedir. Kargo ücreti sipariş tutarına göre ayrıca hesaplanır. Flora Yapay Çiçek, teknik hatalar nedeniyle oluşan yanlış fiyatlandırma için siparişi iptal etme hakkına sahiptir; bu durumda Alıcı bilgilendirilir ve ödeme iade edilir.`,
   },
   {
     title: '6. Sorumluluğun Sınırlandırılması',
-    content: `Erhan Flowers; teknik arızalar, internet kesintileri veya üçüncü taraf hizmet sağlayıcılarından kaynaklanan aksaklıklar nedeniyle oluşan kayıplardan sorumlu tutulamaz. Bağlantı verilen üçüncü taraf sitelerin içeriğinden Erhan Flowers sorumlu değildir.`,
+    content: `Flora Yapay Çiçek; teknik arızalar, internet kesintileri veya üçüncü taraf hizmet sağlayıcılarından kaynaklanan aksaklıklar nedeniyle oluşan kayıplardan sorumlu tutulamaz. Bağlantı verilen üçüncü taraf sitelerin içeriğinden Flora Yapay Çiçek sorumlu değildir.`,
   },
   {
     title: '7. Geçerli Hukuk',

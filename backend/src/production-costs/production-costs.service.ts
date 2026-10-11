@@ -879,6 +879,11 @@ export class ProductionCostsService {
   private async broadcastApprovedCost(product: { barcode?: string | null; modelCode?: string | null; trendyolBarcode?: string | null; salePrice: number; listPrice: number; stockQuantity: number }): Promise<void> {
     if (!product.barcode && !product.modelCode && !product.trendyolBarcode) return;
     if (!product.salePrice) return;
+    // Katalog stratejisi ekranından satışa kapatılan ürün maliyet onayıyla tekrar açılmasın.
+    if (product.barcode) {
+      const closed = await this.prisma.trendyolProductVariant.findFirst({ where: { barcode: product.barcode, status: 'PASSIVE' }, select: { id: true } });
+      if (closed) return;
+    }
     const payload = {
       trendyolBarcode: product.trendyolBarcode ?? null,
       barcode: product.barcode ?? product.modelCode ?? '',

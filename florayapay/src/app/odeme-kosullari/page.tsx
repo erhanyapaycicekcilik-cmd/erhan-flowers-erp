@@ -4,7 +4,7 @@ import { Footer } from '@/components/layout/Footer'
 
 export const metadata: Metadata = {
   title: 'Ödeme Koşulları',
-  description: 'Erhan Flowers ödeme yöntemleri ve güvenli alışveriş koşulları.',
+  description: 'Flora Yapay Çiçek ödeme yöntemleri ve güvenli alışveriş koşulları.',
 }
 
 const methods = [

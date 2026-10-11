@@ -67,7 +67,7 @@ Sonra tarayıcıda: **http://localhost:3200**
 - Container adı: `erhan-flowers-florayapay-prod`
 
 **Bilinen sorunlar (düzeltilecek):**
-- Sayfa title çift yazıyor: "Erhan Flowers | Erhan Flowers"
+- Marka adı "Flora Yapay Çiçek" oldu; `public/logo.png` görselinde hâlâ "Erhan Flowers" yazıyor — yeni logo dosyası gerekli
 
 ## Container İsimleri
 
@@ -92,6 +92,14 @@ Sonra tarayıcıda: **http://localhost:3200**
 - Eşleştirme: `barcode` yoksa `modelCode` kullanılır
 - Platform bağlantı listesi 5dk TTL cache ile tutulur
 - **15 dakikada bir cron**: `OrderSyncService.syncAllPlatforms()` — tüm platformlarda teslim edilmiş siparişleri otomatik DELIVERED yapar (`markMissingAsDelivered`)
+
+## Katalog Stratejisi (`/katalog-stratejisi`, sadece OWNER)
+
+- Backend: `backend/src/catalog-strategy/` — `GET /catalog-strategy/cleanup/preview?company=ERHAN|FLORA&days=&minSold=`, `POST /catalog-strategy/cleanup/apply` (onay metni `SATISA KAPAT`), `GET /catalog-strategy/bestsellers`, `POST /catalog-strategy/publish`
+- Satmayanları kapatma = **silme değil**, stok 0 (Trendyol toplu, N11/HB ERP kaydı olanlar). ERHAN'da kapatılan varyant `PASSIVE` olur; `broadcastPriceStock` ve `broadcastApprovedCost` PASSIVE ürünleri tekrar açmaz
+- Satış verisi `marketplace_orders` tablosundan; FLORA siparişleri `external_order_id LIKE 'FLORA\_%'`
+- İki mağaza yayını: `PublishingService.sendToStores` (`POST /publishing/send-to-stores`). Varsayılan ERHAN barkod aynen, FLORA `FL-` ön ek + %-3 fiyat. FLORA'da contentId/trendyolBarcode gönderilmez (yeni ürün açılır)
+- `IntegrationCenterService.storeCredentials(platform, company)`: ERHAN dışı mağazada .env'e **düşmez**, eksik API bilgisi varsa hata verir (Flora işlemi yanlışlıkla Erhan mağazasına gitmesin)
 
 ## Veritabanı
 

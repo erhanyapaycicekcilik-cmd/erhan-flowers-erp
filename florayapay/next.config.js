@@ -77,6 +77,10 @@ const nextConfig = {
       },
       {
         protocol: 'https',
+        hostname: '**.florayapaycicek.com',
+      },
+      {
+        protocol: 'https',
         hostname: 'erhanflowers.com',
       },
       // Trendyol CDN
@@ -119,7 +123,7 @@ const nextConfig = {
 
   // Env değişkenleri (public olanlar NEXT_PUBLIC_ prefix ile)
   env: {
-    SITE_URL: process.env.SITE_URL || 'https://erhanflowers.com',
+    SITE_URL: process.env.SITE_URL || 'https://florayapaycicek.com',
   },
 }
 
