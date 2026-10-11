@@ -1,11 +1,11 @@
 // JSON-LD Structured Data şemaları — Google rich results için
 
-const SITE_URL = process.env.SITE_URL || 'https://erhanflowers.com'
+const SITE_URL = process.env.SITE_URL || 'https://florayapaycicek.com'
 
 export const organizationSchema = {
   '@context': 'https://schema.org',
   '@type': 'Organization',
-  name: 'Erhan Flowers',
+  name: 'Flora Yapay Çiçek',
   url: SITE_URL,
   logo: `${SITE_URL}/logo.png`,
   contactPoint: {
@@ -32,7 +32,7 @@ export const organizationSchema = {
 export const websiteSchema = {
   '@context': 'https://schema.org',
   '@type': 'WebSite',
-  name: 'Erhan Flowers',
+  name: 'Flora Yapay Çiçek',
   url: SITE_URL,
   potentialAction: {
     '@type': 'SearchAction',
@@ -47,7 +47,7 @@ export const websiteSchema = {
 export const localBusinessSchema = {
   '@context': 'https://schema.org',
   '@type': 'LocalBusiness',
-  name: 'Erhan Flowers',
+  name: 'Flora Yapay Çiçek',
   description: 'Yapay çiçek, yapay ağaç, dikey bahçe ve dekorasyon ürünleri.',
   url: SITE_URL,
   telephone: '+90-544-654-62-20',
@@ -104,7 +104,7 @@ export function productSchema(product: {
     sku: product.sku,
     brand: {
       '@type': 'Brand',
-      name: product.brand || 'Erhan Flowers',
+      name: product.brand || 'Flora Yapay Çiçek',
     },
     offers: {
       '@type': 'Offer',
@@ -114,7 +114,7 @@ export function productSchema(product: {
       availability: `https://schema.org/${product.availability || 'InStock'}`,
       seller: {
         '@type': 'Organization',
-        name: 'Erhan Flowers',
+        name: 'Flora Yapay Çiçek',
       },
     },
     ...(product.ratingValue && product.reviewCount

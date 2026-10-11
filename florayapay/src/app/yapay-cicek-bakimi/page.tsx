@@ -9,7 +9,7 @@ export const metadata: Metadata = {
   keywords: ['yapay çiçek bakımı', 'yapay bitki temizliği', 'yapay ağaç toz alma', 'solmayan çiçek bakım'],
   alternates: { canonical: '/yapay-cicek-bakimi' },
   openGraph: {
-    title: 'Yapay Çiçek Bakımı Rehberi | Erhan Flowers',
+    title: 'Yapay Çiçek Bakımı Rehberi',
     description: 'Yapay çiçeklerinizi yıllarca taze tutmanın yolları.',
   },
 }

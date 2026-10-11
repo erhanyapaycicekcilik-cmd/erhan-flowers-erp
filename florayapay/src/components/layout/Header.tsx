@@ -92,7 +92,7 @@ export function Header() {
         </button>
 
         <Link href="/" className="flex-1 flex justify-center">
-          <Image src="/logo.png" alt="Erhan Flowers" width={160} height={80} style={{ objectFit: 'contain' }} priority />
+          <Image src="/logo.png" alt="Flora Yapay Çiçek" width={160} height={80} style={{ objectFit: 'contain' }} priority />
         </Link>
 
         <div className="flex items-center gap-3">

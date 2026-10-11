@@ -19,7 +19,7 @@ export default async function AdminDashboard() {
     <div className="max-w-5xl mx-auto px-6 py-10">
       <div className="mb-10">
         <h1 className="font-display text-3xl font-light text-[#0D1510]">Yönetim Paneli</h1>
-        <p className="text-[#8C8A82] mt-1">Erhan Flowers mağaza yönetimi</p>
+        <p className="text-[#8C8A82] mt-1">Flora Yapay Çiçek mağaza yönetimi</p>
       </div>
 
       {/* İstatistikler */}

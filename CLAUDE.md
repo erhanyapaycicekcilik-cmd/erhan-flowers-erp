@@ -67,7 +67,7 @@ Sonra tarayıcıda: **http://localhost:3200**
 - Container adı: `erhan-flowers-florayapay-prod`
 
 **Bilinen sorunlar (düzeltilecek):**
-- Sayfa title çift yazıyor: "Erhan Flowers | Erhan Flowers"
+- Marka adı "Flora Yapay Çiçek" oldu; `public/logo.png` görselinde hâlâ "Erhan Flowers" yazıyor — yeni logo dosyası gerekli
 
 ## Container İsimleri
 

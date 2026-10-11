@@ -5,7 +5,7 @@ import Link from 'next/link'
 
 export const metadata: Metadata = {
   title: 'Projelerimiz — Kurumsal Dekorasyon Çalışmaları',
-  description: 'Erhan Flowers olarak tamamladığımız otel, restoran, ofis ve mağaza dekorasyon projeleri. Yapay çiçek ve bitki ile dönüştürdüğümüz mekanlar.',
+  description: 'Flora Yapay Çiçek olarak tamamladığımız otel, restoran, ofis ve mağaza dekorasyon projeleri. Yapay çiçek ve bitki ile dönüştürdüğümüz mekanlar.',
   alternates: { canonical: '/projelerimiz' },
 }
 

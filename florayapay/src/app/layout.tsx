@@ -24,17 +24,17 @@ const cormorant = Cormorant_Garamond({
   preload: false,
 })
 
-const SITE_URL = process.env.SITE_URL || 'https://erhanflowers.com'
+const SITE_URL = process.env.SITE_URL || 'https://florayapaycicek.com'
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
 
   title: {
-    default: 'Erhan Flowers | Kaliteli Yapay Çiçek & Dekorasyon',
-    template: '%s | Erhan Flowers',
+    default: 'Flora Yapay Çiçek | Kaliteli Yapay Çiçek & Dekorasyon',
+    template: '%s | Flora Yapay Çiçek',
   },
   description:
-    'Erhan Flowers — Türkiye\'nin en kaliteli yapay çiçek ve bitki dekorasyonları. Solmayan güzellik, ömür boyu zarafet. Hızlı kargo, kolay iade.',
+    'Flora Yapay Çiçek — Türkiye\'nin en kaliteli yapay çiçek ve bitki dekorasyonları. Solmayan güzellik, ömür boyu zarafet. Hızlı kargo, kolay iade.',
 
   keywords: [
     'yapay çiçek',
@@ -58,24 +58,24 @@ export const metadata: Metadata = {
     type: 'website',
     locale: 'tr_TR',
     url: SITE_URL,
-    siteName: 'Erhan Flowers',
-    title: 'Erhan Flowers | Kaliteli Yapay Çiçek & Dekorasyon',
+    siteName: 'Flora Yapay Çiçek',
+    title: 'Flora Yapay Çiçek | Kaliteli Yapay Çiçek & Dekorasyon',
     description:
-      'Erhan Flowers — Türkiye\'nin en kaliteli yapay çiçek ve bitki dekorasyonları. Solmayan güzellik, ömür boyu zarafet.',
+      'Flora Yapay Çiçek — Türkiye\'nin en kaliteli yapay çiçek ve bitki dekorasyonları. Solmayan güzellik, ömür boyu zarafet.',
     images: [
       {
         url: '/logo.png',
         width: 800,
         height: 400,
-        alt: 'Erhan Flowers — Kaliteli Yapay Çiçek',
+        alt: 'Flora Yapay Çiçek — Kaliteli Yapay Çiçek',
       },
     ],
   },
 
   twitter: {
     card: 'summary_large_image',
-    title: 'Erhan Flowers | Kaliteli Yapay Çiçek & Dekorasyon',
-    description: 'Erhan Flowers — Türkiye\'nin en kaliteli yapay çiçek dekorasyonları.',
+    title: 'Flora Yapay Çiçek | Kaliteli Yapay Çiçek & Dekorasyon',
+    description: 'Flora Yapay Çiçek — Türkiye\'nin en kaliteli yapay çiçek dekorasyonları.',
     images: ['/logo.png'],
   },
 
@@ -95,9 +95,9 @@ export const metadata: Metadata = {
     google: process.env.GOOGLE_SITE_VERIFICATION || '',
   },
 
-  authors: [{ name: 'Erhan Flowers' }],
-  creator: 'Erhan Flowers',
-  publisher: 'Erhan Flowers',
+  authors: [{ name: 'Flora Yapay Çiçek' }],
+  creator: 'Flora Yapay Çiçek',
+  publisher: 'Flora Yapay Çiçek',
   category: 'E-Ticaret / Ev Dekorasyonu',
 }
 

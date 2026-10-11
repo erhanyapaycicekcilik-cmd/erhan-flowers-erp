@@ -4,7 +4,7 @@ import { Footer } from '@/components/layout/Footer'
 
 export const metadata: Metadata = {
   title: 'Çerez Politikası',
-  description: 'Erhan Flowers çerez (cookie) politikası. Hangi çerezleri kullandığımız ve nasıl yönetebileceğiniz hakkında bilgi.',
+  description: 'Flora Yapay Çiçek çerez (cookie) politikası. Hangi çerezleri kullandığımız ve nasıl yönetebileceğiniz hakkında bilgi.',
 }
 
 const cookies = [

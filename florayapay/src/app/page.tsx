@@ -12,18 +12,18 @@ import { SocialProofBar } from '@/components/home/SocialProofBar'
 import { FlashSaleBanner } from '@/components/home/FlashSaleBanner'
 
 export const metadata: Metadata = {
-  title: { absolute: 'Erhan Flowers | Yapay Çiçek & Dekorasyon — Manavgat, Antalya' },
+  title: { absolute: 'Flora Yapay Çiçek | Yapay Çiçek & Dekorasyon — Manavgat, Antalya' },
   description:
-    'Erhan Flowers — Manavgat\'ın en kaliteli yapay çiçek ve bitki dekorasyonları. Yapay ağaç, orkide, dikey bahçe ve daha fazlası. Hızlı kargo, kolay iade. 500+ mutlu müşteri.',
+    'Flora Yapay Çiçek — Manavgat\'ın en kaliteli yapay çiçek ve bitki dekorasyonları. Yapay ağaç, orkide, dikey bahçe ve daha fazlası. Hızlı kargo, kolay iade. 500+ mutlu müşteri.',
   keywords: ['yapay çiçek', 'yapay ağaç', 'yapay çiçek manavgat', 'yapay orkide', 'dikey bahçe', 'yapay bitki dekorasyon', 'erhan flowers'],
   alternates: {
     canonical: '/',
   },
   openGraph: {
-    title: 'Erhan Flowers — Kaliteli Yapay Çiçek & Dekorasyon',
+    title: 'Flora Yapay Çiçek — Kaliteli Yapay Çiçek & Dekorasyon',
     description: 'Manavgat\'ın en kaliteli yapay çiçek ve bitki dekorasyonları. 500+ mutlu müşteri.',
     url: 'https://florayapaycicek.com',
-    siteName: 'Erhan Flowers',
+    siteName: 'Flora Yapay Çiçek',
     locale: 'tr_TR',
     type: 'website',
   },

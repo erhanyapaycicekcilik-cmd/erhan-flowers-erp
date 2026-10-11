@@ -22,7 +22,7 @@ function DekontContent() {
     '₺' + new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 0 }).format(Number(n))
 
   const waMsg = encodeURIComponent(
-    `🌿 Erhan Flowers — EFT Dekontu\n\nSipariş Kodu: ${kod}\nÖdenen Tutar: ${tutar ? fmt(tutar) : '—'}\n\n[Dekontu bu mesaja ekleyerek gönderin]`
+    `🌿 Flora Yapay Çiçek — EFT Dekontu\n\nSipariş Kodu: ${kod}\nÖdenen Tutar: ${tutar ? fmt(tutar) : '—'}\n\n[Dekontu bu mesaja ekleyerek gönderin]`
   )
   const waUrl = `https://wa.me/905446546220?text=${waMsg}`
 

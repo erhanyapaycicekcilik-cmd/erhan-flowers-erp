@@ -52,7 +52,7 @@ export default function AdminAddProductPage() {
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            <Field label="Marka" name="brand" placeholder="Erhan Flowers" />
+            <Field label="Marka" name="brand" placeholder="Flora Yapay Çiçek" />
             <Field label="Menşei" name="origin" placeholder="ÇİN" />
           </div>
 
