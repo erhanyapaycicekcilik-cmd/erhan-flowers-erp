@@ -302,6 +302,7 @@ export class PublishingService {
       successMessage: result.ok ? result.message : null,
       logId: log.id,
       batchRequestId: result.batchRequestId ?? null,
+      listingUploadId: result.listingUploadId ?? null,
     };
   }
 

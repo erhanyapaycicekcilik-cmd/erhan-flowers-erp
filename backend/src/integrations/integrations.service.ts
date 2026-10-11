@@ -265,9 +265,12 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
   // Bir gönderimin (batchRequestId) pazaryerinde gerçekten işlenip işlenmediğini
   // sorgular. "Kuyruğa alındı" mesajı gerçek sonuç değildir; bu asenkron sonucu
   // ayrıca kontrol etmek gerekir.
-  async checkBatchStatus(platformValue: string, batchRequestId: string) {
+  async checkBatchStatus(platformValue: string, batchRequestId: string, companyValue?: string) {
     const platform = this.platform(platformValue);
-    const adapter = await this.adapter(platform);
+    const companyCode = this.text(companyValue).toUpperCase() || 'ERHAN';
+    if (!['ERHAN', 'FLORA'].includes(companyCode)) throw new BadRequestException('Mağaza ERHAN veya FLORA olmalıdır.');
+    // ERHAN dışı mağazada Erhan'ın .env bilgilerine düşmemek için mağazaya özel bilgiler kullanılır.
+    const adapter = companyCode === 'ERHAN' ? await this.adapter(platform) : await this.storeAdapter(platform, companyCode);
     if (!adapter.checkBatchStatus) {
       return { ok: false, status: 'NOT_IMPLEMENTED' as const, message: `${platform} icin batch durumu sorgulama desteklenmiyor.` };
     }
@@ -1367,6 +1370,14 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
       await new Promise(r => setTimeout(r, 100));
     }
     return { deleted, failed, errors };
+  }
+
+  private async storeAdapter(platform: IntegrationPlatform, companyCode: string): Promise<IntegrationAdapter> {
+    const credentials = await this.integrationCenter.storeCredentials(platform, companyCode);
+    if (platform === 'TRENDYOL') return new TrendyolAdapter(credentials);
+    if (platform === 'HEPSIBURADA') return new HepsiburadaAdapter(credentials);
+    if (platform === 'N11') return new N11Adapter(credentials);
+    throw new BadRequestException(`${platform} için mağaza seçimi desteklenmiyor.`);
   }
 
   private async adapter(platform: IntegrationPlatform, companyCode = 'ERHAN'): Promise<IntegrationAdapter> {
