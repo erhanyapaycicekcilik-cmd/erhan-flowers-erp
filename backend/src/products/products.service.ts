@@ -890,4 +890,28 @@ export class ProductsService {
     }
     throw error;
   }
+
+  async getVariantsWithoutDriveFolder() {
+    return this.prisma.trendyolProductVariant.findMany({
+      where: { status: 'ACTIVE', driveFolderId: null },
+      select: {
+        id: true,
+        productName: true,
+        currentModelCode: true,
+        proposedModelCode: true,
+        barcode: true,
+        images: true,
+      },
+      orderBy: { createdAt: 'asc' },
+      take: 50,
+    });
+  }
+
+  async setDriveFolderId(variantId: number, folderId: string) {
+    return this.prisma.trendyolProductVariant.update({
+      where: { id: variantId },
+      data: { driveFolderId: folderId },
+      select: { id: true, driveFolderId: true },
+    });
+  }
 }

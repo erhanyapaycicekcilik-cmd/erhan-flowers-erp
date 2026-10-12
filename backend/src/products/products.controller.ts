@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '../auth/auth.guard';
+import { InternalKeyGuard } from '../auth/internal-key.guard';
 import { GeminiContentService } from './gemini-content.service';
 import { ProductsService } from './products.service';
 
@@ -65,4 +66,5 @@ export class ProductsController {
   passive(@Param('id') id: string) {
     return this.products.passive(Number(id));
   }
+
 }
