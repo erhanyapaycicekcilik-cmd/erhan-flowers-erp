@@ -79,7 +79,12 @@ export class SalesService {
       },
       include: {
         family: true,
-        productCostDraft: true,
+        productCostDraft: {
+          include: {
+            items: { where: { stockCardId: { not: null } }, take: 3 },
+            pots: { where: { stockCardId: { not: null } }, take: 1 },
+          },
+        },
       },
       orderBy: { updatedAt: 'desc' },
       take: 20,
@@ -142,7 +147,7 @@ export class SalesService {
         pot: variant.detectedPot,
         stockQuantity: Number(stockCard?.stockQuantity ?? variant.stockQuantity ?? 0),
         stockUnit: stockCard?.unit ?? 'Adet',
-        stockCardId: stockCard?.id ?? null,
+        stockCardId: stockCard?.id ?? variant.productCostDraft?.items?.[0]?.stockCardId ?? variant.productCostDraft?.pots?.[0]?.stockCardId ?? null,
         salePrice: Number(variant.productCostDraft?.salePrice ?? (Number(variant.trendyolSalePrice) > 0 ? variant.trendyolSalePrice : null) ?? (Number(stockCard?.salePrice) > 0 ? stockCard?.salePrice : null) ?? stockCard?.purchasePrice ?? 0),
         trendyolSalePrice: Number(variant.trendyolSalePrice ?? 0),
         trendyolProductUrl: variant.trendyolProductUrl,
@@ -1193,7 +1198,7 @@ export class SalesService {
       if (!draft) continue;
 
       const recipeRows = [...draft.items, ...draft.pots]
-        .filter((row) => row.source !== 'MANUAL' && row.stockCardId && Number(row.quantity) > 0)
+        .filter((row) => row.stockCardId && Number(row.quantity) > 0)
         .map((row) => ({
           stockCardId: Number(row.stockCardId),
           quantity: Number(row.quantity) * saleQuantity,
