@@ -191,6 +191,30 @@ export class IntegrationCenterService {
     return values;
   }
 
+  // Trendyol satıcı panelindeki "Token" = base64("API_KEY:API_SECRET").
+  // Token'ı yapıştırmak, anahtarları elle yazarken oluşan I/l gibi harf karışıklıklarını önler.
+  async saveTrendyolToken(companyValue: unknown, tokenValue: unknown) {
+    await this.ensureManagedIntegrationSeed();
+    const companyCode = this.text(companyValue).toUpperCase() || 'ERHAN';
+    if (!['ERHAN', 'FLORA'].includes(companyCode)) throw new BadRequestException('Mağaza ERHAN veya FLORA olmalıdır.');
+    const token = this.text(tokenValue).replace(/^basic\s+/i, '').replace(/\s+/g, '');
+    let decoded = '';
+    try {
+      decoded = Buffer.from(token, 'base64').toString('utf8');
+    } catch {
+      decoded = '';
+    }
+    const match = decoded.match(/^([A-Za-z0-9]{8,64}):([A-Za-z0-9]{8,64})$/);
+    if (!match) throw new BadRequestException('Token çözülemedi. Trendyol panelindeki Token satırını kopyalama ikonuyla kopyalayıp yapıştırın.');
+    const accountId = await this.ensureManagedAccount(companyCode, 'TRENDYOL', 'Trendyol Magaza', null, false);
+    await this.addCredential(accountId, { credentialType: 'API_KEY', value: match[1] } as CredentialPayload);
+    await this.addCredential(accountId, { credentialType: 'API_SECRET', value: match[2] } as CredentialPayload);
+    await this.prisma.$executeRaw`
+      UPDATE channel_accounts SET status = 'CONFIGURED'::"ChannelAccountStatus", updated_at = NOW() WHERE id = ${accountId}
+    `;
+    return { ok: true, companyCode, apiKeyEnd: match[1].slice(-4), apiSecretEnd: match[2].slice(-4) };
+  }
+
   // Mağazaya özel (ERHAN dışı, ör. FLORA) işlemler için: yalnızca o mağazanın
   // kendi kayıtlı API bilgilerini döner. Eksik anahtarlar ERHAN'ın .env
   // değerleriyle doldurulmaz; aksi halde FLORA işlemi Erhan mağazasına gider.

@@ -82,6 +82,13 @@ export class IntegrationsController {
     return this.integrations.getSellerPanelLink(platform, barcode);
   }
 
+  @Post('trendyol/save-token')
+  @UseGuards(OwnerGuard)
+  async saveTrendyolToken(@Body() body: { company?: string; token?: string }) {
+    const saved = await this.integrationCenter.saveTrendyolToken(body?.company, body?.token);
+    return { saved, diagnose: await this.integrations.diagnoseTrendyolStore(body?.company) };
+  }
+
   @Get('trendyol/diagnose')
   @UseGuards(OwnerGuard)
   diagnoseTrendyol(@Query('company') company?: string) {
