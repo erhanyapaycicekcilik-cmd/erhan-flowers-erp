@@ -18,7 +18,8 @@ export type StorePublishOption = {
   priceMultiplier?: number;
 };
 
-// Varsayılan: Erhan Flowers ana mağaza (barkod aynen), Flora "FL-" ön ekli ve %3 farklı fiyatlı.
+// Varsayılan: Erhan Flowers ana mağaza, Flora model/stok kodu "FL-" ön ekli ve %3 farklı fiyatlı.
+// Barkod her iki mağazada aynıdır (ön ek yalnızca model kodu / stok koduna eklenir).
 const DEFAULT_STORES: Required<StorePublishOption>[] = [
   { companyCode: 'ERHAN', barcodePrefix: '', priceMultiplier: 1 },
   { companyCode: 'FLORA', barcodePrefix: 'FL-', priceMultiplier: 0.97 },
@@ -350,7 +351,7 @@ export class PublishingService {
     const isMainStore = store.companyCode === 'ERHAN';
     return {
       ...base,
-      barcode: prefix(base.barcode),
+      barcode: base.barcode,
       modelCode: prefix(base.modelCode),
       // Ana mağazanın Trendyol içerik kimliği/barkodu diğer mağazada geçersizdir; yeni ürün olarak açılır.
       trendyolBarcode: isMainStore ? base.trendyolBarcode : null,

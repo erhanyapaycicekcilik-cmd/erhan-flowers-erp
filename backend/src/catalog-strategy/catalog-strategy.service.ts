@@ -155,7 +155,7 @@ export class CatalogStrategyService {
       const price = Number(platform === 'N11' ? variant.n11SalePrice : variant.hepsiburadaSalePrice) || Number(variant.trendyolSalePrice) || 0;
       if (platform === 'N11' && !price) continue;
       const payload = {
-        barcode: `${prefix}${variant.barcode}`,
+        barcode: variant.barcode,
         modelCode: modelCode ? `${prefix}${modelCode}` : undefined,
         // Hepsiburada'da fiyat gönderilmezse sadece stok güncellenir.
         salePrice: platform === 'N11' ? price : undefined,
