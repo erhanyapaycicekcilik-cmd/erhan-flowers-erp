@@ -933,6 +933,7 @@ model TrendyolProductVariant {
   trendyolCommentCount  Int                       @default(0) @map("trendyol_comment_count")
   trendyolFavoriteCount Int                       @default(0) @map("trendyol_favorite_count")
   trendyolStatsSyncedAt DateTime?                 @map("trendyol_stats_synced_at")
+  driveFolderId         String?                   @map("drive_folder_id")
   status                RecordStatus              @default(ACTIVE)
   createdAt             DateTime                  @default(now()) @map("created_at")
   updatedAt             DateTime                  @updatedAt @map("updated_at")
