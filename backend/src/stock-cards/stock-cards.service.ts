@@ -1304,6 +1304,29 @@ export class StockCardsService {
     });
   }
 
+  async getCardsWithoutDriveFolder() {
+    return this.prisma.stockCard.findMany({
+      where: { status: 'ACTIVE', driveFolderId: null },
+      select: {
+        id: true,
+        name: true,
+        sku: true,
+        imagePath: true,
+        images: { select: { filePath: true, folderName: true, fileName: true }, take: 1 },
+      },
+      orderBy: { createdAt: 'asc' },
+      take: 50,
+    });
+  }
+
+  async setDriveFolderId(cardId: number, folderId: string) {
+    return this.prisma.stockCard.update({
+      where: { id: cardId },
+      data: { driveFolderId: folderId },
+      select: { id: true, driveFolderId: true },
+    });
+  }
+
   private handleUniqueError(error: unknown): never {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
       throw new BadRequestException('Bu stok kodu zaten kullanılıyor.');
