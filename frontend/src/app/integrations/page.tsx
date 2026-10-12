@@ -163,6 +163,14 @@ const defaultTicimaxSettings: TicimaxSettings & { uyeKodu: string } = {
   uyeKodu: '',
 };
 
+type TrendyolDiagnose = {
+  ok: boolean;
+  message?: string;
+  apiBase?: string;
+  credentials: { supplierId: string; apiKey: { length: number; preview: string; hasSpaces: boolean }; apiSecret: { length: number; preview: string; hasSpaces: boolean } } | null;
+  tests: Array<{ name: string; ok: boolean; status: number; message: string }>;
+};
+
 export default function IntegrationsPage() {
   const [connections, setConnections] = useState<Connection[]>([]);
   const [history, setHistory] = useState<LogRow[]>([]);
@@ -180,6 +188,7 @@ export default function IntegrationsPage() {
   const [message, setMessage] = useState('');
   const [loadingPlatform, setLoadingPlatform] = useState('');
   const [company, setCompany] = useState<CompanyCode>('ERHAN');
+  const [trendyolToken, setTrendyolToken] = useState('');
 
   function load() {
     Promise.all([
@@ -336,28 +345,44 @@ export default function IntegrationsPage() {
     }
   }
 
+  function trendyolDiagnoseText(result: TrendyolDiagnose) {
+    if (!result.credentials) return `Trendyol bağlantı testi: ${result.message ?? 'API bilgileri okunamadı.'}`;
+    const c = result.credentials;
+    return [
+      `Trendyol bağlantı testi (${company}): ${result.ok ? 'BAŞARILI ✓' : 'BAŞARISIZ ✗'}`,
+      `Satıcı ID: ${c.supplierId} | API Key: ${c.apiKey.preview} (${c.apiKey.length} karakter${c.apiKey.hasSpaces ? ', BOŞLUK VAR!' : ''}) | API Secret: ${c.apiSecret.preview} (${c.apiSecret.length} karakter${c.apiSecret.hasSpaces ? ', BOŞLUK VAR!' : ''})`,
+      ...result.tests.map((test) => `${test.ok ? '✓' : '✗'} ${test.name}: HTTP ${test.status}${test.ok ? '' : ` — ${test.message}`}`),
+    ].join('\n');
+  }
+
+  async function saveTrendyolToken() {
+    if (!trendyolToken.trim()) {
+      setMessage('Önce Trendyol panelindeki Token satırını kopyalayıp kutuya yapıştırın.');
+      return;
+    }
+    setLoadingPlatform('TOKEN_TRENDYOL');
+    setMessage('');
+    try {
+      const result = await api<{ saved: { apiKeyEnd: string; apiSecretEnd: string }; diagnose: TrendyolDiagnose }>('/integrations/trendyol/save-token', {
+        method: 'POST',
+        json: { company, token: trendyolToken.trim() },
+      });
+      setTrendyolToken('');
+      setMessage(`Token'dan API Key (…${result.saved.apiKeyEnd}) ve API Secret (…${result.saved.apiSecretEnd}) kaydedildi.\n${trendyolDiagnoseText(result.diagnose)}`);
+      loadSprint1A(company);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Token kaydedilemedi.');
+    } finally {
+      setLoadingPlatform('');
+    }
+  }
+
   async function diagnoseTrendyol() {
     setLoadingPlatform('DIAGNOSE_TRENDYOL');
     setMessage('');
     try {
-      const result = await api<{
-        ok: boolean;
-        message?: string;
-        apiBase?: string;
-        credentials: { supplierId: string; apiKey: { length: number; preview: string; hasSpaces: boolean }; apiSecret: { length: number; preview: string; hasSpaces: boolean } } | null;
-        tests: Array<{ name: string; ok: boolean; status: number; message: string }>;
-      }>(`/integrations/trendyol/diagnose?company=${company}`);
-      if (!result.credentials) {
-        setMessage(`Trendyol bağlantı testi: ${result.message ?? 'API bilgileri okunamadı.'}`);
-        return;
-      }
-      const c = result.credentials;
-      const lines = [
-        `Trendyol bağlantı testi (${company}): ${result.ok ? 'BAŞARILI ✓' : 'BAŞARISIZ ✗'}`,
-        `Satıcı ID: ${c.supplierId} | API Key: ${c.apiKey.preview} (${c.apiKey.length} karakter${c.apiKey.hasSpaces ? ', BOŞLUK VAR!' : ''}) | API Secret: ${c.apiSecret.preview} (${c.apiSecret.length} karakter${c.apiSecret.hasSpaces ? ', BOŞLUK VAR!' : ''})`,
-        ...result.tests.map((test) => `${test.ok ? '✓' : '✗'} ${test.name}: HTTP ${test.status}${test.ok ? '' : ` — ${test.message}`}`),
-      ];
-      setMessage(lines.join('\n'));
+      const result = await api<TrendyolDiagnose>(`/integrations/trendyol/diagnose?company=${company}`);
+      setMessage(trendyolDiagnoseText(result));
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Bağlantı testi yapılamadı.');
     } finally {
@@ -616,6 +641,27 @@ export default function IntegrationsPage() {
                       </button>
                     )}
                   </div>
+                  {platform === 'TRENDYOL' && (
+                    <div className="mt-3 rounded-md border border-dashed border-slate-300 p-3">
+                      <div className="mb-1 text-xs font-semibold text-slate-600">
+                        Kolay yol: Trendyol satıcı paneli → Hesap Bilgileri → Entegrasyon Bilgileri → <b>Token</b> satırını kopyalayıp yapıştırın. API Key ve Secret otomatik kaydedilir ve test edilir.
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <input
+                          className="field min-w-[240px] flex-1"
+                          type="password"
+                          autoComplete="off"
+                          placeholder="Trendyol Token'ı buraya yapıştırın"
+                          value={trendyolToken}
+                          onChange={(event) => setTrendyolToken(event.target.value)}
+                        />
+                        <button className="btn btn-primary" type="button" onClick={saveTrendyolToken} disabled={loadingPlatform === 'TOKEN_TRENDYOL'}>
+                          <ClipboardPaste size={16} />
+                          {loadingPlatform === 'TOKEN_TRENDYOL' ? 'Kaydediliyor…' : 'Token ile kaydet ve test et'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               );
             })}
