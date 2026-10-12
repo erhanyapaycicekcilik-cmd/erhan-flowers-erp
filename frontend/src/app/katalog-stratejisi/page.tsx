@@ -494,13 +494,13 @@ function BestsellerPanel({ onMessage, onError }: { onMessage: (text: string) => 
               <div className="flex flex-wrap items-center gap-4 text-sm">
                 <span className="flex items-center gap-1 font-semibold"><Store size={15} /> Mağazalar:</span>
                 <label className="flex items-center gap-1.5">
-                  <input type="checkbox" checked={stores.ERHAN} onChange={(event) => setStores((current) => ({ ...current, ERHAN: event.target.checked }))} /> Erhan Flowers (barkod aynen)
+                  <input type="checkbox" checked={stores.ERHAN} onChange={(event) => setStores((current) => ({ ...current, ERHAN: event.target.checked }))} /> Erhan Flowers
                 </label>
                 <label className="flex items-center gap-1.5">
                   <input type="checkbox" checked={stores.FLORA} onChange={(event) => setStores((current) => ({ ...current, FLORA: event.target.checked }))} /> Flora
                 </label>
                 <label className="flex items-center gap-1.5">
-                  barkod ön eki
+                  Flora model kodu ön eki
                   <input className="w-20 rounded border border-slate-300 px-2 py-1 font-mono" value={floraPrefix} onChange={(event) => setFloraPrefix(event.target.value.toUpperCase())} />
                 </label>
                 <label className="flex items-center gap-1.5">

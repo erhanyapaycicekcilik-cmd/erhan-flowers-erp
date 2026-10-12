@@ -339,7 +339,7 @@ const CATALOG_CATEGORIES = [
 const steps = ['Ürün Bilgileri', 'Reçete/Malzeme', 'Maliyet/Fiyat', 'Görsel/SEO', 'Kanallara Gönder'];
 const visibleStepIndexes = [0, 1, 2, 3, 4] as const;
 const channels = ['SHOP', 'SITE', 'TRENDYOL', 'TRENDYOL_FLORA', 'HEPSIBURADA', 'N11', 'TICIMAX'] as const;
-// Aynı ürünü Flora mağazasının Trendyol hesabına da açar (barkod FL- ön ekli).
+// Aynı ürünü Flora mağazasının Trendyol hesabına da açar (barkod aynı, model/stok kodu FL- ön ekli).
 const FLORA_TRENDYOL_CHANNEL = 'TRENDYOL_FLORA';
 const publishableChannels = ['TRENDYOL', 'HEPSIBURADA', 'N11', 'TICIMAX'] as const;
 const treeVisualSlots = [

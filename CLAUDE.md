@@ -98,8 +98,8 @@ Sonra tarayıcıda: **http://localhost:3200**
 - Backend: `backend/src/catalog-strategy/` — `GET /catalog-strategy/cleanup/preview?company=ERHAN|FLORA&days=&minSold=`, `POST /catalog-strategy/cleanup/apply` (onay metni `SATISA KAPAT`), `GET /catalog-strategy/bestsellers`, `POST /catalog-strategy/publish`
 - Satmayanları kapatma = **silme değil**, stok 0 (Trendyol toplu, N11/HB ERP kaydı olanlar). ERHAN'da kapatılan varyant `PASSIVE` olur; `broadcastPriceStock` ve `broadcastApprovedCost` PASSIVE ürünleri tekrar açmaz
 - Satış verisi `marketplace_orders` tablosundan; FLORA siparişleri `external_order_id LIKE 'FLORA\_%'`
-- İki mağaza yayını: `PublishingService.sendToStores` (`POST /publishing/send-to-stores`). Varsayılan ERHAN barkod aynen, FLORA `FL-` ön ek + %-3 fiyat. FLORA'da contentId/trendyolBarcode gönderilmez (yeni ürün açılır)
-- **Yeni ürün açarken iki hesaba birden:** Ürün Merkezi'nde (hızlı kayıt + tam form) "Trendyol (Flora)" kanalı = platform kodu `TRENDYOL_FLORA`. `/publishing/send` bu kodu görünce ürünü FLORA Trendyol hesabına da gönderir (FL- barkod, %-3 fiyat; `DEFAULT_STORES`). Varsayılan olarak işaretli
+- İki mağaza yayını: `PublishingService.sendToStores` (`POST /publishing/send-to-stores`). Varsayılan barkod iki mağazada aynı; FLORA'da model/stok kodu `FL-` ön ekli + %-3 fiyat. FLORA'da contentId/trendyolBarcode gönderilmez (yeni ürün açılır)
+- **Yeni ürün açarken iki hesaba birden:** Ürün Merkezi'nde (hızlı kayıt + tam form) "Trendyol (Flora)" kanalı = platform kodu `TRENDYOL_FLORA`. `/publishing/send` bu kodu görünce ürünü FLORA Trendyol hesabına da gönderir (barkod aynı, model kodu FL- ön ekli, %-3 fiyat; `DEFAULT_STORES`). Varsayılan olarak işaretli
 - `IntegrationCenterService.storeCredentials(platform, company)`: ERHAN dışı mağazada .env'e **düşmez**, eksik API bilgisi varsa hata verir (Flora işlemi yanlışlıkla Erhan mağazasına gitmesin)
 
 ## Veritabanı
