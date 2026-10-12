@@ -336,6 +336,35 @@ export default function IntegrationsPage() {
     }
   }
 
+  async function diagnoseTrendyol() {
+    setLoadingPlatform('DIAGNOSE_TRENDYOL');
+    setMessage('');
+    try {
+      const result = await api<{
+        ok: boolean;
+        message?: string;
+        apiBase?: string;
+        credentials: { supplierId: string; apiKey: { length: number; preview: string; hasSpaces: boolean }; apiSecret: { length: number; preview: string; hasSpaces: boolean } } | null;
+        tests: Array<{ name: string; ok: boolean; status: number; message: string }>;
+      }>(`/integrations/trendyol/diagnose?company=${company}`);
+      if (!result.credentials) {
+        setMessage(`Trendyol bağlantı testi: ${result.message ?? 'API bilgileri okunamadı.'}`);
+        return;
+      }
+      const c = result.credentials;
+      const lines = [
+        `Trendyol bağlantı testi (${company}): ${result.ok ? 'BAŞARILI ✓' : 'BAŞARISIZ ✗'}`,
+        `Satıcı ID: ${c.supplierId} | API Key: ${c.apiKey.preview} (${c.apiKey.length} karakter${c.apiKey.hasSpaces ? ', BOŞLUK VAR!' : ''}) | API Secret: ${c.apiSecret.preview} (${c.apiSecret.length} karakter${c.apiSecret.hasSpaces ? ', BOŞLUK VAR!' : ''})`,
+        ...result.tests.map((test) => `${test.ok ? '✓' : '✗'} ${test.name}: HTTP ${test.status}${test.ok ? '' : ` — ${test.message}`}`),
+      ];
+      setMessage(lines.join('\n'));
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Bağlantı testi yapılamadı.');
+    } finally {
+      setLoadingPlatform('');
+    }
+  }
+
   async function savePlatform(platform: PlatformCode) {
     const form = platformForms[platform];
     if (!form) return;
@@ -506,7 +535,7 @@ export default function IntegrationsPage() {
           ))}
         </div>
 
-        {message && <div className="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">{message}</div>}
+        {message && <div className="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 whitespace-pre-line break-words">{message}</div>}
 
         <section className="panel p-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
@@ -580,6 +609,12 @@ export default function IntegrationsPage() {
                       <Download size={16} />
                       Sablon Indir
                     </button>
+                    {platform === 'TRENDYOL' && (
+                      <button className="btn btn-secondary" type="button" onClick={diagnoseTrendyol} disabled={loadingPlatform === 'DIAGNOSE_TRENDYOL'}>
+                        <TestTube2 size={16} />
+                        {loadingPlatform === 'DIAGNOSE_TRENDYOL' ? 'Test ediliyor…' : 'Bağlantıyı test et'}
+                      </button>
+                    )}
                   </div>
                 </div>
               );
