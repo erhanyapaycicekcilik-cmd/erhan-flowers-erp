@@ -515,6 +515,7 @@ model StockCard {
   stockQuantity                   Decimal                       @default(0) @map("stock_quantity") @db.Decimal(12, 3)
   reservedQuantity                Decimal                       @default(0) @map("reserved_quantity") @db.Decimal(12, 3)
   status                          RecordStatus                  @default(ACTIVE)
+  driveFolderId                   String?                       @map("drive_folder_id")
   createdAt                       DateTime                      @default(now()) @map("created_at")
   updatedAt                       DateTime                      @updatedAt @map("updated_at")
   recipeItems                     RecipeItem[]
