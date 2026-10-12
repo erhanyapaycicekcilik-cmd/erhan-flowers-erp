@@ -82,6 +82,12 @@ export class IntegrationsController {
     return this.integrations.getSellerPanelLink(platform, barcode);
   }
 
+  @Get('trendyol/diagnose')
+  @UseGuards(OwnerGuard)
+  diagnoseTrendyol(@Query('company') company?: string) {
+    return this.integrations.diagnoseTrendyolStore(company);
+  }
+
   @Get('products/:platform/batch-status/:batchRequestId')
   @UseGuards(OwnerGuard)
   checkBatchStatus(@Param('platform') platform: string, @Param('batchRequestId') batchRequestId: string, @Query('company') company?: string) {
