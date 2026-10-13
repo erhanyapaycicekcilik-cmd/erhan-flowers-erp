@@ -70,9 +70,7 @@ export class ProductionCostsService {
 
     const catalog = await this.fetchTrendyolCatalog(apiUrl, supplierId, apiKey, apiSecret);
     const byBarcode = new Map(catalog.map((item) => [item.barcode, item]));
-    // Trendyol arşivlenmiş/satışa kapalı ürünü de listede tutuyor - gerçek
-    // "hâlâ satılıyor" kümesi bu ikisini dışlayarak bulunur.
-    const liveBarcodes = new Set(catalog.filter((item) => !item.archived && item.onSale).map((item) => item.barcode));
+    const liveBarcodes = new Set(catalog.filter((item) => !item.archived).map((item) => item.barcode));
 
     let updated = 0;
     let created = 0;
@@ -81,7 +79,7 @@ export class ProductionCostsService {
       const imageUrls = (item.images ?? [])
         .map((image) => (typeof image === 'string' ? image : image?.url))
         .filter((url): url is string => Boolean(url));
-      const isLive = !item.archived && item.onSale;
+      const isLive = !item.archived;
       const data = {
         productName: item.title || item.barcode,
         brand: item.brand ?? null,
