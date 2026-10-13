@@ -1,5 +1,4 @@
 import type { Metadata, Viewport } from 'next'
-import { DM_Sans, Cormorant_Garamond } from 'next/font/google'
 import './globals.css'
 import { GoogleTagManager } from '@/components/analytics/GoogleTagManager'
 import { GoogleAnalytics } from '@/components/analytics/GoogleAnalytics'
@@ -7,22 +6,6 @@ import { JsonLd } from '@/components/seo/JsonLd'
 import { organizationSchema, websiteSchema, localBusinessSchema } from '@/lib/seo/schemas'
 import { WhatsAppButton } from '@/components/layout/WhatsAppButton'
 import { CookieBanner } from '@/components/layout/CookieBanner'
-
-const dmSans = DM_Sans({
-  subsets: ['latin'],
-  display: 'swap',
-  variable: '--font-sans',
-  preload: false,
-})
-
-const cormorant = Cormorant_Garamond({
-  subsets: ['latin'],
-  weight: ['300', '400', '500', '600'],
-  style: ['normal', 'italic'],
-  display: 'swap',
-  variable: '--font-display',
-  preload: false,
-})
 
 const SITE_URL = process.env.SITE_URL || 'https://www.erhanflowers.com'
 
@@ -115,11 +98,15 @@ export default function RootLayout({
   const gaId = process.env.NEXT_PUBLIC_GA_ID
 
   return (
-    <html lang="tr" className={`${dmSans.variable} ${cormorant.variable}`}>
+    <html lang="tr">
       <head>
-        {/* Preconnect kritik kaynaklar — sayfa hızı için */}
+        {/* Google Fonts — preconnect + stylesheet */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=DM+Sans:wght@400;500;600&display=swap"
+        />
 
         {/* JSON-LD Structured Data */}
         <JsonLd data={organizationSchema} />
