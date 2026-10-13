@@ -67,6 +67,7 @@ export class ProductionCostsService {
     const supplierId = (dbCreds?.SUPPLIER_ID ?? this.config.get<string>('TRENDYOL_SUPPLIER_ID') ?? '').trim();
     const apiKey = (dbCreds?.API_KEY ?? this.config.get<string>('TRENDYOL_API_KEY') ?? '').trim();
     const apiSecret = (dbCreds?.API_SECRET ?? this.config.get<string>('TRENDYOL_API_SECRET') ?? '').trim();
+    this.logger.log(`Trendyol sync: supplierId=${supplierId || '(BOŞ)'}, apiKey=${apiKey ? apiKey.slice(0,4)+'...' : '(BOŞ)'}, dbCreds=${dbCreds ? 'VAR' : 'NULL'}`);
     if (!supplierId || !apiKey || !apiSecret) {
       throw new BadRequestException('Trendyol API bilgileri eksik, senkronizasyon yapılamıyor.');
     }
@@ -141,11 +142,13 @@ export class ProductionCostsService {
     const items: TrendyolCatalogProduct[] = [];
     while (page < totalPages) {
       const response = await fetch(`${apiUrl}/product/sellers/${supplierId}/products?page=${page}&size=${size}&approved=true`, { headers });
+      const responseText = await response.text();
       if (!response.ok) {
-        this.logger.warn(`Trendyol katalog senkronu: HTTP ${response.status} (sayfa ${page})`);
+        this.logger.warn(`Trendyol katalog senkronu: HTTP ${response.status} (sayfa ${page}) - ${responseText.slice(0, 200)}`);
         break;
       }
-      const body = await response.json();
+      const body = JSON.parse(responseText);
+      this.logger.log(`Trendyol sayfa ${page}: totalPages=${body.totalPages}, content=${body.content?.length ?? 0} ürün`);
       totalPages = body.totalPages ?? 1;
       for (const item of body.content ?? []) {
         items.push({
