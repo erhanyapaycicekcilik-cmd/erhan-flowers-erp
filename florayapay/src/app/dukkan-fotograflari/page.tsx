@@ -6,7 +6,7 @@ import Link from 'next/link'
 
 export const metadata: Metadata = {
   title: 'Mağazamız — Dükkan Fotoğrafları & Google Yorumlar',
-  description: 'Erhan Flowers Manavgat mağazasını ziyaret edin. Yapay çiçek ve dekorasyon ürünlerimizi yerinde görün. Google\'da yorum yapın, %10 indirim kazanın!',
+  description: 'Flora Yapay Çiçek Manavgat mağazasını ziyaret edin. Yapay çiçek ve dekorasyon ürünlerimizi yerinde görün. Google\'da yorum yapın, %10 indirim kazanın!',
   alternates: { canonical: '/dukkan-fotograflari' },
 }
 
@@ -92,7 +92,7 @@ export default function DukkanFotografPage() {
                 allowFullScreen
                 loading="lazy"
                 referrerPolicy="no-referrer-when-downgrade"
-                title="Erhan Flowers Manavgat Konum"
+                title="Flora Yapay Çiçek Manavgat Konum"
               />
             </div>
             <div className="p-4 grid grid-cols-3 divide-x divide-[#E0DDD4] text-center text-sm">

@@ -4,7 +4,7 @@ import { Footer } from '@/components/layout/Footer'
 
 export const metadata: Metadata = {
   title: 'Mesafeli Satış Sözleşmesi',
-  description: 'Erhan Flowers mesafeli satış sözleşmesi. 6502 sayılı Tüketicinin Korunması Hakkında Kanun kapsamında yasal bilgilendirme.',
+  description: 'Flora Yapay Çiçek mesafeli satış sözleşmesi. 6502 sayılı Tüketicinin Korunması Hakkında Kanun kapsamında yasal bilgilendirme.',
 }
 
 export default function MesafeliSatisSozlesmesiPage() {
@@ -26,7 +26,7 @@ export default function MesafeliSatisSozlesmesiPage() {
               <div className="space-y-3">
                 <div className="bg-[#F4F2EC] rounded-xl p-4 text-xs space-y-1">
                   <p className="font-semibold text-[#0D1510] mb-2">SATICI</p>
-                  <p><strong>Unvan:</strong> Erhan Flowers / Erhan Yapay Çiçekçilik</p>
+                  <p><strong>Unvan:</strong> Flora Yapay Çiçek / Erhan Yapay Çiçekçilik</p>
                   <p><strong>Adres:</strong> Sarılar Mah. Cumhuriyet Cd. 2038 Sk. No:52/1/2, 07600 Manavgat/Antalya</p>
                   <p><strong>Telefon:</strong> 0544 654 62 20</p>
                   <p><strong>E-posta:</strong> erhanyapaycicekcilik@gmail.com</p>

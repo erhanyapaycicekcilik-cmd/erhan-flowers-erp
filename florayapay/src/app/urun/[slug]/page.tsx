@@ -18,7 +18,7 @@ import { WhatsAppOrderButton } from '@/components/product/WhatsAppOrderButton'
 import { StickyMobileCTA } from '@/components/product/StickyMobileCTA'
 import { RelatedProducts } from '@/components/product/RelatedProducts'
 
-const SITE_URL = process.env.SITE_URL || 'https://erhanflowers.com'
+const SITE_URL = process.env.SITE_URL || 'https://www.erhanflowers.com'
 
 interface PageProps {
   params: { slug: string }
@@ -38,7 +38,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     alternates: { canonical: `/urun/${params.slug}` },
     openGraph: {
       title: product.name,
-      description: product.description?.slice(0, 200) || `${product.name} — Erhan Flowers`,
+      description: product.description?.slice(0, 200) || `${product.name} — Flora Yapay Çiçek`,
       images: [{ url: imageUrl, width: 800, height: 800, alt: product.name }],
       type: 'website',
     },

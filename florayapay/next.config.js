@@ -77,6 +77,10 @@ const nextConfig = {
       },
       {
         protocol: 'https',
+        hostname: '**.florayapaycicek.com',
+      },
+      {
+        protocol: 'https',
         hostname: 'erhanflowers.com',
       },
       // Trendyol CDN
@@ -99,6 +103,19 @@ const nextConfig = {
         hostname: 'localhost',
         port: '8101',
       },
+      // Instagram CDN
+      {
+        protocol: 'https',
+        hostname: '**.cdninstagram.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'scontent.cdninstagram.com',
+      },
+      {
+        protocol: 'https',
+        hostname: '**.fbcdn.net',
+      },
       // Unsplash (telif yok)
       {
         protocol: 'https',
@@ -119,7 +136,7 @@ const nextConfig = {
 
   // Env değişkenleri (public olanlar NEXT_PUBLIC_ prefix ile)
   env: {
-    SITE_URL: process.env.SITE_URL || 'https://erhanflowers.com',
+    SITE_URL: process.env.SITE_URL || 'https://florayapaycicek.com',
   },
 }
 

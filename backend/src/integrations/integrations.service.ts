@@ -265,9 +265,12 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
   // Bir gönderimin (batchRequestId) pazaryerinde gerçekten işlenip işlenmediğini
   // sorgular. "Kuyruğa alındı" mesajı gerçek sonuç değildir; bu asenkron sonucu
   // ayrıca kontrol etmek gerekir.
-  async checkBatchStatus(platformValue: string, batchRequestId: string) {
+  async checkBatchStatus(platformValue: string, batchRequestId: string, companyValue?: string) {
     const platform = this.platform(platformValue);
-    const adapter = await this.adapter(platform);
+    const companyCode = this.text(companyValue).toUpperCase() || 'ERHAN';
+    if (!['ERHAN', 'FLORA'].includes(companyCode)) throw new BadRequestException('Mağaza ERHAN veya FLORA olmalıdır.');
+    // ERHAN dışı mağazada Erhan'ın .env bilgilerine düşmemek için mağazaya özel bilgiler kullanılır.
+    const adapter = companyCode === 'ERHAN' ? await this.adapter(platform) : await this.storeAdapter(platform, companyCode);
     if (!adapter.checkBatchStatus) {
       return { ok: false, status: 'NOT_IMPLEMENTED' as const, message: `${platform} icin batch durumu sorgulama desteklenmiyor.` };
     }
@@ -1367,6 +1370,66 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
       await new Promise(r => setTimeout(r, 100));
     }
     return { deleted, failed, errors };
+  }
+
+  // Mağazanın Trendyol bağlantısını şifreleri göstermeden teşhis eder:
+  // hangi Satıcı ID / anahtarın kullanıldığı (maskeli) ve sipariş + ürün uç noktalarının cevabı.
+  async diagnoseTrendyolStore(companyValue?: string) {
+    const companyCode = this.text(companyValue).toUpperCase() || 'ERHAN';
+    if (!['ERHAN', 'FLORA'].includes(companyCode)) throw new BadRequestException('Mağaza ERHAN veya FLORA olmalıdır.');
+    let creds: Record<string, string>;
+    try {
+      creds = companyCode === 'ERHAN'
+        ? await this.integrationCenter.runtimeCredentials('TRENDYOL', 'ERHAN')
+        : await this.integrationCenter.storeCredentials('TRENDYOL', companyCode);
+    } catch (error) {
+      return { ok: false, companyCode, credentials: null, tests: [], message: this.errorMessage(error) };
+    }
+    const supplierId = this.text(creds.SUPPLIER_ID);
+    const mask = (value: unknown) => {
+      const raw = String(value ?? '');
+      const trimmed = raw.trim();
+      return {
+        length: raw.length,
+        preview: trimmed ? `${trimmed.slice(0, 2)}…${trimmed.slice(-4)}` : '(boş)',
+        hasSpaces: raw !== trimmed || /\s/.test(trimmed),
+      };
+    };
+    const apiBase = String(creds.API_URL || process.env.TRENDYOL_API_URL || 'https://api.trendyol.com/sapigw').replace(/\/+$/, '');
+    const headers = {
+      Authorization: `Basic ${Buffer.from(`${creds.API_KEY ?? ''}:${creds.API_SECRET ?? ''}`).toString('base64')}`,
+      'User-Agent': `${supplierId} - SelfIntegration`,
+      Accept: 'application/json',
+    };
+    const probe = async (name: string, url: string) => {
+      try {
+        const response = await fetch(url, { headers });
+        const body = response.ok ? '' : (await response.text().catch(() => '')).slice(0, 300);
+        return { name, ok: response.ok, status: response.status, message: response.ok ? 'Başarılı' : body };
+      } catch (error) {
+        return { name, ok: false, status: 0, message: this.errorMessage(error) };
+      }
+    };
+    const now = Date.now();
+    const tests = [
+      await probe('Sipariş okuma', `${apiBase}/order/sellers/${supplierId}/v2/orders?size=1&page=0&startDate=${now - 86_400_000}&endDate=${now}`),
+      await probe('Ürün okuma', `${apiBase}/product/sellers/${supplierId}/products?size=1&page=0`),
+    ];
+    return {
+      ok: tests.every((test) => test.ok),
+      companyCode,
+      apiBase,
+      credentials: { supplierId, apiKey: mask(creds.API_KEY), apiSecret: mask(creds.API_SECRET) },
+      tests,
+    };
+  }
+
+  private async storeAdapter(platform: IntegrationPlatform, companyCode: string): Promise<IntegrationAdapter> {
+    const credentials = await this.integrationCenter.storeCredentials(platform, companyCode);
+    if (platform === 'TRENDYOL') return new TrendyolAdapter(credentials);
+    if (platform === 'HEPSIBURADA') return new HepsiburadaAdapter(credentials);
+    if (platform === 'N11') return new N11Adapter(credentials);
+    throw new BadRequestException(`${platform} için mağaza seçimi desteklenmiyor.`);
   }
 
   private async adapter(platform: IntegrationPlatform, companyCode = 'ERHAN'): Promise<IntegrationAdapter> {

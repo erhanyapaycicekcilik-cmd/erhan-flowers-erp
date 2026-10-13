@@ -33,12 +33,14 @@ async function bootstrap() {
     'http://localhost:3001',
     'http://localhost:3000',
     process.env.FRONTEND_URL,
+    // Yeni domainler
+    'https://erhanflowers.com',
+    'https://www.erhanflowers.com',
+    'https://erp.erhanflowers.com',
+    // Eski domainler (yönlendirme süresi boyunca)
     'https://erp.florayapaycicek.com',
     'https://florayapaycicek.com',
     'https://www.florayapaycicek.com',
-    'http://erp.florayapaycicek.com',
-    'http://florayapaycicek.com',
-    'http://www.florayapaycicek.com',
     'https://claude.ai',
   ].filter(Boolean) as string[]);
 

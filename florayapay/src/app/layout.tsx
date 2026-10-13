@@ -1,5 +1,4 @@
 import type { Metadata, Viewport } from 'next'
-import { DM_Sans, Cormorant_Garamond } from 'next/font/google'
 import './globals.css'
 import { GoogleTagManager } from '@/components/analytics/GoogleTagManager'
 import { GoogleAnalytics } from '@/components/analytics/GoogleAnalytics'
@@ -8,46 +7,25 @@ import { organizationSchema, websiteSchema, localBusinessSchema } from '@/lib/se
 import { WhatsAppButton } from '@/components/layout/WhatsAppButton'
 import { CookieBanner } from '@/components/layout/CookieBanner'
 
-const dmSans = DM_Sans({
-  subsets: ['latin'],
-  display: 'swap',
-  variable: '--font-sans',
-  preload: false,
-})
-
-const cormorant = Cormorant_Garamond({
-  subsets: ['latin'],
-  weight: ['300', '400', '500', '600'],
-  style: ['normal', 'italic'],
-  display: 'swap',
-  variable: '--font-display',
-  preload: false,
-})
-
-const SITE_URL = process.env.SITE_URL || 'https://erhanflowers.com'
+const SITE_URL = process.env.SITE_URL || 'https://www.erhanflowers.com'
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
 
   title: {
-    default: 'Erhan Flowers | Kaliteli Yapay Çiçek & Dekorasyon',
-    template: '%s | Erhan Flowers',
+    default: 'Flora Yapay Çiçek | Kaliteli Yapay Çiçek & Dekorasyon',
+    template: '%s | Flora Yapay Çiçek',
   },
   description:
-    'Erhan Flowers — Türkiye\'nin en kaliteli yapay çiçek ve bitki dekorasyonları. Solmayan güzellik, ömür boyu zarafet. Hızlı kargo, kolay iade.',
+    'Flora Yapay Çiçek — Türkiye\'nin en kaliteli yapay çiçek ve bitki dekorasyonları. Solmayan güzellik, ömür boyu zarafet. Hızlı kargo, kolay iade.',
 
   keywords: [
-    'yapay çiçek',
-    'yapay bitki',
-    'dekoratif çiçek',
-    'solmayan çiçek',
-    'ev dekorasyonu',
-    'ofis dekorasyonu',
-    'yapay orkide',
-    'yapay ağaç',
-    'dikey bahçe',
-    'erhan flowers',
-    'erhan çiçek',
+    'yapay çiçek', 'yapay çiçek antalya', 'yapay çiçek manavgat',
+    'çiçek antalya', 'çiçekçi antalya', 'çiçekçi manavgat',
+    'aranjman antalya', 'canlı çiçek antalya',
+    'yapay ağaç', 'yapay ağaç antalya', 'saksı antalya',
+    'yapay bitki', 'yapay orkide', 'dikey bahçe', 'bambu',
+    'erhan flowers', 'erhan çiçek', 'flora yapay çiçek',
   ],
 
   alternates: {
@@ -59,23 +37,23 @@ export const metadata: Metadata = {
     locale: 'tr_TR',
     url: SITE_URL,
     siteName: 'Erhan Flowers',
-    title: 'Erhan Flowers | Kaliteli Yapay Çiçek & Dekorasyon',
+    title: 'Erhan Flowers | Kaliteli Yapay Çiçek & Dekorasyon — Antalya',
     description:
-      'Erhan Flowers — Türkiye\'nin en kaliteli yapay çiçek ve bitki dekorasyonları. Solmayan güzellik, ömür boyu zarafet.',
+      'Erhan Flowers — Manavgat & Antalya\'nın en kaliteli yapay çiçek ve bitki dekorasyonları. Solmayan güzellik, ömür boyu zarafet.',
     images: [
       {
         url: '/logo.png',
         width: 800,
         height: 400,
-        alt: 'Erhan Flowers — Kaliteli Yapay Çiçek',
+        alt: 'Flora Yapay Çiçek — Kaliteli Yapay Çiçek',
       },
     ],
   },
 
   twitter: {
     card: 'summary_large_image',
-    title: 'Erhan Flowers | Kaliteli Yapay Çiçek & Dekorasyon',
-    description: 'Erhan Flowers — Türkiye\'nin en kaliteli yapay çiçek dekorasyonları.',
+    title: 'Flora Yapay Çiçek | Kaliteli Yapay Çiçek & Dekorasyon',
+    description: 'Flora Yapay Çiçek — Türkiye\'nin en kaliteli yapay çiçek dekorasyonları.',
     images: ['/logo.png'],
   },
 
@@ -95,9 +73,9 @@ export const metadata: Metadata = {
     google: process.env.GOOGLE_SITE_VERIFICATION || '',
   },
 
-  authors: [{ name: 'Erhan Flowers' }],
-  creator: 'Erhan Flowers',
-  publisher: 'Erhan Flowers',
+  authors: [{ name: 'Flora Yapay Çiçek' }],
+  creator: 'Flora Yapay Çiçek',
+  publisher: 'Flora Yapay Çiçek',
   category: 'E-Ticaret / Ev Dekorasyonu',
 }
 
@@ -106,8 +84,8 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 5,
   themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#22c55e' },
-    { media: '(prefers-color-scheme: dark)', color: '#15803d' },
+    { media: '(prefers-color-scheme: light)', color: '#1E3A28' },
+    { media: '(prefers-color-scheme: dark)', color: '#0D1510' },
   ],
 }
 
@@ -120,11 +98,15 @@ export default function RootLayout({
   const gaId = process.env.NEXT_PUBLIC_GA_ID
 
   return (
-    <html lang="tr" className={`${dmSans.variable} ${cormorant.variable}`}>
+    <html lang="tr">
       <head>
-        {/* Preconnect kritik kaynaklar — sayfa hızı için */}
+        {/* Google Fonts — preconnect + stylesheet */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=DM+Sans:wght@400;500;600&display=swap"
+        />
 
         {/* JSON-LD Structured Data */}
         <JsonLd data={organizationSchema} />

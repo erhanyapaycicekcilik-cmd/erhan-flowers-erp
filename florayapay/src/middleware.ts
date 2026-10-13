@@ -3,7 +3,7 @@ import type { NextRequest } from 'next/server'
 
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'erhan2024'
 const COOKIE_NAME = 'admin_auth'
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.florayapaycicek.com'
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.erhanflowers.com'
 
 const SKIP_PREFIXES = ['/_next/', '/favicon', '/images/', '/icons/', '/api/']
 

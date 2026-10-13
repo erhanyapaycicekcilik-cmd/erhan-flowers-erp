@@ -69,7 +69,7 @@ export default function SiparisPage() {
       ? `\n*Ödeme Yöntemi:* EFT/Havale (%3 indirim uygulandı)\n*Ödenecek Tutar:* ${fmt(genelToplam)}`
       : '\n*Ödeme Yöntemi:* Teslimatta Nakit / Havale'
     const msg = [
-      `🌿 *Erhan Flowers — Yeni Sipariş #${orderNumber}*`,
+      `🌿 *Flora Yapay Çiçek — Yeni Sipariş #${orderNumber}*`,
       '',
       `*Ad Soyad:* ${form.ad} ${form.soyad}`,
       `*Telefon:* ${form.telefon}`,

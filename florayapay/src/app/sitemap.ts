@@ -1,7 +1,7 @@
 import type { MetadataRoute } from 'next'
 import { getProducts } from '@/lib/api/catalog'
 
-const BASE = 'https://florayapaycicek.com'
+const BASE = process.env.SITE_URL || 'https://www.erhanflowers.com'
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const staticPages: MetadataRoute.Sitemap = [
@@ -19,6 +19,15 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${BASE}/sepet`, changeFrequency: 'never', priority: 0.3 },
   ]
 
+  const categoryPages: MetadataRoute.Sitemap = [
+    'yapay-agac-yesil', 'yapay-agac-renkli', 'bambu', 'sarmasik',
+    'dikey-bahce', 'demet-cicek', 'saksili', 'cicekler',
+  ].map(slug => ({
+    url: `${BASE}/urunler?kategori=${slug}`,
+    changeFrequency: 'weekly' as const,
+    priority: 0.85,
+  }))
+
   let productPages: MetadataRoute.Sitemap = []
   try {
     // Fetch all products (up to 500) for sitemap
@@ -33,5 +42,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // If product fetch fails, sitemap still works with static pages
   }
 
-  return [...staticPages, ...productPages]
+  return [...staticPages, ...categoryPages, ...productPages]
 }

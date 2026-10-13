@@ -24,6 +24,7 @@ import {
   PlugZap,
   Settings,
   ShoppingCart,
+  TrendingUp,
   Users,
   Wallet,
   Warehouse,
@@ -96,6 +97,7 @@ const navGroups: { section: string; icon: LucideIcon; items: NavItem[] }[] = [
     items: [
       { href: '/integrations', label: 'Entegrasyon', icon: PlugZap, roles: OWNER_MANAGER },
       { href: '/market-analizi', label: 'Pazar Analizi', icon: Megaphone, roles: OWNER_MANAGER },
+      { href: '/katalog-stratejisi', label: 'Katalog Stratejisi', icon: TrendingUp, roles: OWNER_ONLY },
     ],
   },
   {

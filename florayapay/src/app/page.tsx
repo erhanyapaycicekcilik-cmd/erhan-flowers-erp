@@ -9,21 +9,27 @@ import { WhyUs } from '@/components/home/WhyUs'
 import { PromoBanners } from '@/components/home/PromoBanners'
 import { MekanKategorileri } from '@/components/home/MekanKategorileri'
 import { SocialProofBar } from '@/components/home/SocialProofBar'
-import { FlashSaleBanner } from '@/components/home/FlashSaleBanner'
+import { InstagramFeed } from '@/components/home/InstagramFeed'
 
 export const metadata: Metadata = {
-  title: { absolute: 'Erhan Flowers | Yapay Çiçek & Dekorasyon — Manavgat, Antalya' },
+  title: { absolute: 'Flora Yapay Çiçek | Yapay Çiçek, Aranjman & Dekorasyon — Manavgat, Antalya' },
   description:
-    'Erhan Flowers — Manavgat\'ın en kaliteli yapay çiçek ve bitki dekorasyonları. Yapay ağaç, orkide, dikey bahçe ve daha fazlası. Hızlı kargo, kolay iade. 500+ mutlu müşteri.',
-  keywords: ['yapay çiçek', 'yapay ağaç', 'yapay çiçek manavgat', 'yapay orkide', 'dikey bahçe', 'yapay bitki dekorasyon', 'erhan flowers'],
+    'Manavgat & Antalya\'nın en kaliteli yapay çiçek ve bitki mağazası. Yapay ağaç, bambu, orkide, dikey bahçe, aranjman ve saksılı bitkiler. Hızlı kargo, kolay iade.',
+  keywords: [
+    'yapay çiçek', 'yapay çiçek antalya', 'yapay çiçek manavgat',
+    'çiçek antalya', 'aranjman antalya', 'canlı çiçek antalya',
+    'yapay ağaç', 'yapay ağaç antalya', 'saksı antalya',
+    'yapay bitki', 'yapay orkide', 'dikey bahçe', 'bambu',
+    'çiçekçi manavgat', 'çiçekçi antalya', 'erhan flowers',
+  ],
   alternates: {
     canonical: '/',
   },
   openGraph: {
-    title: 'Erhan Flowers — Kaliteli Yapay Çiçek & Dekorasyon',
-    description: 'Manavgat\'ın en kaliteli yapay çiçek ve bitki dekorasyonları. 500+ mutlu müşteri.',
-    url: 'https://florayapaycicek.com',
-    siteName: 'Erhan Flowers',
+    title: 'Flora Yapay Çiçek — Yapay Çiçek & Aranjman, Manavgat Antalya',
+    description: 'Manavgat & Antalya\'nın en kaliteli yapay çiçek mağazası. Yapay ağaç, orkide, aranjman, saksılı bitkiler. Hızlı kargo.',
+    url: 'https://www.erhanflowers.com',
+    siteName: 'Flora Yapay Çiçek',
     locale: 'tr_TR',
     type: 'website',
   },
@@ -37,12 +43,12 @@ export default function HomePage() {
         <SocialProofBar />
         <HeroSection />
         <TrustBadges />
-        <FlashSaleBanner />
         <CategoryGrid />
         <PromoBanners />
         <MekanKategorileri />
         <FeaturedProducts />
         <WhyUs />
+        <InstagramFeed />
       </main>
       <Footer />
     </>

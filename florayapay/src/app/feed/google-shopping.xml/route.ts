@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8101'
-const SITE_URL = process.env.SITE_URL || 'https://florayapaycicek.com'
+const SITE_URL = process.env.SITE_URL || 'https://www.erhanflowers.com'
 
 // Google Product Category mapping for artificial flowers/plants
 const CATEGORY_MAP: Record<string, string> = {
@@ -48,7 +48,7 @@ export async function GET() {
         const description = escapeXml(p.description || p.name)
         const price = p.sitePrice.toFixed(2)
         const availability = p.inStock ? 'in_stock' : 'out_of_stock'
-        const brand = escapeXml(p.brand || 'Erhan Flowers')
+        const brand = escapeXml(p.brand || 'Flora Yapay Çiçek')
         const gCategory = CATEGORY_MAP[p.categorySlug ?? ''] ?? '5886'
 
         return `    <item>
@@ -70,9 +70,9 @@ export async function GET() {
     const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0" xmlns:g="http://base.google.com/ns/1.0">
   <channel>
-    <title>Erhan Flowers — Yapay Çiçek &amp; Dekorasyon</title>
+    <title>Flora Yapay Çiçek — Yapay Çiçek &amp; Dekorasyon</title>
     <link>${SITE_URL}</link>
-    <description>Erhan Flowers ürün kataloğu</description>
+    <description>Flora Yapay Çiçek ürün kataloğu</description>
 ${items}
   </channel>
 </rss>`

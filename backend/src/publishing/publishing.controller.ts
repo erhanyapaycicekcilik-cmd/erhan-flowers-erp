@@ -34,6 +34,15 @@ export class PublishingController {
     });
   }
 
+  @Post('send-to-stores')
+  sendToStores(@Body() body: { variantIds?: number[]; platforms?: string[]; stores?: Array<{ companyCode: string; barcodePrefix?: string; priceMultiplier?: number }>; allowIncomplete?: boolean }, @Req() request: AuthenticatedRequest) {
+    return this.publishing.sendToStores(body.variantIds ?? [], request.user!.id, {
+      platforms: body.platforms as any,
+      stores: body.stores,
+      allowIncomplete: body.allowIncomplete === true,
+    });
+  }
+
   @Post('excel-export')
   exportExcel(@Body() body: { variantIds?: number[]; platform?: string }, @Req() request: AuthenticatedRequest) {
     return this.publishing.exportExcel(body.variantIds ?? [], request.user!.id, body.platform as any);

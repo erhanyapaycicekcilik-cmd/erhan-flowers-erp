@@ -6,7 +6,7 @@ import Link from 'next/link'
 
 export const metadata: Metadata = {
   title: 'Referans Projelerimiz',
-  description: 'Erhan Flowers olarak hayata geçirdiğimiz yapay bitki ve çiçek projeleri. Otel, restoran, ofis ve mekan tasarımları.',
+  description: 'Flora Yapay Çiçek olarak hayata geçirdiğimiz yapay bitki ve çiçek projeleri. Otel, restoran, ofis ve mekan tasarımları.',
   alternates: { canonical: '/referanslarimiz' },
 }
 
@@ -15,7 +15,7 @@ const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8101'
 const reviewSchema = {
   '@context': 'https://schema.org',
   '@type': 'LocalBusiness',
-  name: 'Erhan Flowers',
+  name: 'Flora Yapay Çiçek',
   aggregateRating: {
     '@type': 'AggregateRating',
     ratingValue: '4.9',

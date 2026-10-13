@@ -1,5 +1,5 @@
-# Flora E-Ticaret Sitesi
-florayapaycicek.com, www.florayapaycicek.com {
+# Flora E-Ticaret Sitesi — Ana domain: erhanflowers.com
+erhanflowers.com, www.erhanflowers.com {
     reverse_proxy florayapay:3200
 
     header {
@@ -17,8 +17,13 @@ florayapaycicek.com, www.florayapaycicek.com {
     }
 }
 
+# Eski domain → yeni domain yönlendirme (301 kalıcı)
+florayapaycicek.com, www.florayapaycicek.com {
+    redir https://www.erhanflowers.com{uri} 301
+}
+
 # ERP Yönetim Paneli — Güvenli HTTPS
-erp.florayapaycicek.com {
+erp.erhanflowers.com, erp.florayapaycicek.com {
     reverse_proxy frontend:3000
 
     header {
@@ -37,10 +42,10 @@ erp.florayapaycicek.com {
 }
 
 # Backend API — Güvenli HTTPS
-api.florayapaycicek.com {
+api.erhanflowers.com, api.florayapaycicek.com {
     @options method OPTIONS
     handle @options {
-        header Access-Control-Allow-Origin "https://erp.florayapaycicek.com"
+        header Access-Control-Allow-Origin "https://erp.erhanflowers.com"
         header Access-Control-Allow-Credentials "true"
         header Access-Control-Allow-Methods "GET, HEAD, PUT, PATCH, POST, DELETE, OPTIONS"
         header Access-Control-Allow-Headers "Content-Type, Accept, Authorization, x-admin-token"

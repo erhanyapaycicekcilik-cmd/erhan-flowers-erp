@@ -4,7 +4,7 @@ import { Footer } from '@/components/layout/Footer'
 
 export const metadata: Metadata = {
   title: 'Hakkımızda',
-  description: 'Erhan Flowers — vizyonumuz, misyonumuz ve değerlerimiz. Kaliteli yapay çiçek ve dekorasyonda Türkiye\'nin güvenilir markası.',
+  description: 'Flora Yapay Çiçek — vizyonumuz, misyonumuz ve değerlerimiz. Kaliteli yapay çiçek ve dekorasyonda Türkiye\'nin güvenilir markası.',
 }
 
 export default function HakkimizdaPage() {
@@ -20,7 +20,7 @@ export default function HakkimizdaPage() {
             <em>gerçek özen</em>
           </h1>
           <p className="text-gray-300 max-w-xl mx-auto text-base leading-relaxed">
-            Erhan Flowers olarak yapay çiçek ve bitki dekorasyonunu bir sanat dalı olarak ele alıyor, yaşam alanlarınıza solmayan bir zarafet katıyoruz.
+            Flora Yapay Çiçek olarak yapay çiçek ve bitki dekorasyonunu bir sanat dalı olarak ele alıyor, yaşam alanlarınıza solmayan bir zarafet katıyoruz.
           </p>
         </section>
 

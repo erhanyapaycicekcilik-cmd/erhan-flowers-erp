@@ -4,6 +4,8 @@
 
 @layer base {
   :root {
+    --font-sans: 'DM Sans', system-ui, sans-serif;
+    --font-display: 'Cormorant Garamond', Georgia, serif;
     --color-flora: #22c55e;
     --color-flora-dark: #15803d;
     --color-cream: #fdf9ec;
