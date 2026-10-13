@@ -63,7 +63,7 @@ export class ProductionCostsService {
 
   async syncWithTrendyol() {
     const dbCreds = await this.orderSync.getTrendyolCreds();
-    const apiUrl = (dbCreds?.API_URL ?? this.config.get<string>('TRENDYOL_API_URL') ?? 'https://apigw.trendyol.com/integration').trim().replace(/\/+$/, '');
+    const apiUrl = 'https://apigw.trendyol.com/integration';
     const supplierId = (dbCreds?.SUPPLIER_ID ?? this.config.get<string>('TRENDYOL_SUPPLIER_ID') ?? '').trim();
     const apiKey = (dbCreds?.API_KEY ?? this.config.get<string>('TRENDYOL_API_KEY') ?? '').trim();
     const apiSecret = (dbCreds?.API_SECRET ?? this.config.get<string>('TRENDYOL_API_SECRET') ?? '').trim();
