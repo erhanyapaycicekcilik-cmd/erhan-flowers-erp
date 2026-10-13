@@ -46,9 +46,10 @@ export const websiteSchema = {
 
 export const localBusinessSchema = {
   '@context': 'https://schema.org',
-  '@type': 'LocalBusiness',
+  '@type': ['LocalBusiness', 'Florist'],
   name: 'Flora Yapay Çiçek',
-  description: 'Yapay çiçek, yapay ağaç, dikey bahçe ve dekorasyon ürünleri.',
+  alternateName: ['Erhan Flowers', 'Erhan Yapay Çiçek', 'Flora Çiçek Manavgat'],
+  description: 'Manavgat ve Antalya\'da yapay çiçek, yapay ağaç, aranjman, dikey bahçe ve saksılı bitki dekorasyon ürünleri.',
   url: SITE_URL,
   telephone: '+90-544-654-62-20',
   email: 'erhanyapaycicekcilik@gmail.com',
@@ -75,7 +76,20 @@ export const localBusinessSchema = {
       opens: '09:00',
       closes: '18:00',
     },
+    {
+      '@type': 'OpeningHoursSpecification',
+      dayOfWeek: ['Saturday'],
+      opens: '09:00',
+      closes: '17:00',
+    },
   ],
+  hasMap: 'https://maps.google.com/?q=Flora+Yapay+Çiçek+Manavgat',
+  areaServed: [
+    { '@type': 'City', name: 'Manavgat' },
+    { '@type': 'City', name: 'Antalya' },
+    { '@type': 'State', name: 'Antalya' },
+  ],
+  keywords: 'yapay çiçek antalya, yapay çiçek manavgat, çiçekçi antalya, aranjman antalya, yapay ağaç, saksı antalya',
   sameAs: [
     'https://www.instagram.com/erhanflowers',
     'https://www.facebook.com/erhanflowers',

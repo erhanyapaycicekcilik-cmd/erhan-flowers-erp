@@ -57,6 +57,10 @@ services:
       - erp_net
     environment:
       ADMIN_PASSWORD: ${FLORAYAPAY_ADMIN_PASSWORD:-erhan2024}
+      NEXT_PUBLIC_INSTAGRAM_HANDLE: ${INSTAGRAM_HANDLE:-erhanflowers}
+      INSTAGRAM_ACCESS_TOKEN: ${INSTAGRAM_ACCESS_TOKEN:-}
+      NEXT_PUBLIC_GTM_ID: ${GTM_ID:-}
+      NEXT_PUBLIC_GA_ID: ${GA_ID:-}
     volumes:
       - florayapay_banner:/app/data
 
