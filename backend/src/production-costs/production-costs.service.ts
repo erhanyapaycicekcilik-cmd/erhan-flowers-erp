@@ -7,6 +7,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { PublishingService } from '../publishing/publishing.service';
 import { IntegrationsService } from '../integrations/integrations.service';
 import { IntegrationPlatform } from '../integrations/adapters/integration-adapter.interface';
+import { OrderSyncService } from '../integrations/services/order-sync.service';
 
 type TrendyolCatalogProduct = {
   barcode: string;
@@ -44,6 +45,7 @@ export class ProductionCostsService {
     private readonly publishing: PublishingService,
     private readonly config: ConfigService,
     private readonly integrations: IntegrationsService,
+    private readonly orderSync: OrderSyncService,
   ) {}
 
   // Gunde bir kez Trendyol katalogunu ceker; satici panelinden silinen/pasife
@@ -60,12 +62,13 @@ export class ProductionCostsService {
   }
 
   async syncWithTrendyol() {
-    const apiUrl = this.config.get<string>('TRENDYOL_API_URL')?.trim().replace(/\/+$/, '');
-    const supplierId = this.config.get<string>('TRENDYOL_SUPPLIER_ID')?.trim();
-    const apiKey = this.config.get<string>('TRENDYOL_API_KEY')?.trim();
-    const apiSecret = this.config.get<string>('TRENDYOL_API_SECRET')?.trim();
-    if (!apiUrl || !supplierId || !apiKey || !apiSecret) {
-      throw new BadRequestException('Trendyol API bilgileri (.env) eksik, senkronizasyon yapılamıyor.');
+    const dbCreds = await this.orderSync.getTrendyolCreds();
+    const apiUrl = (dbCreds?.API_URL ?? this.config.get<string>('TRENDYOL_API_URL') ?? 'https://api.trendyol.com/sapigw').trim().replace(/\/+$/, '');
+    const supplierId = (dbCreds?.SUPPLIER_ID ?? this.config.get<string>('TRENDYOL_SUPPLIER_ID') ?? '').trim();
+    const apiKey = (dbCreds?.API_KEY ?? this.config.get<string>('TRENDYOL_API_KEY') ?? '').trim();
+    const apiSecret = (dbCreds?.API_SECRET ?? this.config.get<string>('TRENDYOL_API_SECRET') ?? '').trim();
+    if (!supplierId || !apiKey || !apiSecret) {
+      throw new BadRequestException('Trendyol API bilgileri eksik, senkronizasyon yapılamıyor.');
     }
 
     const catalog = await this.fetchTrendyolCatalog(apiUrl, supplierId, apiKey, apiSecret);
