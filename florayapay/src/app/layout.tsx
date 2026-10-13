@@ -37,17 +37,12 @@ export const metadata: Metadata = {
     'Flora Yapay Çiçek — Türkiye\'nin en kaliteli yapay çiçek ve bitki dekorasyonları. Solmayan güzellik, ömür boyu zarafet. Hızlı kargo, kolay iade.',
 
   keywords: [
-    'yapay çiçek',
-    'yapay bitki',
-    'dekoratif çiçek',
-    'solmayan çiçek',
-    'ev dekorasyonu',
-    'ofis dekorasyonu',
-    'yapay orkide',
-    'yapay ağaç',
-    'dikey bahçe',
-    'erhan flowers',
-    'erhan çiçek',
+    'yapay çiçek', 'yapay çiçek antalya', 'yapay çiçek manavgat',
+    'çiçek antalya', 'çiçekçi antalya', 'çiçekçi manavgat',
+    'aranjman antalya', 'canlı çiçek antalya',
+    'yapay ağaç', 'yapay ağaç antalya', 'saksı antalya',
+    'yapay bitki', 'yapay orkide', 'dikey bahçe', 'bambu',
+    'erhan flowers', 'erhan çiçek', 'flora yapay çiçek',
   ],
 
   alternates: {
@@ -106,8 +101,8 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 5,
   themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#22c55e' },
-    { media: '(prefers-color-scheme: dark)', color: '#15803d' },
+    { media: '(prefers-color-scheme: light)', color: '#1E3A28' },
+    { media: '(prefers-color-scheme: dark)', color: '#0D1510' },
   ],
 }
 

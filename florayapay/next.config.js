@@ -103,6 +103,19 @@ const nextConfig = {
         hostname: 'localhost',
         port: '8101',
       },
+      // Instagram CDN
+      {
+        protocol: 'https',
+        hostname: '**.cdninstagram.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'scontent.cdninstagram.com',
+      },
+      {
+        protocol: 'https',
+        hostname: '**.fbcdn.net',
+      },
       // Unsplash (telif yok)
       {
         protocol: 'https',
