@@ -43,28 +43,65 @@ export default async function AdminDashboard() {
         <RecategorizeButton />
       </div>
 
-      {/* Hızlı işlemler */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <Link href="/admin/urun-ekle"
-          className="bg-[#0D1510] text-[#F4F2EC] rounded-2xl p-6 hover:bg-[#1E3A28] transition-colors group">
-          <div className="text-3xl mb-3">＋</div>
-          <h3 className="font-semibold text-lg">Yeni Ürün Ekle</h3>
-          <p className="text-sm text-white/60 mt-1">Manuel ürün kaydı oluştur</p>
-        </Link>
+      {/* Site yönetimi */}
+      <div className="mb-8">
+        <h2 className="text-xs uppercase tracking-widest text-[#5C7A62] font-semibold mb-4">Site Yönetimi</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Link href="/admin/site-ayarlari"
+            className="bg-white border border-[#E0DDD4] rounded-2xl p-6 hover:shadow-md transition-shadow">
+            <div className="text-3xl mb-3">⚙️</div>
+            <h3 className="font-semibold text-lg text-[#0D1510]">Site Ayarları</h3>
+            <p className="text-sm text-[#8C8A82] mt-1">Duyuru çubuğu, telefon, adres, çalışma saatleri</p>
+          </Link>
 
-        <Link href="/admin/urunler"
-          className="bg-white border border-[#E0DDD4] rounded-2xl p-6 hover:shadow-md transition-shadow">
-          <div className="text-3xl mb-3">📦</div>
-          <h3 className="font-semibold text-lg text-[#0D1510]">Ürünleri Yönet</h3>
-          <p className="text-sm text-[#8C8A82] mt-1">Listele, düzenle, sil</p>
-        </Link>
+          <Link href="/admin/kategoriler"
+            className="bg-white border border-[#E0DDD4] rounded-2xl p-6 hover:shadow-md transition-shadow">
+            <div className="text-3xl mb-3">🗂️</div>
+            <h3 className="font-semibold text-lg text-[#0D1510]">Kategori Grid</h3>
+            <p className="text-sm text-[#8C8A82] mt-1">Anasayfadaki kategori kartları, görseller, sıralama</p>
+          </Link>
 
-        <Link href="/admin/banner"
-          className="bg-white border border-[#E0DDD4] rounded-2xl p-6 hover:shadow-md transition-shadow">
-          <div className="text-3xl mb-3">🖼</div>
-          <h3 className="font-semibold text-lg text-[#0D1510]">Banner Yönetimi</h3>
-          <p className="text-sm text-[#8C8A82] mt-1">Slider, aylık konsept ayarla</p>
-        </Link>
+          <Link href="/admin/mekan-kategorileri"
+            className="bg-white border border-[#E0DDD4] rounded-2xl p-6 hover:shadow-md transition-shadow">
+            <div className="text-3xl mb-3">🏢</div>
+            <h3 className="font-semibold text-lg text-[#0D1510]">Mekan Kategorileri</h3>
+            <p className="text-sm text-[#8C8A82] mt-1">Ofis, restaurant, bahçe… kullanım alanı kartları</p>
+          </Link>
+
+          <Link href="/admin/promo-banner"
+            className="bg-white border border-[#E0DDD4] rounded-2xl p-6 hover:shadow-md transition-shadow">
+            <div className="text-3xl mb-3">🎯</div>
+            <h3 className="font-semibold text-lg text-[#0D1510]">Promo Bannerlar</h3>
+            <p className="text-sm text-[#8C8A82] mt-1">Anasayfadaki koyu renkli banner kartları</p>
+          </Link>
+        </div>
+      </div>
+
+      {/* Ürün işlemleri */}
+      <div>
+        <h2 className="text-xs uppercase tracking-widest text-[#5C7A62] font-semibold mb-4">Ürün İşlemleri</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Link href="/admin/urun-ekle"
+            className="bg-[#0D1510] text-[#F4F2EC] rounded-2xl p-6 hover:bg-[#1E3A28] transition-colors group">
+            <div className="text-3xl mb-3">＋</div>
+            <h3 className="font-semibold text-lg">Yeni Ürün Ekle</h3>
+            <p className="text-sm text-white/60 mt-1">Manuel ürün kaydı oluştur</p>
+          </Link>
+
+          <Link href="/admin/urunler"
+            className="bg-white border border-[#E0DDD4] rounded-2xl p-6 hover:shadow-md transition-shadow">
+            <div className="text-3xl mb-3">📦</div>
+            <h3 className="font-semibold text-lg text-[#0D1510]">Ürünleri Yönet</h3>
+            <p className="text-sm text-[#8C8A82] mt-1">Listele, düzenle, sil</p>
+          </Link>
+
+          <Link href="/admin/banner"
+            className="bg-white border border-[#E0DDD4] rounded-2xl p-6 hover:shadow-md transition-shadow">
+            <div className="text-3xl mb-3">🖼</div>
+            <h3 className="font-semibold text-lg text-[#0D1510]">Banner Yönetimi</h3>
+            <p className="text-sm text-[#8C8A82] mt-1">Slider, aylık konsept ayarla</p>
+          </Link>
+        </div>
       </div>
 
       {/* Kategoriler özeti */}

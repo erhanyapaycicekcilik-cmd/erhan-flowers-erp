@@ -7,7 +7,7 @@ import { ShoppingCart, Menu, X, Search } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useCart } from '@/hooks/useCart'
 
-const announcements = [
+const DEFAULT_ANNOUNCEMENTS = [
   '🚚 1.000 TL ve üzeri ÜCRETSİZ kargo  ·  📞 0544 654 62 20',
   '⭐ Google\'da 4.9 yıldız — 127 yorum  ·  14 gün iade garantisi',
   '🔥 Bu hafta 200+ sipariş gönderildi',
@@ -18,13 +18,26 @@ const announcements = [
 function AnnouncementBar() {
   const [idx, setIdx] = useState(0)
   const [vis, setVis] = useState(true)
+  const [announcements, setAnnouncements] = useState(DEFAULT_ANNOUNCEMENTS)
+
+  useEffect(() => {
+    fetch('/api/admin/site-config')
+      .then(r => r.json())
+      .then(cfg => {
+        if (cfg?.announcementBar) {
+          setAnnouncements([cfg.announcementBar, ...DEFAULT_ANNOUNCEMENTS.slice(1)])
+        }
+      })
+      .catch(() => {})
+  }, [])
+
   useEffect(() => {
     const t = setInterval(() => {
       setVis(false)
       setTimeout(() => { setIdx(i => (i + 1) % announcements.length); setVis(true) }, 350)
     }, 3500)
     return () => clearInterval(t)
-  }, [])
+  }, [announcements.length])
   return (
     <div className="bg-[#0D1510] text-[#EAE6DC] text-xs py-2 text-center overflow-hidden h-7 flex items-center justify-center">
       <p className={`transition-all duration-300 ${vis ? 'opacity-100' : 'opacity-0'}`}>
