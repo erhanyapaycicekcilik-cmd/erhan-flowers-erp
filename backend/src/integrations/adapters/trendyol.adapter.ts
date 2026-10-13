@@ -253,8 +253,7 @@ export class TrendyolAdapter extends BaseIntegrationAdapter {
   // gerçekten işlenip işlenmediğini ve varsa hata sebebini sorgular.
   async fetchCategories(): Promise<Array<{ id: number; name: string; parentId: number | null; leaf: boolean }>> {
     const supplierId = this.env('SUPPLIER_ID');
-    const apiBaseUrl = this.env('API_URL').replace(/\/+$/, '');
-    const url = `${apiBaseUrl}/product-categories`;
+    const url = `${this.productApiBase()}/product-categories`;
     const response = await fetch(url, {
       headers: {
         Authorization: `Basic ${Buffer.from(`${this.env('API_KEY')}:${this.env('API_SECRET')}`).toString('base64')}`,
@@ -284,8 +283,7 @@ export class TrendyolAdapter extends BaseIntegrationAdapter {
     if (!batchRequestId) return { ok: false, status: 'FAILED', message: 'batchRequestId zorunludur.' };
 
     const supplierId = this.env('SUPPLIER_ID');
-    const apiBaseUrl = this.env('API_URL').replace(/\/+$/, '');
-    const url = `${apiBaseUrl}/product/sellers/${supplierId}/v2/products/batch-requests/${batchRequestId}`;
+    const url = `https://apigw.trendyol.com/integration/product/sellers/${supplierId}/v2/products/batch-requests/${batchRequestId}`;
     const response = await fetch(url, { headers: this.productHeaders(supplierId) });
     if (!response.ok) {
       return {
@@ -329,8 +327,7 @@ export class TrendyolAdapter extends BaseIntegrationAdapter {
     if (!barcode) return { ok: false, status: 'FAILED', message: 'Barkod zorunludur.' };
 
     const supplierId = this.env('SUPPLIER_ID');
-    const apiBaseUrl = this.env('API_URL').replace(/\/+$/, '');
-    const url = `${apiBaseUrl}/product/sellers/${supplierId}/v2/products?barcode=${encodeURIComponent(barcode)}`;
+    const url = `${this.productApiBase()}/product/sellers/${supplierId}/v2/products?barcode=${encodeURIComponent(barcode)}`;
     const response = await fetch(url, { headers: this.productHeaders(supplierId) });
     if (!response.ok) {
       return {
@@ -443,7 +440,7 @@ export class TrendyolAdapter extends BaseIntegrationAdapter {
     const batchIds: string[] = [];
     for (let index = 0; index < items.length; index += 500) {
       const chunk = items.slice(index, index + 500);
-      const response = await fetch(`${apiBaseUrl}/inventory/sellers/${supplierId}/products/price-and-inventory`, {
+      const response = await fetch(`${this.productApiBase()}/inventory/sellers/${supplierId}/products/price-and-inventory`, {
         method: 'POST',
         headers: this.productHeaders(supplierId),
         body: JSON.stringify({ items: chunk }),
@@ -544,8 +541,7 @@ export class TrendyolAdapter extends BaseIntegrationAdapter {
 
   private requestProductUpsert(payload: unknown) {
     const supplierId = this.env('SUPPLIER_ID');
-    const apiBaseUrl = this.env('API_URL').replace(/\/+$/, '');
-    const url = `${apiBaseUrl}/product/sellers/${supplierId}/v2/products`;
+    const url = `${this.productApiBase()}/product/sellers/${supplierId}/v2/products`;
     return fetch(url, {
       method: 'POST',
       headers: this.productHeaders(supplierId),
@@ -559,8 +555,7 @@ export class TrendyolAdapter extends BaseIntegrationAdapter {
   // var" hatasıyla reddediyor.
   private requestContentUpdate(payload: unknown, contentId: string) {
     const supplierId = this.env('SUPPLIER_ID');
-    const apiBaseUrl = this.env('API_URL').replace(/\/+$/, '');
-    const url = `${apiBaseUrl}/product/sellers/${supplierId}/v2/products/content-bulk-update`;
+    const url = `${this.productApiBase()}/product/sellers/${supplierId}/v2/products/content-bulk-update`;
     const data = this.record(payload);
     return fetch(url, {
       method: 'POST',
@@ -584,8 +579,7 @@ export class TrendyolAdapter extends BaseIntegrationAdapter {
 
   private requestPriceAndInventory(payload: unknown) {
     const supplierId = this.env('SUPPLIER_ID');
-    const apiBaseUrl = this.env('API_URL').replace(/\/+$/, '');
-    const url = `${apiBaseUrl}/inventory/sellers/${supplierId}/products/price-and-inventory`;
+    const url = `${this.productApiBase()}/inventory/sellers/${supplierId}/products/price-and-inventory`;
     const data = this.record(payload);
     return fetch(url, {
       method: 'POST',
@@ -617,6 +611,10 @@ export class TrendyolAdapter extends BaseIntegrationAdapter {
     const val = String(this.runtimeCredentials[key] ?? process.env[`TRENDYOL_${key}`] ?? '').trim();
     if (!val && key === 'API_URL') return 'https://api.trendyol.com/sapigw';
     return val;
+  }
+
+  private productApiBase() {
+    return 'https://apigw.trendyol.com/integration';
   }
 
   private buildAttributes(data: Record<string, any>) {
