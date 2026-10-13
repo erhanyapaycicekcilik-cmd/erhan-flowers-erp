@@ -46,9 +46,9 @@ erhan-flowers-erp/
 
 ## Domain & URL'ler
 
-- **ERP Panel:** https://erp.florayapaycicek.com
-- **Backend API:** https://api.florayapaycicek.com
-- **E-Ticaret Sitesi (canlı):** https://florayapaycicek.com
+- **ERP Panel:** https://erp.erhanflowers.com (eski: erp.florayapaycicek.com → yönlendiriyor)
+- **Backend API:** https://api.erhanflowers.com (eski: api.florayapaycicek.com → yönlendiriyor)
+- **E-Ticaret Sitesi (canlı):** https://www.erhanflowers.com (eski: florayapaycicek.com → 301 yönlendiriyor)
 - **E-Ticaret Sitesi (lokal geliştirme):** http://localhost:3200
 
 ## Florayapay E-Ticaret Sitesi Geliştirme

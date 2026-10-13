@@ -83,7 +83,7 @@ const platformCredentialFields: Record<string, string[]> = {
 };
 const managedCompanies: Record<string, { name: string; legalName: string; domain: string; skipStockDeduction: boolean }> = {
   ERHAN: { name: 'Erhan Flowers', legalName: 'Erhan Flowers', domain: 'erhanflowers.com', skipStockDeduction: false },
-  FLORA: { name: 'Florayapaycicek', legalName: 'Flora Yapay Çiçekçilik', domain: 'florayapaycicek.com', skipStockDeduction: true },
+  FLORA: { name: 'Erhan Flowers', legalName: 'Erhan Yapay Çiçekçilik', domain: 'erhanflowers.com', skipStockDeduction: true },
 };
 
 @Injectable()

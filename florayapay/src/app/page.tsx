@@ -28,7 +28,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'Flora Yapay Çiçek — Yapay Çiçek & Aranjman, Manavgat Antalya',
     description: 'Manavgat & Antalya\'nın en kaliteli yapay çiçek mağazası. Yapay ağaç, orkide, aranjman, saksılı bitkiler. Hızlı kargo.',
-    url: 'https://florayapaycicek.com',
+    url: 'https://www.erhanflowers.com',
     siteName: 'Flora Yapay Çiçek',
     locale: 'tr_TR',
     type: 'website',

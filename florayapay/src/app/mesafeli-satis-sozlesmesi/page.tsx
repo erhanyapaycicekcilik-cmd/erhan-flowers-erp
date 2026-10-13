@@ -41,7 +41,7 @@ export default function MesafeliSatisSozlesmesiPage() {
             <section>
               <h2 className="font-semibold text-[#0D1510] text-base mb-3">Madde 2 — Sözleşme Konusu</h2>
               <p>
-                İşbu sözleşme; Alıcının, Satıcıya ait <strong>florayapaycicek.com</strong> internet sitesi üzerinden
+                İşbu sözleşme; Alıcının, Satıcıya ait <strong>erhanflowers.com</strong> internet sitesi üzerinden
                 elektronik ortamda siparişini verdiği ürün/ürünlerin satışı ve teslimi ile ilgili olarak
                 6502 sayılı Tüketicinin Korunması Hakkında Kanun ve Mesafeli Sözleşmeler Yönetmeliği hükümleri
                 gereğince tarafların hak ve yükümlülüklerini kapsar.

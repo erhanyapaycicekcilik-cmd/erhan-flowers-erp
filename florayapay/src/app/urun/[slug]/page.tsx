@@ -18,7 +18,7 @@ import { WhatsAppOrderButton } from '@/components/product/WhatsAppOrderButton'
 import { StickyMobileCTA } from '@/components/product/StickyMobileCTA'
 import { RelatedProducts } from '@/components/product/RelatedProducts'
 
-const SITE_URL = process.env.SITE_URL || 'https://florayapaycicek.com'
+const SITE_URL = process.env.SITE_URL || 'https://www.erhanflowers.com'
 
 interface PageProps {
   params: { slug: string }

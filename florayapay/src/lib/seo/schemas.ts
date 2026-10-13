@@ -1,6 +1,6 @@
 // JSON-LD Structured Data şemaları — Google rich results için
 
-const SITE_URL = process.env.SITE_URL || 'https://florayapaycicek.com'
+const SITE_URL = process.env.SITE_URL || 'https://www.erhanflowers.com'
 
 export const organizationSchema = {
   '@context': 'https://schema.org',
