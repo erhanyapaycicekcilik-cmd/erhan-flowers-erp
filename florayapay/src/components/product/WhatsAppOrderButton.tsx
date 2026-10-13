@@ -6,7 +6,7 @@ interface Props {
 
 export function WhatsAppOrderButton({ productName, price, slug }: Props) {
   const message = encodeURIComponent(
-    `Merhaba! "${productName}" ürününü satın almak istiyorum.\nFiyat: ${price.toLocaleString('tr-TR')} ₺\nhttps://florayapaycicek.com/urun/${slug}`
+    `Merhaba! "${productName}" ürününü satın almak istiyorum.\nFiyat: ${price.toLocaleString('tr-TR')} ₺\nhttps://www.erhanflowers.com/urun/${slug}`
   )
 
   return (

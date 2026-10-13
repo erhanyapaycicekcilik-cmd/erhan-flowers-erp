@@ -1,5 +1,7 @@
 import type { MetadataRoute } from 'next'
 
+const SITE_URL = process.env.SITE_URL || 'https://www.erhanflowers.com'
+
 export default function robots(): MetadataRoute.Robots {
   return {
     rules: [
@@ -9,7 +11,7 @@ export default function robots(): MetadataRoute.Robots {
         disallow: ['/api/', '/sepet', '/_next/'],
       },
     ],
-    sitemap: 'https://florayapaycicek.com/sitemap.xml',
-    host: 'https://florayapaycicek.com',
+    sitemap: `${SITE_URL}/sitemap.xml`,
+    host: SITE_URL,
   }
 }

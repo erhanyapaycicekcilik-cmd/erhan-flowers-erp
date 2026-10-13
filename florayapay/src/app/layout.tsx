@@ -24,7 +24,7 @@ const cormorant = Cormorant_Garamond({
   preload: false,
 })
 
-const SITE_URL = process.env.SITE_URL || 'https://florayapaycicek.com'
+const SITE_URL = process.env.SITE_URL || 'https://www.erhanflowers.com'
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
@@ -53,10 +53,10 @@ export const metadata: Metadata = {
     type: 'website',
     locale: 'tr_TR',
     url: SITE_URL,
-    siteName: 'Flora Yapay Çiçek',
-    title: 'Flora Yapay Çiçek | Kaliteli Yapay Çiçek & Dekorasyon',
+    siteName: 'Erhan Flowers',
+    title: 'Erhan Flowers | Kaliteli Yapay Çiçek & Dekorasyon — Antalya',
     description:
-      'Flora Yapay Çiçek — Türkiye\'nin en kaliteli yapay çiçek ve bitki dekorasyonları. Solmayan güzellik, ömür boyu zarafet.',
+      'Erhan Flowers — Manavgat & Antalya\'nın en kaliteli yapay çiçek ve bitki dekorasyonları. Solmayan güzellik, ömür boyu zarafet.',
     images: [
       {
         url: '/logo.png',

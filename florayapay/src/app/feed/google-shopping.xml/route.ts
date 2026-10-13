@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8101'
-const SITE_URL = process.env.SITE_URL || 'https://florayapaycicek.com'
+const SITE_URL = process.env.SITE_URL || 'https://www.erhanflowers.com'
 
 // Google Product Category mapping for artificial flowers/plants
 const CATEGORY_MAP: Record<string, string> = {
