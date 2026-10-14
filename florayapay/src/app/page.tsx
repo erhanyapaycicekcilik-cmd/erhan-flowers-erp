@@ -7,7 +7,7 @@ import { FeaturedProducts } from '@/components/home/FeaturedProducts'
 import { TrustBadges } from '@/components/home/TrustBadges'
 import { WhyUs } from '@/components/home/WhyUs'
 import { PromoBanners } from '@/components/home/PromoBanners'
-import { MekanKategorileri } from '@/components/home/MekanKategorileri'
+// import { MekanKategorileri } from '@/components/home/MekanKategorileri' // geçici olarak kaldırıldı
 import { SocialProofBar } from '@/components/home/SocialProofBar'
 import { InstagramFeed } from '@/components/home/InstagramFeed'
 
@@ -45,7 +45,7 @@ export default function HomePage() {
         <TrustBadges />
         <CategoryGrid />
         <PromoBanners />
-        <MekanKategorileri />
+        {/* <MekanKategorileri /> — geçici olarak kaldırıldı */}
         <FeaturedProducts />
         <WhyUs />
         <InstagramFeed />
