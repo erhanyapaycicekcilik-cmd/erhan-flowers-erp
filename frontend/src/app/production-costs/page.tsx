@@ -52,8 +52,14 @@ export default function ProductCostListPage() {
   }, []);
 
   function loadProducts() {
-    api<Variant[]>('/production-costs/variants').then(setVariants).catch(() => setVariants([]));
-    api<{ completed: number; total: number }>('/production-costs/progress').then(setProgress).catch(() => setProgress(null));
+    api<Variant[]>('/production-costs/variants').then((data) => {
+      setVariants(data);
+      const completed = data.filter((v) => {
+        const s = v.productCostStatus || v.costStatus || '';
+        return s === 'Tamamlandı';
+      }).length;
+      setProgress({ total: data.length, completed });
+    }).catch(() => setVariants([]));
   }
 
   const filtered = useMemo(() => {
