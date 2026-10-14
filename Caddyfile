@@ -17,9 +17,22 @@ erhanflowers.com, www.erhanflowers.com {
     }
 }
 
-# Eski domain → yeni domain yönlendirme (301 kalıcı)
 florayapaycicek.com, www.florayapaycicek.com {
-    redir https://www.erhanflowers.com{uri} 301
+    reverse_proxy florayapay:3200
+
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        X-Frame-Options "DENY"
+        X-Content-Type-Options "nosniff"
+        X-XSS-Protection "1; mode=block"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        Permissions-Policy "geolocation=()"
+    }
+
+    log {
+        output file /var/log/caddy/flora-access.log
+        format json
+    }
 }
 
 # ERP Yönetim Paneli — Güvenli HTTPS
