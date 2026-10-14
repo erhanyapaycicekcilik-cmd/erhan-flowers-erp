@@ -7,6 +7,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { PublishingService } from '../publishing/publishing.service';
 import { IntegrationsService } from '../integrations/integrations.service';
 import { IntegrationPlatform } from '../integrations/adapters/integration-adapter.interface';
+import { OrderSyncService } from '../integrations/services/order-sync.service';
 
 type TrendyolCatalogProduct = {
   barcode: string;
@@ -44,6 +45,7 @@ export class ProductionCostsService {
     private readonly publishing: PublishingService,
     private readonly config: ConfigService,
     private readonly integrations: IntegrationsService,
+    private readonly orderSync: OrderSyncService,
   ) {}
 
   // Gunde bir kez Trendyol katalogunu ceker; satici panelinden silinen/pasife
@@ -60,19 +62,19 @@ export class ProductionCostsService {
   }
 
   async syncWithTrendyol() {
-    const apiUrl = this.config.get<string>('TRENDYOL_API_URL')?.trim().replace(/\/+$/, '');
-    const supplierId = this.config.get<string>('TRENDYOL_SUPPLIER_ID')?.trim();
-    const apiKey = this.config.get<string>('TRENDYOL_API_KEY')?.trim();
-    const apiSecret = this.config.get<string>('TRENDYOL_API_SECRET')?.trim();
-    if (!apiUrl || !supplierId || !apiKey || !apiSecret) {
-      throw new BadRequestException('Trendyol API bilgileri (.env) eksik, senkronizasyon yapılamıyor.');
+    const dbCreds = await this.orderSync.getTrendyolCreds();
+    const apiUrl = 'https://apigw.trendyol.com/integration';
+    const supplierId = (dbCreds?.SUPPLIER_ID ?? this.config.get<string>('TRENDYOL_SUPPLIER_ID') ?? '').trim();
+    const apiKey = (dbCreds?.API_KEY ?? this.config.get<string>('TRENDYOL_API_KEY') ?? '').trim();
+    const apiSecret = (dbCreds?.API_SECRET ?? this.config.get<string>('TRENDYOL_API_SECRET') ?? '').trim();
+    this.logger.log(`Trendyol sync: supplierId=${supplierId || '(BOŞ)'}, apiKey=${apiKey ? apiKey.slice(0,4)+'...' : '(BOŞ)'}, dbCreds=${dbCreds ? 'VAR' : 'NULL'}`);
+    if (!supplierId || !apiKey || !apiSecret) {
+      throw new BadRequestException('Trendyol API bilgileri eksik, senkronizasyon yapılamıyor.');
     }
 
     const catalog = await this.fetchTrendyolCatalog(apiUrl, supplierId, apiKey, apiSecret);
     const byBarcode = new Map(catalog.map((item) => [item.barcode, item]));
-    // Trendyol arşivlenmiş/satışa kapalı ürünü de listede tutuyor - gerçek
-    // "hâlâ satılıyor" kümesi bu ikisini dışlayarak bulunur.
-    const liveBarcodes = new Set(catalog.filter((item) => !item.archived && item.onSale).map((item) => item.barcode));
+    const liveBarcodes = new Set(catalog.filter((item) => !item.archived).map((item) => item.barcode));
 
     let updated = 0;
     let created = 0;
@@ -81,7 +83,7 @@ export class ProductionCostsService {
       const imageUrls = (item.images ?? [])
         .map((image) => (typeof image === 'string' ? image : image?.url))
         .filter((url): url is string => Boolean(url));
-      const isLive = !item.archived && item.onSale;
+      const isLive = !item.archived;
       const data = {
         productName: item.title || item.barcode,
         brand: item.brand ?? null,
@@ -140,11 +142,14 @@ export class ProductionCostsService {
     const items: TrendyolCatalogProduct[] = [];
     while (page < totalPages) {
       const response = await fetch(`${apiUrl}/product/sellers/${supplierId}/products?page=${page}&size=${size}`, { headers });
+      const responseText = await response.text();
       if (!response.ok) {
-        this.logger.warn(`Trendyol katalog senkronu: HTTP ${response.status} (sayfa ${page})`);
+        this.logger.warn(`Trendyol katalog senkronu: HTTP ${response.status} (sayfa ${page}) - ${responseText.slice(0, 200)}`);
         break;
       }
-      const body = await response.json();
+      this.logger.log(`Trendyol ham yanıt (sayfa ${page}, ilk 500 karakter): ${responseText.slice(0, 500)}`);
+      const body = JSON.parse(responseText);
+      this.logger.log(`Trendyol sayfa ${page}: totalPages=${body.totalPages}, totalElements=${body.totalElements}, content=${body.content?.length ?? 0} ürün`);
       totalPages = body.totalPages ?? 1;
       for (const item of body.content ?? []) {
         items.push({

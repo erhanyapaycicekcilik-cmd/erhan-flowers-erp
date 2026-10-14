@@ -260,6 +260,10 @@ export class OrderSyncService {
     return { processed: orders.length, newOrders, stockDeductions };
   }
 
+  async getTrendyolCreds(): Promise<Record<string, string> | null> {
+    return this.loadCredentials();
+  }
+
   private async loadCredentials(): Promise<Record<string, string> | null> {
     const rows = await this.prisma.$queryRaw<Array<{ credentialType: string; encryptedValue: string; externalAccountId: string | null }>>`
       SELECT cc.credential_type AS "credentialType", cc.encrypted_value AS "encryptedValue",

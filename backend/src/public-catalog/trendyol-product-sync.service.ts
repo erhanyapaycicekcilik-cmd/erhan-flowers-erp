@@ -27,10 +27,31 @@ interface TrendyolProduct {
 @Injectable()
 export class TrendyolProductSyncService {
   private readonly logger = new Logger(TrendyolProductSyncService.name);
-  private readonly auth = Buffer.from(`${API_KEY}:${API_SECRET}`).toString('base64');
   private syncRunning = false;
 
   constructor(private readonly prisma: PrismaService) {}
+
+  private async loadAuth(): Promise<{ auth: string; supplierId: string } | null> {
+    try {
+      const cred = await this.prisma.$queryRaw<Array<{ credentials: string }>>`
+        SELECT cc.credentials FROM channel_credentials cc
+        JOIN channel_accounts ca ON cc.channel_account_id = ca.id
+        JOIN sales_channels sc ON ca.sales_channel_id = sc.id
+        JOIN companies co ON ca.company_id = co.id
+        WHERE sc.code = 'TRENDYOL' AND ca.is_active = true AND cc.is_active = true AND co.code = 'ERHAN'
+        LIMIT 1
+      `;
+      if (!cred.length) return null;
+      const parsed = JSON.parse(cred[0].credentials) as Record<string, string>;
+      const apiKey = parsed['API_KEY'] || '';
+      const apiSecret = parsed['API_SECRET'] || '';
+      const supplierId = parsed['SUPPLIER_ID'] || SUPPLIER_ID;
+      if (!apiKey || !apiSecret) return null;
+      return { auth: Buffer.from(`${apiKey}:${apiSecret}`).toString('base64'), supplierId };
+    } catch {
+      return null;
+    }
+  }
 
   /** Her 15 dakikada bir Trendyol'dan ürünleri çek, DB'ye yaz, siteyi revalidate et */
   @Cron('0 */15 * * * *') // her 15 dakika
@@ -141,16 +162,20 @@ export class TrendyolProductSyncService {
   }
 
   private async fetchAllTrendyolProducts(): Promise<TrendyolProduct[]> {
+    const creds = await this.loadAuth();
+    const auth = creds?.auth ?? Buffer.from(`${API_KEY}:${API_SECRET}`).toString('base64');
+    const supplierId = creds?.supplierId ?? SUPPLIER_ID;
+
     const all: TrendyolProduct[] = [];
     let page = 0;
     const size = 200;
 
     while (true) {
-      const url = `${TY_API}/product/sellers/${SUPPLIER_ID}/products?page=${page}&size=${size}&approved=true`;
+      const url = `${TY_API}/product/sellers/${supplierId}/products?page=${page}&size=${size}`;
       const res = await fetch(url, {
         headers: {
-          'Authorization': `Basic ${this.auth}`,
-          'User-Agent': `${SUPPLIER_ID} - SelfIntegration`,
+          'Authorization': `Basic ${auth}`,
+          'User-Agent': `${supplierId} - SelfIntegration`,
           'Content-Type': 'application/json',
         },
       });
