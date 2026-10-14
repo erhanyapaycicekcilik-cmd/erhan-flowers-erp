@@ -141,7 +141,7 @@ export class ProductionCostsService {
     let totalPages = 1;
     const items: TrendyolCatalogProduct[] = [];
     while (page < totalPages) {
-      const response = await fetch(`${apiUrl}/product/sellers/${supplierId}/products?page=${page}&size=${size}&approved=true`, { headers });
+      const response = await fetch(`${apiUrl}/product/sellers/${supplierId}/products?page=${page}&size=${size}&onSale=true`, { headers });
       const responseText = await response.text();
       if (!response.ok) {
         this.logger.warn(`Trendyol katalog senkronu: HTTP ${response.status} (sayfa ${page}) - ${responseText.slice(0, 200)}`);
