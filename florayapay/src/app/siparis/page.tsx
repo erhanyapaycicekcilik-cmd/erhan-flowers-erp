@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Header } from '@/components/layout/Header'
 import { Footer } from '@/components/layout/Footer'
@@ -13,19 +13,38 @@ function fmt(n: number) {
   return '₺' + new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(n)
 }
 
-const KARGO_UCRETI = 0
 const EFT_INDIRIM = 0.03
 
-const IBAN_BILGI = {
+const DEFAULT_IBAN = {
   banka: 'Yapı Kredi Bankası',
-  iban: 'TR50 0006 7010 0000 0013 5920 99',
+  iban: 'TR__ ____ ____ ____ ____ ____ __',
   hesapSahibi: 'ERHAN FLOWERS ÇİÇEKÇİLİK ELEKTRONİK TİCARET VE SANAYİ LİMİTED ŞİRKETİ',
-  swift: 'YAPITRISXXX',
+  swift: '',
 }
 
 export default function SiparisPage() {
   const { items, total, clearCart } = useCart()
   const router = useRouter()
+
+  const [ibanBilgi, setIbanBilgi] = useState(DEFAULT_IBAN)
+  const [iyzicoAktif, setIyzicoAktif] = useState(false)
+
+  useEffect(() => {
+    fetch('/api/admin/site-config')
+      .then(r => r.json())
+      .then(cfg => {
+        if (cfg?.ibanNo) {
+          setIbanBilgi({
+            banka: cfg.ibanBanka || DEFAULT_IBAN.banka,
+            iban: cfg.ibanNo,
+            hesapSahibi: cfg.ibanHesapSahibi || DEFAULT_IBAN.hesapSahibi,
+            swift: cfg.ibanSwift || '',
+          })
+        }
+        setIyzicoAktif(!!cfg?.iyzicoAktif)
+      })
+      .catch(() => {})
+  }, [])
 
   const [form, setForm] = useState({
     ad: '',
@@ -38,7 +57,7 @@ export default function SiparisPage() {
     postaKodu: '',
     not: '',
   })
-  const [odemeYontemi, setOdemeYontemi] = useState<'whatsapp' | 'eft'>('whatsapp')
+  const [odemeYontemi, setOdemeYontemi] = useState<'whatsapp' | 'eft' | 'kart'>('whatsapp')
   const [loading, setLoading] = useState(false)
   const [errors, setErrors] = useState<Partial<typeof form>>({})
 
@@ -97,11 +116,11 @@ export default function SiparisPage() {
 
     try {
       // 1. ERP backend'e sipariş kaydet
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/public/orders`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || ''}/public/orders`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          paymentMethod: odemeYontemi === 'eft' ? 'EFT' : 'WHATSAPP',
+          paymentMethod: odemeYontemi === 'eft' ? 'EFT' : odemeYontemi === 'kart' ? 'ONLINE' : 'WHATSAPP',
           customerName: `${form.ad} ${form.soyad}`,
           customerPhone: form.telefon,
           customerEmail: form.email || undefined,
@@ -121,10 +140,35 @@ export default function SiparisPage() {
         }),
       })
 
-      const data = res.ok ? await res.json() : { orderNumber: Date.now().toString(36).toUpperCase() }
+      const data = res.ok ? await res.json() : {}
       const orderNumber = data.orderNumber || 'WEB-' + Date.now().toString(36).toUpperCase()
 
-      // 2. WhatsApp'a bildir
+      if (odemeYontemi === 'kart') {
+        // iyzico ödeme başlat
+        const payRes = await fetch('/api/payment/iyzico/initialize', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            orderNumber,
+            tutar: Math.round(genelToplam),
+            musteri: { ad: form.ad, soyad: form.soyad, email: form.email || `${form.telefon}@erhanflowers.com`, telefon: form.telefon },
+            adres: { adres: form.adres, sehir: form.sehir, ilce: form.ilce || form.sehir, postaKodu: form.postaKodu || '07000' },
+            urunler: items.map(i => ({ id: String(i.id), ad: i.name, kategori: 'YAPAY_CICEK', fiyat: i.price, adet: i.quantity })),
+          }),
+        })
+        const payData = await payRes.json()
+        if (payData.htmlContent) {
+          // 3DS sayfasına yönlendir
+          clearCart()
+          router.push(`/odeme-kart?token=${payData.token}`)
+        } else {
+          alert(payData.error || 'Ödeme başlatılamadı. Lütfen başka ödeme yöntemi deneyin.')
+          setLoading(false)
+        }
+        return
+      }
+
+      // WhatsApp'a bildir
       const waUrl = buildWhatsAppMsg(orderNumber)
       window.open(waUrl, '_blank')
       clearCart()
@@ -136,11 +180,16 @@ export default function SiparisPage() {
       }
     } catch {
       // backend erişilemese de WhatsApp akışı çalışır
-      const orderNumber = 'WEB-' + Date.now().toString(36).toUpperCase()
-      const waUrl = buildWhatsAppMsg(orderNumber)
-      window.open(waUrl, '_blank')
-      clearCart()
-      router.push('/siparis-tamamlandi')
+      if (odemeYontemi !== 'kart') {
+        const orderNumber = 'WEB-' + Date.now().toString(36).toUpperCase()
+        const waUrl = buildWhatsAppMsg(orderNumber)
+        window.open(waUrl, '_blank')
+        clearCart()
+        router.push('/siparis-tamamlandi')
+      } else {
+        alert('Sunucuya bağlanılamadı. Lütfen WhatsApp veya EFT ile sipariş verin.')
+        setLoading(false)
+      }
     }
   }
 
@@ -206,11 +255,11 @@ export default function SiparisPage() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <Field label="Şehir *" error={errors.sehir}>
                       <input value={form.sehir} onChange={(e) => set('sehir', e.target.value)}
-                        placeholder="İstanbul" className={inputCls(!!errors.sehir)} />
+                        placeholder="Antalya" className={inputCls(!!errors.sehir)} />
                     </Field>
                     <Field label="İlçe">
                       <input value={form.ilce} onChange={(e) => set('ilce', e.target.value)}
-                        placeholder="Kadıköy" className={inputCls(false)} />
+                        placeholder="Manavgat" className={inputCls(false)} />
                     </Field>
                     <Field label="Adres *" error={errors.adres} className="sm:col-span-2">
                       <textarea value={form.adres} onChange={(e) => set('adres', e.target.value)}
@@ -219,7 +268,7 @@ export default function SiparisPage() {
                     </Field>
                     <Field label="Posta Kodu">
                       <input value={form.postaKodu} onChange={(e) => set('postaKodu', e.target.value)}
-                        placeholder="34000" className={inputCls(false)} />
+                        placeholder="07600" className={inputCls(false)} />
                     </Field>
                   </div>
                 </div>
@@ -264,6 +313,27 @@ export default function SiparisPage() {
                         odemeYontemi === 'eft' ? 'border-[#5C7A62] bg-[#5C7A62]' : 'border-[#C4C0B8]'
                       }`} />
                     </button>
+
+                    {/* Kredi Kartı (iyzico aktifse göster) */}
+                    {iyzicoAktif && (
+                      <button type="button" onClick={() => setOdemeYontemi('kart')}
+                        className={`flex items-start gap-3 p-4 rounded-xl border-2 text-left transition-all sm:col-span-2 ${
+                          odemeYontemi === 'kart'
+                            ? 'border-[#2563EB] bg-blue-50'
+                            : 'border-[#E0DDD4] hover:border-[#B8B5AB]'
+                        }`}>
+                        <span className="text-2xl">💳</span>
+                        <div>
+                          <p className="font-semibold text-[#0D1510] text-sm">Kredi / Banka Kartı
+                            <span className="ml-2 text-[10px] bg-blue-600 text-white px-1.5 py-0.5 rounded-full font-bold">GÜVENLİ ÖDEME</span>
+                          </p>
+                          <p className="text-xs text-[#8C8A82] mt-0.5">Visa, Mastercard, Troy — 3D Secure ile</p>
+                        </div>
+                        <div className={`ml-auto w-4 h-4 rounded-full border-2 mt-0.5 flex-shrink-0 ${
+                          odemeYontemi === 'kart' ? 'border-blue-600 bg-blue-600' : 'border-[#C4C0B8]'
+                        }`} />
+                      </button>
+                    )}
                   </div>
 
                   {/* EFT seçilince IBAN bilgisi */}
@@ -273,21 +343,36 @@ export default function SiparisPage() {
                       <div className="space-y-2 text-sm">
                         <div className="flex justify-between">
                           <span className="text-[#5C5C52]">Banka</span>
-                          <span className="font-medium text-[#0D1510]">{IBAN_BILGI.banka}</span>
+                          <span className="font-medium text-[#0D1510]">{ibanBilgi.banka}</span>
                         </div>
                         <div className="flex justify-between">
                           <span className="text-[#5C5C52]">Hesap Sahibi</span>
-                          <span className="font-medium text-[#0D1510]">{IBAN_BILGI.hesapSahibi}</span>
+                          <span className="font-medium text-[#0D1510] text-right max-w-[60%] leading-snug">{ibanBilgi.hesapSahibi}</span>
                         </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-[#5C5C52]">IBAN</span>
+                        <div className="flex justify-between items-center gap-2">
+                          <span className="text-[#5C5C52] flex-shrink-0">IBAN</span>
                           <span className="font-mono font-semibold text-[#0D1510] text-xs bg-white px-2 py-1 rounded-lg border border-[#C5D9C8]">
-                            {IBAN_BILGI.iban}
+                            {ibanBilgi.iban}
                           </span>
                         </div>
+                        {ibanBilgi.swift && (
+                          <div className="flex justify-between">
+                            <span className="text-[#5C5C52]">SWIFT</span>
+                            <span className="font-mono text-xs text-[#0D1510]">{ibanBilgi.swift}</span>
+                          </div>
+                        )}
                       </div>
                       <p className="text-[11px] text-[#5C7A62] mt-3">
                         ✓ Sipariş onayından sonra dekontu WhatsApp&apos;tan göndermeniz yeterli.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Kart seçilince bilgi */}
+                  {odemeYontemi === 'kart' && (
+                    <div className="mt-4 bg-blue-50 border border-blue-200 rounded-xl p-4">
+                      <p className="text-xs text-blue-800">
+                        🔒 Ödemeniz iyzico altyapısıyla güvence altında işlenir. Kart bilgileriniz bizimle paylaşılmaz.
                       </p>
                     </div>
                   )}
@@ -353,12 +438,16 @@ export default function SiparisPage() {
                   <div className="mt-6 space-y-3">
                     <button type="submit" disabled={loading}
                       className={`w-full py-3.5 rounded-xl font-semibold transition-colors disabled:opacity-60 flex items-center justify-center gap-2 ${
-                        odemeYontemi === 'eft'
+                        odemeYontemi === 'kart'
+                          ? 'bg-blue-600 text-white hover:bg-blue-700'
+                          : odemeYontemi === 'eft'
                           ? 'bg-[#5C7A62] text-white hover:bg-[#4A6650]'
                           : 'bg-[#0D1510] text-[#F4F2EC] hover:bg-[#1E3A28]'
                       }`}>
                       {loading ? (
                         <><span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Yönlendiriliyor...</>
+                      ) : odemeYontemi === 'kart' ? (
+                        <>💳 Kartla Öde</>
                       ) : odemeYontemi === 'eft' ? (
                         <>🏦 EFT ile Sipariş Ver</>
                       ) : (
@@ -366,7 +455,9 @@ export default function SiparisPage() {
                       )}
                     </button>
                     <p className="text-xs text-center text-[#8C8A82]">
-                      {odemeYontemi === 'eft'
+                      {odemeYontemi === 'kart'
+                        ? '3D Secure ile güvenli ödeme sayfasına yönlendirileceksiniz.'
+                        : odemeYontemi === 'eft'
                         ? 'IBAN bilgileri gösterilecek. Dekontu WhatsApp ile paylaşın.'
                         : 'Sipariş detayları WhatsApp\'a gönderilecek.'}
                     </p>

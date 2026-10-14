@@ -27,5 +27,10 @@
   "promoBanners": [
     { "id": "agaclar", "title": "Yapay Ağaçlar", "subtitle": "Salonunuza doğal dokunuş", "desc": "Benjamin, zeytin, palmiye ve daha fazlası", "href": "/urunler?kategori=yapay-agac", "cta": "Koleksiyonu Keşfet", "bg": "#1A2E1C", "active": true },
     { "id": "dikey-bahce", "title": "Dikey Bahçe", "subtitle": "Duvarlarınızı yeşile boyayın", "desc": "Yapay panel sistemleri, balkon ve ofis için", "href": "/urunler?kategori=dikey-bahce", "cta": "İncele", "bg": "#0D1510", "active": true }
-  ]
+  ],
+  "ibanBanka": "Yapı Kredi Bankası",
+  "ibanNo": "TR__ ____ ____ ____ ____ ____ __",
+  "ibanHesapSahibi": "ERHAN FLOWERS ÇİÇEKÇİLİK ELEKTRONİK TİCARET VE SANAYİ LİMİTED ŞİRKETİ",
+  "ibanSwift": "YAPITRISXXX",
+  "iyzicoAktif": false
 }

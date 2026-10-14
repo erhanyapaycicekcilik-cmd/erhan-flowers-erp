@@ -1,4 +1,4 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8101'
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001'
 
 export interface PublicProduct {
   id: number
