@@ -99,11 +99,9 @@ export class ProductionCostsService {
         select: { id: true, productCostDraft: { select: { status: true } } },
       });
       if (existing) {
-        const hasApprovedCost = existing.productCostDraft?.status === 'APPROVED';
-        const safeData = hasApprovedCost && !isLive ? { ...data, status: 'ACTIVE' as const } : data;
-        await this.prisma.trendyolProductVariant.update({ where: { id: existing.id }, data: safeData });
+        await this.prisma.trendyolProductVariant.update({ where: { id: existing.id }, data });
         updated++;
-        if (!isLive && !hasApprovedCost) passivatedFromArchive++;
+        if (!isLive) passivatedFromArchive++;
       } else {
         const newVariant = await this.prisma.trendyolProductVariant.create({ data: { barcode: item.barcode, ...data } });
         created++;
@@ -112,14 +110,8 @@ export class ProductionCostsService {
       }
     }
 
-    const approvedCostVariantIds = await this.prisma.trendyolProductVariant.findMany({
-      where: { productCostDraft: { status: 'APPROVED' } },
-      select: { barcode: true },
-    });
-    const approvedBarcodes = new Set(approvedCostVariantIds.map((v) => v.barcode));
-
     const passivatedMissing = await this.prisma.trendyolProductVariant.updateMany({
-      where: { status: 'ACTIVE', barcode: { notIn: [...byBarcode.keys(), ...approvedBarcodes] } },
+      where: { status: 'ACTIVE', barcode: { notIn: [...byBarcode.keys()] } },
       data: { status: 'PASSIVE' },
     });
 
