@@ -146,7 +146,7 @@ export class ProductionCostsService {
         this.logger.warn(`Trendyol katalog senkronu: HTTP ${response.status} (sayfa ${page})`);
         break;
       }
-      const body = await response.json() as { totalPages?: number; totalElements?: number; content?: unknown[] };
+      const body = await response.json() as { totalPages?: number; totalElements?: number; content?: Array<Record<string, unknown>> };
       totalPages = body.totalPages ?? 1;
       for (const item of body.content ?? []) {
         items.push({
