@@ -480,7 +480,7 @@ export class ProductionCostsService {
   async listVariants() {
     const [variants, orderCounts] = await Promise.all([
       this.prisma.trendyolProductVariant.findMany({
-        where: { status: 'ACTIVE' },
+        where: { status: 'ACTIVE', stockQuantity: { gt: 0 } },
         include: {
           family: true,
           sizeOption: true,
