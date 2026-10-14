@@ -1,7 +1,8 @@
+import type { ReactNode } from 'react'
 import Link from 'next/link'
 import { readSiteConfig } from '@/lib/site-config'
 
-const PATTERNS: Record<string, React.ReactNode> = {
+const PATTERNS: Record<string, ReactNode> = {
   agaclar: (
     <svg className="absolute inset-0 w-full h-full opacity-10" viewBox="0 0 400 300" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
       <circle cx="350" cy="50" r="120" fill="#7AB88A"/>
@@ -21,7 +22,7 @@ const PATTERNS: Record<string, React.ReactNode> = {
   ),
 }
 
-const DEFAULT_PATTERN = (
+const DEFAULT_PATTERN: ReactNode = (
   <svg className="absolute inset-0 w-full h-full opacity-10" viewBox="0 0 400 300" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
     <circle cx="300" cy="150" r="100" fill="#7AB88A"/>
     <circle cx="100" cy="200" r="70" fill="#5C7A62"/>
