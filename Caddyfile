@@ -59,10 +59,6 @@ api.erhanflowers.com, api.florayapaycicek.com {
 
     reverse_proxy backend:8001
 
-    header @from-erp Access-Control-Allow-Origin "https://erp.erhanflowers.com"
-    header @from-erp-old Access-Control-Allow-Origin "https://erp.florayapaycicek.com"
-    header Access-Control-Allow-Credentials "true"
-
     request_body {
         max_size 500MB
     }
