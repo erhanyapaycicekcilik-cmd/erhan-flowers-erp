@@ -142,14 +142,11 @@ export class ProductionCostsService {
     const items: TrendyolCatalogProduct[] = [];
     while (page < totalPages) {
       const response = await fetch(`${apiUrl}/product/sellers/${supplierId}/products?page=${page}&size=${size}`, { headers });
-      const responseText = await response.text();
       if (!response.ok) {
-        this.logger.warn(`Trendyol katalog senkronu: HTTP ${response.status} (sayfa ${page}) - ${responseText.slice(0, 200)}`);
+        this.logger.warn(`Trendyol katalog senkronu: HTTP ${response.status} (sayfa ${page})`);
         break;
       }
-      this.logger.log(`Trendyol ham yanıt (sayfa ${page}, ilk 500 karakter): ${responseText.slice(0, 500)}`);
-      const body = JSON.parse(responseText);
-      this.logger.log(`Trendyol sayfa ${page}: totalPages=${body.totalPages}, totalElements=${body.totalElements}, content=${body.content?.length ?? 0} ürün`);
+      const body = await response.json() as { totalPages?: number; totalElements?: number; content?: unknown[] };
       totalPages = body.totalPages ?? 1;
       for (const item of body.content ?? []) {
         items.push({
