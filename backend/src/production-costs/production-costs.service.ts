@@ -73,6 +73,9 @@ export class ProductionCostsService {
     }
 
     const catalog = await this.fetchTrendyolCatalog(apiUrl, supplierId, apiKey, apiSecret);
+    if (catalog.length === 0) {
+      throw new BadRequestException('Trendyol API 0 ürün döndürdü — senkronizasyon iptal edildi (veri kaybı önlendi).');
+    }
     const byBarcode = new Map(catalog.map((item) => [item.barcode, item]));
     const liveBarcodes = new Set(catalog.filter((item) => !item.archived).map((item) => item.barcode));
 
