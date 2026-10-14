@@ -52,6 +52,13 @@ export interface SiteConfig {
   mekanlar: MekanItem[]
   // Promo bannerlar
   promoBanners: PromoBannerItem[]
+  // EFT / Havale bilgileri
+  ibanBanka: string
+  ibanNo: string
+  ibanHesapSahibi: string
+  ibanSwift: string
+  // Online ödeme (iyzico)
+  iyzicoAktif: boolean
 }
 
 export const DEFAULT_CONFIG: SiteConfig = {
@@ -84,6 +91,11 @@ export const DEFAULT_CONFIG: SiteConfig = {
     { id: 'agaclar', title: 'Yapay Ağaçlar', subtitle: 'Salonunuza doğal dokunuş', desc: 'Benjamin, zeytin, palmiye ve daha fazlası', href: '/urunler?kategori=yapay-agac', cta: 'Koleksiyonu Keşfet', bg: '#1A2E1C', active: true },
     { id: 'dikey-bahce', title: 'Dikey Bahçe', subtitle: 'Duvarlarınızı yeşile boyayın', desc: 'Yapay panel sistemleri, balkon ve ofis için', href: '/urunler?kategori=dikey-bahce', cta: 'İncele', bg: '#0D1510', active: true },
   ],
+  ibanBanka: process.env.IBAN_BANKA || 'Yapı Kredi Bankası',
+  ibanNo: process.env.IBAN_NO || 'TR__ ____ ____ ____ ____ ____ __',
+  ibanHesapSahibi: process.env.IBAN_HESAP_SAHIBI || 'ERHAN FLOWERS ÇİÇEKÇİLİK ELEKTRONİK TİCARET VE SANAYİ LİMİTED ŞİRKETİ',
+  ibanSwift: process.env.IBAN_SWIFT || '',
+  iyzicoAktif: !!(process.env.IYZICO_API_KEY && process.env.IYZICO_SECRET_KEY),
 }
 
 export function readSiteConfig(): SiteConfig {

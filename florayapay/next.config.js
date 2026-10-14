@@ -95,9 +95,18 @@ const nextConfig = {
       // ERP API (production)
       {
         protocol: 'https',
+        hostname: 'api.erhanflowers.com',
+      },
+      {
+        protocol: 'https',
         hostname: 'api.florayapaycicek.com',
       },
       // ERP upload server (local dev)
+      {
+        protocol: 'http',
+        hostname: 'localhost',
+        port: '8001',
+      },
       {
         protocol: 'http',
         hostname: 'localhost',
@@ -136,7 +145,7 @@ const nextConfig = {
 
   // Env değişkenleri (public olanlar NEXT_PUBLIC_ prefix ile)
   env: {
-    SITE_URL: process.env.SITE_URL || 'https://florayapaycicek.com',
+    SITE_URL: process.env.SITE_URL || 'https://www.erhanflowers.com',
   },
 }
 

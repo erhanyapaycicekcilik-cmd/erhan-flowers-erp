@@ -64,6 +64,15 @@ services:
       INSTAGRAM_ACCESS_TOKEN: ${INSTAGRAM_ACCESS_TOKEN:-}
       NEXT_PUBLIC_GTM_ID: ${GTM_ID:-}
       NEXT_PUBLIC_GA_ID: ${GA_ID:-}
+      # EFT / Havale banka bilgileri
+      IBAN_BANKA: ${IBAN_BANKA:-Yapı Kredi Bankası}
+      IBAN_NO: ${IBAN_NO:-}
+      IBAN_HESAP_SAHIBI: ${IBAN_HESAP_SAHIBI:-ERHAN FLOWERS ÇİÇEKÇİLİK ELEKTRONİK TİCARET VE SANAYİ LİMİTED ŞİRKETİ}
+      IBAN_SWIFT: ${IBAN_SWIFT:-}
+      # Online ödeme — iyzico (boş bırakılırsa kart ödeme seçeneği gizlenir)
+      IYZICO_API_KEY: ${IYZICO_API_KEY:-}
+      IYZICO_SECRET_KEY: ${IYZICO_SECRET_KEY:-}
+      IYZICO_BASE_URL: ${IYZICO_BASE_URL:-https://api.iyzipay.com}
     volumes:
       - florayapay_banner:/app/data
 

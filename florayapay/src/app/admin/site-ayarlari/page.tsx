@@ -12,6 +12,10 @@ interface SiteSettings {
   workingHours: string
   instagramHandle: string
   facebookUrl: string
+  ibanBanka: string
+  ibanNo: string
+  ibanHesapSahibi: string
+  ibanSwift: string
 }
 
 export default function SiteAyarlari() {
@@ -24,6 +28,10 @@ export default function SiteAyarlari() {
     workingHours: '',
     instagramHandle: '',
     facebookUrl: '',
+    ibanBanka: '',
+    ibanNo: '',
+    ibanHesapSahibi: '',
+    ibanSwift: '',
   })
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -42,6 +50,10 @@ export default function SiteAyarlari() {
           workingHours: cfg.workingHours ?? '',
           instagramHandle: cfg.instagramHandle ?? '',
           facebookUrl: cfg.facebookUrl ?? '',
+          ibanBanka: cfg.ibanBanka ?? '',
+          ibanNo: cfg.ibanNo ?? '',
+          ibanHesapSahibi: cfg.ibanHesapSahibi ?? '',
+          ibanSwift: cfg.ibanSwift ?? '',
         })
         setLoading(false)
       })
@@ -127,6 +139,49 @@ export default function SiteAyarlari() {
               onChange={e => setForm(f => ({ ...f, workingHours: e.target.value }))}
               className="w-full border border-[#D6D2C4] rounded-xl px-4 py-2.5 text-sm text-[#0D1510] focus:outline-none focus:border-[#5C7A62]"
               placeholder="Pzt–Cum 09:00–18:00"
+            />
+          </div>
+        </div>
+
+        {/* IBAN / EFT Bilgileri */}
+        <div className="border-t border-[#E0DDD4] pt-6">
+          <p className="text-xs font-semibold uppercase tracking-widest text-[#5C7A62] mb-4">EFT / Havale Banka Bilgileri</p>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-widest text-[#8C8A82] mb-2">Banka Adı</label>
+              <input
+                value={form.ibanBanka}
+                onChange={e => setForm(f => ({ ...f, ibanBanka: e.target.value }))}
+                className="w-full border border-[#D6D2C4] rounded-xl px-4 py-2.5 text-sm text-[#0D1510] focus:outline-none focus:border-[#5C7A62]"
+                placeholder="Yapı Kredi Bankası"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-widest text-[#8C8A82] mb-2">SWIFT / BIC</label>
+              <input
+                value={form.ibanSwift}
+                onChange={e => setForm(f => ({ ...f, ibanSwift: e.target.value }))}
+                className="w-full border border-[#D6D2C4] rounded-xl px-4 py-2.5 text-sm text-[#0D1510] focus:outline-none focus:border-[#5C7A62]"
+                placeholder="YAPITRISXXX"
+              />
+            </div>
+          </div>
+          <div className="mt-4">
+            <label className="block text-xs font-semibold uppercase tracking-widest text-[#8C8A82] mb-2">IBAN Numarası</label>
+            <input
+              value={form.ibanNo}
+              onChange={e => setForm(f => ({ ...f, ibanNo: e.target.value }))}
+              className="w-full border border-[#D6D2C4] rounded-xl px-4 py-2.5 text-sm font-mono text-[#0D1510] focus:outline-none focus:border-[#5C7A62]"
+              placeholder="TR00 0000 0000 0000 0000 0000 00"
+            />
+          </div>
+          <div className="mt-4">
+            <label className="block text-xs font-semibold uppercase tracking-widest text-[#8C8A82] mb-2">Hesap Sahibi Unvanı</label>
+            <input
+              value={form.ibanHesapSahibi}
+              onChange={e => setForm(f => ({ ...f, ibanHesapSahibi: e.target.value }))}
+              className="w-full border border-[#D6D2C4] rounded-xl px-4 py-2.5 text-sm text-[#0D1510] focus:outline-none focus:border-[#5C7A62]"
+              placeholder="ERHAN FLOWERS ÇİÇEKÇİLİK..."
             />
           </div>
         </div>
