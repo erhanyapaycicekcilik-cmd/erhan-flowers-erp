@@ -1,4 +1,5 @@
-import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Header, NotFoundException, Param, Post, Query, Res, UseGuards } from '@nestjs/common';
+import { Response } from 'express';
 
 import { AuthGuard } from '../auth/auth.guard';
 import { PublicCatalogService } from './public-catalog.service';
@@ -89,5 +90,40 @@ export class PublicCatalogController {
       return { error: 'Unauthorized' };
     }
     return this.trendyolSync.syncNow();
+  }
+
+  // Meta/WhatsApp Commerce Manager ürün kataloğu feed'i (CSV)
+  @Get('meta-feed')
+  async metaCatalogFeed(@Res() res: Response) {
+    const siteUrl = process.env.SITE_URL || 'https://www.erhanflowers.com';
+    const { products } = await this.catalog.listProducts({ limit: 2000, page: 1 });
+
+    const escapeCsv = (v: string | number | null | undefined) => {
+      const s = String(v ?? '');
+      return s.includes('"') || s.includes(',') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+
+    const headers = ['id', 'title', 'description', 'availability', 'condition', 'price', 'link', 'image_link', 'brand', 'retailer_id'];
+    const rows = (products as any[])
+      .filter((p) => p.mainImage && p.sitePrice > 0)
+      .map((p) => [
+        escapeCsv(p.id),
+        escapeCsv(p.name),
+        escapeCsv(p.description || p.name),
+        escapeCsv(p.inStock ? 'in stock' : 'out of stock'),
+        'new',
+        escapeCsv(`${Number(p.sitePrice).toFixed(2)} TRY`),
+        escapeCsv(`${siteUrl}/urun/${p.slug}`),
+        escapeCsv(p.mainImage),
+        escapeCsv(p.brand || 'Flora Yapay Çiçek'),
+        escapeCsv(p.modelCode || p.id),
+      ].join(','));
+
+    const csv = [headers.join(','), ...rows].join('\n');
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
+    res.setHeader('Content-Disposition', 'inline; filename="meta-catalog.csv"');
+    res.send(csv);
   }
 }
