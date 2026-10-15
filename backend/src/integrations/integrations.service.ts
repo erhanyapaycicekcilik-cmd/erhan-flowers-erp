@@ -528,7 +528,14 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
               'quantity', i.quantity,
               'unitPrice', i.unit_price,
               'lineTotal', i.line_total,
-              'imagePath', COALESCE(sc.image_path, sc.external_image_url, i.external_image_url, tpv.images->>0),
+              'imagePath', COALESCE(
+                sc.image_path,
+                (SELECT sci.file_path FROM stock_card_images sci WHERE sci.stock_card_id = sc.id AND sci.is_main = true LIMIT 1),
+                (SELECT sci.file_path FROM stock_card_images sci WHERE sci.stock_card_id = sc.id ORDER BY sci.id LIMIT 1),
+                sc.external_image_url,
+                i.external_image_url,
+                (SELECT url FROM jsonb_array_elements_text(CASE WHEN jsonb_typeof(tpv.images) = 'array' THEN tpv.images ELSE '[]'::jsonb END) AS url LIMIT 1)
+              ),
               'color', sc.color,
               'trendyolUrl', tpv.trendyol_product_url
             )
