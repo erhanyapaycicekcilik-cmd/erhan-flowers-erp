@@ -71,7 +71,7 @@ export async function InstagramFeed() {
               >
                 <Image
                   src={post.imageUrl}
-                  alt={post.caption?.slice(0, 80) || 'Flora Yapay Çiçek Instagram'}
+                  alt={post.caption?.slice(0, 80) || 'Erhan Flowers Instagram'}
                   fill
                   className="object-cover group-hover:scale-105 transition-transform duration-300"
                   sizes="(max-width: 640px) 33vw, (max-width: 1024px) 25vw, 20vw"

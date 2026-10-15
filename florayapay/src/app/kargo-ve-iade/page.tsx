@@ -4,7 +4,7 @@ import { Footer } from '@/components/layout/Footer'
 
 export const metadata: Metadata = {
   title: 'Kargo, İade & Değişim',
-  description: '14 gün iade garantisi. Flora Yapay Çiçek kargo, iade ve değişim koşulları.',
+  description: '14 gün iade garantisi. Erhan Flowers kargo, iade ve değişim koşulları.',
 }
 
 const sections = [

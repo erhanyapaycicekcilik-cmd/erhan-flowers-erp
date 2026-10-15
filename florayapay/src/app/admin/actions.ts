@@ -35,7 +35,7 @@ export async function createProduct(form: FormData) {
     categoryId: form.get('categoryId') ? Number(form.get('categoryId')) : null,
     sitePrice: Number(form.get('sitePrice')),
     originalPrice: form.get('originalPrice') ? Number(form.get('originalPrice')) : null,
-    brand: form.get('brand') || 'Flora Yapay Çiçek',
+    brand: form.get('brand') || 'Erhan Flowers',
     description: form.get('description') || null,
     origin: form.get('origin') || 'ÇİN',
     vatRate: Number(form.get('vatRate')) || 10,

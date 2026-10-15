@@ -5,7 +5,7 @@ import { Footer } from '@/components/layout/Footer'
 
 export const metadata: Metadata = {
   title: 'Sipariş Alındı',
-  description: 'Siparişiniz başarıyla alındı. Flora Yapay Çiçek ekibi en kısa sürede sizinle iletişime geçecek.',
+  description: 'Siparişiniz başarıyla alındı. Erhan Flowers ekibi en kısa sürede sizinle iletişime geçecek.',
   robots: { index: false, follow: false },
 }
 

@@ -4,7 +4,7 @@ import { Footer } from '@/components/layout/Footer'
 
 export const metadata: Metadata = {
   title: 'İletişim',
-  description: 'Flora Yapay Çiçek ile iletişime geçin. Telefon, WhatsApp veya e-posta ile 7/24 ulaşabilirsiniz.',
+  description: 'Erhan Flowers ile iletişime geçin. Telefon, WhatsApp veya e-posta ile 7/24 ulaşabilirsiniz.',
 }
 
 export default function IletisimPage() {
@@ -31,7 +31,7 @@ export default function IletisimPage() {
             </a>
 
             {/* WhatsApp */}
-            <a href="https://wa.me/905446546220?text=Merhaba!%20Flora%20Yapay%20%C3%87i%C3%A7ek%20hakkında%20bilgi%20almak%20istiyorum."
+            <a href="https://wa.me/905446546220?text=Merhaba!%20Erhan%20Flowers%20hakkında%20bilgi%20almak%20istiyorum."
               target="_blank" rel="noopener noreferrer"
               className="bg-white rounded-2xl p-8 border border-[#E0DDD4] hover:shadow-md transition-shadow flex items-start gap-5">
               <span className="text-3xl">💬</span>
@@ -80,7 +80,7 @@ export default function IletisimPage() {
                 allowFullScreen
                 loading="lazy"
                 referrerPolicy="no-referrer-when-downgrade"
-                title="Flora Yapay Çiçek Konum — Manavgat/Antalya"
+                title="Erhan Flowers Konum — Manavgat/Antalya"
               />
             </div>
             <div className="p-4 flex gap-3">
@@ -109,7 +109,7 @@ export default function IletisimPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm text-[#5C5C52]">
               <div>
                 <span className="font-medium text-[#0D1510]">Ticari Unvan:</span>
-                <p>Flora Yapay Çiçek / Erhan Yapay Çiçekçilik</p>
+                <p>Erhan Flowers / Erhan Yapay Çiçekçilik</p>
               </div>
               <div>
                 <span className="font-medium text-[#0D1510]">Telefon:</span>

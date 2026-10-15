@@ -48,7 +48,7 @@ export async function GET() {
         const description = escapeXml(p.description || p.name)
         const price = p.sitePrice.toFixed(2)
         const availability = p.inStock ? 'in_stock' : 'out_of_stock'
-        const brand = escapeXml(p.brand || 'Flora Yapay Çiçek')
+        const brand = escapeXml(p.brand || 'Erhan Flowers')
         const gCategory = CATEGORY_MAP[p.categorySlug ?? ''] ?? '5886'
 
         return `    <item>
@@ -70,9 +70,9 @@ export async function GET() {
     const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0" xmlns:g="http://base.google.com/ns/1.0">
   <channel>
-    <title>Flora Yapay Çiçek — Yapay Çiçek &amp; Dekorasyon</title>
+    <title>Erhan Flowers — Yapay Çiçek &amp; Dekorasyon</title>
     <link>${SITE_URL}</link>
-    <description>Flora Yapay Çiçek ürün kataloğu</description>
+    <description>Erhan Flowers ürün kataloğu</description>
 ${items}
   </channel>
 </rss>`
