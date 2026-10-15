@@ -52,7 +52,7 @@ export function HeroSection() {
   if (!slide) return null
 
   return (
-    <section className="relative h-[55vh] min-h-[380px] max-h-[520px] overflow-hidden">
+    <section className="relative h-[38vh] min-h-[260px] max-h-[360px] overflow-hidden">
       {slides.map((s, i) => (
         <div
           key={s.id}
@@ -78,11 +78,11 @@ export function HeroSection() {
             <p className="text-xs uppercase tracking-[0.3em] text-white/70 mb-4">
               {slide.tag}
             </p>
-            <h1 className="font-display text-5xl md:text-6xl font-light text-white leading-none tracking-tight mb-4">
+            <h1 className="font-display text-3xl md:text-4xl font-light text-white leading-none tracking-tight mb-3">
               {slide.title}<br />
               <em className="not-italic text-[#8FBF97]">{slide.accent}</em>
             </h1>
-            <p className="text-white/75 text-base md:text-lg max-w-md mb-8 leading-relaxed">
+            <p className="text-white/75 text-sm md:text-base max-w-md mb-5 leading-relaxed">
               {slide.description}
             </p>
             <div className="flex items-center gap-4 flex-wrap">

@@ -49,13 +49,10 @@ function AnnouncementBar() {
 
 const navLinks = [
   { href: '/urunler', label: 'Tüm Ürünler' },
-  { href: '/urunler?kategori=yapay-agac-yesil', label: 'Yapay Ağaç' },
-  { href: '/urunler?kategori=yapay-agac-renkli', label: 'Renkli Ağaç' },
+  { href: '/urunler?kategori=yapay-agac', label: 'Yapay Ağaçlar' },
   { href: '/urunler?kategori=bambu', label: 'Bambu' },
   { href: '/urunler?kategori=cicekler', label: 'Çiçekler' },
-  { href: '/urunler?kategori=separator', label: 'Separatör' },
-  { href: '/urunler?kategori=dikey-bahce', label: 'Dikey Bahçe' },
-  { href: '/urunler?kategori=duvar-dekor', label: 'Duvar Dekor' },
+  { href: '/urunler?kategori=dekorasyon', label: 'Dekorasyon' },
 ]
 
 const extraLinks = [
