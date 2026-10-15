@@ -34,7 +34,7 @@ export async function GET() {
         const availability = p.inStock ? 'in stock' : 'out of stock'
         const link = `${SITE_URL}/urun/${p.slug}`
         const description = p.description || p.name
-        const brand = p.brand || 'Flora Yapay Çiçek'
+        const brand = p.brand || 'Erhan Flowers'
 
         return [
           escapeCsv(p.id),

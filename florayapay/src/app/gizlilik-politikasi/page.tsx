@@ -4,7 +4,7 @@ import { Footer } from '@/components/layout/Footer'
 
 export const metadata: Metadata = {
   title: 'Gizlilik Politikası & KVKK Aydınlatma Metni',
-  description: 'Flora Yapay Çiçek kişisel verilerin korunması (KVKK) politikası ve gizlilik ilkeleri.',
+  description: 'Erhan Flowers kişisel verilerin korunması (KVKK) politikası ve gizlilik ilkeleri.',
 }
 
 export default function GizlilikPolitikasiPage() {
@@ -25,11 +25,11 @@ export default function GizlilikPolitikasiPage() {
               <h2 className="font-semibold text-[#0D1510] text-base mb-3">1. Veri Sorumlusu</h2>
               <p>
                 6698 sayılı Kişisel Verilerin Korunması Kanunu (&ldquo;KVKK&rdquo;) uyarınca kişisel verileriniz; veri
-                sorumlusu sıfatıyla <strong>Flora Yapay Çiçek / Erhan Yapay Çiçekçilik</strong> tarafından aşağıda
+                sorumlusu sıfatıyla <strong>Erhan Flowers / Erhan Yapay Çiçekçilik</strong> tarafından aşağıda
                 açıklanan kapsamda işlenebilecektir.
               </p>
               <div className="mt-3 bg-[#F4F2EC] rounded-xl p-4 text-xs space-y-1">
-                <p><strong>Unvan:</strong> Flora Yapay Çiçek / Erhan Yapay Çiçekçilik</p>
+                <p><strong>Unvan:</strong> Erhan Flowers / Erhan Yapay Çiçekçilik</p>
                 <p><strong>Adres:</strong> Sarılar Mah. Cumhuriyet Cd. 2038 Sk. No:52/1/2, 07600 Manavgat/Antalya</p>
                 <p><strong>E-posta:</strong> erhanyapaycicekcilik@gmail.com</p>
                 <p><strong>Telefon:</strong> 0544 654 62 20</p>

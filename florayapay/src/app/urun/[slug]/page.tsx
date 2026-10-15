@@ -38,7 +38,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     alternates: { canonical: `/urun/${params.slug}` },
     openGraph: {
       title: product.name,
-      description: product.description?.slice(0, 200) || `${product.name} — Flora Yapay Çiçek`,
+      description: product.description?.slice(0, 200) || `${product.name} — Erhan Flowers`,
       images: [{ url: imageUrl, width: 800, height: 800, alt: product.name }],
       type: 'website',
     },

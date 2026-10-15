@@ -13,11 +13,11 @@ export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
 
   title: {
-    default: 'Flora Yapay Çiçek | Kaliteli Yapay Çiçek & Dekorasyon',
-    template: '%s | Flora Yapay Çiçek',
+    default: 'Erhan Flowers | Kaliteli Yapay Çiçek & Dekorasyon',
+    template: '%s | Erhan Flowers',
   },
   description:
-    'Flora Yapay Çiçek — Türkiye\'nin en kaliteli yapay çiçek ve bitki dekorasyonları. Solmayan güzellik, ömür boyu zarafet. Hızlı kargo, kolay iade.',
+    'Erhan Flowers — Türkiye\'nin en kaliteli yapay çiçek ve bitki dekorasyonları. Solmayan güzellik, ömür boyu zarafet. Hızlı kargo, kolay iade.',
 
   keywords: [
     'yapay çiçek', 'yapay çiçek antalya', 'yapay çiçek manavgat',
@@ -45,15 +45,15 @@ export const metadata: Metadata = {
         url: '/logo.png',
         width: 800,
         height: 400,
-        alt: 'Flora Yapay Çiçek — Kaliteli Yapay Çiçek',
+        alt: 'Erhan Flowers — Kaliteli Yapay Çiçek',
       },
     ],
   },
 
   twitter: {
     card: 'summary_large_image',
-    title: 'Flora Yapay Çiçek | Kaliteli Yapay Çiçek & Dekorasyon',
-    description: 'Flora Yapay Çiçek — Türkiye\'nin en kaliteli yapay çiçek dekorasyonları.',
+    title: 'Erhan Flowers | Kaliteli Yapay Çiçek & Dekorasyon',
+    description: 'Erhan Flowers — Türkiye\'nin en kaliteli yapay çiçek dekorasyonları.',
     images: ['/logo.png'],
   },
 
@@ -73,9 +73,9 @@ export const metadata: Metadata = {
     google: process.env.GOOGLE_SITE_VERIFICATION || '',
   },
 
-  authors: [{ name: 'Flora Yapay Çiçek' }],
-  creator: 'Flora Yapay Çiçek',
-  publisher: 'Flora Yapay Çiçek',
+  authors: [{ name: 'Erhan Flowers' }],
+  creator: 'Erhan Flowers',
+  publisher: 'Erhan Flowers',
   category: 'E-Ticaret / Ev Dekorasyonu',
 }
 

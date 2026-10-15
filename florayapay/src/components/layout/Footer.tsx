@@ -11,7 +11,7 @@ export function Footer() {
           {/* Marka */}
           <div className="md:col-span-1">
             <Link href="/" className="font-display text-2xl font-light text-[#EAE6DC] block mb-3 tracking-wide">
-              Flora<em className="not-italic text-[#8BAF8A]"> Yapay Çiçek</em>
+              Erhan<em className="not-italic text-[#8BAF8A]"> Flowers</em>
             </Link>
             <p className="text-sm leading-relaxed text-[#8C8A82]">
               Kaliteli yapay çiçek ve dekorasyon ürünleriyle yaşam alanlarınızı güzelleştiriyoruz.
@@ -92,7 +92,7 @@ export function Footer() {
 
         {/* Alt bar */}
         <div className="border-t border-[#1E3A28] mt-10 pt-6 flex flex-col md:flex-row justify-between items-center gap-4 text-sm text-[#8C8A82]">
-          <p>© {year} Flora Yapay Çiçek. Tüm hakları saklıdır.</p>
+          <p>© {year} Erhan Flowers. Tüm hakları saklıdır.</p>
           <div className="flex items-center gap-4">
             <span className="flex items-center gap-1 text-xs">
               🔒 SSL Güvenli Ödeme

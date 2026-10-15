@@ -30,7 +30,7 @@ function LoginForm() {
       <div className="w-full max-w-sm">
         <div className="text-center mb-10">
           <p className="text-xs uppercase tracking-[0.3em] text-[#8C8A82] mb-2">Yönetim Paneli</p>
-          <h1 className="font-display text-3xl font-light text-[#0D1510]">Flora<em className="not-italic text-[#5C7A62]"> Yapay Çiçek</em></h1>
+          <h1 className="font-display text-3xl font-light text-[#0D1510]">Erhan<em className="not-italic text-[#5C7A62]"> Flowers</em></h1>
         </div>
 
         <form onSubmit={handleSubmit} className="bg-white rounded-3xl p-8 shadow-sm border border-[#E0DDD4]">

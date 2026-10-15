@@ -5,7 +5,7 @@ const SITE_URL = process.env.SITE_URL || 'https://www.erhanflowers.com'
 export const organizationSchema = {
   '@context': 'https://schema.org',
   '@type': 'Organization',
-  name: 'Flora Yapay Çiçek',
+  name: 'Erhan Flowers',
   url: SITE_URL,
   logo: `${SITE_URL}/logo.png`,
   contactPoint: {
@@ -32,7 +32,7 @@ export const organizationSchema = {
 export const websiteSchema = {
   '@context': 'https://schema.org',
   '@type': 'WebSite',
-  name: 'Flora Yapay Çiçek',
+  name: 'Erhan Flowers',
   url: SITE_URL,
   potentialAction: {
     '@type': 'SearchAction',
@@ -47,7 +47,7 @@ export const websiteSchema = {
 export const localBusinessSchema = {
   '@context': 'https://schema.org',
   '@type': ['LocalBusiness', 'Florist'],
-  name: 'Flora Yapay Çiçek',
+  name: 'Erhan Flowers',
   alternateName: ['Erhan Flowers', 'Erhan Yapay Çiçek', 'Flora Çiçek Manavgat'],
   description: 'Manavgat ve Antalya\'da yapay çiçek, yapay ağaç, aranjman, dikey bahçe ve saksılı bitki dekorasyon ürünleri.',
   url: SITE_URL,
@@ -83,7 +83,7 @@ export const localBusinessSchema = {
       closes: '17:00',
     },
   ],
-  hasMap: 'https://maps.google.com/?q=Flora+Yapay+Çiçek+Manavgat',
+  hasMap: 'https://maps.google.com/?q=Erhan+Flowers+Manavgat',
   areaServed: [
     { '@type': 'City', name: 'Manavgat' },
     { '@type': 'City', name: 'Antalya' },
@@ -118,7 +118,7 @@ export function productSchema(product: {
     sku: product.sku,
     brand: {
       '@type': 'Brand',
-      name: product.brand || 'Flora Yapay Çiçek',
+      name: product.brand || 'Erhan Flowers',
     },
     offers: {
       '@type': 'Offer',
@@ -128,7 +128,7 @@ export function productSchema(product: {
       availability: `https://schema.org/${product.availability || 'InStock'}`,
       seller: {
         '@type': 'Organization',
-        name: 'Flora Yapay Çiçek',
+        name: 'Erhan Flowers',
       },
     },
     ...(product.ratingValue && product.reviewCount

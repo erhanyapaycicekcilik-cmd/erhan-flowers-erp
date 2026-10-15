@@ -12,7 +12,7 @@ import { SocialProofBar } from '@/components/home/SocialProofBar'
 import { InstagramFeed } from '@/components/home/InstagramFeed'
 
 export const metadata: Metadata = {
-  title: { absolute: 'Flora Yapay Çiçek | Yapay Çiçek, Aranjman & Dekorasyon — Manavgat, Antalya' },
+  title: { absolute: 'Erhan Flowers | Yapay Çiçek, Aranjman & Dekorasyon — Manavgat, Antalya' },
   description:
     'Manavgat & Antalya\'nın en kaliteli yapay çiçek ve bitki mağazası. Yapay ağaç, bambu, orkide, dikey bahçe, aranjman ve saksılı bitkiler. Hızlı kargo, kolay iade.',
   keywords: [
@@ -26,10 +26,10 @@ export const metadata: Metadata = {
     canonical: '/',
   },
   openGraph: {
-    title: 'Flora Yapay Çiçek — Yapay Çiçek & Aranjman, Manavgat Antalya',
+    title: 'Erhan Flowers — Yapay Çiçek & Aranjman, Manavgat Antalya',
     description: 'Manavgat & Antalya\'nın en kaliteli yapay çiçek mağazası. Yapay ağaç, orkide, aranjman, saksılı bitkiler. Hızlı kargo.',
     url: 'https://www.erhanflowers.com',
-    siteName: 'Flora Yapay Çiçek',
+    siteName: 'Erhan Flowers',
     locale: 'tr_TR',
     type: 'website',
   },

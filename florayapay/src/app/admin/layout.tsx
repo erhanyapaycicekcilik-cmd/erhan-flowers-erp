@@ -8,7 +8,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       <header className="bg-[#0D1510] text-[#F4F2EC] px-6 py-3 flex items-center justify-between">
         <div className="flex items-center gap-6">
           <Link href="/admin" className="font-display text-lg font-light">
-            Flora<em className="not-italic text-[#7AB88A]">Admin</em>
+            Erhan<em className="not-italic text-[#7AB88A]">Admin</em>
           </Link>
           <nav className="hidden md:flex items-center gap-1">
             <Link href="/admin" className="px-3 py-1.5 rounded-lg text-sm hover:bg-white/10 transition-colors">
