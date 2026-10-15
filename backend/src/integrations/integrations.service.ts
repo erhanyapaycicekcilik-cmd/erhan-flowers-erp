@@ -554,7 +554,7 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
       LEFT JOIN stock_cards sc ON sc.id = i.stock_card_id
         OR (i.stock_card_id IS NULL AND i.barcode IS NOT NULL AND sc.barcode = i.barcode)
         OR (i.stock_card_id IS NULL AND i.model_code IS NOT NULL AND sc.sku = i.model_code)
-      LEFT JOIN trendyol_product_variants tpv ON tpv.barcode = i.barcode
+      LEFT JOIN trendyol_product_variants tpv ON tpv.barcode = COALESCE(i.barcode, sc.barcode)
       WHERE s.integration_sync_status <> 'MANUAL'
         AND (${companyCode} = '' OR co.code = ${companyCode})
         AND (${platform} = '' OR s.channel::text = ${platform})
