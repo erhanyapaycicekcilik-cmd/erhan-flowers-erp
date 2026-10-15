@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001'
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8101'
 const SITE_URL = process.env.SITE_URL || 'https://www.erhanflowers.com'
 
 function escapeCsv(value: string | number | null | undefined): string {
