@@ -1,5 +1,11 @@
 # Flora E-Ticaret Sitesi — Ana domain: erhanflowers.com
 erhanflowers.com, www.erhanflowers.com {
+    # Meta/WhatsApp katalog feed — backend'den servis edilir
+    handle /feed/meta-catalog {
+        rewrite * /public/catalog/meta-feed
+        reverse_proxy backend:8001
+    }
+
     reverse_proxy florayapay:3200
 
     header {
