@@ -73,6 +73,7 @@ services:
       IYZICO_API_KEY: ${IYZICO_API_KEY:-}
       IYZICO_SECRET_KEY: ${IYZICO_SECRET_KEY:-}
       IYZICO_BASE_URL: ${IYZICO_BASE_URL:-https://api.iyzipay.com}
+      INTERNAL_API_URL: http://backend:8001
     volumes:
       - florayapay_banner:/app/data
 

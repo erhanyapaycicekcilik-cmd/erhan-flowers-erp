@@ -68,6 +68,17 @@ const nextConfig = {
     ]
   },
 
+  // Meta katalog feed proxy — backend:8001'e yönlendirir (standalone build'de çalışır)
+  async rewrites() {
+    const internalApiUrl = process.env.INTERNAL_API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8101'
+    return [
+      {
+        source: '/feed/meta-catalog',
+        destination: `${internalApiUrl}/public/catalog/meta-feed`,
+      },
+    ]
+  },
+
   // Görseller için optimize edilmiş domain listesi
   images: {
     remotePatterns: [

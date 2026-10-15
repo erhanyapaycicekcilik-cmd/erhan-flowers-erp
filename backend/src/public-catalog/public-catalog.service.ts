@@ -162,7 +162,7 @@ export class PublicCatalogService {
     sort?: 'price_asc' | 'price_desc' | 'newest' | 'name';
   }) {
     const page = Math.max(1, params.page ?? 1);
-    const limit = Math.min(100, Math.max(1, params.limit ?? 48));
+    const limit = Math.min(2000, Math.max(1, params.limit ?? 48));
     const skip = (page - 1) * limit;
 
     const where: Record<string, unknown> = {
