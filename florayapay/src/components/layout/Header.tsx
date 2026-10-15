@@ -10,7 +10,7 @@ import { useCart } from '@/hooks/useCart'
 const DEFAULT_ANNOUNCEMENTS = [
   '🚚 1.000 TL ve üzeri ÜCRETSİZ kargo  ·  📞 0544 654 62 20',
   '⭐ Google\'da 4.9 yıldız — 127 yorum  ·  14 gün iade garantisi',
-  '🔥 Bu hafta 200+ sipariş gönderildi',
+  '🔥 Yüzlerce mutlu müşteri — Google\'da 4.9 yıldız',
   '💬 WhatsApp\'tan sipariş — anında yanıt',
   '🌿 Trendyol\'a göre %15 daha uygun fiyat',
 ]
@@ -53,7 +53,7 @@ const navLinks = [
   { href: '/urunler?kategori=yapay-agac-renkli', label: 'Renkli Ağaç' },
   { href: '/urunler?kategori=bambu', label: 'Bambu' },
   { href: '/urunler?kategori=cicekler', label: 'Çiçekler' },
-  { href: '/urunler?kategori=separator', label: 'Seperatör' },
+  { href: '/urunler?kategori=separator', label: 'Separatör' },
   { href: '/urunler?kategori=dikey-bahce', label: 'Dikey Bahçe' },
   { href: '/urunler?kategori=duvar-dekor', label: 'Duvar Dekor' },
 ]

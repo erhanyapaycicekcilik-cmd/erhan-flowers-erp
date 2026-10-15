@@ -54,7 +54,6 @@ export function Footer() {
                 { href: '/yapay-cicek-bakimi', label: 'Bakım Rehberi' },
                 { href: '/mekaninizi-gonderin', label: 'Mekanınızı Gönderin' },
                 { href: '/oneri-istek', label: 'Öneri & İstek' },
-                { href: '/doviz-kurlari', label: 'Döviz Kurları' },
                 { href: '/sss', label: 'Sık Sorulan Sorular' },
               ].map((link) => (
                 <li key={link.href}>
@@ -76,8 +75,8 @@ export function Footer() {
                 </a>
               </li>
               <li>
-                <a href="mailto:erhanyapaycicekcilik@gmail.com" className="hover:text-[#8BAF8A] transition-colors">
-                  ✉️ erhanyapaycicekcilik@gmail.com
+                <a href="/iletisim" className="hover:text-[#8BAF8A] transition-colors">
+                  ✉️ İletişim Formu
                 </a>
               </li>
               <li className="text-[#8C8A82] leading-relaxed">

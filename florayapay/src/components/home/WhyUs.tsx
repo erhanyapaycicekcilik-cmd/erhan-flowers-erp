@@ -33,7 +33,7 @@ export function WhyUs() {
             Neden Erhan Flowers?
           </h2>
           <p className="text-[#8C8A82] max-w-xl mx-auto">
-            Binlerce mutlu müşteri ve yıllarca süren deneyimle kaliteyi en uygun fiyata sunuyoruz.
+            Google'da 4.9 yıldız ve yıllarca süren deneyimle kaliteyi en uygun fiyata sunuyoruz.
           </p>
         </div>
 
