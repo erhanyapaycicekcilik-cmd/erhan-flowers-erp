@@ -16,8 +16,10 @@ COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
 ARG NEXT_PUBLIC_API_URL=https://api.florayapaycicek.com
 ARG SITE_URL=https://florayapaycicek.com
+ARG INTERNAL_API_URL=http://backend:8001
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ENV SITE_URL=$SITE_URL
+ENV INTERNAL_API_URL=$INTERNAL_API_URL
 RUN npm run build
 
 # Production runner
