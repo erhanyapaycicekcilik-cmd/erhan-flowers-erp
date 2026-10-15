@@ -563,7 +563,7 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
         AND (${cargoProvider} = '' OR s.cargo_provider ILIKE ${`%${cargoProvider}%`})
         AND (${startDate} = '' OR COALESCE(s.order_date, s.created_at)::date >= ${startDate}::date)
         AND (${endDate} = '' OR COALESCE(s.order_date, s.created_at)::date <= ${endDate}::date)
-      GROUP BY s.id, c.display_name, c.phone, c.customer_type, a.city, a.district, a.full_address, d.status, d.delivery_note, u.name
+      GROUP BY s.id, c.display_name, c.phone, c.customer_type, a.city, a.district, a.full_address, d.status, d.delivery_note, u.name, co.code, co.name
       ORDER BY ${orderBy}
       LIMIT ${take} OFFSET ${offset}
     `);
