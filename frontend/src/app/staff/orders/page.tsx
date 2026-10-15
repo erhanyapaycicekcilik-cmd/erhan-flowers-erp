@@ -31,6 +31,8 @@ type OrderRow = {
   orderDate?: string | null;
   deliveryDueAt?: string | null;
   cargoProvider?: string | null;
+  companyCode?: string | null;
+  companyName?: string | null;
   items: OrderItem[];
 };
 
@@ -39,6 +41,7 @@ const PLATFORMS = [
   { key: 'TRENDYOL', label: 'Trendyol' },
   { key: 'N11', label: 'N11' },
   { key: 'HEPSIBURADA', label: 'Hepsiburada' },
+  { key: 'WEBSITE', label: '🌐 Web Sitesi' },
 ];
 
 const STATUS_TABS = [
@@ -561,6 +564,11 @@ function OrderCard({ order, onStatusChange, readySection }: { order: OrderRow; o
             title="Trendyol'da görüntüle">
             <ExternalLink size={14} />
           </a>
+        )}
+        {(order.platform === 'WEBSITE' || order.companyCode === 'FLORA') && (
+          <span className="absolute bottom-2 left-2 text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-600 text-white shadow">
+            🌐 florayapaycicek.com
+          </span>
         )}
       </div>
 

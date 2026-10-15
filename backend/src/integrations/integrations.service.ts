@@ -510,6 +510,7 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
         s.cargo_provider AS "cargoProvider", s.cargo_tracking_number AS "cargoTrackingNumber",
         s.grand_total AS "grandTotal", s.subtotal, s.delivery_fee AS "deliveryFee", s.invoice_status AS "invoiceStatus",
         s.invoice_note AS "invoiceNote", s.cancelled_at AS "cancelledAt", s.internal_note AS "internalNote",
+        co.code AS "companyCode", co.name AS "companyName",
         c.display_name AS "customerName", c.phone, c.customer_type AS "customerType",
         a.city, a.district, a.full_address AS "fullAddress",
         d.status AS "deliveryStatus", d.delivery_note AS "deliveryNote",
@@ -538,6 +539,7 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
         ) AS items
       FROM retail_sales s
       JOIN retail_customers c ON c.id = s.customer_id
+      LEFT JOIN companies co ON co.id = s.company_id
       LEFT JOIN retail_customer_addresses a ON a.id = s.address_id
       LEFT JOIN retail_deliveries d ON d.sale_id = s.id
       LEFT JOIN users u ON u.id = s.cancelled_by_id
@@ -547,7 +549,7 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
         OR (i.stock_card_id IS NULL AND i.model_code IS NOT NULL AND sc.sku = i.model_code)
       LEFT JOIN trendyol_product_variants tpv ON tpv.barcode = i.barcode
       WHERE s.integration_sync_status <> 'MANUAL'
-        AND (${companyCode} = '' OR EXISTS (SELECT 1 FROM companies co WHERE co.id = s.company_id AND co.code = ${companyCode}))
+        AND (${companyCode} = '' OR co.code = ${companyCode})
         AND (${platform} = '' OR s.channel::text = ${platform})
         AND (${statuses.length} = 0 OR s.status::text IN (${Prisma.join(statuses.length ? statuses : ['__NONE__'])}))
         AND (${q} = '' OR s.sale_number ILIKE ${`%${q}%`} OR s.platform_order_number ILIKE ${`%${q}%`} OR c.display_name ILIKE ${`%${q}%`} OR c.phone ILIKE ${`%${q}%`})
