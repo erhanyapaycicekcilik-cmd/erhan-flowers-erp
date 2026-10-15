@@ -483,6 +483,16 @@ export class StockCardsService {
         this.products.broadcastStockCardUpdate([id]).catch(() => undefined);
       }
 
+      const purchasePriceChanged = (updateData as Record<string, unknown>)['purchasePrice'] !== undefined
+        || (updateData as Record<string, unknown>)['manualUnitCost'] !== undefined
+        || (updateData as Record<string, unknown>)['manualUnitCostEnabled'] !== undefined
+        || (updateData as Record<string, unknown>)['packageContent'] !== undefined;
+      if (purchasePriceChanged) {
+        this.propagatePriceToLinkedCostDrafts(id, stockCard).catch((err) =>
+          this.logger.warn(`Maliyet yayını hatası (stok kartı ${id}): ${String(err)}`),
+        );
+      }
+
       return this.serialize(stockCard);
     } catch (error) {
       this.handleUniqueError(error);
@@ -1190,6 +1200,90 @@ export class StockCardsService {
 
   private roundQuantity(value: number) {
     return Math.round((Number(value) + Number.EPSILON) * 1000) / 1000;
+  }
+
+  private async propagatePriceToLinkedCostDrafts(stockCardId: number, updatedStockCard: { purchasePrice: Prisma.Decimal; packageContent: Prisma.Decimal; automaticUnitCost: Prisma.Decimal; manualUnitCostEnabled?: boolean; manualUnitCost?: Prisma.Decimal }) {
+    // Bu stok kartını kullanan onaylı maliyet taslakları
+    const drafts = await this.prisma.productCostDraft.findMany({
+      where: {
+        status: 'APPROVED',
+        OR: [
+          { items: { some: { stockCardId, source: { not: 'MANUAL' } } } },
+          { pots: { some: { stockCardId, source: { not: 'MANUAL' } } } },
+        ],
+      },
+      include: {
+        variant: { select: { id: true, barcode: true, currentModelCode: true, stockQuantity: true, product: { select: { barcode: true, trendyolBarcode: true, modelCode: true } } } },
+        items: { include: { stockCard: { select: { id: true, purchasePrice: true, packageContent: true, automaticUnitCost: true, manualUnitCostEnabled: true, manualUnitCost: true } } } },
+        pots: { include: { stockCard: { select: { id: true, purchasePrice: true, packageContent: true, automaticUnitCost: true, manualUnitCostEnabled: true, manualUnitCost: true } } } },
+      },
+    });
+
+    if (drafts.length === 0) return;
+    this.logger.log(`Stok kartı ${stockCardId} fiyat değişikliği → ${drafts.length} onaylı taslak güncelleniyor`);
+
+    const newUnitCost = Number(updatedStockCard.manualUnitCostEnabled)
+      ? Number(updatedStockCard.manualUnitCost ?? 0)
+      : (() => {
+          const stored = Number(updatedStockCard.automaticUnitCost);
+          if (stored > 0) return stored;
+          const pkg = Number(updatedStockCard.packageContent);
+          const price = Number(updatedStockCard.purchasePrice);
+          return price > 0 && pkg > 0 ? price / pkg : 0;
+        })();
+
+    for (const draft of drafts) {
+      const round = (v: number) => Math.round(v * 100) / 100;
+
+      const stockUnitCostOf = (sc: { purchasePrice: Prisma.Decimal; packageContent: Prisma.Decimal; automaticUnitCost: Prisma.Decimal; manualUnitCostEnabled?: boolean | null; manualUnitCost?: Prisma.Decimal | null } | null, cardId: number) => {
+        if (!sc) return 0;
+        if (cardId === stockCardId) return newUnitCost;
+        if (sc.manualUnitCostEnabled) return Number(sc.manualUnitCost ?? 0);
+        const stored = Number(sc.automaticUnitCost);
+        if (stored > 0) return stored;
+        const pkg = Number(sc.packageContent);
+        const price = Number(sc.purchasePrice);
+        return price > 0 && pkg > 0 ? price / pkg : 0;
+      };
+
+      const totalCost = round(
+        (draft.items ?? []).reduce((sum, item) => {
+          if (item.isActive === false) return sum;
+          const unitCost = item.source === 'MANUAL' ? Number(item.manualUnitCost ?? 0) : stockUnitCostOf(item.stockCard as any, item.stockCardId ?? 0);
+          return sum + Number(item.quantity ?? 0) * unitCost;
+        }, 0) +
+        (draft.pots ?? []).reduce((sum, item) => {
+          const unitCost = item.source === 'MANUAL' ? Number(item.manualUnitCost ?? 0) : stockUnitCostOf(item.stockCard as any, item.stockCardId ?? 0);
+          return sum + Number(item.quantity ?? 0) * unitCost;
+        }, 0),
+      );
+
+      const vatPercent = Number(draft.vatPercent ?? 20);
+      const marginPercent = Number(draft.profitMarginPercent ?? 45);
+      const vatIncludedCost = totalCost * (1 + vatPercent / 100);
+      const newSalePrice = round(vatIncludedCost * (1 + marginPercent / 100));
+
+      await this.prisma.productCostDraft.update({
+        where: { id: draft.id },
+        data: { salePrice: newSalePrice },
+      });
+
+      const variant = draft.variant;
+      if (!variant) continue;
+
+      const broadcastBarcode = variant.product?.barcode ?? variant.barcode;
+      const broadcastModel = variant.product?.modelCode ?? variant.currentModelCode;
+      if (!broadcastBarcode && !broadcastModel) continue;
+
+      await this.products.broadcastPriceStockPublic({
+        barcode: broadcastBarcode,
+        modelCode: broadcastModel,
+        marketPrice: newSalePrice,
+        stockQuantity: Number(variant.stockQuantity ?? 0),
+      }).catch((err) => this.logger.warn(`Platform yayın hatası (variant ${variant.id}): ${String(err)}`));
+
+      this.logger.log(`Variant ${variant.id} (${broadcastBarcode ?? broadcastModel}): yeni satış fiyatı ${newSalePrice} TL → platformlara gönderildi`);
+    }
   }
 
   private serialize(stockCard: {
