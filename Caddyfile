@@ -6,7 +6,10 @@ erhanflowers.com, www.erhanflowers.com {
         reverse_proxy backend:8001
     }
 
-    reverse_proxy florayapay:3200
+    # Diğer tüm istekler florayapay'e
+    handle {
+        reverse_proxy florayapay:3200
+    }
 
     header {
         Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
