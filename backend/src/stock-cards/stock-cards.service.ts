@@ -1017,7 +1017,7 @@ export class StockCardsService {
     if (text.includes('yaprak')) return 'YAP';
     if (text.includes('demet') || text.includes('cicek') || text.includes('gul') || text.includes('sakayik')) return 'DMT';
     if (text.includes('silikon') || text.includes('yardimci') || /\blif\w*/.test(text)) return 'YRD';
-    return null;
+    return 'STK';
   }
 
   private isStoneStock(data: StockCardPayload) {
