@@ -285,14 +285,9 @@ export class PublicCatalogService {
         sitePrice: true,
         productCenterVariant: {
           select: {
-            salePrice: true,
             trendyolSalePrice: true,
-            status: true,
             productCostDraft: {
               select: { salePrice: true, status: true },
-              where: { status: 'APPROVED' },
-              orderBy: { updatedAt: 'desc' },
-              take: 1,
             },
           },
         },
@@ -305,11 +300,11 @@ export class PublicCatalogService {
 
     for (const product of products) {
       const variant = product.productCenterVariant;
-      // Fiyat önceliği: onaylı maliyet → trendyolSalePrice → variant salePrice
-      const approvedPrice = Number(variant?.productCostDraft?.[0]?.salePrice ?? 0);
+      const draft = variant?.productCostDraft;
+      // Fiyat önceliği: onaylı maliyet → trendyolSalePrice
+      const approvedPrice = draft?.status === 'APPROVED' ? Number(draft.salePrice ?? 0) : 0;
       const trendyolPrice = Number(variant?.trendyolSalePrice ?? 0);
-      const variantPrice = Number(variant?.salePrice ?? 0);
-      const newPrice = approvedPrice > 0 ? approvedPrice : trendyolPrice > 0 ? trendyolPrice : variantPrice;
+      const newPrice = approvedPrice > 0 ? approvedPrice : trendyolPrice;
 
       if (newPrice <= 0) { skipped++; continue; }
       if (product.sitePrice === newPrice) { skipped++; continue; }
