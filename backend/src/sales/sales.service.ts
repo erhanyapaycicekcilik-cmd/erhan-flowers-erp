@@ -79,7 +79,7 @@ export class SalesService {
     }
 
     const variants = await this.prisma.trendyolProductVariant.findMany({
-      where: variantWhere as Parameters<typeof this.prisma.trendyolProductVariant.findMany>[0]['where'],
+      where: variantWhere as any,
       include: {
         family: true,
         productCostDraft: {
@@ -106,7 +106,7 @@ export class SalesService {
     }
 
     const products = await this.prisma.product.findMany({
-      where: productWhere as Parameters<typeof this.prisma.product.findMany>[0]['where'],
+      where: productWhere as any,
       include: {
         category: true,
         mediaFiles: true,
