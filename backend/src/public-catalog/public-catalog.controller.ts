@@ -81,6 +81,14 @@ export class PublicCatalogController {
     return this.catalog.recategorizeByName();
   }
 
+  // Admin: Tüm onaylı maliyetleri sitePrice'a toplu yansıt
+  @Post('admin/bulk-sync-site-price')
+  bulkSyncSitePrice(@Query('secret') secret?: string) {
+    const expected = process.env.REVALIDATE_SECRET || 'dev-secret-local';
+    if (secret !== expected) return { error: 'Unauthorized' };
+    return this.catalog.bulkSyncSitePriceFromApprovedCosts();
+  }
+
   // Admin: Trendyol ürünlerini anında çek
   // REVALIDATE_SECRET ile korunur — JWT gerekmez, florayapay admin panelinden çağrılabilir
   @Post('admin/trendyol-sync')
