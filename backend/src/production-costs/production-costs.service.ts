@@ -789,6 +789,7 @@ export class ProductionCostsService {
             where: { id: product.id },
             data: {
               costPrice: totalCost,
+              sitePrice: salePrice,
               shopPrice: salePrice,
               marketPrice: salePrice,
               listPrice: salePrice,
