@@ -36,6 +36,10 @@ export async function GET() {
         const description = p.description || p.name
         const brand = p.brand || 'Erhan Flowers'
 
+        const imageUrl = p.mainImage?.startsWith('http')
+          ? p.mainImage
+          : `https://api.erhanflowers.com/${p.mainImage?.replace(/^\//, '')}`
+
         return [
           escapeCsv(p.id),
           escapeCsv(p.name),
@@ -44,7 +48,7 @@ export async function GET() {
           'new',
           escapeCsv(price),
           escapeCsv(link),
-          escapeCsv(p.mainImage),
+          escapeCsv(imageUrl),
           escapeCsv(brand),
           escapeCsv(p.modelCode || p.id),
         ].join(',')
