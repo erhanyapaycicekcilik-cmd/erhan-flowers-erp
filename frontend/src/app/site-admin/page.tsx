@@ -193,6 +193,18 @@ export default function SiteAdminPage() {
             </Field>
           </Section>
 
+          <Section title="Google & SEO" icon={<Globe size={17} />}>
+            <Field label="Google Analytics ID" hint="Örn: G-XXXXXXXXXX">
+              <input className="field font-mono text-sm" value={draft.google_analytics_id ?? ''} onChange={(e) => set('google_analytics_id', e.target.value)} placeholder="G-XXXXXXXXXX" />
+            </Field>
+            <Field label="Google Tag Manager ID" hint="Örn: GTM-XXXXXXX">
+              <input className="field font-mono text-sm" value={draft.google_tag_manager_id ?? ''} onChange={(e) => set('google_tag_manager_id', e.target.value)} placeholder="GTM-XXXXXXX" />
+            </Field>
+            <Field label="Google Site Doğrulama" hint="Search Console meta tag içeriği">
+              <input className="field font-mono text-sm" value={draft.google_site_verification ?? ''} onChange={(e) => set('google_site_verification', e.target.value)} placeholder="xxxxxxxxxxxxxxxxx" />
+            </Field>
+          </Section>
+
           <SaveBar saving={saving} onSave={saveSettings} />
         </div>
       )}
