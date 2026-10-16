@@ -13,6 +13,9 @@ const DEFAULTS: Record<string, string> = {
   site_name: 'Erhan Flowers',
   instagram: '',
   facebook: '',
+  google_analytics_id: '',
+  google_tag_manager_id: '',
+  google_site_verification: '',
 };
 
 @Injectable()
