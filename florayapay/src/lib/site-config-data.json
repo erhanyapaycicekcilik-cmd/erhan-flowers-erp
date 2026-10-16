@@ -8,14 +8,15 @@
   "instagramHandle": "erhanflowers",
   "facebookUrl": "https://www.facebook.com/erhanflowers",
   "categories": [
-    { "slug": "yapay-agac", "label": "Yapay Ağaçlar", "desc": "Evinize canlı bir ağaç dokunuşu", "image": "https://images.unsplash.com/photo-1614594975525-e45190c55d0b?w=600&q=85&fit=crop", "active": true },
-    { "slug": "demet-cicek", "label": "Demet Çiçekler", "desc": "Solmayan buketler, ömür boyu taze", "image": "https://images.unsplash.com/photo-1490750967868-88df5691cc33?w=600&q=85&fit=crop", "active": true },
-    { "slug": "bambu", "label": "Bambular", "desc": "Sade, zarif ve dingin bir köşe", "image": "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=600&q=85&fit=crop", "active": true },
-    { "slug": "yapay-bitki", "label": "Yapay Bitkiler", "desc": "Her mevsim açan, hiç solmayan renkler", "image": "https://images.unsplash.com/photo-1416879595882-3373a0480b5b?w=600&q=85&fit=crop", "active": true },
-    { "slug": "sarmasik", "label": "Yapay Sarmaşıklar", "desc": "Tavandan sarkan, duvarı kaplayan yeşillik", "image": "https://images.unsplash.com/photo-1545239351-1141bd82e8a6?w=600&q=85&fit=crop", "active": true },
-    { "slug": "dikey-bahce", "label": "Dikey Bahçe", "desc": "Yosun duvar, doğal yeşil atmosfer", "image": "https://images.unsplash.com/photo-1598300042247-d088f8ab3a91?w=600&q=85&fit=crop", "active": true },
-    { "slug": "saksilar", "label": "Saksılar", "desc": "Şık saksı ve vazo koleksiyonu", "image": "https://images.unsplash.com/photo-1485955900006-10f4d324d411?w=600&q=85&fit=crop", "active": true },
-    { "slug": null, "label": "Tüm Ürünler", "desc": "Bütün koleksiyonu keşfet", "image": "https://images.unsplash.com/photo-1490750967868-88df5691cc33?w=600&q=85&fit=crop", "active": true }
+    { "slug": "yapay-agac", "label": "Yapay Ağaçlar", "desc": "Evinize canlı bir ağaç dokunuşu", "image": "https://api.erhanflowers.com/uploads/products/YC-1116_8698527412127_Yapay%20Bonzai%20A%C4%9Fac%C4%B1%20Model%201%20150%20CM/images/1791895195318-732528858-AltA-n-DamarlA-SaksA-da-Zarif-Bonsai.png", "active": true },
+    { "slug": "demet-cicek", "label": "Demet Çiçekler", "desc": "Solmayan buketler, ömür boyu taze", "image": "https://cdn.dsmcdn.com/ty1941/prod/QC_PREP/20260807/18/c64b6468-3f64-39bf-b96d-62e759830947/1_org_zoom.jpg", "active": true },
+    { "slug": "bambu", "label": "Bambular", "desc": "Sade, zarif ve dingin bir köşe", "image": "https://cdn.dsmcdn.com/ty1586/prod/QC/20241014/09/05fb1d28-3117-32b5-b19b-74e0d856a172/1_org_zoom.jpg", "active": true },
+    { "slug": "yapay-bitki", "label": "Yapay Bitkiler", "desc": "Her mevsim açan, hiç solmayan renkler", "image": "https://api.erhanflowers.com/uploads/products/YC-1024_8698527411298_test/images/1789133029428-518437150-WhatsApp-Image-2026-09-11-at-11.07.12.jpeg", "active": true },
+    { "slug": "sarmasik", "label": "Yapay Sarmaşıklar", "desc": "Tavandan sarkan, duvarı kaplayan yeşillik", "image": "https://cdn.dsmcdn.com/ty1891/prod/QC_PREP/20260810/15/b4402cc5-b842-3d3b-87cf-644fa0810411/1_org_zoom.jpg", "active": true },
+    { "slug": "dikey-bahce", "label": "Dikey Bahçe", "desc": "Yosun duvar, doğal yeşil atmosfer", "image": "https://cdn.dsmcdn.com/ty1801/prod/QC_PREP/20251215/10/606fface-6bf4-3283-9163-07f38b2148b7/1_org_zoom.jpg", "active": true },
+    { "slug": "saksilar", "label": "Saksılar", "desc": "Şık saksı ve vazo koleksiyonu", "image": "https://cdn.dsmcdn.com/ty1810/prod/QC_PREP/20260110/17/14f3b498-e4a3-3b76-8706-66df71a8ec28/1_org_zoom.jpg", "active": true },
+    { "slug": "aranjman", "label": "Aranjmanlar", "desc": "Özel günlere özel çiçek aranjmanları", "image": "https://api.erhanflowers.com/uploads/products/YC-1120_8698527412165_Yapay%20Pembe%20Lilium%20VE%20Mor%20%C3%87i%C3%A7ekli%20Incili%20Aranjman%20Demeti%20-/images/1792086750765-276679229-1000748867.png", "active": true },
+    { "slug": null, "label": "Tüm Ürünler", "desc": "Bütün koleksiyonu keşfet", "image": "https://cdn.dsmcdn.com/ty1941/prod/QC_PREP/20260807/18/c64b6468-3f64-39bf-b96d-62e759830947/1_org_zoom.jpg", "active": true }
   ],
   "mekanlar": [
     { "slug": "ofis-lobi", "label": "Ofis & Lobi", "desc": "Kurumsal alanlara şık, bakım gerektirmeyen yeşillik", "image": "https://images.unsplash.com/photo-1497366216548-37526070297c?w=600&q=85&fit=crop", "active": true },
