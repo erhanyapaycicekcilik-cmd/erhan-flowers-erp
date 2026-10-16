@@ -275,6 +275,56 @@ export class PublicCatalogService {
     return { updated, skipped };
   }
 
+  // Onaylı maliyetlerden sitePrice toplu doldur — tüm ürünlerde çalışır
+  async bulkSyncSitePriceFromApprovedCosts(): Promise<{ updated: number; skipped: number; details: string[] }> {
+    const products = await this.prisma.product.findMany({
+      where: { status: 'ACTIVE' },
+      select: {
+        id: true,
+        productName: true,
+        sitePrice: true,
+        productCenterVariant: {
+          select: {
+            salePrice: true,
+            trendyolSalePrice: true,
+            status: true,
+            productCostDraft: {
+              select: { salePrice: true, status: true },
+              where: { status: 'APPROVED' },
+              orderBy: { updatedAt: 'desc' },
+              take: 1,
+            },
+          },
+        },
+      },
+    });
+
+    let updated = 0;
+    let skipped = 0;
+    const details: string[] = [];
+
+    for (const product of products) {
+      const variant = product.productCenterVariant;
+      // Fiyat önceliği: onaylı maliyet → trendyolSalePrice → variant salePrice
+      const approvedPrice = Number(variant?.productCostDraft?.[0]?.salePrice ?? 0);
+      const trendyolPrice = Number(variant?.trendyolSalePrice ?? 0);
+      const variantPrice = Number(variant?.salePrice ?? 0);
+      const newPrice = approvedPrice > 0 ? approvedPrice : trendyolPrice > 0 ? trendyolPrice : variantPrice;
+
+      if (newPrice <= 0) { skipped++; continue; }
+      if (product.sitePrice === newPrice) { skipped++; continue; }
+
+      await this.prisma.product.update({
+        where: { id: product.id },
+        data: { sitePrice: newPrice, shopPrice: newPrice, listPrice: newPrice, marketPrice: newPrice },
+      });
+      details.push(`[${product.id}] ${product.productName}: ${product.sitePrice} → ${newPrice}`);
+      updated++;
+    }
+
+    return { updated, skipped, details };
+  }
+
   // Dükkan barkod okutma — sadece shopPrice döner, diğer fiyat bilgileri YOK
   async getShopPrice(barcode: string) {
     const product = await this.prisma.product.findFirst({
