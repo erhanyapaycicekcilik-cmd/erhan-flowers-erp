@@ -60,7 +60,19 @@ export function formatSitePrice(value: number) {
   return new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY', maximumFractionDigits: 0 }).format(value);
 }
 
-export function whatsappOrderHref(product: Pick<PublicProduct, 'name' | 'sku'>) {
+export type SiteSettings = Record<string, string>;
+
+export async function fetchSiteSettings(): Promise<SiteSettings> {
+  try {
+    const response = await fetch(`${apiBaseUrl}/public/catalog/settings`, { next: { revalidate: 3600 } });
+    if (!response.ok) return {};
+    return (await response.json()) as SiteSettings;
+  } catch {
+    return {};
+  }
+}
+
+export function whatsappOrderHref(product: Pick<PublicProduct, 'name' | 'sku'>, whatsappNumber = '905446546220') {
   const message = `Merhaba, "${product.name}"${product.sku ? ` (${product.sku})` : ''} ürünü hakkında bilgi almak istiyorum.`;
-  return `https://wa.me/905446546220?text=${encodeURIComponent(message)}`;
+  return `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(message)}`;
 }

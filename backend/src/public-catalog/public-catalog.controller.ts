@@ -4,6 +4,7 @@ import { Response } from 'express';
 import { AuthGuard } from '../auth/auth.guard';
 import { PublicCatalogService } from './public-catalog.service';
 import { TrendyolProductSyncService } from './trendyol-product-sync.service';
+import { SiteSettingsService } from '../site-settings/site-settings.service';
 
 // AuthGuard YOK — herkese açık müşteri kataloğu
 @Controller('public/catalog')
@@ -11,7 +12,13 @@ export class PublicCatalogController {
   constructor(
     private readonly catalog: PublicCatalogService,
     private readonly trendyolSync: TrendyolProductSyncService,
+    private readonly siteSettings: SiteSettingsService,
   ) {}
+
+  @Get('settings')
+  getSiteSettings() {
+    return this.siteSettings.getAll();
+  }
 
   @Get('categories')
   listCategories() {
