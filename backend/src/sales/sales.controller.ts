@@ -15,8 +15,8 @@ export class SalesController {
   constructor(private readonly sales: SalesService) {}
 
   @Get('products/search')
-  searchProducts(@Query('q') query = '') {
-    return this.sales.searchProducts(query);
+  searchProducts(@Query('q') query = '', @Query('category') category = '') {
+    return this.sales.searchProducts(query, category);
   }
 
   @Get('customers/search')

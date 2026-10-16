@@ -60,23 +60,26 @@ export class SalesService {
     private readonly products: ProductsService,
   ) {}
 
-  async searchProducts(query: string) {
+  async searchProducts(query: string, category = '') {
     const cleanQuery = query.trim();
-    if (cleanQuery.length < 2) return [];
+    const cleanCategory = category.trim();
+    if (cleanQuery.length < 2 && !cleanCategory) return [];
+
+    const variantWhere: Record<string, unknown> = { status: 'ACTIVE' };
+    if (cleanQuery.length >= 2) {
+      variantWhere['OR'] = [
+        { barcode: { contains: cleanQuery, mode: 'insensitive' } },
+        { productName: { contains: cleanQuery, mode: 'insensitive' } },
+        { currentModelCode: { contains: cleanQuery, mode: 'insensitive' } },
+        { proposedModelCode: { contains: cleanQuery, mode: 'insensitive' } },
+        { supplierStockCode: { contains: cleanQuery, mode: 'insensitive' } },
+        { seoProductName: { contains: cleanQuery, mode: 'insensitive' } },
+        { seoManualProductName: { contains: cleanQuery, mode: 'insensitive' } },
+      ];
+    }
 
     const variants = await this.prisma.trendyolProductVariant.findMany({
-      where: {
-        status: 'ACTIVE',
-        OR: [
-          { barcode: { contains: cleanQuery, mode: 'insensitive' } },
-          { productName: { contains: cleanQuery, mode: 'insensitive' } },
-          { currentModelCode: { contains: cleanQuery, mode: 'insensitive' } },
-          { proposedModelCode: { contains: cleanQuery, mode: 'insensitive' } },
-          { supplierStockCode: { contains: cleanQuery, mode: 'insensitive' } },
-          { seoProductName: { contains: cleanQuery, mode: 'insensitive' } },
-          { seoManualProductName: { contains: cleanQuery, mode: 'insensitive' } },
-        ],
-      },
+      where: variantWhere as Parameters<typeof this.prisma.trendyolProductVariant.findMany>[0]['where'],
       include: {
         family: true,
         productCostDraft: {
@@ -90,21 +93,26 @@ export class SalesService {
       take: 20,
     });
 
+    const productWhere: Record<string, unknown> = { status: 'ACTIVE' };
+    if (cleanQuery.length >= 2) {
+      productWhere['OR'] = [
+        { barcode: { contains: cleanQuery, mode: 'insensitive' } },
+        { productName: { contains: cleanQuery, mode: 'insensitive' } },
+        { modelCode: { contains: cleanQuery, mode: 'insensitive' } },
+      ];
+    }
+    if (cleanCategory) {
+      productWhere['category'] = { name: { contains: cleanCategory, mode: 'insensitive' } };
+    }
+
     const products = await this.prisma.product.findMany({
-      where: {
-        status: 'ACTIVE',
-        OR: [
-          { barcode: { contains: cleanQuery, mode: 'insensitive' } },
-          { productName: { contains: cleanQuery, mode: 'insensitive' } },
-          { modelCode: { contains: cleanQuery, mode: 'insensitive' } },
-        ],
-      },
+      where: productWhere as Parameters<typeof this.prisma.product.findMany>[0]['where'],
       include: {
         category: true,
         mediaFiles: true,
       },
       orderBy: { updatedAt: 'desc' },
-      take: 20,
+      take: cleanCategory && !cleanQuery ? 50 : 20,
     });
 
     const lookupValues = Array.from(
