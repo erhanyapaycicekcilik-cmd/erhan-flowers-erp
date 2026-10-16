@@ -296,14 +296,15 @@ export class PublicCatalogService {
   async recategorizeByName(): Promise<{ updated: number; skipped: number; details: string[] }> {
     // Anahtar kelime → kategori adı (DB'deki tam ad ile eşleşmeli)
     const RULES: Array<{ keywords: string[]; categoryName: string }> = [
-      { keywords: ['bambu'],                          categoryName: 'Bambu' },
-      { keywords: ['sarmaşık', 'sarmasik'],           categoryName: 'Sarmaşık' },
-      { keywords: ['dikey bahçe', 'dikey bahce', 'yosun duvar', 'panel'],  categoryName: 'Dikey Bahçe' },
-      { keywords: ['demet', 'buket'],                 categoryName: 'Demet Çiçek' },
-      { keywords: ['saksı', 'saksi', 'vazo', 'saksılı', 'saksili'], categoryName: 'Saksılı' },
-      { keywords: ['renkli ağaç', 'renkli agac', 'renk', 'çiçekli ağaç', 'cicekli agac', 'pembe', 'kırmızı', 'kiraz', 'erik', 'bahar dalı', 'bahar dali'], categoryName: 'Yapay Ağaç Renkli' },
-      { keywords: ['yapay ağaç', 'yapay agac', 'ağaç', 'agac'],    categoryName: 'Yapay Ağaç Yeşil' },
-      { keywords: ['çiçek', 'cicek', 'orkide', 'gül', 'gul', 'lale', 'kasımpatı'], categoryName: 'Çiçekler' },
+      { keywords: ['bambu'],                                                                                                                                     categoryName: 'Bambu' },
+      { keywords: ['dikey bahçe', 'dikey bahce', 'yosun duvar', 'panel', 'duvar kaplama', 'yapay çit', 'yapay cit'],                                           categoryName: 'Dikey Bahçe' },
+      { keywords: ['sarmaşık', 'sarmasik'],                                                                                                                      categoryName: 'Yapay Sarmaşık' },
+      { keywords: ['demet', 'buket'],                                                                                                                            categoryName: 'Demet Çiçek' },
+      { keywords: ['aranjman', 'arajman', 'kompozisyon'],                                                                                                       categoryName: 'Aranjman' },
+      { keywords: ['saksı', 'saksi', 'vazo', 'saksılı', 'saksili'],                                                                                            categoryName: 'Saksı & Vazo' },
+      { keywords: ['ağaç', 'agac', 'bonzai', 'bonsai', 'palmiye', 'zeytin', 'ficus', 'benjamin', 'areka', 'strelitzia', 'kiraz', 'erik', 'bahar dal'],        categoryName: 'Yapay Ağaç' },
+      { keywords: ['çiçek', 'cicek', 'orkide', 'gül', 'gul', 'lale', 'kasımpatı', 'kasimpati', 'dal çiçek', 'dal cicek'],                                     categoryName: 'Demet Çiçek' },
+      { keywords: ['bitki', 'sukulent', 'kaktüs', 'kaktus', 'lavanta', 'şimşir', 'simsir'],                                                                    categoryName: 'Yapay Bitki' },
     ];
 
     const allCategories = await this.prisma.category.findMany({ select: { id: true, name: true } });

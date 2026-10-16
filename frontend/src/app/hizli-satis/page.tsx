@@ -4,6 +4,17 @@ import { useState, useRef, useCallback } from 'react';
 import { api } from '@/lib/api';
 import { Search, Trash2, ShoppingBag, CheckCircle2, Plus, Minus } from 'lucide-react';
 
+const CATEGORIES = [
+  { label: 'Yapay Ağaç',    value: 'Yapay Ağaç' },
+  { label: 'Bambu',          value: 'Bambu' },
+  { label: 'Yapay Bitki',    value: 'Yapay Bitki' },
+  { label: 'Sarmaşık',       value: 'Yapay Sarmaşık' },
+  { label: 'Dikey Bahçe',   value: 'Dikey Bahçe' },
+  { label: 'Demet Çiçek',   value: 'Demet Çiçek' },
+  { label: 'Saksı & Vazo',  value: 'Saksı & Vazo' },
+  { label: 'Aranjman',       value: 'Aranjman' },
+];
+
 interface Product {
   id: number;
   barcode: string;
@@ -22,6 +33,7 @@ interface CartItem extends Product {
 
 export default function HizliSatisPage() {
   const [query, setQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('');
   const [results, setResults] = useState<Product[]>([]);
   const [searching, setSearching] = useState(false);
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -31,11 +43,11 @@ export default function HizliSatisPage() {
   const inputRef = useRef<HTMLInputElement>(null);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const search = useCallback(async (q: string) => {
-    if (q.length < 2) { setResults([]); return; }
+  const search = useCallback(async (q: string, cat: string) => {
+    if (q.length < 2 && !cat) { setResults([]); return; }
     setSearching(true);
     try {
-      const r = await api<Product[]>(`/sales/products/search?q=${encodeURIComponent(q)}&limit=10`);
+      const r = await api<Product[]>(`/sales/products/search?q=${encodeURIComponent(q)}&category=${encodeURIComponent(cat)}&limit=50`);
       setResults(Array.isArray(r) ? r : []);
     } finally {
       setSearching(false);
@@ -45,7 +57,14 @@ export default function HizliSatisPage() {
   function onQueryChange(v: string) {
     setQuery(v);
     if (searchTimer.current) clearTimeout(searchTimer.current);
-    searchTimer.current = setTimeout(() => void search(v), 300);
+    searchTimer.current = setTimeout(() => void search(v, selectedCategory), 300);
+  }
+
+  function onCategorySelect(cat: string) {
+    const next = selectedCategory === cat ? '' : cat;
+    setSelectedCategory(next);
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    void search(query, next);
   }
 
   function addToCart(p: Product) {
@@ -125,6 +144,16 @@ export default function HizliSatisPage() {
       <h1 className="text-xl font-bold flex items-center gap-2">
         <ShoppingBag size={20} /> Hızlı Dükkan Satışı
       </h1>
+
+      {/* Kategori Filtreleri */}
+      <div className="flex flex-wrap gap-2">
+        {CATEGORIES.map(c => (
+          <button key={c.value} onClick={() => onCategorySelect(c.value)}
+            className={`px-3 py-1.5 rounded-full text-xs font-medium border transition ${selectedCategory === c.value ? 'bg-brand text-white border-brand' : 'bg-white border-slate-200 text-slate-600 hover:border-brand/50'}`}>
+            {c.label}
+          </button>
+        ))}
+      </div>
 
       {/* Ürün Arama */}
       <div className="relative">
