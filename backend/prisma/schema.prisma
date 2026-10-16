@@ -2492,3 +2492,11 @@ model PageView {
   @@index([site, createdAt])
   @@map("page_views")
 }
+
+model SiteSetting {
+  key       String   @id
+  value     String   @db.Text
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@map("site_settings")
+}

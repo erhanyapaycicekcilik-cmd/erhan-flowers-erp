@@ -29,6 +29,7 @@ import { ProductCenterModule } from './product-center/product-center.module';
 import { MarketIntelligenceModule } from './market-intelligence/market-intelligence.module';
 import { CatalogStrategyModule } from './catalog-strategy/catalog-strategy.module';
 import { PublicCatalogModule } from './public-catalog/public-catalog.module';
+import { SiteSettingsModule } from './site-settings/site-settings.module';
 import { WebOrdersModule } from './web-orders/web-orders.module';
 import { SuppliersModule } from './suppliers/suppliers.module';
 import { EftModule } from './eft/eft.module';
@@ -76,6 +77,7 @@ import { BillAccountsModule } from './bill-accounts/bill-accounts.module';
     MarketIntelligenceModule,
     CatalogStrategyModule,
     PublicCatalogModule,
+    SiteSettingsModule,
     WebOrdersModule,
     SuppliersModule,
     EftModule,
