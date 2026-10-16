@@ -1,5 +1,6 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs'
 import { join } from 'path'
+import sourceData from './site-config-data.json'
 
 const CONFIG_PATH = process.env.NODE_ENV === 'production'
   ? join(process.cwd(), 'data/site-config.json')
@@ -99,11 +100,17 @@ export const DEFAULT_CONFIG: SiteConfig = {
 }
 
 export function readSiteConfig(): SiteConfig {
+  // categories ve mekanlar her zaman derleme zamanındaki kaynak dosyadan gelir
+  const sourceOverrides = {
+    categories: sourceData.categories as CategoryItem[],
+    mekanlar: sourceData.mekanlar as MekanItem[],
+  }
   try {
     const raw = readFileSync(CONFIG_PATH, 'utf-8')
-    return { ...DEFAULT_CONFIG, ...JSON.parse(raw) }
+    const { categories: _, mekanlar: __, ...dynamicSettings } = JSON.parse(raw) as Partial<SiteConfig>
+    return { ...DEFAULT_CONFIG, ...dynamicSettings, ...sourceOverrides }
   } catch {
-    return DEFAULT_CONFIG
+    return { ...DEFAULT_CONFIG, ...sourceOverrides }
   }
 }
 
