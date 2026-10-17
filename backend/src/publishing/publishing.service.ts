@@ -22,7 +22,8 @@ export type StorePublishOption = {
 // Barkod her iki mağazada aynıdır (ön ek yalnızca model kodu / stok koduna eklenir).
 const DEFAULT_STORES: Required<StorePublishOption>[] = [
   { companyCode: 'ERHAN', barcodePrefix: '', priceMultiplier: 1 },
-  { companyCode: 'FLORA', barcodePrefix: 'FL-', priceMultiplier: 0.97 },
+  // FLORA devre dışı — aynı ürün/görsel nedeniyle Trendyol hesap kapatma riski
+  // { companyCode: 'FLORA', barcodePrefix: 'FL-', priceMultiplier: 0.97 },
 ];
 
 export const FLORA_TRENDYOL_CHANNEL = 'TRENDYOL_FLORA';
