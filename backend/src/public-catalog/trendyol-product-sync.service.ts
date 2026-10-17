@@ -90,6 +90,9 @@ export class TrendyolProductSyncService {
       const genelCategory = allCategories.find((c) => c.name === 'Genel');
       const fallbackCategoryId = genelCategory?.id ?? allCategories[0]?.id ?? 1;
 
+      // Trendyol'dan gelen aktif model kodlarını topla — sync sonrası bunlar dışındakileri PASSIVE yap
+      const activeTrendyolCodes = new Set(products.map((p) => (p.stockCode || `TY-${p.id}`).toUpperCase()));
+
       for (const p of products) {
         try {
           const modelCode = (p.stockCode || `TY-${p.id}`).toUpperCase();
@@ -154,6 +157,19 @@ export class TrendyolProductSyncService {
           skipped++;
         }
       }
+      // Trendyol'da artık aktif olmayan ürünleri PASSIVE yap
+      if (activeTrendyolCodes.size > 0) {
+        const deactivated = await this.prisma.product.updateMany({
+          where: {
+            status: 'ACTIVE',
+            modelCode: { notIn: Array.from(activeTrendyolCodes) },
+          },
+          data: { status: 'PASSIVE' },
+        });
+        if (deactivated.count > 0) {
+          this.logger.log(`${deactivated.count} ürün Trendyol'da aktif olmadığı için PASSIVE yapıldı`);
+        }
+      }
     } finally {
       this.syncRunning = false;
     }
@@ -171,7 +187,7 @@ export class TrendyolProductSyncService {
     const size = 200;
 
     while (true) {
-      const url = `${TY_API}/product/sellers/${supplierId}/products?page=${page}&size=${size}`;
+      const url = `${TY_API}/product/sellers/${supplierId}/products?page=${page}&size=${size}&approved=true&onSale=true`;
       const res = await fetch(url, {
         headers: {
           'Authorization': `Basic ${auth}`,
