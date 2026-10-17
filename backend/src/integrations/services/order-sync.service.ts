@@ -1315,15 +1315,16 @@ export class OrderSyncService {
     const PAZARAMA_API = 'https://isortagim.pazarama.com';
     let token: string | null = null;
     try {
-      const tokenRes = await fetch(`${PAZARAMA_API}/api/account/login`, {
+      const tokenBody = new URLSearchParams({ grant_type: 'client_credentials', client_id: apiKey, client_secret: apiSecret });
+      const tokenRes = await fetch(`${PAZARAMA_API}/connect/token`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ Username: apiKey, Password: apiSecret }),
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: tokenBody.toString(),
         signal: AbortSignal.timeout(8000),
       });
       if (tokenRes.ok) {
-        const tokenData = await tokenRes.json() as { data?: { accessToken?: string } };
-        token = tokenData?.data?.accessToken ?? null;
+        const tokenData = await tokenRes.json() as Record<string, unknown>;
+        token = String(tokenData?.access_token ?? tokenData?.accessToken ?? tokenData?.token ?? '') || null;
       }
     } catch { /* skip */ }
 
