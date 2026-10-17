@@ -22,6 +22,9 @@ interface TrendyolProduct {
   description: string | null;
   brand: string | null;
   categoryName: string | null;
+  approved?: boolean;
+  onSale?: boolean;
+  blacklisted?: boolean;
 }
 
 @Injectable()
@@ -90,10 +93,17 @@ export class TrendyolProductSyncService {
       const genelCategory = allCategories.find((c) => c.name === 'Genel');
       const fallbackCategoryId = genelCategory?.id ?? allCategories[0]?.id ?? 1;
 
-      // Trendyol'dan gelen aktif model kodlarını topla — sync sonrası bunlar dışındakileri PASSIVE yap
-      const activeTrendyolCodes = new Set(products.map((p) => (p.stockCode || `TY-${p.id}`).toUpperCase()));
+      // Sadece onaylı ve satışta olan ürünleri filtrele
+      const activeProducts = products.filter((p) => {
+        if (p.approved === false) return false;
+        if (p.blacklisted === true) return false;
+        return true;
+      });
 
-      for (const p of products) {
+      // Trendyol'dan gelen aktif model kodlarını topla — sync sonrası bunlar dışındakileri PASSIVE yap
+      const activeTrendyolCodes = new Set(activeProducts.map((p) => (p.stockCode || `TY-${p.id}`).toUpperCase()));
+
+      for (const p of activeProducts) {
         try {
           const modelCode = (p.stockCode || `TY-${p.id}`).toUpperCase();
           const salePrice  = parseFloat(String(p.salePrice  || 0));
@@ -187,7 +197,7 @@ export class TrendyolProductSyncService {
     const size = 200;
 
     while (true) {
-      const url = `${TY_API}/product/sellers/${supplierId}/products?page=${page}&size=${size}&approved=true&onSale=true`;
+      const url = `${TY_API}/product/sellers/${supplierId}/products?page=${page}&size=${size}`;
       const res = await fetch(url, {
         headers: {
           'Authorization': `Basic ${auth}`,
