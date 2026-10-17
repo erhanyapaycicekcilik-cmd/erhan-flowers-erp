@@ -1318,7 +1318,7 @@ export class OrderSyncService {
       const tokenRes = await fetch(`${PAZARAMA_API}/api/account/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: apiKey, password: apiSecret }),
+        body: JSON.stringify({ Username: apiKey, Password: apiSecret }),
         signal: AbortSignal.timeout(8000),
       });
       if (tokenRes.ok) {
