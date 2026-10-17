@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service';
+import { CredentialVaultService } from '../integrations/services/credential-vault.service';
 
 const SUPPLIER_ID = process.env.TRENDYOL_SUPPLIER_ID || '485323';
 const API_KEY     = process.env.TRENDYOL_API_KEY     || 'vKUXhTt38k0RHiC5iRnX';
@@ -32,23 +33,36 @@ export class TrendyolProductSyncService {
   private readonly logger = new Logger(TrendyolProductSyncService.name);
   private syncRunning = false;
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly credentialVault: CredentialVaultService,
+  ) {}
 
   private async loadAuth(): Promise<{ auth: string; supplierId: string } | null> {
     try {
-      const cred = await this.prisma.$queryRaw<Array<{ credentials: string }>>`
-        SELECT cc.credentials FROM channel_credentials cc
-        JOIN channel_accounts ca ON cc.channel_account_id = ca.id
+      const account = await this.prisma.$queryRaw<Array<{ id: number }>>`
+        SELECT ca.id FROM channel_accounts ca
         JOIN sales_channels sc ON ca.sales_channel_id = sc.id
         JOIN companies co ON ca.company_id = co.id
-        WHERE sc.code = 'TRENDYOL' AND ca.is_active = true AND cc.is_active = true AND co.code = 'ERHAN'
+        WHERE sc.code = 'TRENDYOL' AND co.code = 'ERHAN' AND ca.is_active = true
         LIMIT 1
       `;
-      if (!cred.length) return null;
-      const parsed = JSON.parse(cred[0].credentials) as Record<string, string>;
-      const apiKey = parsed['API_KEY'] || '';
-      const apiSecret = parsed['API_SECRET'] || '';
-      const supplierId = parsed['SUPPLIER_ID'] || SUPPLIER_ID;
+      if (!account.length) return null;
+
+      const rows = await this.prisma.$queryRaw<Array<{ credentialType: string; encryptedValue: string }>>`
+        SELECT credential_type AS "credentialType", encrypted_value AS "encryptedValue"
+        FROM channel_credentials
+        WHERE channel_account_id = ${Number(account[0].id)} AND is_active = true
+      `;
+
+      const values: Record<string, string> = {};
+      for (const row of rows) {
+        try { values[row.credentialType] = this.credentialVault.decrypt(row.encryptedValue); } catch { /* skip */ }
+      }
+
+      const apiKey = values['API_KEY'] || '';
+      const apiSecret = values['API_SECRET'] || '';
+      const supplierId = values['SUPPLIER_ID'] || SUPPLIER_ID;
       if (!apiKey || !apiSecret) return null;
       return { auth: Buffer.from(`${apiKey}:${apiSecret}`).toString('base64'), supplierId };
     } catch {

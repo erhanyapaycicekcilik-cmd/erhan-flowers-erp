@@ -6,6 +6,7 @@ import { PublicCatalogController } from './public-catalog.controller';
 import { PublicCatalogService } from './public-catalog.service';
 import { TrendyolProductSyncService } from './trendyol-product-sync.service';
 import { SiteSettingsModule } from '../site-settings/site-settings.module';
+import { CredentialVaultService } from '../integrations/services/credential-vault.service';
 
 @Module({
   imports: [
@@ -15,7 +16,7 @@ import { SiteSettingsModule } from '../site-settings/site-settings.module';
     SiteSettingsModule,
   ],
   controllers: [PublicCatalogController],
-  providers: [PublicCatalogService, TrendyolProductSyncService],
+  providers: [PublicCatalogService, TrendyolProductSyncService, CredentialVaultService],
   exports: [TrendyolProductSyncService],
 })
 export class PublicCatalogModule {}
