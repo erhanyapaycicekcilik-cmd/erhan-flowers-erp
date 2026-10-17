@@ -4,7 +4,7 @@ import { AdapterConnectionResult, ExternalOrder } from './integration-adapter.in
 
 // Trendrum seller API — https://seller.trendruum.com
 // Dokümantasyon gelince endpoint'ler güncellenir; şimdilik REST tahmin yapısı.
-const TRENDRUM_API = 'https://api.trendruum.com';
+const TRENDRUM_API = 'https://products.trendruum.com';
 
 @Injectable()
 export class TrendrumAdapter extends BaseIntegrationAdapter {
