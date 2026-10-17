@@ -51,9 +51,13 @@ export class PazaramaAdapter extends BaseIntegrationAdapter {
         client_id: apiKey,
         client_secret: apiSecret,
       });
+      const basicAuth = Buffer.from(`${apiKey}:${apiSecret}`).toString('base64');
       const res = await fetch(`${PAZARAMA_API}/connect/token`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Authorization': `Basic ${basicAuth}`,
+        },
         body: body.toString(),
         signal: AbortSignal.timeout(8000),
       });
@@ -87,9 +91,10 @@ export class PazaramaAdapter extends BaseIntegrationAdapter {
       const apiKey = this.env('API_KEY');
       const apiSecret = this.env('API_SECRET');
       const loginBody = new URLSearchParams({ grant_type: 'client_credentials', client_id: apiKey, client_secret: apiSecret });
+      const basicAuth = Buffer.from(`${apiKey}:${apiSecret}`).toString('base64');
       const loginRes = await fetch(`${PAZARAMA_API}/connect/token`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Authorization': `Basic ${basicAuth}` },
         body: loginBody.toString(),
         signal: AbortSignal.timeout(8000),
       });
