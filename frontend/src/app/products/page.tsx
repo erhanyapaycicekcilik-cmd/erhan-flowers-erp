@@ -338,10 +338,10 @@ const CATALOG_CATEGORIES = [
 
 const steps = ['Ürün Bilgileri', 'Reçete/Malzeme', 'Maliyet/Fiyat', 'Görsel/SEO', 'Kanallara Gönder'];
 const visibleStepIndexes = [0, 1, 2, 3, 4] as const;
-const channels = ['SHOP', 'SITE', 'TRENDYOL', 'TRENDYOL_FLORA', 'HEPSIBURADA', 'N11', 'TICIMAX'] as const;
+const channels = ['SHOP', 'SITE', 'TRENDYOL', 'TRENDYOL_FLORA', 'HEPSIBURADA', 'N11', 'TICIMAX', 'TRENDRUM', 'PAZARAMA', 'WHATSAPP'] as const;
 // Aynı ürünü Flora mağazasının Trendyol hesabına da açar (barkod aynı, model/stok kodu FL- ön ekli).
 const FLORA_TRENDYOL_CHANNEL = 'TRENDYOL_FLORA';
-const publishableChannels = ['TRENDYOL', 'HEPSIBURADA', 'N11', 'TICIMAX'] as const;
+const publishableChannels = ['TRENDYOL', 'HEPSIBURADA', 'N11', 'TICIMAX', 'TRENDRUM', 'PAZARAMA'] as const;
 const treeVisualSlots = [
   { title: '01 Beyaz ana görsel', detail: 'Pazaryeri ana fotoğrafı: beyaz fon, ürün ortada, tam boy.' },
   { title: '02 Otel lobisi / dükkan', detail: 'Ağaç gerçek showroom, mağaza veya otel lobisinde duruyormuş gibi.' },
@@ -4316,6 +4316,9 @@ function calculateChannelPricing(draft: CostDetail['costDraft'], salePrice: numb
     { key: 'HEPSIBURADA', label: 'Hepsiburada', salePrice: summary.suggestedSalePrice, commissionPercent: 0, shippingCost: baseShipping, customerShippingCharge: 0, paymentFeePercent: 0, serviceFee: 0, otherExpense: 0 },
     { key: 'N11', label: 'N11', salePrice: summary.suggestedSalePrice, commissionPercent: 0, shippingCost: baseShipping, customerShippingCharge: 0, paymentFeePercent: 0, serviceFee: 0, otherExpense: 0 },
     { key: 'TICIMAX', label: 'Diğer Pazaryeri / Ticimax', salePrice: summary.suggestedSalePrice, commissionPercent: 0, shippingCost: baseShipping, customerShippingCharge: 0, paymentFeePercent: 0, serviceFee: 0, otherExpense: 0 },
+    { key: 'TRENDRUM', label: 'Trendrum', salePrice: summary.suggestedSalePrice, commissionPercent: 0, shippingCost: baseShipping, customerShippingCharge: 0, paymentFeePercent: 0, serviceFee: 0, otherExpense: 0 },
+    { key: 'PAZARAMA', label: 'Pazarama', salePrice: summary.suggestedSalePrice, commissionPercent: 0, shippingCost: baseShipping, customerShippingCharge: 0, paymentFeePercent: 0, serviceFee: 0, otherExpense: 0 },
+    { key: 'WHATSAPP', label: 'WhatsApp Katalog', salePrice: summary.suggestedSalePrice, commissionPercent: 0, shippingCost: 0, customerShippingCharge: 0, paymentFeePercent: 0, serviceFee: 0, otherExpense: 0 },
   ];
 
   return presets.map((preset) => {
@@ -4593,6 +4596,9 @@ function channelLabel(value: string) {
     HEPSIBURADA: 'Hepsiburada',
     N11: 'N11',
     TICIMAX: 'Diğer / Ticimax',
+    TRENDRUM: 'Trendrum',
+    PAZARAMA: 'Pazarama',
+    WHATSAPP: 'WhatsApp Katalog',
   };
   return labels[value] ?? value;
 }
