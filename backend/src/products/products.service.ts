@@ -70,7 +70,7 @@ export class ProductsService {
     }
     const rows = await this.prisma.$queryRaw<Array<{ platform: string }>>`
       SELECT platform FROM integration_connections
-      WHERE status = 'CONNECTED' AND platform IN ('TRENDYOL', 'N11', 'HEPSIBURADA', 'TRENDRUM')
+      WHERE status = 'CONNECTED' AND platform IN ('TRENDYOL', 'N11', 'HEPSIBURADA', 'TRENDRUM', 'PAZARAMA')
     `.catch(() => [] as Array<{ platform: string }>);
     const platforms = rows.map((r) => r.platform);
     this.connectedPlatformsCache = { platforms, expiresAt: now + 5 * 60 * 1000 };

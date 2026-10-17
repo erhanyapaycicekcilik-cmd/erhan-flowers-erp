@@ -1,4 +1,4 @@
-export type IntegrationPlatform = 'TRENDYOL' | 'HEPSIBURADA' | 'N11' | 'AMAZON' | 'WEBSITE' | 'TICIMAX' | 'TRENDRUM';
+export type IntegrationPlatform = 'TRENDYOL' | 'HEPSIBURADA' | 'N11' | 'AMAZON' | 'WEBSITE' | 'TICIMAX' | 'TRENDRUM' | 'PAZARAMA';
 
 export type AdapterConnectionResult = {
   ok: boolean;

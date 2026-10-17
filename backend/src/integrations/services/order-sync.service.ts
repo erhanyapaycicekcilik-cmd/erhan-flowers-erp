@@ -66,6 +66,9 @@ export class OrderSyncService {
     try { await this.runTrendrumSync(); } catch (err) {
       this.logger.error('Trendrum sync hatasi', err instanceof Error ? err.message : String(err));
     }
+    try { await this.runPazaramaSync(); } catch (err) {
+      this.logger.error('Pazarama sync hatasi', err instanceof Error ? err.message : String(err));
+    }
   }
 
   async runSync(): Promise<{ processed: number; newOrders: number; stockDeductions: number }> {
@@ -1277,6 +1280,119 @@ export class OrderSyncService {
     await this.markMissingAsDelivered('TRENDRUM', allOrders.map((o) => String(o.id ?? o.orderId ?? o.orderNumber ?? '')));
 
     this.logger.log(`Trendrum sync tamamlandi: ${newOrders} yeni siparis.`);
+    return { processed: allOrders.length, newOrders };
+  }
+
+  async runPazaramaSync(): Promise<{ processed: number; newOrders: number }> {
+    let apiKey = process.env.PAZARAMA_API_KEY ?? '';
+    let apiSecret = process.env.PAZARAMA_API_SECRET ?? '';
+
+    if (!apiKey || !apiSecret) {
+      try {
+        const rows = await this.prisma.$queryRaw<Array<{ credentialType: string; encryptedValue: string }>>`
+          SELECT cc.credential_type AS "credentialType", cc.encrypted_value AS "encryptedValue"
+          FROM channel_credentials cc
+          JOIN channel_accounts ca ON cc.channel_account_id = ca.id
+          JOIN sales_channels sc ON ca.sales_channel_id = sc.id
+          JOIN companies co ON ca.company_id = co.id
+          WHERE sc.code = 'PAZARAMA' AND co.code = 'ERHAN' AND ca.is_active = true AND cc.is_active = true
+        `;
+        const vals: Record<string, string> = {};
+        for (const row of rows) {
+          try { vals[row.credentialType] = this.credentialVault.decrypt(row.encryptedValue); } catch { /* skip */ }
+        }
+        apiKey = vals['API_KEY'] || apiKey;
+        apiSecret = vals['API_SECRET'] || apiSecret;
+      } catch { /* skip */ }
+    }
+
+    if (!apiKey || !apiSecret) {
+      this.logger.warn('Pazarama credentials bulunamadi, sync atlanıyor.');
+      return { processed: 0, newOrders: 0 };
+    }
+
+    // Get Bearer token
+    const PAZARAMA_API = 'https://isortagim.pazarama.com';
+    let token: string | null = null;
+    try {
+      const tokenRes = await fetch(`${PAZARAMA_API}/api/account/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: apiKey, password: apiSecret }),
+        signal: AbortSignal.timeout(8000),
+      });
+      if (tokenRes.ok) {
+        const tokenData = await tokenRes.json() as { data?: { accessToken?: string } };
+        token = tokenData?.data?.accessToken ?? null;
+      }
+    } catch { /* skip */ }
+
+    if (!token) {
+      this.logger.warn('Pazarama token alınamadı, sync atlanıyor.');
+      return { processed: 0, newOrders: 0 };
+    }
+
+    const headers = { Accept: 'application/json', Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+    const lookback = Date.now() - this.lookbackDays * 24 * 60 * 60 * 1000;
+
+    const allOrders: Array<Record<string, unknown>> = [];
+    let page = 0;
+    while (page < 10) {
+      const url = `${PAZARAMA_API}/api/order/orders?status=1&pageSize=50&pageIndex=${page}`;
+      const res = await fetch(url, { headers }).catch(() => null);
+      if (!res || !res.ok) break;
+      const data = await res.json() as { data?: { orderList?: Array<Record<string, unknown>> } | Array<Record<string, unknown>> };
+      const items: Array<Record<string, unknown>> = Array.isArray(data.data)
+        ? data.data
+        : (data.data as any)?.orderList ?? [];
+      if (!Array.isArray(items) || items.length === 0) break;
+      allOrders.push(...items);
+      if (items.length < 50) break;
+      page++;
+    }
+
+    this.logger.log(`Pazarama'dan ${allOrders.length} siparis cekildi.`);
+    let newOrders = 0;
+
+    for (const order of allOrders) {
+      const externalOrderId = String(order.id ?? order.orderId ?? order.orderNumber ?? order.orderCode ?? '');
+      if (!externalOrderId) continue;
+      const rawDate = order.orderDate ?? order.createdAt;
+      const orderDate = rawDate ? new Date(String(rawDate)) : null;
+      if (orderDate && orderDate.getTime() < lookback) continue;
+
+      const existing = await this.prisma.marketplaceOrder.findUnique({
+        where: { platform_externalOrderId: { platform: 'PAZARAMA', externalOrderId } },
+      });
+      if (existing) {
+        const newStatus = String(order.status ?? '');
+        if (newStatus && existing.status !== newStatus) {
+          await this.prisma.marketplaceOrder.update({ where: { id: existing.id }, data: { status: newStatus } });
+        }
+        continue;
+      }
+
+      const shipAddr = (order.shippingAddress ?? order.deliveryAddress ?? order.address ?? {}) as Record<string, unknown>;
+      await this.prisma.marketplaceOrder.create({
+        data: {
+          platform: 'PAZARAMA',
+          externalOrderId,
+          orderNumber: String(order.orderNumber ?? order.orderCode ?? externalOrderId),
+          status: String(order.status ?? 'NEW'),
+          customerName: String(shipAddr.fullName ?? order.customerName ?? order.buyerName ?? ''),
+          totalAmount: Number(order.totalAmount ?? order.total ?? order.totalPrice ?? 0),
+          cargoAmount: 0,
+          currency: 'TRY',
+          orderDate,
+          rawPayload: order as object,
+        },
+      });
+      newOrders++;
+    }
+
+    await this.markMissingAsDelivered('PAZARAMA', allOrders.map((o) => String(o.id ?? o.orderId ?? o.orderNumber ?? o.orderCode ?? '')));
+
+    this.logger.log(`Pazarama sync tamamlandi: ${newOrders} yeni siparis.`);
     return { processed: allOrders.length, newOrders };
   }
 }
