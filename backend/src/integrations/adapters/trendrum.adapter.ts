@@ -2,9 +2,8 @@ import { Inject, Injectable, Optional } from '@nestjs/common';
 import { BaseIntegrationAdapter } from './base-adapter';
 import { AdapterConnectionResult, ExternalOrder } from './integration-adapter.interface';
 
-// Trendrum seller API — https://seller.trendruum.com
-// Dokümantasyon gelince endpoint'ler güncellenir; şimdilik REST tahmin yapısı.
-const TRENDRUM_API = 'https://products.trendruum.com';
+// Trendrum Entegrasyon API — https://api.trendruum.com/api/v1/integration
+const TRENDRUM_API = 'https://api.trendruum.com/api/v1/integration';
 
 @Injectable()
 export class TrendrumAdapter extends BaseIntegrationAdapter {
@@ -50,7 +49,7 @@ export class TrendrumAdapter extends BaseIntegrationAdapter {
     if (missing.length) return this.missing(missing);
 
     try {
-      const res = await fetch(`${TRENDRUM_API}/v1/products?page=0&size=1`, {
+      const res = await fetch(`${TRENDRUM_API}/auth/me`, {
         headers: this.authHeaders(),
         signal: AbortSignal.timeout(8000),
       });
@@ -76,7 +75,7 @@ export class TrendrumAdapter extends BaseIntegrationAdapter {
     if (missing.length) return [];
 
     try {
-      const res = await fetch(`${TRENDRUM_API}/v1/orders?status=OPEN&page=0&size=50`, {
+      const res = await fetch(`${TRENDRUM_API}/orders?status=OPEN&page=0&size=50`, {
         headers: this.authHeaders(),
         signal: AbortSignal.timeout(15000),
       });
@@ -95,7 +94,7 @@ export class TrendrumAdapter extends BaseIntegrationAdapter {
     if (missing.length || !_externalOrderId) return null;
 
     try {
-      const res = await fetch(`${TRENDRUM_API}/v1/orders/${_externalOrderId}`, {
+      const res = await fetch(`${TRENDRUM_API}/orders/${_externalOrderId}`, {
         headers: this.authHeaders(),
         signal: AbortSignal.timeout(8000),
       });
@@ -119,7 +118,7 @@ export class TrendrumAdapter extends BaseIntegrationAdapter {
     if (!barcode) return { ok: false, status: 'FAILED', message: 'Trendrum: barcode/modelCode zorunlu.' };
 
     try {
-      const res = await fetch(`${TRENDRUM_API}/v1/products/price-stock`, {
+      const res = await fetch(`${TRENDRUM_API}/products/price-stock`, {
         method: 'PUT',
         headers: this.authHeaders(),
         body: JSON.stringify({ barcode, salePrice, listPrice, quantity }),
@@ -163,7 +162,7 @@ export class TrendrumAdapter extends BaseIntegrationAdapter {
     };
 
     try {
-      const res = await fetch(`${TRENDRUM_API}/v1/products`, {
+      const res = await fetch(`${TRENDRUM_API}/products`, {
         method: 'POST',
         headers: this.authHeaders(),
         body: JSON.stringify(body),
@@ -194,7 +193,7 @@ export class TrendrumAdapter extends BaseIntegrationAdapter {
     if (!orderId) return { ok: false, status: 'FAILED', message: 'Trendrum: orderId zorunlu.' };
 
     try {
-      const res = await fetch(`${TRENDRUM_API}/v1/orders/${orderId}/status`, {
+      const res = await fetch(`${TRENDRUM_API}/orders/${orderId}/status`, {
         method: 'PUT',
         headers: this.authHeaders(),
         body: JSON.stringify({ status }),
