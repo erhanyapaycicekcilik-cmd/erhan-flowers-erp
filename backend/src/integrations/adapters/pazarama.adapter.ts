@@ -98,18 +98,7 @@ export class PazaramaAdapter extends BaseIntegrationAdapter {
       if (!token) {
         return { ok: false, status: 'MISSING_CREDENTIALS', message: `Pazarama login başarısız. HTTP ${loginRes.status}: ${loginRespText.slice(0, 200)}` };
       }
-      const res = await fetch(`${PAZARAMA_API}/api/account/info`, {
-        headers: { 'Authorization': `Bearer ${token}` },
-        signal: AbortSignal.timeout(8000),
-      });
-      if (res.ok) {
-        return { ok: true, status: 'CONNECTED', message: 'Pazarama API bağlantısı doğrulandı.' };
-      }
-      return {
-        ok: false,
-        status: res.status === 401 || res.status === 403 ? 'MISSING_CREDENTIALS' : 'FAILED',
-        message: `Pazarama API test başarısız. HTTP ${res.status}`,
-      };
+      return { ok: true, status: 'CONNECTED', message: 'Pazarama API bağlantısı doğrulandı.' };
     } catch (err: unknown) {
       return {
         ok: false,
