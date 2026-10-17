@@ -53,8 +53,9 @@ export class PazaramaAdapter extends BaseIntegrationAdapter {
         signal: AbortSignal.timeout(8000),
       });
       if (!res.ok) return null;
-      const data = await res.json() as { result?: boolean; data?: { accessToken?: string; refreshToken?: string } };
-      const token = data?.data?.accessToken ?? null;
+      const data = await res.json() as Record<string, unknown>;
+      const inner = (data?.data ?? data) as Record<string, unknown>;
+      const token = String(inner?.accessToken ?? inner?.token ?? inner?.Token ?? inner?.AccessToken ?? data?.token ?? data?.Token ?? '') || null;
       if (token) {
         this.cachedToken = token;
         this.tokenExpiresAt = Date.now() + 50 * 60 * 1000; // 50 dakika cache
@@ -79,9 +80,18 @@ export class PazaramaAdapter extends BaseIntegrationAdapter {
     if (missing.length) return this.missing(missing);
 
     try {
+      const apiKey = this.env('API_KEY');
+      const apiSecret = this.env('API_SECRET');
+      const loginRes = await fetch(`${PAZARAMA_API}/api/account/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ Username: apiKey, Password: apiSecret }),
+        signal: AbortSignal.timeout(8000),
+      });
+      const loginBody = await loginRes.text();
       const token = await this.getToken();
       if (!token) {
-        return { ok: false, status: 'MISSING_CREDENTIALS', message: 'Pazarama: API Key/Secret ile token alınamadı.' };
+        return { ok: false, status: 'MISSING_CREDENTIALS', message: `Pazarama login başarısız. HTTP ${loginRes.status}: ${loginBody.slice(0, 200)}` };
       }
       const res = await fetch(`${PAZARAMA_API}/api/account/info`, {
         headers: { 'Authorization': `Bearer ${token}` },
