@@ -634,10 +634,15 @@ export default function IntegrationsPage() {
                       <Download size={16} />
                       Sablon Indir
                     </button>
-                    {platform === 'TRENDYOL' && (
+                    {platform === 'TRENDYOL' ? (
                       <button className="btn btn-secondary" type="button" onClick={diagnoseTrendyol} disabled={loadingPlatform === 'DIAGNOSE_TRENDYOL'}>
                         <TestTube2 size={16} />
                         {loadingPlatform === 'DIAGNOSE_TRENDYOL' ? 'Test ediliyor…' : 'Bağlantıyı test et'}
+                      </button>
+                    ) : (
+                      <button className="btn btn-secondary" type="button" onClick={() => test(platform)} disabled={loadingPlatform === platform}>
+                        <TestTube2 size={16} />
+                        {loadingPlatform === platform ? 'Test ediliyor…' : 'Bağlantıyı test et'}
                       </button>
                     )}
                   </div>
