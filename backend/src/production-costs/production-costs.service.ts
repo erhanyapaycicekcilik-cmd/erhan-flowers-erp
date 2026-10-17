@@ -785,12 +785,15 @@ export class ProductionCostsService {
             : null;
 
         if (product) {
+          // sitePrice = pazaryeri komisyonu düşülmüş fiyat (kendi sitemiz için)
+          const commissionRate = Math.max(0, Math.min(Number(commissionPercent ?? 20), 100));
+          const sitePriceCalc = Math.round(salePrice * (1 - commissionRate / 100));
           await tx.product.update({
             where: { id: product.id },
             data: {
               costPrice: totalCost,
-              sitePrice: salePrice,
-              shopPrice: salePrice,
+              sitePrice: sitePriceCalc > 0 ? sitePriceCalc : salePrice,
+              shopPrice: sitePriceCalc > 0 ? sitePriceCalc : salePrice,
               marketPrice: salePrice,
               listPrice: salePrice,
               stockQuantity: variant.stockQuantity,

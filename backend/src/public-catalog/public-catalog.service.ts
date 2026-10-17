@@ -235,8 +235,15 @@ export class PublicCatalogService {
     return product ? this.toPublicProduct(product) : null;
   }
 
+  // Trendyol fiyatından komisyon düşülerek site fiyatı hesapla
+  private calcSitePrice(trendyolPrice: number, commissionPercent: number): number {
+    if (trendyolPrice <= 0) return 0;
+    const commission = Math.max(0, Math.min(commissionPercent, 100));
+    return Math.round(trendyolPrice * (1 - commission / 100));
+  }
+
   // Trendyol ürünlerinden sitePrice toplu doldur — sitePrice=0 olanları günceller
-  // Kural: sitePrice = trendyolSalePrice (müşteri sonradan manuel ayarlayabilir)
+  // Kural: sitePrice = trendyolSalePrice - komisyon (pazaryeri komisyonu olmadan)
   async bulkSyncSitePriceFromTrendyol(): Promise<{ updated: number; skipped: number }> {
     // sitePrice=0 olan ürünleri bul, Trendyol varyantı varsa fiyatını al
     const products = await this.prisma.product.findMany({
@@ -244,7 +251,7 @@ export class PublicCatalogService {
       select: {
         id: true,
         productCenterVariant: {
-          select: { trendyolSalePrice: true, status: true },
+          select: { trendyolSalePrice: true, commissionPercent: true, status: true },
         },
       },
     });
@@ -259,13 +266,15 @@ export class PublicCatalogService {
       const trendyolPrice = Number(variant.trendyolSalePrice ?? 0);
       if (trendyolPrice <= 0) { skipped++; continue; }
 
-      // sitePrice = trendyolSalePrice (kullanıcı sonradan ERP'den manuel ayarlayabilir)
+      const commission = Number(variant.commissionPercent ?? 20);
+      const sitePrice = this.calcSitePrice(trendyolPrice, commission);
+
       await this.prisma.product.update({
         where: { id: product.id },
         data: {
-          sitePrice: trendyolPrice,
-          shopPrice: trendyolPrice,
-          listPrice: trendyolPrice,
+          sitePrice,
+          shopPrice: sitePrice,
+          listPrice: trendyolPrice, // pazaryeri fiyatı üstü çizili "eski fiyat" olarak gösterilebilir
           marketPrice: trendyolPrice,
         },
       });
@@ -286,6 +295,7 @@ export class PublicCatalogService {
         productCenterVariant: {
           select: {
             trendyolSalePrice: true,
+            commissionPercent: true,
             productCostDraft: {
               select: { salePrice: true, status: true },
             },
@@ -301,19 +311,31 @@ export class PublicCatalogService {
     for (const product of products) {
       const variant = product.productCenterVariant;
       const draft = variant?.productCostDraft;
-      // Fiyat önceliği: onaylı maliyet → trendyolSalePrice
-      const approvedPrice = draft?.status === 'APPROVED' ? Number(draft.salePrice ?? 0) : 0;
       const trendyolPrice = Number(variant?.trendyolSalePrice ?? 0);
-      const newPrice = approvedPrice > 0 ? approvedPrice : trendyolPrice;
+      const commission = Number((variant as any)?.commissionPercent ?? 20);
+
+      // Fiyat önceliği: onaylı maliyet sale price → trendyolSalePrice, her ikisi de komisyonsuz
+      const approvedPrice = draft?.status === 'APPROVED' ? Number(draft.salePrice ?? 0) : 0;
+      const basePrice = approvedPrice > 0 ? approvedPrice : trendyolPrice;
+
+      if (basePrice <= 0) { skipped++; continue; }
+
+      // sitePrice = pazaryeri fiyatı - komisyon
+      const newPrice = this.calcSitePrice(basePrice, commission);
 
       if (newPrice <= 0) { skipped++; continue; }
       if (product.sitePrice === newPrice) { skipped++; continue; }
 
       await this.prisma.product.update({
         where: { id: product.id },
-        data: { sitePrice: newPrice, shopPrice: newPrice, listPrice: newPrice, marketPrice: newPrice },
+        data: {
+          sitePrice: newPrice,
+          shopPrice: newPrice,
+          listPrice: trendyolPrice > 0 ? trendyolPrice : newPrice,
+          marketPrice: trendyolPrice > 0 ? trendyolPrice : newPrice,
+        },
       });
-      details.push(`[${product.id}] ${product.productName}: ${product.sitePrice} → ${newPrice}`);
+      details.push(`[${product.id}] ${product.productName}: ${product.sitePrice} → ${newPrice} (komisyon %${commission})`);
       updated++;
     }
 
