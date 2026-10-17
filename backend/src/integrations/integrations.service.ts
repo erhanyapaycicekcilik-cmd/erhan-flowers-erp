@@ -10,6 +10,7 @@ import { ExternalOrder, ExternalOrderSummary, IntegrationAdapter, IntegrationPla
 import { N11Adapter } from './adapters/n11.adapter';
 import { TicimaxAdapter } from './adapters/ticimax.adapter';
 import { TrendyolAdapter } from './adapters/trendyol.adapter';
+import { TrendrumAdapter } from './adapters/trendrum.adapter';
 import { IntegrationCenterService } from './services/integration-center.service';
 
 const platforms: Array<{ platform: IntegrationPlatform; displayName: string }> = [
@@ -19,6 +20,7 @@ const platforms: Array<{ platform: IntegrationPlatform; displayName: string }> =
   { platform: 'AMAZON', displayName: 'Amazon' },
   { platform: 'WEBSITE', displayName: 'Web Site' },
   { platform: 'TICIMAX', displayName: 'Ticimax' },
+  { platform: 'TRENDRUM', displayName: 'Trendrum' },
 ];
 
 const TICIMAX_PLATFORM: IntegrationPlatform = 'TICIMAX';
@@ -1446,6 +1448,7 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
     if (platform === 'HEPSIBURADA') return new HepsiburadaAdapter(await this.integrationCenter.runtimeCredentials(platform, companyCode));
     if (platform === 'N11') return new N11Adapter(await this.integrationCenter.runtimeCredentials(platform, companyCode));
     if (platform === 'TICIMAX') return new TicimaxAdapter(await this.integrationCenter.ticimaxRuntimeCredentials());
+    if (platform === 'TRENDRUM') return new TrendrumAdapter(await this.integrationCenter.runtimeCredentials(platform, companyCode));
     return new GenericMarketplaceAdapter(platform);
   }
 
