@@ -63,6 +63,9 @@ export class OrderSyncService {
     try { await this.runFloraN11Sync(); } catch (err) {
       this.logger.error('FLORA N11 sync hatasi', err instanceof Error ? err.message : String(err));
     }
+    try { await this.runTrendrumSync(); } catch (err) {
+      this.logger.error('Trendrum sync hatasi', err instanceof Error ? err.message : String(err));
+    }
   }
 
   async runSync(): Promise<{ processed: number; newOrders: number; stockDeductions: number }> {
@@ -1180,6 +1183,100 @@ export class OrderSyncService {
     }
 
     this.logger.log(`FLORA N11 sync tamamlandi: ${newOrders} yeni siparis.`);
+    return { processed: allOrders.length, newOrders };
+  }
+
+  async runTrendrumSync(): Promise<{ processed: number; newOrders: number }> {
+    const apiKey = process.env.TRENDRUM_API_KEY ?? '';
+    const apiSecret = process.env.TRENDRUM_API_SECRET ?? '';
+
+    // DB'den de dene
+    let resolvedKey = apiKey;
+    let resolvedSecret = apiSecret;
+    if (!resolvedKey || !resolvedSecret) {
+      try {
+        const rows = await this.prisma.$queryRaw<Array<{ credentialType: string; encryptedValue: string }>>`
+          SELECT cc.credential_type AS "credentialType", cc.encrypted_value AS "encryptedValue"
+          FROM channel_credentials cc
+          JOIN channel_accounts ca ON cc.channel_account_id = ca.id
+          JOIN sales_channels sc ON ca.sales_channel_id = sc.id
+          JOIN companies co ON ca.company_id = co.id
+          WHERE sc.code = 'TRENDRUM' AND co.code = 'ERHAN' AND ca.is_active = true AND cc.is_active = true
+        `;
+        const vals: Record<string, string> = {};
+        for (const row of rows) {
+          try { vals[row.credentialType] = this.credentialVault.decrypt(row.encryptedValue); } catch { /* skip */ }
+        }
+        resolvedKey = vals['API_KEY'] || resolvedKey;
+        resolvedSecret = vals['API_SECRET'] || resolvedSecret;
+      } catch { /* skip */ }
+    }
+
+    if (!resolvedKey || !resolvedSecret) {
+      this.logger.warn('Trendrum credentials bulunamadi, sync atlanıyor.');
+      return { processed: 0, newOrders: 0 };
+    }
+
+    const apiBase = (process.env.TRENDRUM_API_URL ?? 'https://api.trendruum.com').replace(/\/+$/, '');
+    const auth = Buffer.from(`${resolvedKey}:${resolvedSecret}`).toString('base64');
+    const headers = { Accept: 'application/json', Authorization: `Basic ${auth}`, 'Content-Type': 'application/json' };
+    const lookback = Date.now() - this.lookbackDays * 24 * 60 * 60 * 1000;
+
+    const allOrders: Array<Record<string, unknown>> = [];
+    let page = 0;
+    while (page < 10) {
+      const url = `${apiBase}/v1/orders?status=OPEN&page=${page}&size=50`;
+      const res = await fetch(url, { headers }).catch(() => null);
+      if (!res || !res.ok) break;
+      const data = await res.json() as { content?: Array<Record<string, unknown>>; orders?: Array<Record<string, unknown>> };
+      const items = data.content ?? data.orders ?? [];
+      if (!Array.isArray(items) || items.length === 0) break;
+      allOrders.push(...items);
+      if (items.length < 50) break;
+      page++;
+    }
+
+    this.logger.log(`Trendrum'dan ${allOrders.length} siparis cekildi.`);
+    let newOrders = 0;
+
+    for (const order of allOrders) {
+      const externalOrderId = String(order.id ?? order.orderId ?? order.orderNumber ?? '');
+      if (!externalOrderId) continue;
+      const rawDate = order.orderDate ?? order.createdAt;
+      const orderDate = rawDate ? new Date(String(rawDate)) : null;
+      if (orderDate && orderDate.getTime() < lookback) continue;
+
+      const existing = await this.prisma.marketplaceOrder.findUnique({
+        where: { platform_externalOrderId: { platform: 'TRENDRUM', externalOrderId } },
+      });
+      if (existing) {
+        const newStatus = String(order.status ?? '');
+        if (newStatus && existing.status !== newStatus) {
+          await this.prisma.marketplaceOrder.update({ where: { id: existing.id }, data: { status: newStatus } });
+        }
+        continue;
+      }
+
+      await this.prisma.marketplaceOrder.create({
+        data: {
+          platform: 'TRENDRUM',
+          externalOrderId,
+          orderNumber: String(order.orderNumber ?? externalOrderId),
+          status: String(order.status ?? 'NEW'),
+          customerName: String((order.shippingAddress as Record<string,unknown>)?.fullName ?? order.customerName ?? ''),
+          totalAmount: Number(order.totalAmount ?? order.total ?? 0),
+          cargoAmount: 0,
+          currency: 'TRY',
+          orderDate,
+          rawPayload: order as object,
+        },
+      });
+      newOrders++;
+    }
+
+    await this.markMissingAsDelivered('TRENDRUM', allOrders.map((o) => String(o.id ?? o.orderId ?? o.orderNumber ?? '')));
+
+    this.logger.log(`Trendrum sync tamamlandi: ${newOrders} yeni siparis.`);
     return { processed: allOrders.length, newOrders };
   }
 }
