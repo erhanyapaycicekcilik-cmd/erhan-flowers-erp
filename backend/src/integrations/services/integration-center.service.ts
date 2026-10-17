@@ -7,6 +7,7 @@ import { AdapterConnectionResult, IntegrationAdapter } from '../adapters/integra
 import { N11Adapter } from '../adapters/n11.adapter';
 import { TicimaxAdapter } from '../adapters/ticimax.adapter';
 import { TrendyolAdapter } from '../adapters/trendyol.adapter';
+import { TrendrumAdapter } from '../adapters/trendrum.adapter';
 import { MockMarketplaceAdapter } from '../adapters/mock/mock-marketplace.adapter';
 import { CredentialVaultService } from './credential-vault.service';
 
@@ -866,6 +867,7 @@ export class IntegrationCenterService {
     if (platform === 'HEPSIBURADA') return new HepsiburadaAdapter(await this.runtimeCredentials(platform));
     if (platform === 'N11') return new N11Adapter(await this.runtimeCredentials(platform));
     if (platform === 'TICIMAX') return new TicimaxAdapter(await this.ticimaxRuntimeCredentials());
+    if (platform === 'TRENDRUM') return new TrendrumAdapter(await this.runtimeCredentials(platform));
     throw new BadRequestException('Platform desteklenmiyor.');
   }
 }
