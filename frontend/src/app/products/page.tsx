@@ -338,7 +338,7 @@ const CATALOG_CATEGORIES = [
 
 const steps = ['Ürün Bilgileri', 'Reçete/Malzeme', 'Maliyet/Fiyat', 'Görsel/SEO', 'Kanallara Gönder'];
 const visibleStepIndexes = [0, 1, 2, 3, 4] as const;
-const channels = ['SHOP', 'SITE', 'TRENDYOL', 'TRENDYOL_FLORA', 'HEPSIBURADA', 'N11', 'TICIMAX', 'TRENDRUM', 'PAZARAMA', 'WHATSAPP'] as const;
+const channels = ['SHOP', 'SITE', 'TRENDYOL', 'HEPSIBURADA', 'N11', 'TICIMAX', 'TRENDRUM', 'PAZARAMA', 'WHATSAPP'] as const;
 // Aynı ürünü Flora mağazasının Trendyol hesabına da açar (barkod aynı, model/stok kodu FL- ön ekli).
 const FLORA_TRENDYOL_CHANNEL = 'TRENDYOL_FLORA';
 const publishableChannels = ['TRENDYOL', 'HEPSIBURADA', 'N11', 'TICIMAX', 'TRENDRUM', 'PAZARAMA'] as const;
@@ -404,7 +404,7 @@ export default function ProductsPage() {
   const [step, setStep] = useState(0);
   const [sourceRecipeId, setSourceRecipeId] = useState('');
   const [costDetail, setCostDetail] = useState<CostDetail | null>(null);
-  const [selectedChannels, setSelectedChannels] = useState<string[]>(['SHOP', 'SITE', 'TRENDYOL', 'TRENDYOL_FLORA', 'HEPSIBURADA', 'N11']);
+  const [selectedChannels, setSelectedChannels] = useState<string[]>(['SHOP', 'SITE', 'TRENDYOL', 'HEPSIBURADA', 'N11']);
   const [allowIncomplete, setAllowIncomplete] = useState(true);
   const [query, setQuery] = useState('');
   const [familyPickerOpen, setFamilyPickerOpen] = useState(false);
