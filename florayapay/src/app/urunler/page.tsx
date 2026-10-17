@@ -48,6 +48,7 @@ export default async function ProductsPage({ searchParams }: PageProps) {
       category: searchParams.kategori,
       q: searchParams.q,
       page: searchParams.sayfa ? Number(searchParams.sayfa) : 1,
+      limit: 24,
       sort: searchParams.sirala,
     }),
   ])
@@ -126,7 +127,7 @@ export default async function ProductsPage({ searchParams }: PageProps) {
           ) : (
             <>
               <ul className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 md:gap-4">
-                {response.products.map((product) => (
+                {response.products.map((product, idx) => (
                   <li key={product.id}>
                     <article className="group bg-white rounded-2xl overflow-hidden hover:shadow-lg transition-all duration-300">
                       {/* Görsel */}
@@ -137,6 +138,9 @@ export default async function ProductsPage({ searchParams }: PageProps) {
                             alt={product.name}
                             fill
                             sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
+                            quality={60}
+                            priority={idx < 6}
+                            loading={idx < 6 ? 'eager' : 'lazy'}
                             className="object-cover group-hover:scale-105 transition-transform duration-500"
                           />
                         </div>
