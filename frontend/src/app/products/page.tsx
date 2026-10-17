@@ -479,6 +479,30 @@ export default function ProductsPage() {
     })));
   }
 
+  function downloadWhatsAppCsv() {
+    const activeEntries = entries.filter((e) => e.status === 'ACTIVE' && e.salePrice > 0);
+    const header = ['id', 'title', 'description', 'availability', 'condition', 'price', 'link', 'image_link', 'brand', 'google_product_category'].join(',');
+    const rows = activeEntries.map((e) => {
+      const id = e.barcode || e.modelCode || String(e.id);
+      const title = `"${(e.productName || '').replace(/"/g, '""')}"`;
+      const description = `"${(e.description || e.productName || '').replace(/"/g, '""')}"`;
+      const price = `${e.salePrice.toFixed(2)} TRY`;
+      const link = `https://www.erhanflowers.com/urun/${e.modelCode || e.barcode || e.id}`;
+      const imageLink = e.images?.[0] ? (e.images[0].startsWith('http') ? e.images[0] : `https://api.erhanflowers.com${e.images[0]}`) : '';
+      const brand = `"${(e.brand || 'Erhan Flowers').replace(/"/g, '""')}"`;
+      return [id, title, description, 'in stock', 'new', price, link, imageLink, brand, '5122'].join(',');
+    });
+    const csv = [header, ...rows].join('\n');
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `whatsapp-katalog-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    window.URL.revokeObjectURL(url);
+    setMessage(`WhatsApp Katalog CSV hazırlandı: ${activeEntries.length} ürün.`);
+  }
+
   async function downloadUnlinkedExcel() {
     try {
       const result = await api<{ fileName: string; mimeType: string; contentBase64: string; total: number }>('/product-center/export/excel');
@@ -1807,6 +1831,7 @@ export default function ProductsPage() {
         <div className="flex flex-wrap gap-2">
           <button className="btn btn-primary" onClick={() => { setQuickFormOpen((v) => !v); setQuickResult(null); }}><PackagePlus size={17} /> Hızlı Ürün Ekle</button>
           <button className="btn btn-secondary" onClick={downloadUnlinkedExcel}><FileText size={17} /> Bağlanmamış Ürünler Excel</button>
+          <button className="btn btn-secondary" onClick={downloadWhatsAppCsv}><FileText size={17} /> WhatsApp Katalog CSV</button>
           <label className="btn btn-secondary cursor-pointer">
             <Upload size={17} /> {importingExcel ? 'Yükleniyor...' : 'Excel ile Toplu Yükle'}
             <input type="file" accept=".xlsx,.xls" className="hidden" disabled={importingExcel} onChange={(event) => { const file = event.target.files?.[0]; if (file) importExcelFile(file); event.target.value = ''; }} />
