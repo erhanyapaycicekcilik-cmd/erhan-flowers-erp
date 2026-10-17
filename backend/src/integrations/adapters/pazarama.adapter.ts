@@ -113,8 +113,7 @@ export class PazaramaAdapter extends BaseIntegrationAdapter {
       if (res.status === 401 || res.status === 403) {
         return { ok: false, status: 'MISSING_CREDENTIALS', message: `Pazarama: kimlik doğrulama başarısız. HTTP ${res.status}` };
       }
-      // 4xx veya 5xx ama 401/403 değilse — API erişilebilir ama bu endpoint hata döndü
-      // 404/405 da geçerli bir "sunucuya ulaşıldı" sinyali
+      // 4xx ama 401/403 değilse — API sunucusuna ulaşıldı
       if (res.status < 500) {
         return { ok: true, status: 'CONNECTED', message: `Pazarama API erişilebilir (HTTP ${res.status}).` };
       }
