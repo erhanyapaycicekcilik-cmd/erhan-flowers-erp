@@ -1217,7 +1217,7 @@ export class OrderSyncService {
       return { processed: 0, newOrders: 0 };
     }
 
-    const apiBase = (process.env.TRENDRUM_API_URL ?? 'https://api.trendruum.com').replace(/\/+$/, '');
+    const apiBase = (process.env.TRENDRUM_API_URL ?? 'https://api.trendruum.com/api/v1/integration').replace(/\/+$/, '');
     const auth = Buffer.from(`${resolvedKey}:${resolvedSecret}`).toString('base64');
     const headers = { Accept: 'application/json', Authorization: `Basic ${auth}`, 'Content-Type': 'application/json' };
     const lookback = Date.now() - this.lookbackDays * 24 * 60 * 60 * 1000;
@@ -1225,7 +1225,7 @@ export class OrderSyncService {
     const allOrders: Array<Record<string, unknown>> = [];
     let page = 0;
     while (page < 10) {
-      const url = `${apiBase}/v1/orders?status=OPEN&page=${page}&size=50`;
+      const url = `${apiBase}/orders?status=OPEN&page=${page}&size=50`;
       const res = await fetch(url, { headers }).catch(() => null);
       if (!res || !res.ok) break;
       const data = await res.json() as { content?: Array<Record<string, unknown>>; orders?: Array<Record<string, unknown>> };
