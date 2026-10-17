@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '../auth/auth.guard';
 import { InternalKeyGuard } from '../auth/internal-key.guard';
+import { OwnerGuard } from '../auth/owner.guard';
 import { GeminiContentService } from './gemini-content.service';
 import { ProductsService } from './products.service';
 
@@ -45,6 +46,18 @@ export class ProductsController {
   @Post('broadcast-all')
   broadcastAll() {
     return this.products.broadcastAll();
+  }
+
+  @Post('broadcast-images-all')
+  @UseGuards(OwnerGuard)
+  broadcastImagesAll() {
+    return this.products.broadcastImagesAll();
+  }
+
+  @Post(':id/broadcast-images')
+  @UseGuards(OwnerGuard)
+  broadcastImages(@Param('id') id: string) {
+    return this.products.broadcastImages(Number(id));
   }
 
   @Post('bulk-set-model-codes')

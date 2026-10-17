@@ -186,6 +186,7 @@ export default function IntegrationsPage() {
   const [dryRunForm, setDryRunForm] = useState({ channelAccountId: '', trendyolProductVariantId: '', stockCardId: '', productId: '' });
   const [dryRunResult, setDryRunResult] = useState<Record<string, unknown> | null>(null);
   const [message, setMessage] = useState('');
+  const [platformMessages, setPlatformMessages] = useState<Record<string, string>>({});
   const [loadingPlatform, setLoadingPlatform] = useState('');
   const [company, setCompany] = useState<CompanyCode>('ERHAN');
   const [trendyolToken, setTrendyolToken] = useState('');
@@ -247,13 +248,15 @@ export default function IntegrationsPage() {
 
   async function test(platform: string) {
     setLoadingPlatform(platform);
+    setPlatformMessages((prev) => ({ ...prev, [platform]: '' }));
     setMessage('');
     try {
       const result = await api<{ ok: boolean; message: string }>(`/integrations/connections/${platform}/test`, { method: 'POST' });
-      setMessage(result.message);
+      setPlatformMessages((prev) => ({ ...prev, [platform]: result.message }));
       load();
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Bağlantı testi yapılamadı.');
+      const msg = error instanceof Error ? error.message : 'Bağlantı testi yapılamadı.';
+      setPlatformMessages((prev) => ({ ...prev, [platform]: msg }));
     } finally {
       setLoadingPlatform('');
     }
@@ -379,12 +382,15 @@ export default function IntegrationsPage() {
 
   async function diagnoseTrendyol() {
     setLoadingPlatform('DIAGNOSE_TRENDYOL');
+    setPlatformMessages((prev) => ({ ...prev, TRENDYOL: '' }));
     setMessage('');
     try {
       const result = await api<TrendyolDiagnose>(`/integrations/trendyol/diagnose?company=${company}`);
-      setMessage(trendyolDiagnoseText(result));
+      const msg = trendyolDiagnoseText(result);
+      setPlatformMessages((prev) => ({ ...prev, TRENDYOL: msg }));
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Bağlantı testi yapılamadı.');
+      const msg = error instanceof Error ? error.message : 'Bağlantı testi yapılamadı.';
+      setPlatformMessages((prev) => ({ ...prev, TRENDYOL: msg }));
     } finally {
       setLoadingPlatform('');
     }
@@ -665,6 +671,11 @@ export default function IntegrationsPage() {
                           {loadingPlatform === 'TOKEN_TRENDYOL' ? 'Kaydediliyor…' : 'Token ile kaydet ve test et'}
                         </button>
                       </div>
+                    </div>
+                  )}
+                  {platformMessages[platform] && (
+                    <div className={`mt-3 rounded border px-3 py-2 text-sm whitespace-pre-line break-words ${platformMessages[platform].includes('başarısız') || platformMessages[platform].includes('hata') || platformMessages[platform].includes('eksik') ? 'border-red-200 bg-red-50 text-red-800' : 'border-emerald-200 bg-emerald-50 text-emerald-800'}`}>
+                      {platformMessages[platform]}
                     </div>
                   )}
                 </div>

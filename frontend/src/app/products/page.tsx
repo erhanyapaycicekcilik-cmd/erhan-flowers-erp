@@ -382,6 +382,8 @@ export default function ProductsPage() {
   const [importingExcel, setImportingExcel] = useState(false);
   const [broadcastingAll, setBroadcastingAll] = useState(false);
   const [broadcastResult, setBroadcastResult] = useState<{ total: number; sent: number; skipped: number; errors: number } | null>(null);
+  const [broadcastingImages, setBroadcastingImages] = useState(false);
+  const [broadcastImagesResult, setBroadcastImagesResult] = useState<{ sent: number; errors: number } | null>(null);
   const [recalculating, setRecalculating] = useState(false);
   const [backfillingCosts, setBackfillingCosts] = useState(false);
   const [backfillResult, setBackfillResult] = useState<{ checked: number; created: number; skipped: number } | null>(null);
@@ -1850,6 +1852,26 @@ export default function ProductsPage() {
           </button>
           <button
             className="btn btn-secondary"
+            disabled={broadcastingImages}
+            onClick={async () => {
+              if (!confirm('Tüm aktif ürünlerin görselleri Trendyol, N11, Hepsiburada ve Trendrum\'a gönderilecek. Bu işlem birkaç dakika sürebilir. Devam edilsin mi?')) return;
+              setBroadcastingImages(true);
+              setBroadcastImagesResult(null);
+              try {
+                const result = await api<{ sent: number; errors: number }>('/products/broadcast-images-all', { method: 'POST' });
+                setBroadcastImagesResult(result);
+              } catch {
+                alert('Görsel gönderimi sırasında hata oluştu.');
+              } finally {
+                setBroadcastingImages(false);
+              }
+            }}
+          >
+            {broadcastingImages ? <RefreshCw size={17} className="animate-spin" /> : <Send size={17} />}
+            {broadcastingImages ? 'Görseller Gönderiliyor...' : 'Tüm Görselleri Platformlara Gönder'}
+          </button>
+          <button
+            className="btn btn-secondary"
             disabled={backfillingCosts}
             onClick={async () => {
               if (!confirm('Barkodu olan tüm ürünler için eksik maliyet taslakları oluşturulacak. Devam edilsin mi?')) return;
@@ -1881,6 +1903,12 @@ export default function ProductsPage() {
         <div className="mb-4 rounded-md bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-800">
           Toplu yayın tamamlandı — Toplam: {broadcastResult.total} | Gönderildi: {broadcastResult.sent} | Atlandı: {broadcastResult.skipped} | Hata: {broadcastResult.errors}
           <button className="ml-3 text-blue-500 hover:underline" onClick={() => setBroadcastResult(null)}>×</button>
+        </div>
+      )}
+      {broadcastImagesResult && (
+        <div className="mb-4 rounded-md bg-purple-50 px-3 py-2 text-sm font-semibold text-purple-800">
+          Görsel gönderimi tamamlandı — Gönderildi: {broadcastImagesResult.sent} | Hata: {broadcastImagesResult.errors}
+          <button className="ml-3 text-purple-500 hover:underline" onClick={() => setBroadcastImagesResult(null)}>×</button>
         </div>
       )}
       {message && <div className="mb-4 rounded-md bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800">{message}</div>}

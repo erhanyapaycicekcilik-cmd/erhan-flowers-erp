@@ -262,6 +262,12 @@ export class ProductsService {
           this.logger.warn(`Platform yayını hatası (update): ${String(err)}`),
         );
       }
+      // Görsel değiştiyse tüm platformlara görsel gönder
+      if (patch['imageUrls'] !== undefined) {
+        this.broadcastImages(id).catch((err) =>
+          this.logger.warn(`Görsel platform yayını hatası (update): ${String(err)}`),
+        );
+      }
       return product;
     } catch (error) {
       this.handleUniqueError(error);
@@ -381,6 +387,66 @@ export class ProductsService {
         }),
       ),
     );
+  }
+
+  // Tek ürünün görsellerini tüm bağlı platformlara gönderir.
+  async broadcastImages(productId: number): Promise<{ ok: boolean; results: Record<string, string> }> {
+    const product = await this.prisma.product.findUnique({
+      where: { id: productId },
+      include: { category: true, mediaFiles: true },
+    });
+    if (!product) return { ok: false, results: { error: 'Ürün bulunamadı.' } };
+
+    const imageUrls = [
+      ...(Array.isArray(product.imageUrls) ? (product.imageUrls as string[]) : []),
+      ...product.mediaFiles.map((f) => f.filePath).filter(Boolean) as string[],
+    ];
+    if (!imageUrls.length) return { ok: false, results: { error: 'Üründe görsel yok.' } };
+
+    const platforms = await this.getConnectedPlatforms();
+    if (!platforms.length) return { ok: false, results: { error: 'Bağlı platform yok.' } };
+
+    const payload = {
+      barcode: product.barcode ?? product.modelCode ?? '',
+      modelCode: product.modelCode ?? product.barcode ?? '',
+      trendyolBarcode: (product as any).trendyolBarcode ?? null,
+      productName: product.productName,
+      description: (product as any).description ?? product.productName,
+      salePrice: Number(product.marketPrice ?? product.shopPrice ?? 0),
+      listPrice: Number(product.listPrice ?? product.marketPrice ?? 0),
+      stockQuantity: Number(product.stockQuantity ?? 0),
+      imageUrls,
+      brand: product.brand ?? 'Erhan Flowers',
+      categoryName: (product.category as any)?.name ?? '',
+    };
+
+    const results: Record<string, string> = {};
+    await Promise.allSettled(
+      platforms.map(async (platform) => {
+        const res = await this.integrations.pushProduct(platform, payload);
+        results[platform] = res.ok ? 'OK' : res.message;
+      }),
+    );
+    const ok = Object.values(results).some((v) => v === 'OK');
+    return { ok, results };
+  }
+
+  // Tüm aktif ürünlerin görsellerini platformlara toplu gönderir.
+  async broadcastImagesAll(): Promise<{ sent: number; errors: number }> {
+    const products = await this.prisma.product.findMany({
+      where: { status: 'ACTIVE' },
+      select: { id: true, barcode: true, modelCode: true, imageUrls: true },
+    });
+    let sent = 0;
+    let errors = 0;
+    for (const p of products) {
+      const imgs = Array.isArray(p.imageUrls) ? p.imageUrls as string[] : [];
+      if (!imgs.length) continue;
+      const res = await this.broadcastImages(p.id).catch(() => null);
+      if (res?.ok) sent++; else errors++;
+      await new Promise((r) => setTimeout(r, 200));
+    }
+    return { sent, errors };
   }
 
   // Tüm aktif ürünleri tüm bağlı platformlara toplu yayınlar.
