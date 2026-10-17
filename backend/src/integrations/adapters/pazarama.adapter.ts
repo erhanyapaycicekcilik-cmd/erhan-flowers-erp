@@ -3,8 +3,8 @@ import { BaseIntegrationAdapter } from './base-adapter';
 import { AdapterConnectionResult, ExternalOrder } from './integration-adapter.interface';
 
 // Pazarama Entegrasyon API — https://isortagim.pazarama.com/
-// Auth: POST /api/account/login { username, password } → accessToken (Bearer)
-// Username = API Key, Password = API Secret
+// Auth: POST /connect/token (OAuth2 client_credentials) → access_token (Bearer)
+// client_id = API Key, client_secret = API Secret
 const PAZARAMA_API = 'https://isortagim.pazarama.com';
 
 @Injectable()
@@ -46,16 +46,20 @@ export class PazaramaAdapter extends BaseIntegrationAdapter {
     if (!apiKey || !apiSecret) return null;
 
     try {
-      const res = await fetch(`${PAZARAMA_API}/api/account/login`, {
+      const body = new URLSearchParams({
+        grant_type: 'client_credentials',
+        client_id: apiKey,
+        client_secret: apiSecret,
+      });
+      const res = await fetch(`${PAZARAMA_API}/connect/token`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ Username: apiKey, Password: apiSecret }),
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: body.toString(),
         signal: AbortSignal.timeout(8000),
       });
       if (!res.ok) return null;
       const data = await res.json() as Record<string, unknown>;
-      const inner = (data?.data ?? data) as Record<string, unknown>;
-      const token = String(inner?.accessToken ?? inner?.token ?? inner?.Token ?? inner?.AccessToken ?? data?.token ?? data?.Token ?? '') || null;
+      const token = String(data?.access_token ?? data?.accessToken ?? data?.token ?? '') || null;
       if (token) {
         this.cachedToken = token;
         this.tokenExpiresAt = Date.now() + 50 * 60 * 1000; // 50 dakika cache
@@ -82,16 +86,17 @@ export class PazaramaAdapter extends BaseIntegrationAdapter {
     try {
       const apiKey = this.env('API_KEY');
       const apiSecret = this.env('API_SECRET');
-      const loginRes = await fetch(`${PAZARAMA_API}/api/account/login`, {
+      const loginBody = new URLSearchParams({ grant_type: 'client_credentials', client_id: apiKey, client_secret: apiSecret });
+      const loginRes = await fetch(`${PAZARAMA_API}/connect/token`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ Username: apiKey, Password: apiSecret }),
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: loginBody.toString(),
         signal: AbortSignal.timeout(8000),
       });
-      const loginBody = await loginRes.text();
+      const loginRespText = await loginRes.text();
       const token = await this.getToken();
       if (!token) {
-        return { ok: false, status: 'MISSING_CREDENTIALS', message: `Pazarama login başarısız. HTTP ${loginRes.status}: ${loginBody.slice(0, 200)}` };
+        return { ok: false, status: 'MISSING_CREDENTIALS', message: `Pazarama login başarısız. HTTP ${loginRes.status}: ${loginRespText.slice(0, 200)}` };
       }
       const res = await fetch(`${PAZARAMA_API}/api/account/info`, {
         headers: { 'Authorization': `Bearer ${token}` },
