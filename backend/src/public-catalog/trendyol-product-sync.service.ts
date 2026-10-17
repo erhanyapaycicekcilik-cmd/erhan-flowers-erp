@@ -197,7 +197,7 @@ export class TrendyolProductSyncService {
     const size = 200;
 
     while (true) {
-      const url = `${TY_API}/product/sellers/${supplierId}/products?page=${page}&size=${size}`;
+      const url = `${TY_API}/product/sellers/${supplierId}/products?page=${page}&size=${size}&approved=true&onSale=true`;
       const res = await fetch(url, {
         headers: {
           'Authorization': `Basic ${auth}`,
