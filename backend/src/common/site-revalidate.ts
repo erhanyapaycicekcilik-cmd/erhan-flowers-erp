@@ -1,11 +1,11 @@
 // ERP ürün/fiyat değişince FloraYapayCiçek sitesini anında günceller.
-// SITE_REVALIDATE_URL ve SITE_REVALIDATE_SECRET env değişkenleri ile yapılandırılır.
+// SITE_REVALIDATE_URL ve SITE_REVALIDATE_SECRET (veya REVALIDATE_SECRET) env değişkenleri ile yapılandırılır.
 
 export async function revalidateSite(slug?: string): Promise<void> {
-  const url = process.env.SITE_REVALIDATE_URL;
-  const secret = process.env.SITE_REVALIDATE_SECRET;
+  const url = process.env.SITE_REVALIDATE_URL || 'https://www.erhanflowers.com/api/revalidate';
+  const secret = process.env.SITE_REVALIDATE_SECRET || process.env.REVALIDATE_SECRET;
 
-  if (!url || !secret) return; // env yoksa sessizce geç (dev ortamı)
+  if (!secret) return; // secret yoksa sessizce geç (dev ortamı)
 
   try {
     await fetch(`${url}?secret=${encodeURIComponent(secret)}`, {

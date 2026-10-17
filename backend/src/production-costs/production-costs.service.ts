@@ -8,6 +8,7 @@ import { PublishingService } from '../publishing/publishing.service';
 import { IntegrationsService } from '../integrations/integrations.service';
 import { IntegrationPlatform } from '../integrations/adapters/integration-adapter.interface';
 import { OrderSyncService } from '../integrations/services/order-sync.service';
+import { revalidateSite } from '../common/site-revalidate';
 
 type TrendyolCatalogProduct = {
   barcode: string;
@@ -785,6 +786,8 @@ export class ProductionCostsService {
             : null;
 
         if (product) {
+          // marketplaceSalePrice = dükkan fiyatı + komisyon + KDV + kargo (hesaplanmış platform fiyatı)
+          const platformPrice = marketplaceSalePrice > 0 ? marketplaceSalePrice : salePrice;
           await tx.product.update({
             where: { id: product.id },
             data: {
@@ -793,12 +796,12 @@ export class ProductionCostsService {
               shopPrice: salePrice,
               marketPrice: salePrice,
               listPrice: salePrice,
+              // Kendi sitemiz (sitePrice > 0 olanları gösterir) pazaryeri fiyatıyla satar
+              sitePrice: platformPrice,
               stockQuantity: variant.stockQuantity,
             },
           });
           // Maliyet onaylanınca tüm platformlara fiyat/stok yayını
-          // marketplaceSalePrice = dükkan fiyatı + komisyon + KDV + kargo (hesaplanmış platform fiyatı)
-          const platformPrice = marketplaceSalePrice > 0 ? marketplaceSalePrice : salePrice;
           this.broadcastApprovedCost({
             barcode: product.barcode,
             trendyolBarcode: product.trendyolBarcode,
@@ -818,6 +821,9 @@ export class ProductionCostsService {
         },
       });
     });
+
+    // Onaylanan fiyat kendi sitemizde de hemen görünsün (commit sonrası)
+    if (approve) void revalidateSite();
 
     return { ok: true, costDraft: this.serializeCostDraft(draft) };
   }
