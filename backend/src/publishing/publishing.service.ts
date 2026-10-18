@@ -277,8 +277,10 @@ export class PublishingService {
   }
 
   private async sendToPlatform(platform: IntegrationPlatform, variantId: number, userId: number, actionType: PublishingActionType, payload: Record<string, unknown>, missingFields: string[], allowIncomplete: boolean, companyCode = 'ERHAN') {
+    const noCommissionPrice = payload.salePrice ? Math.round(Number(payload.salePrice) * 0.8 * 100) / 100 : payload.salePrice;
     const platformPrice = platform === 'N11' ? (payload.n11SalePrice ?? payload.salePrice)
       : platform === 'HEPSIBURADA' ? (payload.hepsiburadaSalePrice ?? payload.salePrice)
+      : (platform === 'TRENDRUM' || platform === 'PAZARAMA') ? noCommissionPrice
       : payload.salePrice;
     const platformPayload = { ...payload, salePrice: platformPrice, listPrice: platformPrice, platform, allowIncomplete };
     if (platform === 'TRENDYOL' && companyCode === 'ERHAN' && this.useLegacyTrendyolPublisher()) {
