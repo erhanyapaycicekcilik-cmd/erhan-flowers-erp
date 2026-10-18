@@ -404,7 +404,7 @@ export default function ProductsPage() {
   const [step, setStep] = useState(0);
   const [sourceRecipeId, setSourceRecipeId] = useState('');
   const [costDetail, setCostDetail] = useState<CostDetail | null>(null);
-  const [selectedChannels, setSelectedChannels] = useState<string[]>(['SHOP', 'SITE', 'TRENDYOL', 'HEPSIBURADA', 'N11']);
+  const [selectedChannels, setSelectedChannels] = useState<string[]>(['SHOP', 'SITE', 'TRENDYOL', 'HEPSIBURADA', 'N11', 'TRENDRUM', 'PAZARAMA']);
   const [allowIncomplete, setAllowIncomplete] = useState(true);
   const [query, setQuery] = useState('');
   const [familyPickerOpen, setFamilyPickerOpen] = useState(false);
