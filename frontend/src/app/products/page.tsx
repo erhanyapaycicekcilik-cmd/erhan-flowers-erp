@@ -4334,16 +4334,18 @@ function calculateChannelPricing(draft: CostDetail['costDraft'], salePrice: numb
   const targetMarginPercent = Number(normalized.profitMarginPercent || 45);
   const baseShipping = Number(normalized.shippingCost || 0);
   const summary = calculatePricing(normalized, salePrice, commissionPercent);
+  // Komisyonsuz platformlar (SITE, TRENDRUM, PAZARAMA, WHATSAPP) e-ticaret fiyatının %80'ini alır
+  const noCommissionPrice = roundMoney(summary.suggestedSalePrice * 0.8);
   const presets = [
     { key: 'SHOP', label: 'Dükkan / Fiziki Mağaza', salePrice: summary.shopSalePrice, commissionPercent: 0, shippingCost: 0, customerShippingCharge: 0, paymentFeePercent: 0, serviceFee: 0, otherExpense: 0 },
-    { key: 'SITE', label: 'Mağaza Web Sitesi', salePrice: summary.siteSalePrice, commissionPercent: 0, shippingCost: baseShipping, customerShippingCharge: 0, paymentFeePercent: 0, serviceFee: 0, otherExpense: 0 },
+    { key: 'SITE', label: 'Mağaza Web Sitesi', salePrice: noCommissionPrice, commissionPercent: 0, shippingCost: baseShipping, customerShippingCharge: 0, paymentFeePercent: 0, serviceFee: 0, otherExpense: 0 },
     { key: 'TRENDYOL', label: 'Trendyol', salePrice: summary.suggestedSalePrice, commissionPercent: 0, shippingCost: baseShipping, customerShippingCharge: 0, paymentFeePercent: 0, serviceFee: 0, otherExpense: 0 },
     { key: 'HEPSIBURADA', label: 'Hepsiburada', salePrice: summary.suggestedSalePrice, commissionPercent: 0, shippingCost: baseShipping, customerShippingCharge: 0, paymentFeePercent: 0, serviceFee: 0, otherExpense: 0 },
     { key: 'N11', label: 'N11', salePrice: summary.suggestedSalePrice, commissionPercent: 0, shippingCost: baseShipping, customerShippingCharge: 0, paymentFeePercent: 0, serviceFee: 0, otherExpense: 0 },
     { key: 'TICIMAX', label: 'Diğer Pazaryeri / Ticimax', salePrice: summary.suggestedSalePrice, commissionPercent: 0, shippingCost: baseShipping, customerShippingCharge: 0, paymentFeePercent: 0, serviceFee: 0, otherExpense: 0 },
-    { key: 'TRENDRUM', label: 'Trendrum', salePrice: summary.suggestedSalePrice, commissionPercent: 0, shippingCost: baseShipping, customerShippingCharge: 0, paymentFeePercent: 0, serviceFee: 0, otherExpense: 0 },
-    { key: 'PAZARAMA', label: 'Pazarama', salePrice: summary.suggestedSalePrice, commissionPercent: 0, shippingCost: baseShipping, customerShippingCharge: 0, paymentFeePercent: 0, serviceFee: 0, otherExpense: 0 },
-    { key: 'WHATSAPP', label: 'WhatsApp Katalog', salePrice: summary.suggestedSalePrice, commissionPercent: 0, shippingCost: 0, customerShippingCharge: 0, paymentFeePercent: 0, serviceFee: 0, otherExpense: 0 },
+    { key: 'TRENDRUM', label: 'Trendrum', salePrice: noCommissionPrice, commissionPercent: 0, shippingCost: baseShipping, customerShippingCharge: 0, paymentFeePercent: 0, serviceFee: 0, otherExpense: 0 },
+    { key: 'PAZARAMA', label: 'Pazarama', salePrice: noCommissionPrice, commissionPercent: 0, shippingCost: baseShipping, customerShippingCharge: 0, paymentFeePercent: 0, serviceFee: 0, otherExpense: 0 },
+    { key: 'WHATSAPP', label: 'WhatsApp Katalog', salePrice: noCommissionPrice, commissionPercent: 0, shippingCost: 0, customerShippingCharge: 0, paymentFeePercent: 0, serviceFee: 0, otherExpense: 0 },
   ];
 
   return presets.map((preset) => {
