@@ -33,7 +33,6 @@ function OdemeKartInner() {
     }
   }, [orderDataStr])
 
-  // iframe srcdoc approach — scripts execute in their own context
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
