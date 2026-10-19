@@ -73,6 +73,11 @@ services:
       IYZICO_API_KEY: ${IYZICO_API_KEY:-}
       IYZICO_SECRET_KEY: ${IYZICO_SECRET_KEY:-}
       IYZICO_BASE_URL: ${IYZICO_BASE_URL:-https://api.iyzipay.com}
+      # Online ödeme — Tami Sanal POS (boş bırakılırsa kart ödeme seçeneği gizlenir)
+      TAMI_MERCHANT_ID: ${TAMI_MERCHANT_ID:-}
+      TAMI_TERMINAL_ID: ${TAMI_TERMINAL_ID:-}
+      TAMI_SECRET_KEY: ${TAMI_SECRET_KEY:-}
+      TAMI_API_URL: ${TAMI_API_URL:-https://paymentapi.tami.com.tr}
       INTERNAL_API_URL: http://backend:8001
     volumes:
       - florayapay_banner:/app/data
