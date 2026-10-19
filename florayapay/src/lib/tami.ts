@@ -154,17 +154,23 @@ export async function initiate3DS(req: TamiInitRequest): Promise<TamiInitRespons
     securityHash,
   }
 
+  const correlationId = randomUUID()
   const res = await fetch(`${API_URL}/payment/auth`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'PG-Auth-Token': generatePGAuthToken(),
-      'X-Correlation-ID': randomUUID(),
+      'X-Correlation-ID': correlationId,
+      'X-Correlation-Id': correlationId,
+      'X-CorrelationId': correlationId,
+      'correlationId': correlationId,
     },
     body: JSON.stringify(body),
   })
 
-  return res.json()
+  const raw = await res.json()
+  console.log('[tami] initiate3DS response:', JSON.stringify(raw))
+  return raw
 }
 
 export async function complete3DS(orderId: string): Promise<TamiCompleteResponse> {
