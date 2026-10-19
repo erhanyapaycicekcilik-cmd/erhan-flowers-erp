@@ -115,8 +115,8 @@ export default function SiparisPage() {
     setLoading(true)
 
     try {
-      // 1. ERP backend'e sipariş kaydet
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || ''}/public/orders`, {
+      // 1. ERP backend'e sipariş kaydet (proxy üzerinden — CSP bypass)
+      const res = await fetch('/api/orders/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -176,7 +176,18 @@ export default function SiparisPage() {
         clearCart()
         router.push('/siparis-tamamlandi')
       } else {
-        alert('Sunucuya bağlanılamadı. Lütfen WhatsApp veya EFT ile sipariş verin.')
+        // Kart ödemesinde backend erişilemese de devam et — sipariş callback'te kaydedilir
+        const orderNumber = 'WEB-' + Date.now().toString(36).toUpperCase()
+        const orderPayload = {
+          orderId: orderNumber,
+          amount: Math.round(genelToplam),
+          musteri: { ad: form.ad, soyad: form.soyad, email: form.email || `${form.telefon}@erhanflowers.com`, telefon: form.telefon },
+          adres: { adres: form.adres, sehir: form.sehir, ulke: 'Turkey' },
+          urunler: items.map(i => ({ id: String(i.id), ad: i.name, kategori: 'YAPAY_CICEK', fiyat: i.price, adet: i.quantity })),
+        }
+        clearCart()
+        router.push(`/odeme-kart?data=${encodeURIComponent(JSON.stringify(orderPayload))}`)
+        return
         setLoading(false)
       }
     }
