@@ -61,12 +61,10 @@ export async function POST(req: NextRequest) {
     console.log('[tami callback POST] body:', rawBody.substring(0, 500))
 
     const params: Record<string, string> = {}
-    // try form data parse
     try {
       const sp = new URLSearchParams(rawBody)
       sp.forEach((v, k) => { params[k] = v })
     } catch { /* ignore */ }
-    // also try query string
     req.nextUrl.searchParams.forEach((v, k) => { params[k] = v })
 
     return await handleCallback(params)
