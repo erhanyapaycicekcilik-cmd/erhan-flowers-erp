@@ -630,6 +630,71 @@ export class ProductsService {
     return { total, sent, skipped, errors };
   }
 
+  async syncFromTrendyol(): Promise<{ updated: number; notFound: number; total: number }> {
+    const trendyolProducts = await this.integrations.fetchTrendyolProducts();
+    let updated = 0;
+    let notFound = 0;
+
+    for (const tp of trendyolProducts) {
+      const barcode = String(tp.barcode ?? tp.stockCode ?? '');
+      const name = String(tp.title ?? tp.productName ?? tp.name ?? '');
+      const rawImages = Array.isArray(tp.images) ? tp.images as Record<string, unknown>[] : [];
+      const imageUrls = rawImages.map((img) => String(img.url ?? img)).filter(Boolean);
+
+      if (!barcode || !name) continue;
+
+      // ERP'de barkodla eşleşen varyantı bul
+      const variant = await this.prisma.trendyolProductVariant.findFirst({
+        where: { barcode },
+        select: { id: true, productId: true },
+      });
+
+      if (!variant) {
+        // modelCode ile de dene
+        const variantByModel = await this.prisma.trendyolProductVariant.findFirst({
+          where: { currentModelCode: barcode },
+          select: { id: true, productId: true },
+        });
+        if (!variantByModel) { notFound++; continue; }
+        await this.applyTrendyolSync(variantByModel.id, variantByModel.productId, name, imageUrls);
+      } else {
+        await this.applyTrendyolSync(variant.id, variant.productId, name, imageUrls);
+      }
+      updated++;
+    }
+
+    return { updated, notFound, total: trendyolProducts.length };
+  }
+
+  private async applyTrendyolSync(variantId: number, productId: number | null, name: string, imageUrls: string[]) {
+    if (imageUrls.length > 0) {
+      await this.prisma.trendyolProductVariant.update({
+        where: { id: variantId },
+        data: { productName: name, images: imageUrls },
+      });
+    } else {
+      await this.prisma.trendyolProductVariant.update({
+        where: { id: variantId },
+        data: { productName: name },
+      });
+    }
+    if (productId && imageUrls.length > 0) {
+      await this.prisma.product.update({
+        where: { id: productId },
+        data: { productName: name, imageUrls },
+      });
+    } else if (productId) {
+      await this.prisma.product.update({
+        where: { id: productId },
+        data: { productName: name },
+      });
+    }
+    // Değişen ürünü diğer platformlara yay
+    if (productId) {
+      this.broadcastImages(productId).catch(() => null);
+    }
+  }
+
   passive(id: number) {
     return this.prisma.product.update({
       where: { id },
