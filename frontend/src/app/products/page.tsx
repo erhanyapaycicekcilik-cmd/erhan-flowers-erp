@@ -385,7 +385,7 @@ export default function ProductsPage() {
   const [broadcastingImages, setBroadcastingImages] = useState(false);
   const [broadcastImagesResult, setBroadcastImagesResult] = useState<{ sent: number; errors: number } | null>(null);
   const [syncingFromTrendyol, setSyncingFromTrendyol] = useState(false);
-  const [syncFromTrendyolResult, setSyncFromTrendyolResult] = useState<{ updated: number; notFound: number; total: number } | null>(null);
+  const [syncFromTrendyolResult, setSyncFromTrendyolResult] = useState<{ updated: number; notFound: number; total: number; error?: string } | null>(null);
   const [recalculating, setRecalculating] = useState(false);
   const [backfillingCosts, setBackfillingCosts] = useState(false);
   const [backfillResult, setBackfillResult] = useState<{ checked: number; created: number; skipped: number } | null>(null);
@@ -1905,10 +1905,10 @@ export default function ProductsPage() {
               setSyncingFromTrendyol(true);
               setSyncFromTrendyolResult(null);
               try {
-                const result = await api<{ updated: number; notFound: number; total: number }>('/products/sync-from-trendyol', { method: 'POST' });
+                const result = await api<{ updated: number; notFound: number; total: number; error?: string }>('/products/sync-from-trendyol', { method: 'POST' });
                 setSyncFromTrendyolResult(result);
-              } catch {
-                alert('Trendyol senkronizasyonu sırasında hata oluştu.');
+              } catch (e: unknown) {
+                setSyncFromTrendyolResult({ updated: 0, notFound: 0, total: 0, error: e instanceof Error ? e.message : 'Bağlantı hatası' });
               } finally {
                 setSyncingFromTrendyol(false);
               }
@@ -1918,7 +1918,11 @@ export default function ProductsPage() {
             {syncingFromTrendyol ? 'Trendyol\'dan Çekiliyor...' : 'Trendyol\'dan Ad/Görsel Güncelle'}
           </button>
           {syncFromTrendyolResult && (
-            <span className="text-sm text-green-600">Trendyol: {syncFromTrendyolResult.total} ürün kontrol edildi, {syncFromTrendyolResult.updated} güncellendi, {syncFromTrendyolResult.notFound} eşleşmedi.</span>
+            <span className={`text-sm ${syncFromTrendyolResult.error ? 'text-red-600' : 'text-green-600'}`}>
+              {syncFromTrendyolResult.error
+                ? `Trendyol hatası: ${syncFromTrendyolResult.error}`
+                : `Trendyol: ${syncFromTrendyolResult.total} ürün kontrol edildi, ${syncFromTrendyolResult.updated} güncellendi, ${syncFromTrendyolResult.notFound} eşleşmedi.`}
+            </span>
           )}
           <button
             className="btn btn-secondary"

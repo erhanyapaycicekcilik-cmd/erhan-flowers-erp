@@ -630,8 +630,13 @@ export class ProductsService {
     return { total, sent, skipped, errors };
   }
 
-  async syncFromTrendyol(): Promise<{ updated: number; notFound: number; total: number }> {
-    const trendyolProducts = await this.integrations.fetchTrendyolProducts();
+  async syncFromTrendyol(): Promise<{ updated: number; notFound: number; total: number; error?: string }> {
+    let trendyolProducts: Array<Record<string, unknown>>;
+    try {
+      trendyolProducts = await this.integrations.fetchTrendyolProducts();
+    } catch (err: unknown) {
+      return { updated: 0, notFound: 0, total: 0, error: err instanceof Error ? err.message : String(err) };
+    }
     let updated = 0;
     let notFound = 0;
 
