@@ -25,7 +25,6 @@ export async function POST(req: NextRequest) {
     const rawHtml = Buffer.from(result.threeDSHtmlContent, 'base64').toString('utf-8')
     console.log('[tami] 3ds html preview:', rawHtml.substring(0, 800))
 
-    // Inject a fallback script: if Tami's own auto-submit fails, force-submit the form after 500ms
     const forceSubmit = `<script>
 (function(){
   function go(){
