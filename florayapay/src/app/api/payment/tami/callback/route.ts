@@ -4,8 +4,13 @@ import { complete3DS, verifyCallbackHashedData } from '@/lib/tami'
 const SITE_URL = process.env.SITE_URL || 'https://www.erhanflowers.com'
 
 async function handleCallback(params: Record<string, string>): Promise<NextResponse> {
+  // Log all received params for debugging
+  console.log('[tami callback] ALL PARAMS:', JSON.stringify(params))
+
+  // Tami format fields
   const success = params['success'] || ''
-  const orderId = params['orderId'] || ''
+  // Garanti BBVA uses 'oid' as orderId; Tami uses 'orderId'
+  const orderId = params['orderId'] || params['oid'] || ''
   const mdStatus = params['mdStatus'] || ''
   const hashedData = params['hashedData'] || ''
   const cardOrganization = params['cardOrganization'] || ''
@@ -17,7 +22,11 @@ async function handleCallback(params: Record<string, string>): Promise<NextRespo
   const txnAmount = params['txnAmount'] || ''
   const systemTime = params['systemTime'] || ''
 
-  console.log('[tami callback]', { success, orderId, mdStatus, hashedData: !!hashedData })
+  // Garanti BBVA direct callback: 'response'='Approved', 'procreturncode'='00'
+  const garantiResponse = params['response'] || ''
+  const garantiProcCode = params['procreturncode'] || ''
+
+  console.log('[tami callback]', { success, orderId, mdStatus, hashedData: !!hashedData, garantiResponse, garantiProcCode })
 
   if (hashedData) {
     const valid = verifyCallbackHashedData({
@@ -31,7 +40,24 @@ async function handleCallback(params: Record<string, string>): Promise<NextRespo
     }
   }
 
-  if (success !== 'true' || mdStatus !== '1') {
+  // Accept success if: Tami says success=true, OR mdStatus=1 (with no explicit failure), OR Garanti direct approval
+  const isGarantiApproval = garantiResponse.toLowerCase() === 'approved' && garantiProcCode === '00'
+  const isTamiSuccess = success === 'true'
+  const isMdStatusOk = mdStatus === '1'
+
+  if (!orderId) {
+    console.error('[tami callback] orderId missing, params:', JSON.stringify(params))
+    return NextResponse.redirect(`${SITE_URL}/odeme-basarisiz?kod=eksik_siparis_id`, { status: 302 })
+  }
+
+  if (success === 'false' || (mdStatus && mdStatus !== '1' && !isGarantiApproval)) {
+    return NextResponse.redirect(
+      `${SITE_URL}/odeme-basarisiz?kod=3ds_hata&mdStatus=${mdStatus}`,
+      { status: 302 },
+    )
+  }
+
+  if (!isTamiSuccess && !isMdStatusOk && !isGarantiApproval) {
     return NextResponse.redirect(
       `${SITE_URL}/odeme-basarisiz?kod=3ds_hata&mdStatus=${mdStatus}`,
       { status: 302 },
@@ -56,15 +82,27 @@ async function handleCallback(params: Record<string, string>): Promise<NextRespo
 export async function POST(req: NextRequest) {
   try {
     const rawBody = await req.text()
+    const contentType = req.headers.get('content-type') || ''
     console.log('[tami callback POST] url:', req.url)
-    console.log('[tami callback POST] content-type:', req.headers.get('content-type'))
-    console.log('[tami callback POST] body:', rawBody.substring(0, 500))
+    console.log('[tami callback POST] content-type:', contentType)
+    console.log('[tami callback POST] raw body:', rawBody.substring(0, 1000))
 
     const params: Record<string, string> = {}
+    // Parse form-encoded body
     try {
       const sp = new URLSearchParams(rawBody)
       sp.forEach((v, k) => { params[k] = v })
     } catch { /* ignore */ }
+    // Also try JSON body
+    if (contentType.includes('application/json') && rawBody) {
+      try {
+        const json = JSON.parse(rawBody)
+        if (typeof json === 'object' && json !== null) {
+          Object.entries(json).forEach(([k, v]) => { params[k] = String(v) })
+        }
+      } catch { /* ignore */ }
+    }
+    // URL query params (override body if duplicate)
     req.nextUrl.searchParams.forEach((v, k) => { params[k] = v })
 
     return await handleCallback(params)
