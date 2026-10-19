@@ -36,15 +36,10 @@ function OdemeKartInner() {
   }, [orderDataStr])
 
   useEffect(() => {
-    if (threeDsHtml && containerRef.current) {
-      containerRef.current.innerHTML = threeDsHtml
-      const scripts = containerRef.current.querySelectorAll('script')
-      scripts.forEach(s => {
-        const newScript = document.createElement('script')
-        if (s.src) newScript.src = s.src
-        else newScript.textContent = s.textContent
-        document.body.appendChild(newScript)
-      })
+    if (threeDsHtml) {
+      document.open()
+      document.write(threeDsHtml)
+      document.close()
     }
   }, [threeDsHtml])
 
