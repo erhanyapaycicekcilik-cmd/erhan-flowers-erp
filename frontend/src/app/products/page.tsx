@@ -1859,7 +1859,7 @@ export default function ProductsPage() {
             className="btn btn-secondary"
             disabled={broadcastingAll}
             onClick={async () => {
-              if (!confirm('Tüm aktif ürünlerin fiyat ve stoğu Trendyol, N11 ve Hepsiburada\'ya gönderilecek. Devam edilsin mi?')) return;
+              if (!confirm('Tüm aktif ürünlerin fiyat ve stoğu Trendyol, N11, Hepsiburada, Trendrum ve Pazarama\'ya gönderilecek. Devam edilsin mi?')) return;
               setBroadcastingAll(true);
               setBroadcastResult(null);
               try {
