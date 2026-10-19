@@ -56,7 +56,13 @@ export default function SiparisPage() {
     adres: '',
     postaKodu: '',
     not: '',
+    tcKimlik: '',
+    // Kurumsal fatura
+    firmaUnvan: '',
+    vergiNo: '',
+    vergiDairesi: '',
   })
+  const [faturaKurumsal, setFaturaKurumsal] = useState(false)
   const [odemeYontemi, setOdemeYontemi] = useState<'whatsapp' | 'eft' | 'kart'>('whatsapp')
   const [loading, setLoading] = useState(false)
   const [errors, setErrors] = useState<Partial<typeof form>>({})
@@ -76,6 +82,15 @@ export default function SiparisPage() {
     if (!form.telefon.trim()) e.telefon = 'Telefon gerekli'
     if (!form.sehir.trim()) e.sehir = 'Şehir gerekli'
     if (!form.adres.trim()) e.adres = 'Adres gerekli'
+    if (!form.email.trim()) e.email = 'E-posta gerekli'
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) e.email = 'Geçerli bir e-posta girin'
+    if (!form.tcKimlik.trim()) e.tcKimlik = 'TC Kimlik No gerekli'
+    else if (!/^\d{11}$/.test(form.tcKimlik.trim())) e.tcKimlik = '11 haneli TC Kimlik No girin'
+    if (faturaKurumsal) {
+      if (!form.firmaUnvan.trim()) e.firmaUnvan = 'Firma unvanı gerekli'
+      if (!form.vergiNo.trim()) e.vergiNo = 'Vergi numarası gerekli'
+      if (!form.vergiDairesi.trim()) e.vergiDairesi = 'Vergi dairesi gerekli'
+    }
     setErrors(e)
     return Object.keys(e).length === 0
   }
@@ -129,6 +144,11 @@ export default function SiparisPage() {
           address: form.adres,
           postalCode: form.postaKodu || undefined,
           note: form.not || undefined,
+          tcKimlik: form.tcKimlik || undefined,
+          faturaKurumsal,
+          firmaUnvan: faturaKurumsal ? form.firmaUnvan : undefined,
+          vergiNo: faturaKurumsal ? form.vergiNo : undefined,
+          vergiDairesi: faturaKurumsal ? form.vergiDairesi : undefined,
           items: items.map((i) => ({
             productId: String(i.id),
             productName: i.name,
@@ -242,11 +262,49 @@ export default function SiparisPage() {
                       <input value={form.telefon} onChange={(e) => set('telefon', e.target.value)}
                         placeholder="05XX XXX XX XX" type="tel" className={inputCls(!!errors.telefon)} />
                     </Field>
-                    <Field label="E-posta">
+                    <Field label="E-posta *" error={errors.email}>
                       <input value={form.email} onChange={(e) => set('email', e.target.value)}
-                        placeholder="opsiyonel" type="email" className={inputCls(false)} />
+                        placeholder="ornek@email.com" type="email" className={inputCls(!!errors.email)} />
                     </Field>
                   </div>
+                </div>
+
+                {/* Fatura bilgileri */}
+                <div className="bg-white rounded-2xl border border-[#E0DDD4] p-6">
+                  <h2 className="font-semibold text-[#0D1510] mb-1">Fatura Bilgileri</h2>
+                  <p className="text-xs text-[#8C8A82] mb-5">Yasal zorunluluk gereği fatura için TC Kimlik No gereklidir.</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <Field label="TC Kimlik No *" error={errors.tcKimlik} className="sm:col-span-2">
+                      <input value={form.tcKimlik} onChange={(e) => set('tcKimlik', e.target.value.replace(/\D/g, '').slice(0, 11))}
+                        placeholder="00000000000" inputMode="numeric" maxLength={11} className={inputCls(!!errors.tcKimlik)} />
+                    </Field>
+                  </div>
+
+                  {/* Kurumsal fatura toggle */}
+                  <button type="button" onClick={() => setFaturaKurumsal(v => !v)}
+                    className="mt-4 flex items-center gap-2 text-sm text-[#5C7A62] font-medium">
+                    <span className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-colors ${faturaKurumsal ? 'bg-[#5C7A62] border-[#5C7A62]' : 'border-[#C4C0B8]'}`}>
+                      {faturaKurumsal && <span className="text-white text-[10px] leading-none">✓</span>}
+                    </span>
+                    Kurumsal fatura istiyorum
+                  </button>
+
+                  {faturaKurumsal && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+                      <Field label="Firma Unvanı *" error={errors.firmaUnvan} className="sm:col-span-2">
+                        <input value={form.firmaUnvan} onChange={(e) => set('firmaUnvan', e.target.value)}
+                          placeholder="Şirket adı" className={inputCls(!!errors.firmaUnvan)} />
+                      </Field>
+                      <Field label="Vergi Numarası *" error={errors.vergiNo}>
+                        <input value={form.vergiNo} onChange={(e) => set('vergiNo', e.target.value.replace(/\D/g, '').slice(0, 10))}
+                          placeholder="0000000000" inputMode="numeric" className={inputCls(!!errors.vergiNo)} />
+                      </Field>
+                      <Field label="Vergi Dairesi *" error={errors.vergiDairesi}>
+                        <input value={form.vergiDairesi} onChange={(e) => set('vergiDairesi', e.target.value)}
+                          placeholder="Manavgat VD" className={inputCls(!!errors.vergiDairesi)} />
+                      </Field>
+                    </div>
+                  )}
                 </div>
 
                 {/* Teslimat adresi */}
