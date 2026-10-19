@@ -168,7 +168,9 @@ export async function initiate3DS(req: TamiInitRequest): Promise<TamiInitRespons
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      'PG-Api-Version': 'v3',
       'PG-Auth-Token': generatePGAuthToken(),
+      'correlationId': correlationId,
       'X-Correlation-ID': correlationId,
     },
     body: JSON.stringify(body),
