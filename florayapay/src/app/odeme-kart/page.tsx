@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useRef, Suspense } from 'react'
+import { useEffect, useState, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Header } from '@/components/layout/Header'
 import { Footer } from '@/components/layout/Footer'
@@ -24,8 +24,6 @@ function OdemeKartInner() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [threeDsHtml, setThreeDsHtml] = useState<string | null>(null)
-  const containerRef = useRef<HTMLDivElement>(null)
-
   useEffect(() => {
     if (!orderDataStr) return
     try {
@@ -35,13 +33,6 @@ function OdemeKartInner() {
     }
   }, [orderDataStr])
 
-  useEffect(() => {
-    if (threeDsHtml) {
-      document.open()
-      document.write(threeDsHtml)
-      document.close()
-    }
-  }, [threeDsHtml])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -99,18 +90,12 @@ function OdemeKartInner() {
 
   if (threeDsHtml) {
     return (
-      <div className="max-w-2xl mx-auto px-4 py-8">
-        <div className="bg-white rounded-2xl border border-[#E0DDD4] overflow-hidden">
-          <div className="bg-[#F0F5F1] border-b border-[#C5D9C8] px-6 py-3 flex items-center gap-2">
-            <span className="text-green-600">🔒</span>
-            <p className="text-xs text-[#2D5A36] font-medium">3D Güvenli Doğrulama</p>
-          </div>
-          <div className="p-4" ref={containerRef} />
-        </div>
-        <p className="text-center text-xs text-[#8C8A82] mt-4">
-          Bankanızın doğrulama sayfasındasınız. Telefonunuza gelen kodu girin.
-        </p>
-      </div>
+      <iframe
+        srcDoc={threeDsHtml}
+        sandbox="allow-forms allow-scripts allow-same-origin allow-top-navigation allow-popups"
+        style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', border: 'none', zIndex: 9999 }}
+        title="3D Güvenli Ödeme"
+      />
     )
   }
 
