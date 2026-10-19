@@ -384,6 +384,8 @@ export default function ProductsPage() {
   const [broadcastResult, setBroadcastResult] = useState<{ total: number; sent: number; skipped: number; errors: number } | null>(null);
   const [broadcastingImages, setBroadcastingImages] = useState(false);
   const [broadcastImagesResult, setBroadcastImagesResult] = useState<{ sent: number; errors: number } | null>(null);
+  const [syncingFromTrendyol, setSyncingFromTrendyol] = useState(false);
+  const [syncFromTrendyolResult, setSyncFromTrendyolResult] = useState<{ updated: number; notFound: number; total: number } | null>(null);
   const [recalculating, setRecalculating] = useState(false);
   const [backfillingCosts, setBackfillingCosts] = useState(false);
   const [backfillResult, setBackfillResult] = useState<{ checked: number; created: number; skipped: number } | null>(null);
@@ -1895,6 +1897,29 @@ export default function ProductsPage() {
             {broadcastingImages ? <RefreshCw size={17} className="animate-spin" /> : <Send size={17} />}
             {broadcastingImages ? 'Görseller Gönderiliyor...' : 'Tüm Görselleri Platformlara Gönder'}
           </button>
+          <button
+            className="btn btn-secondary"
+            disabled={syncingFromTrendyol}
+            onClick={async () => {
+              if (!confirm('Trendyol\'dan tüm ürünlerin adları ve görselleri çekilecek, ERP güncellenerek diğer platformlara yayılacak. Devam edilsin mi?')) return;
+              setSyncingFromTrendyol(true);
+              setSyncFromTrendyolResult(null);
+              try {
+                const result = await api<{ updated: number; notFound: number; total: number }>('/products/sync-from-trendyol', { method: 'POST' });
+                setSyncFromTrendyolResult(result);
+              } catch {
+                alert('Trendyol senkronizasyonu sırasında hata oluştu.');
+              } finally {
+                setSyncingFromTrendyol(false);
+              }
+            }}
+          >
+            {syncingFromTrendyol ? <RefreshCw size={17} className="animate-spin" /> : <RefreshCw size={17} />}
+            {syncingFromTrendyol ? 'Trendyol\'dan Çekiliyor...' : 'Trendyol\'dan Ad/Görsel Güncelle'}
+          </button>
+          {syncFromTrendyolResult && (
+            <span className="text-sm text-green-600">Trendyol: {syncFromTrendyolResult.total} ürün kontrol edildi, {syncFromTrendyolResult.updated} güncellendi, {syncFromTrendyolResult.notFound} eşleşmedi.</span>
+          )}
           <button
             className="btn btn-secondary"
             disabled={backfillingCosts}

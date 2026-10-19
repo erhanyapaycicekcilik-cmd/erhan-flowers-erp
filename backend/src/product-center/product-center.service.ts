@@ -328,9 +328,9 @@ export class ProductCenterService {
         productColor: sizeVariant,
         stockQuantity: Math.trunc(initialStockQuantity),
         images,
-        trendyolSalePrice: new Prisma.Decimal(sitePrice),
-        n11SalePrice: new Prisma.Decimal(sitePrice),
-        hepsiburadaSalePrice: new Prisma.Decimal(sitePrice),
+        trendyolSalePrice: new Prisma.Decimal(Math.round(sitePrice * 1.25)),
+        n11SalePrice: new Prisma.Decimal(Math.round(sitePrice * 1.25)),
+        hepsiburadaSalePrice: new Prisma.Decimal(Math.round(sitePrice * 1.25)),
         commissionPercent: new Prisma.Decimal(20),
         status: 'ACTIVE' as const,
       };

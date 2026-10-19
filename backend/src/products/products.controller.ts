@@ -54,6 +54,12 @@ export class ProductsController {
     return this.products.broadcastImagesAll();
   }
 
+  @Post('sync-from-trendyol')
+  @UseGuards(OwnerGuard)
+  syncFromTrendyol() {
+    return this.products.syncFromTrendyol();
+  }
+
   @Post(':id/broadcast-images')
   @UseGuards(OwnerGuard)
   broadcastImages(@Param('id') id: string) {

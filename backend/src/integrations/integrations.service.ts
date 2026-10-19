@@ -1493,4 +1493,8 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
   private roundMoney(value: number) {
     return Math.round((Number(value) + Number.EPSILON) * 100) / 100;
   }
+
+  async fetchTrendyolProducts(): Promise<Array<Record<string, unknown>>> {
+    return this.trendyolAdapter.fetchSellerProducts(100);
+  }
 }
