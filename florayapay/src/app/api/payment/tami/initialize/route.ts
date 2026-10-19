@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { initiate3DS, tamiEnabled } from '@/lib/tami'
+import { store3dsHtml } from '@/lib/3ds-store'
 
 const SITE_URL = process.env.SITE_URL || 'https://www.erhanflowers.com'
 
@@ -12,7 +13,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || '127.0.0.1'
     const callbackUrl = `${SITE_URL}/api/payment/tami/callback`
-const result = await initiate3DS({ ...body, musteri: { ...body.musteri, ip }, callbackUrl })
+    const result = await initiate3DS({ ...body, musteri: { ...body.musteri, ip }, callbackUrl })
 
     if (!result.success || !result.threeDSHtmlContent) {
       return NextResponse.json(
@@ -21,10 +22,9 @@ const result = await initiate3DS({ ...body, musteri: { ...body.musteri, ip }, ca
       )
     }
 
-    // base64 decode → HTML; inject target="_top" so form navigates top frame, not the iframe
-    const rawHtml = Buffer.from(result.threeDSHtmlContent, 'base64').toString('utf-8')
-    const html = rawHtml.replace(/<form(\s)/gi, '<form target="_top"$1')
-    return NextResponse.json({ html })
+    const html = Buffer.from(result.threeDSHtmlContent, 'base64').toString('utf-8')
+    const token = store3dsHtml(html)
+    return NextResponse.json({ token })
   } catch (err) {
     console.error('tami initialize error:', err)
     return NextResponse.json({ error: 'Sunucu hatası.' }, { status: 500 })
