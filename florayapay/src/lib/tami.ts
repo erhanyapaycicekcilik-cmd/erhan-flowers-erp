@@ -25,7 +25,7 @@ function base64url(buf: Buffer): string {
 
 // securityHash: JWT HS512 — payload is the request body JSON (without securityHash field)
 function generateSecurityHash(body: object): string {
-  const header = { alg: 'HS512', typ: 'JWT', kid: JWK_KID.trim() }
+  const header = { kid: JWK_KID.trim(), alg: 'HS512', typ: 'JWT' }
   const headerEnc = base64url(Buffer.from(JSON.stringify(header)))
   const payloadEnc = base64url(Buffer.from(JSON.stringify(body)))
   const signingInput = `${headerEnc}.${payloadEnc}`
