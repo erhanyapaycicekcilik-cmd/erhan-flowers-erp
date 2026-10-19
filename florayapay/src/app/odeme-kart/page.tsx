@@ -23,7 +23,7 @@ function OdemeKartInner() {
   const [kart, setKart] = useState({ holderName: '', number: '', expiry: '', cvv: '' })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [threeDsHtml, setThreeDsHtml] = useState<string | null>(null)
+  const [redirecting, setRedirecting] = useState(false)
   useEffect(() => {
     if (!orderDataStr) return
     try {
@@ -67,15 +67,24 @@ function OdemeKartInner() {
         setError(data.error || 'Ödeme başlatılamadı.')
         return
       }
-      setThreeDsHtml(data.html)
+      setRedirecting(true)
+      window.location.href = `/api/payment/tami/3ds-render?token=${data.token}`
     } catch {
       setError('Sunucuya bağlanılamadı.')
-    } finally {
       setLoading(false)
     }
   }
 
-  if (error && !threeDsHtml) {
+  if (redirecting) {
+    return (
+      <div className="min-h-[60vh] flex flex-col items-center justify-center gap-3">
+        <span className="inline-block w-8 h-8 border-2 border-[#5C7A62] border-t-transparent rounded-full animate-spin" />
+        <p className="text-sm text-[#5C5A52]">Güvenli ödeme sayfasına yönlendiriliyorsunuz…</p>
+      </div>
+    )
+  }
+
+  if (error) {
     return (
       <div className="min-h-[60vh] flex flex-col items-center justify-center text-center px-4">
         <p className="text-4xl mb-4">❌</p>
@@ -85,17 +94,6 @@ function OdemeKartInner() {
           Siparişe Dön
         </a>
       </div>
-    )
-  }
-
-  if (threeDsHtml) {
-    return (
-      <iframe
-        srcDoc={threeDsHtml}
-        sandbox="allow-forms allow-scripts allow-same-origin allow-top-navigation allow-popups"
-        style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', border: 'none', zIndex: 9999 }}
-        title="3D Güvenli Ödeme"
-      />
     )
   }
 
