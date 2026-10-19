@@ -77,6 +77,8 @@ services:
       TAMI_MERCHANT_ID: ${TAMI_MERCHANT_ID:-}
       TAMI_TERMINAL_ID: ${TAMI_TERMINAL_ID:-}
       TAMI_SECRET_KEY: ${TAMI_SECRET_KEY:-}
+      TAMI_JWK_KID: ${TAMI_JWK_KID:-}
+      TAMI_JWK_K: ${TAMI_JWK_K:-}
       TAMI_API_URL: ${TAMI_API_URL:-https://paymentapi.tami.com.tr}
       INTERNAL_API_URL: http://backend:8001
     volumes:
