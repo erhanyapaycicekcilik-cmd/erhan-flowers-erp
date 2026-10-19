@@ -21,8 +21,9 @@ const result = await initiate3DS({ ...body, musteri: { ...body.musteri, ip }, ca
       )
     }
 
-    // base64 decode → HTML
-    const html = Buffer.from(result.threeDSHtmlContent, 'base64').toString('utf-8')
+    // base64 decode → HTML; inject target="_top" so form navigates top frame, not the iframe
+    const rawHtml = Buffer.from(result.threeDSHtmlContent, 'base64').toString('utf-8')
+    const html = rawHtml.replace(/<form(\s)/gi, '<form target="_top"$1')
     return NextResponse.json({ html })
   } catch (err) {
     console.error('tami initialize error:', err)
