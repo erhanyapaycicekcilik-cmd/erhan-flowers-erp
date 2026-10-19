@@ -415,10 +415,9 @@ export class TrendyolAdapter extends BaseIntegrationAdapter {
     const missing = this.missingKeys();
     if (missing.length) throw new Error(`Trendyol API bilgileri eksik: ${missing.join(', ')}`);
     const supplierId = this.env('SUPPLIER_ID');
-    const apiBaseUrl = this.env('API_URL').replace(/\/+$/, '');
     const all: Array<Record<string, unknown>> = [];
     for (let page = 0; page < maxPages; page += 1) {
-      const response = await fetch(`${apiBaseUrl}/product/sellers/${supplierId}/products?approved=true&archived=false&page=${page}&size=200`, {
+      const response = await fetch(`${this.productApiBase()}/product/sellers/${supplierId}/products?approved=true&archived=false&page=${page}&size=200`, {
         headers: this.productHeaders(supplierId),
       });
       if (!response.ok) throw new Error(`Trendyol urun listesi alinamadi. HTTP ${response.status}: ${await this.safeErrorText(response)}`);
