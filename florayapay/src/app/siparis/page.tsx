@@ -27,7 +27,7 @@ export default function SiparisPage() {
   const router = useRouter()
 
   const [ibanBilgi, setIbanBilgi] = useState(DEFAULT_IBAN)
-  const [iyzicoAktif, setIyzicoAktif] = useState(false)
+  const [tamiAktif, setTamiAktif] = useState(false)
 
   useEffect(() => {
     fetch('/api/admin/site-config')
@@ -41,7 +41,7 @@ export default function SiparisPage() {
             swift: cfg.ibanSwift || '',
           })
         }
-        setIyzicoAktif(!!cfg?.iyzicoAktif)
+        setTamiAktif(!!(cfg?.tamiAktif || cfg?.iyzicoAktif))
       })
       .catch(() => {})
   }, [])
@@ -144,27 +144,16 @@ export default function SiparisPage() {
       const orderNumber = data.orderNumber || 'WEB-' + Date.now().toString(36).toUpperCase()
 
       if (odemeYontemi === 'kart') {
-        // iyzico ödeme başlat
-        const payRes = await fetch('/api/payment/iyzico/initialize', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            orderNumber,
-            tutar: Math.round(genelToplam),
-            musteri: { ad: form.ad, soyad: form.soyad, email: form.email || `${form.telefon}@erhanflowers.com`, telefon: form.telefon },
-            adres: { adres: form.adres, sehir: form.sehir, ilce: form.ilce || form.sehir, postaKodu: form.postaKodu || '07000' },
-            urunler: items.map(i => ({ id: String(i.id), ad: i.name, kategori: 'YAPAY_CICEK', fiyat: i.price, adet: i.quantity })),
-          }),
-        })
-        const payData = await payRes.json()
-        if (payData.htmlContent) {
-          // 3DS sayfasına yönlendir
-          clearCart()
-          router.push(`/odeme-kart?token=${payData.token}`)
-        } else {
-          alert(payData.error || 'Ödeme başlatılamadı. Lütfen başka ödeme yöntemi deneyin.')
-          setLoading(false)
+        // Tami 3D Secure ödeme — kart bilgilerini /odeme-kart sayfasında topla
+        const orderPayload = {
+          orderId: orderNumber,
+          amount: Math.round(genelToplam),
+          musteri: { ad: form.ad, soyad: form.soyad, email: form.email || `${form.telefon}@erhanflowers.com`, telefon: form.telefon },
+          adres: { adres: form.adres, sehir: form.sehir, ulke: 'Turkey' },
+          urunler: items.map(i => ({ id: String(i.id), ad: i.name, kategori: 'YAPAY_CICEK', fiyat: i.price, adet: i.quantity })),
         }
+        clearCart()
+        router.push(`/odeme-kart?data=${encodeURIComponent(JSON.stringify(orderPayload))}`)
         return
       }
 
@@ -314,8 +303,8 @@ export default function SiparisPage() {
                       }`} />
                     </button>
 
-                    {/* Kredi Kartı (iyzico aktifse göster) */}
-                    {iyzicoAktif && (
+                    {/* Kredi Kartı (Tami aktifse göster) */}
+                    {tamiAktif && (
                       <button type="button" onClick={() => setOdemeYontemi('kart')}
                         className={`flex items-start gap-3 p-4 rounded-xl border-2 text-left transition-all sm:col-span-2 ${
                           odemeYontemi === 'kart'
@@ -372,7 +361,7 @@ export default function SiparisPage() {
                   {odemeYontemi === 'kart' && (
                     <div className="mt-4 bg-blue-50 border border-blue-200 rounded-xl p-4">
                       <p className="text-xs text-blue-800">
-                        🔒 Ödemeniz iyzico altyapısıyla güvence altında işlenir. Kart bilgileriniz bizimle paylaşılmaz.
+                        🔒 Ödemeniz Tami Sanal POS altyapısıyla güvence altında işlenir. 3D Secure ile korumalıdır.
                       </p>
                     </div>
                   )}
