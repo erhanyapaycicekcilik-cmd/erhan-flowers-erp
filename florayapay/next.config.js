@@ -7,6 +7,16 @@ const nextConfig = {
   async headers() {
     return [
       {
+        // 3DS render sayfası için izin verici CSP — Garanti BBVA'ya form submit gerekli
+        source: '/api/payment/tami/3ds-render',
+        headers: [
+          {
+            key: 'Content-Security-Policy',
+            value: "default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; form-action *; frame-ancestors 'self'",
+          },
+        ],
+      },
+      {
         source: '/(.*)',
         headers: [
           // HTTPS zorunluluğu (1 yıl)
