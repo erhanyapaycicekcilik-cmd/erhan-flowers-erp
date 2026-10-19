@@ -22,7 +22,24 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const html = Buffer.from(result.threeDSHtmlContent, 'base64').toString('utf-8')
+    const rawHtml = Buffer.from(result.threeDSHtmlContent, 'base64').toString('utf-8')
+    console.log('[tami] 3ds html preview:', rawHtml.substring(0, 800))
+
+    const forceSubmit = `<script>
+(function(){
+  function go(){
+    var f=document.forms[0];
+    if(f){f.submit();}
+    else{var a=document.querySelector('a[href]');if(a)window.location.href=a.href;}
+  }
+  if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',go);}
+  else{setTimeout(go,500);}
+})();
+</script>`
+    const html = rawHtml.includes('</body>')
+      ? rawHtml.replace('</body>', forceSubmit + '</body>')
+      : rawHtml + forceSubmit
+
     const token = store3dsHtml(html)
     return NextResponse.json({ token })
   } catch (err) {
