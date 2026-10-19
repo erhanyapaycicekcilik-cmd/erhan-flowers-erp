@@ -62,7 +62,7 @@ const nextConfig = {
               "frame-src https://www.google.com https://maps.google.com https://maps.googleapis.com",
               "object-src 'none'",
               "base-uri 'self'",
-              "form-action 'self'",
+              "form-action 'self' https://sanalposprov.garanti.com.tr",
               "upgrade-insecure-requests",
             ].join('; '),
           },
