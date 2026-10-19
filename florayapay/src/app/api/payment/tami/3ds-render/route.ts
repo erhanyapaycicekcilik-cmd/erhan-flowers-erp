@@ -18,6 +18,7 @@ export async function GET(req: NextRequest) {
     headers: {
       'Content-Type': 'text/html; charset=utf-8',
       'Cache-Control': 'no-store',
+      'Content-Security-Policy': "default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; form-action *; frame-ancestors 'self'",
     },
   })
 }
