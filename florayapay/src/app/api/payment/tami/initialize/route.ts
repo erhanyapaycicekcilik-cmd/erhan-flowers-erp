@@ -23,17 +23,31 @@ export async function POST(req: NextRequest) {
     }
 
     const rawHtml = Buffer.from(result.threeDSHtmlContent, 'base64').toString('utf-8')
-    console.log('[tami] 3ds html preview:', rawHtml.substring(0, 800))
+    // Extract diagnostic info
+    const formMatch = rawHtml.match(/<form[^>]*>/i)
+    const actionMatch = rawHtml.match(/action=["']([^"']+)["']/i)
+    const scriptSrcs = [...rawHtml.matchAll(/src=["']([^"']+)["']/gi)].map(m => m[1])
+    console.log('[tami] form tag:', formMatch?.[0] || 'NOT FOUND')
+    console.log('[tami] form action:', actionMatch?.[1] || 'NOT FOUND')
+    console.log('[tami] script srcs:', scriptSrcs)
+    console.log('[tami] html length:', rawHtml.length)
+    console.log('[tami] html[0-2000]:', rawHtml.substring(0, 2000))
 
     const forceSubmit = `<script>
 (function(){
   function go(){
     var f=document.forms[0];
-    if(f){f.submit();}
-    else{var a=document.querySelector('a[href]');if(a)window.location.href=a.href;}
+    if(f){
+      console.log('form found, action='+f.action+', method='+f.method);
+      f.submit();
+    } else {
+      console.log('no form found, looking for redirect scripts');
+      var a=document.querySelector('a[href]');
+      if(a) window.location.href=a.href;
+    }
   }
   if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',go);}
-  else{setTimeout(go,500);}
+  else{setTimeout(go,800);}
 })();
 </script>`
     const html = rawHtml.includes('</body>')
