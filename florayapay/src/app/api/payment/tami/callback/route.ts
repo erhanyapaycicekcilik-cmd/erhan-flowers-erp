@@ -55,9 +55,20 @@ async function handleCallback(params: Record<string, string>): Promise<NextRespo
 
 export async function POST(req: NextRequest) {
   try {
-    const formData = await req.formData()
+    const rawBody = await req.text()
+    console.log('[tami callback POST] url:', req.url)
+    console.log('[tami callback POST] content-type:', req.headers.get('content-type'))
+    console.log('[tami callback POST] body:', rawBody.substring(0, 500))
+
     const params: Record<string, string> = {}
-    for (const [k, v] of formData.entries()) params[k] = v as string
+    // try form data parse
+    try {
+      const sp = new URLSearchParams(rawBody)
+      sp.forEach((v, k) => { params[k] = v })
+    } catch { /* ignore */ }
+    // also try query string
+    req.nextUrl.searchParams.forEach((v, k) => { params[k] = v })
+
     return await handleCallback(params)
   } catch (err) {
     console.error('tami callback POST error:', err)
@@ -67,8 +78,10 @@ export async function POST(req: NextRequest) {
 
 export async function GET(req: NextRequest) {
   try {
+    console.log('[tami callback GET] url:', req.url)
     const params: Record<string, string> = {}
     req.nextUrl.searchParams.forEach((v, k) => { params[k] = v })
+    console.log('[tami callback GET] params:', params)
     return await handleCallback(params)
   } catch (err) {
     console.error('tami callback GET error:', err)
