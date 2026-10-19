@@ -1495,6 +1495,7 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
   }
 
   async fetchTrendyolProducts(): Promise<Array<Record<string, unknown>>> {
-    return this.trendyolAdapter.fetchSellerProducts(100);
+    const adapter = await this.adapter('TRENDYOL', 'ERHAN') as TrendyolAdapter;
+    return adapter.fetchSellerProducts(100);
   }
 }
