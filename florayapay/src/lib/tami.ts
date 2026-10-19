@@ -3,10 +3,12 @@ import { createHash, createHmac, randomUUID } from 'crypto'
 const MERCHANT_ID = process.env.TAMI_MERCHANT_ID || ''
 const TERMINAL_ID = process.env.TAMI_TERMINAL_ID || ''
 const SECRET_KEY = process.env.TAMI_SECRET_KEY || ''
+const JWK_KID = process.env.TAMI_JWK_KID || ''
+const JWK_K = process.env.TAMI_JWK_K || ''
 const API_URL = process.env.TAMI_API_URL || 'https://paymentapi.tami.com.tr'
 
 export function tamiEnabled() {
-  return !!(MERCHANT_ID && TERMINAL_ID && SECRET_KEY)
+  return !!(MERCHANT_ID && TERMINAL_ID && SECRET_KEY && JWK_KID && JWK_K)
 }
 
 // PG-Auth-Token header: MerchantNumber:TerminalNumber:sha256base64(merchant+terminal+secret)
@@ -17,11 +19,19 @@ function generatePGAuthToken(): string {
   return `${MERCHANT_ID}:${TERMINAL_ID}:${hash}`
 }
 
-// İstek securityHash: HMAC-SHA256(secretKey, merchant+terminal+orderId+amount) → Base64
-export function generateRequestSecurityHash(orderId: string, amount: string): string {
-  return createHmac('sha256', SECRET_KEY)
-    .update(MERCHANT_ID + TERMINAL_ID + orderId + amount)
-    .digest('base64')
+function base64url(buf: Buffer): string {
+  return buf.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '')
+}
+
+// securityHash: JWT HS512 — payload is the request body JSON (without securityHash field)
+function generateSecurityHash(body: object): string {
+  const header = { alg: 'HS512', typ: 'JWT', kid: JWK_KID.trim() }
+  const headerEnc = base64url(Buffer.from(JSON.stringify(header)))
+  const payloadEnc = base64url(Buffer.from(JSON.stringify(body)))
+  const signingInput = `${headerEnc}.${payloadEnc}`
+  const key = Buffer.from(JWK_K, 'base64')
+  const sig = base64url(createHmac('sha512', key).update(signingInput).digest())
+  return `${headerEnc}.${payloadEnc}.${sig}`
 }
 
 // Callback hashedData doğrulaması
@@ -99,10 +109,7 @@ export interface TamiCompleteResponse {
 }
 
 export async function initiate3DS(req: TamiInitRequest): Promise<TamiInitResponse> {
-  const amountStr = req.amount.toFixed(2)
-  const securityHash = generateRequestSecurityHash(req.orderId, amountStr)
-
-  const body = {
+  const bodyWithoutHash = {
     orderId: req.orderId,
     amount: req.amount,
     currency: 'TRY',
@@ -151,19 +158,20 @@ export async function initiate3DS(req: TamiInitRequest): Promise<TamiInitRespons
         numberOfProducts: u.adet,
       })),
     },
-    securityHash,
   }
+
+  const securityHash = generateSecurityHash(bodyWithoutHash)
+  const body = { ...bodyWithoutHash, securityHash }
 
   const correlationId = randomUUID()
   const res = await fetch(`${API_URL}/payment/auth`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      'PG-Api-Version': 'v3',
       'PG-Auth-Token': generatePGAuthToken(),
-      'X-Correlation-ID': correlationId,
-      'X-Correlation-Id': correlationId,
-      'X-CorrelationId': correlationId,
       'correlationId': correlationId,
+      'X-Correlation-ID': correlationId,
     },
     body: JSON.stringify(body),
   })
@@ -174,7 +182,8 @@ export async function initiate3DS(req: TamiInitRequest): Promise<TamiInitRespons
 }
 
 export async function complete3DS(orderId: string): Promise<TamiCompleteResponse> {
-  const securityHash = generateRequestSecurityHash(orderId, '')
+  const bodyWithoutHash = { orderId }
+  const securityHash = generateSecurityHash(bodyWithoutHash)
 
   const res = await fetch(`${API_URL}/payment/complete-3ds`, {
     method: 'POST',
@@ -183,7 +192,7 @@ export async function complete3DS(orderId: string): Promise<TamiCompleteResponse
       'PG-Auth-Token': generatePGAuthToken(),
       'X-Correlation-ID': randomUUID(),
     },
-    body: JSON.stringify({ orderId, securityHash }),
+    body: JSON.stringify({ ...bodyWithoutHash, securityHash }),
   })
 
   return res.json()
