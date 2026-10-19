@@ -50,6 +50,7 @@ async function handleCallback(params: Record<string, string>): Promise<NextRespo
     return NextResponse.redirect(`${SITE_URL}/odeme-basarisiz?kod=eksik_siparis_id`, { status: 302 })
   }
 
+  // Explicit failure signals
   if (success === 'false' || (mdStatus && mdStatus !== '1' && !isGarantiApproval)) {
     return NextResponse.redirect(
       `${SITE_URL}/odeme-basarisiz?kod=3ds_hata&mdStatus=${mdStatus}`,
@@ -57,7 +58,11 @@ async function handleCallback(params: Record<string, string>): Promise<NextRespo
     )
   }
 
-  if (!isTamiSuccess && !isMdStatusOk && !isGarantiApproval) {
+  // If Tami sends bare GET with only orderId (no status params), call complete3DS directly
+  const hasStatusParams = success || mdStatus || garantiResponse || garantiProcCode
+  if (!hasStatusParams) {
+    console.log('[tami callback] bare GET with orderId only, calling complete3DS directly')
+  } else if (!isTamiSuccess && !isMdStatusOk && !isGarantiApproval) {
     return NextResponse.redirect(
       `${SITE_URL}/odeme-basarisiz?kod=3ds_hata&mdStatus=${mdStatus}`,
       { status: 302 },
