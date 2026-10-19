@@ -14,6 +14,7 @@ function fmt(n: number) {
 }
 
 const EFT_INDIRIM = 0.03
+const API_URL = process.env.NEXT_PUBLIC_API_URL || ''
 
 const DEFAULT_IBAN = {
   banka: 'Yapı Kredi Bankası',
@@ -27,7 +28,7 @@ export default function SiparisPage() {
   const router = useRouter()
 
   const [ibanBilgi, setIbanBilgi] = useState(DEFAULT_IBAN)
-  const [iyzicoAktif, setIyzicoAktif] = useState(false)
+  const [kartAktif, setKartAktif] = useState(false)
 
   useEffect(() => {
     fetch('/api/admin/site-config')
@@ -41,8 +42,12 @@ export default function SiparisPage() {
             swift: cfg.ibanSwift || '',
           })
         }
-        setIyzicoAktif(!!cfg?.iyzicoAktif)
       })
+      .catch(() => {})
+    // TAMI sanal POS ayarlıysa kartla ödeme seçeneği görünür
+    fetch(`${API_URL}/public/payments/tami/status`)
+      .then(r => r.json())
+      .then(d => setKartAktif(!!d?.enabled))
       .catch(() => {})
   }, [])
 
@@ -58,6 +63,9 @@ export default function SiparisPage() {
     not: '',
   })
   const [odemeYontemi, setOdemeYontemi] = useState<'whatsapp' | 'eft' | 'kart'>('whatsapp')
+  const [kart, setKart] = useState({ sahibi: '', numara: '', skt: '', cvv: '' })
+  const [kartHata, setKartHata] = useState<Partial<typeof kart>>({})
+  const [odemeHata, setOdemeHata] = useState('')
   const [loading, setLoading] = useState(false)
   const [errors, setErrors] = useState<Partial<typeof form>>({})
 
@@ -76,8 +84,31 @@ export default function SiparisPage() {
     if (!form.telefon.trim()) e.telefon = 'Telefon gerekli'
     if (!form.sehir.trim()) e.sehir = 'Şehir gerekli'
     if (!form.adres.trim()) e.adres = 'Adres gerekli'
+    if (odemeYontemi === 'kart' && !/^\S+@\S+\.\S+$/.test(form.email.trim())) e.email = 'Kartla ödemede e-posta gerekli'
     setErrors(e)
-    return Object.keys(e).length === 0
+
+    const k: Partial<typeof kart> = {}
+    if (odemeYontemi === 'kart') {
+      const no = kart.numara.replace(/\D/g, '')
+      const [ay, yil] = kart.skt.split('/').map(v => v.trim())
+      if (!kart.sahibi.trim()) k.sahibi = 'Kart üzerindeki isim gerekli'
+      if (no.length < 15 || no.length > 19) k.numara = 'Kart numarası geçersiz'
+      if (!(Number(ay) >= 1 && Number(ay) <= 12) || !/^\d{2}$/.test(yil || '')) k.skt = 'AA/YY şeklinde girin'
+      if (!/^\d{3,4}$/.test(kart.cvv)) k.cvv = 'CVV geçersiz'
+    }
+    setKartHata(k)
+    return Object.keys(e).length === 0 && Object.keys(k).length === 0
+  }
+
+  function setKartAlan(key: keyof typeof kart, val: string) {
+    if (key === 'numara') val = val.replace(/\D/g, '').slice(0, 19).replace(/(\d{4})(?=\d)/g, '$1 ')
+    if (key === 'skt') {
+      const d = val.replace(/\D/g, '').slice(0, 4)
+      val = d.length > 2 ? `${d.slice(0, 2)}/${d.slice(2)}` : d
+    }
+    if (key === 'cvv') val = val.replace(/\D/g, '').slice(0, 4)
+    setKart((c) => ({ ...c, [key]: val }))
+    setKartHata((h) => ({ ...h, [key]: '' }))
   }
 
   function buildWhatsAppMsg(orderNumber: string) {
@@ -110,6 +141,7 @@ export default function SiparisPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    setOdemeHata('')
     if (!validate()) return
     if (items.length === 0) return
     setLoading(true)
@@ -141,32 +173,42 @@ export default function SiparisPage() {
       })
 
       const data = res.ok ? await res.json() : {}
-      const orderNumber = data.orderNumber || 'WEB-' + Date.now().toString(36).toUpperCase()
 
       if (odemeYontemi === 'kart') {
-        // iyzico ödeme başlat
-        const payRes = await fetch('/api/payment/iyzico/initialize', {
+        if (!data.orderNumber) {
+          setOdemeHata('Sipariş oluşturulamadı. Lütfen tekrar deneyin veya WhatsApp ile sipariş verin.')
+          setLoading(false)
+          return
+        }
+        // TAMI 3D Secure başlat → bankanın doğrulama sayfasına geç (sepet, ödeme başarılı olunca temizlenir)
+        const [ay, yil] = kart.skt.split('/')
+        const payRes = await fetch(`${API_URL}/public/payments/tami/start`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            orderNumber,
-            tutar: Math.round(genelToplam),
-            musteri: { ad: form.ad, soyad: form.soyad, email: form.email || `${form.telefon}@erhanflowers.com`, telefon: form.telefon },
-            adres: { adres: form.adres, sehir: form.sehir, ilce: form.ilce || form.sehir, postaKodu: form.postaKodu || '07000' },
-            urunler: items.map(i => ({ id: String(i.id), ad: i.name, kategori: 'YAPAY_CICEK', fiyat: i.price, adet: i.quantity })),
+            orderNumber: data.orderNumber,
+            card: {
+              holderName: kart.sahibi.trim(),
+              number: kart.numara.replace(/\D/g, ''),
+              expireMonth: Number(ay),
+              expireYear: 2000 + Number(yil),
+              cvv: kart.cvv,
+            },
           }),
         })
-        const payData = await payRes.json()
-        if (payData.htmlContent) {
-          // 3DS sayfasına yönlendir
-          clearCart()
-          router.push(`/odeme-kart?token=${payData.token}`)
+        const payData = await payRes.json().catch(() => ({}))
+        if (payRes.ok && payData.html) {
+          document.open()
+          document.write(payData.html)
+          document.close()
         } else {
-          alert(payData.error || 'Ödeme başlatılamadı. Lütfen başka ödeme yöntemi deneyin.')
+          setOdemeHata(payData.message || 'Ödeme başlatılamadı. Lütfen kart bilgilerinizi kontrol edin.')
           setLoading(false)
         }
         return
       }
+
+      const orderNumber = data.orderNumber || 'WEB-' + Date.now().toString(36).toUpperCase()
 
       // WhatsApp'a bildir
       const waUrl = buildWhatsAppMsg(orderNumber)
@@ -187,7 +229,7 @@ export default function SiparisPage() {
         clearCart()
         router.push('/siparis-tamamlandi')
       } else {
-        alert('Sunucuya bağlanılamadı. Lütfen WhatsApp veya EFT ile sipariş verin.')
+        setOdemeHata('Sunucuya bağlanılamadı. Lütfen WhatsApp veya EFT ile sipariş verin.')
         setLoading(false)
       }
     }
@@ -242,9 +284,9 @@ export default function SiparisPage() {
                       <input value={form.telefon} onChange={(e) => set('telefon', e.target.value)}
                         placeholder="05XX XXX XX XX" type="tel" className={inputCls(!!errors.telefon)} />
                     </Field>
-                    <Field label="E-posta">
+                    <Field label={odemeYontemi === 'kart' ? 'E-posta *' : 'E-posta'} error={errors.email}>
                       <input value={form.email} onChange={(e) => set('email', e.target.value)}
-                        placeholder="opsiyonel" type="email" className={inputCls(false)} />
+                        placeholder={odemeYontemi === 'kart' ? 'ornek@mail.com' : 'opsiyonel'} type="email" className={inputCls(!!errors.email)} />
                     </Field>
                   </div>
                 </div>
@@ -314,8 +356,8 @@ export default function SiparisPage() {
                       }`} />
                     </button>
 
-                    {/* Kredi Kartı (iyzico aktifse göster) */}
-                    {iyzicoAktif && (
+                    {/* Kredi Kartı (TAMI sanal POS aktifse göster) */}
+                    {kartAktif && (
                       <button type="button" onClick={() => setOdemeYontemi('kart')}
                         className={`flex items-start gap-3 p-4 rounded-xl border-2 text-left transition-all sm:col-span-2 ${
                           odemeYontemi === 'kart'
@@ -368,11 +410,30 @@ export default function SiparisPage() {
                     </div>
                   )}
 
-                  {/* Kart seçilince bilgi */}
+                  {/* Kart seçilince kart formu */}
                   {odemeYontemi === 'kart' && (
                     <div className="mt-4 bg-blue-50 border border-blue-200 rounded-xl p-4">
-                      <p className="text-xs text-blue-800">
-                        🔒 Ödemeniz iyzico altyapısıyla güvence altında işlenir. Kart bilgileriniz bizimle paylaşılmaz.
+                      <div className="grid grid-cols-2 gap-3">
+                        <Field label="Kart Üzerindeki İsim *" error={kartHata.sahibi} className="col-span-2">
+                          <input value={kart.sahibi} onChange={(e) => setKartAlan('sahibi', e.target.value)}
+                            placeholder="AD SOYAD" autoComplete="cc-name" className={inputCls(!!kartHata.sahibi)} />
+                        </Field>
+                        <Field label="Kart Numarası *" error={kartHata.numara} className="col-span-2">
+                          <input value={kart.numara} onChange={(e) => setKartAlan('numara', e.target.value)}
+                            placeholder="0000 0000 0000 0000" inputMode="numeric" autoComplete="cc-number"
+                            className={inputCls(!!kartHata.numara) + ' font-mono tracking-wider'} />
+                        </Field>
+                        <Field label="Son Kullanma *" error={kartHata.skt}>
+                          <input value={kart.skt} onChange={(e) => setKartAlan('skt', e.target.value)}
+                            placeholder="AA/YY" inputMode="numeric" autoComplete="cc-exp" className={inputCls(!!kartHata.skt)} />
+                        </Field>
+                        <Field label="CVV *" error={kartHata.cvv}>
+                          <input value={kart.cvv} onChange={(e) => setKartAlan('cvv', e.target.value)}
+                            placeholder="000" inputMode="numeric" autoComplete="cc-csc" type="password" className={inputCls(!!kartHata.cvv)} />
+                        </Field>
+                      </div>
+                      <p className="text-xs text-blue-800 mt-3">
+                        🔒 Ödemeniz Garanti BBVA güvencesindeki TAMI altyapısıyla 3D Secure olarak işlenir. Kart bilgileriniz sitemizde saklanmaz.
                       </p>
                     </div>
                   )}
@@ -436,6 +497,9 @@ export default function SiparisPage() {
                   </div>
 
                   <div className="mt-6 space-y-3">
+                    {odemeHata && (
+                      <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl px-3 py-2">{odemeHata}</p>
+                    )}
                     <button type="submit" disabled={loading}
                       className={`w-full py-3.5 rounded-xl font-semibold transition-colors disabled:opacity-60 flex items-center justify-center gap-2 ${
                         odemeYontemi === 'kart'
@@ -456,7 +520,7 @@ export default function SiparisPage() {
                     </button>
                     <p className="text-xs text-center text-[#8C8A82]">
                       {odemeYontemi === 'kart'
-                        ? '3D Secure ile güvenli ödeme sayfasına yönlendirileceksiniz.'
+                        ? 'Bankanızın 3D Secure doğrulama sayfasına yönlendirileceksiniz.'
                         : odemeYontemi === 'eft'
                         ? 'IBAN bilgileri gösterilecek. Dekontu WhatsApp ile paylaşın.'
                         : 'Sipariş detayları WhatsApp\'a gönderilecek.'}

@@ -44,6 +44,12 @@ async function bootstrap() {
     'https://claude.ai',
   ].filter(Boolean) as string[]);
 
+  // TAMI 3D callback'i tarayıcı form POST'u olarak (TAMI/banka origin'iyle) gelir; CORS'a takılmasın
+  app.use('/public/payments/tami/callback', (req: any, _res: any, next: () => void) => {
+    delete req.headers.origin;
+    next();
+  });
+
   app.enableCors({
     origin: (origin, callback) => {
       if (!origin) { callback(null, true); return; } // server-to-server

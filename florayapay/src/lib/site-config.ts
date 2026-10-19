@@ -58,8 +58,6 @@ export interface SiteConfig {
   ibanNo: string
   ibanHesapSahibi: string
   ibanSwift: string
-  // Online ödeme (iyzico)
-  iyzicoAktif: boolean
 }
 
 export const DEFAULT_CONFIG: SiteConfig = {
@@ -96,7 +94,6 @@ export const DEFAULT_CONFIG: SiteConfig = {
   ibanNo: process.env.IBAN_NO || 'TR__ ____ ____ ____ ____ ____ __',
   ibanHesapSahibi: process.env.IBAN_HESAP_SAHIBI || 'ERHAN FLOWERS ÇİÇEKÇİLİK ELEKTRONİK TİCARET VE SANAYİ LİMİTED ŞİRKETİ',
   ibanSwift: process.env.IBAN_SWIFT || '',
-  iyzicoAktif: !!(process.env.IYZICO_API_KEY && process.env.IYZICO_SECRET_KEY),
 }
 
 export function readSiteConfig(): SiteConfig {

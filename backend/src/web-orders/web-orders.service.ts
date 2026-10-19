@@ -15,6 +15,7 @@ export class WebOrdersService {
       data: {
         orderNumber,
         paymentMethod: dto.paymentMethod,
+        paymentStatus: dto.paymentMethod === 'ONLINE' ? 'PENDING' : undefined,
         customerName: dto.customerName,
         customerPhone: dto.customerPhone,
         customerEmail: dto.customerEmail,

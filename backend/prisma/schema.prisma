@@ -2370,6 +2370,7 @@ enum WebOrderStatus {
 enum WebOrderPaymentMethod {
   WHATSAPP
   EFT
+  ONLINE
 }
 
 model WebOrder {
@@ -2387,6 +2388,11 @@ model WebOrder {
   note          String?
   subtotal      Decimal               @db.Decimal(14, 2)
   grandTotal    Decimal               @map("grand_total") @db.Decimal(14, 2)
+  // Online kart ödemesi (TAMI sanal POS): PENDING | PAID | FAILED
+  paymentStatus String?               @map("payment_status")
+  paymentRef    String?               @map("payment_ref")
+  paymentError  String?               @map("payment_error")
+  paidAt        DateTime?             @map("paid_at")
   items         WebOrderItem[]
   createdAt     DateTime              @default(now()) @map("created_at")
   updatedAt     DateTime              @updatedAt @map("updated_at")

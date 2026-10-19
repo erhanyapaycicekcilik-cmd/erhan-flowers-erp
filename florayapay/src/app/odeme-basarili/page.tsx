@@ -1,13 +1,15 @@
-import { Suspense } from 'react'
 import Link from 'next/link'
 import { Header } from '@/components/layout/Header'
 import { Footer } from '@/components/layout/Footer'
+import { ClearCartOnMount } from '@/components/checkout/ClearCartOnMount'
 
 export const metadata = { title: 'Ödeme Başarılı' }
 
-export default function OdemeBasariliPage() {
+export default function OdemeBasariliPage({ searchParams }: { searchParams: { siparis?: string } }) {
+  const siparis = searchParams.siparis
   return (
     <>
+      <ClearCartOnMount />
       <Header />
       <main className="min-h-screen bg-[#F4F2EC] flex items-center justify-center px-4">
         <div className="text-center max-w-md">
@@ -18,6 +20,11 @@ export default function OdemeBasariliPage() {
           <p className="text-[#8C8A82] mb-2">
             Siparişiniz alındı ve ödemeniz onaylandı.
           </p>
+          {siparis && (
+            <p className="text-sm text-[#0D1510] mb-2">
+              Sipariş No: <span className="font-mono font-semibold">{siparis}</span>
+            </p>
+          )}
           <p className="text-sm text-[#8C8A82] mb-8">
             En kısa sürede hazırlanıp kargoya verilecektir. WhatsApp hattımız üzerinden sipariş durumunuzu takip edebilirsiniz.
           </p>

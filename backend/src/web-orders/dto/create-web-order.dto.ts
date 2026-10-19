@@ -8,7 +8,7 @@ export class CreateWebOrderItemDto {
 }
 
 export class CreateWebOrderDto {
-  paymentMethod!: 'WHATSAPP' | 'EFT'
+  paymentMethod!: 'WHATSAPP' | 'EFT' | 'ONLINE'
   customerName!: string
   customerPhone!: string
   customerEmail?: string
