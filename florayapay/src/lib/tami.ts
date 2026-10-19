@@ -189,6 +189,7 @@ export async function complete3DS(orderId: string): Promise<TamiCompleteResponse
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      'PG-Api-Version': 'v3',
       'PG-Auth-Token': generatePGAuthToken(),
       'X-Correlation-ID': randomUUID(),
     },
