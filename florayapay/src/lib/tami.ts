@@ -1,4 +1,4 @@
-import { createHash, createHmac } from 'crypto'
+import { createHash, createHmac, randomUUID } from 'crypto'
 
 const MERCHANT_ID = process.env.TAMI_MERCHANT_ID || ''
 const TERMINAL_ID = process.env.TAMI_TERMINAL_ID || ''
@@ -159,6 +159,7 @@ export async function initiate3DS(req: TamiInitRequest): Promise<TamiInitRespons
     headers: {
       'Content-Type': 'application/json',
       'PG-Auth-Token': generatePGAuthToken(),
+      'X-Correlation-ID': randomUUID(),
     },
     body: JSON.stringify(body),
   })
@@ -174,6 +175,7 @@ export async function complete3DS(orderId: string): Promise<TamiCompleteResponse
     headers: {
       'Content-Type': 'application/json',
       'PG-Auth-Token': generatePGAuthToken(),
+      'X-Correlation-ID': randomUUID(),
     },
     body: JSON.stringify({ orderId, securityHash }),
   })
