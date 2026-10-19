@@ -29,7 +29,7 @@ function generateSecurityHash(body: object): string {
   const headerEnc = base64url(Buffer.from(JSON.stringify(header)))
   const payloadEnc = base64url(Buffer.from(JSON.stringify(body)))
   const signingInput = `${headerEnc}.${payloadEnc}`
-  const key = Buffer.from(JWK_K, 'base64')
+  const key = Buffer.from(JWK_K, 'base64url')
   const sig = base64url(createHmac('sha512', key).update(signingInput).digest())
   return `${headerEnc}.${payloadEnc}.${sig}`
 }
