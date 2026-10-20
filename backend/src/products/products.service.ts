@@ -1095,9 +1095,14 @@ export class ProductsService {
             brand: product.brand ?? 'Erhan Flowers',
             categoryName: product.category?.name ?? '',
           };
-          const res = await this.integrations.pushProduct('PAZARAMA', payload);
-          if (res.ok) { sent++; details[key] = 'OK'; }
-          else { errors++; details[key] = res.message; }
+          try {
+            const res = await this.integrations.pushProduct('PAZARAMA', payload);
+            if (res.ok) { sent++; details[key] = 'OK'; }
+            else { errors++; details[key] = res.message; }
+          } catch (err: unknown) {
+            errors++;
+            details[key] = err instanceof Error ? err.message : String(err);
+          }
         }),
       );
       await new Promise((r) => setTimeout(r, 300));

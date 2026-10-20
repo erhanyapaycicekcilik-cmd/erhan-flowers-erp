@@ -1909,8 +1909,8 @@ export default function ProductsPage() {
               try {
                 const result = await api<{ total: number; sent: number; errors: number }>('/products/send-to-pazarama', { method: 'POST' });
                 setPazaramaResult(result);
-              } catch {
-                alert('Pazarama gönderimi sırasında hata oluştu.');
+              } catch (err) {
+                alert('Pazarama gönderimi sırasında hata oluştu: ' + (err instanceof Error ? err.message : String(err)));
               } finally {
                 setSendingToPazarama(false);
               }
