@@ -250,7 +250,7 @@ const [channels, setChannels] = useState<SalesChannel[]>([]);
     setPlatformMessages((prev) => ({ ...prev, IDEFIX: '' }));
     try {
       const result = await api<{ total: number; sent: number; errors: number; details: string[] }>('/integrations/idefix/sync-from-trendyol', { method: 'POST' });
-      const detailText = result.details?.length ? `\n${result.details.join('\n')}` : '';
+      const detailText = result.details?.length ? ` | ${result.details.join(' | ')}` : '';
       setPlatformMessages((prev) => ({ ...prev, IDEFIX: `Trendyol'dan aktarım tamamlandı: ${result.sent}/${result.total} ürün gönderildi, ${result.errors} hata.${detailText}` }));
     } catch (error) {
       const msg = error instanceof Error ? error.message : 'Aktarım yapılamadı.';
