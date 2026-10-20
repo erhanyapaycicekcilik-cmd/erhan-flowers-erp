@@ -1,0 +1,1 @@
+ALTER TYPE "WebOrderPaymentMethod" ADD VALUE IF NOT EXISTS 'ONLINE';
