@@ -1059,10 +1059,10 @@ export class ProductsService {
   }
 
   async sendToPazarama(): Promise<{ total: number; sent: number; errors: number; details: Record<string, string> }> {
-    const products = await this.prisma.product.findMany({
+    const products = await (this.prisma.product as any).findMany({
       where: { status: 'ACTIVE' },
       include: { category: true, mediaFiles: true, productCostDraft: true },
-    });
+    }) as any[];
 
     let sent = 0;
     let errors = 0;
@@ -1072,13 +1072,13 @@ export class ProductsService {
     for (let i = 0; i < products.length; i += BATCH) {
       const batch = products.slice(i, i + BATCH);
       await Promise.allSettled(
-        batch.map(async (product) => {
+        batch.map(async (product: any) => {
           const key = product.barcode ?? product.modelCode;
           const imageUrls = [
             ...(Array.isArray(product.imageUrls) ? (product.imageUrls as string[]) : []),
-            ...product.mediaFiles.map((f) => f.filePath).filter(Boolean) as string[],
+            ...((product.mediaFiles ?? []) as any[]).map((f: any) => f.filePath).filter(Boolean),
           ];
-          const draft = product.productCostDraft as any;
+          const draft = product.productCostDraft;
           const salePrice = Number(
             draft?.marketplaceSalePrice > 0 ? draft.marketplaceSalePrice
             : draft?.salePrice ?? product.marketPrice ?? product.shopPrice ?? 0,
@@ -1093,7 +1093,7 @@ export class ProductsService {
             stockQuantity: Number(product.stockQuantity ?? 0),
             imageUrls,
             brand: product.brand ?? 'Erhan Flowers',
-            categoryName: (product.category as any)?.name ?? '',
+            categoryName: product.category?.name ?? '',
           };
           const res = await this.integrations.pushProduct('PAZARAMA', payload);
           if (res.ok) { sent++; details[key] = 'OK'; }
