@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { complete3DS, verifyCallbackHashedData } from '@/lib/tami'
+import { complete3DS, notifyErpPaid, verifyCallbackHashedData } from '@/lib/tami'
 
 const SITE_URL = process.env.SITE_URL || 'https://www.erhanflowers.com'
 
@@ -72,6 +72,7 @@ async function handleCallback(params: Record<string, string>): Promise<NextRespo
   const result = await complete3DS(orderId)
 
   if (result.success) {
+    await notifyErpPaid(orderId, result)
     return NextResponse.redirect(
       `${SITE_URL}/odeme-basarili?siparis=${encodeURIComponent(orderId)}&banka=${encodeURIComponent(result.bankAuthCode || '')}`,
       { status: 302 },

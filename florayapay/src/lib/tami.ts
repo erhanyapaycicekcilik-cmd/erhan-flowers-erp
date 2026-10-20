@@ -204,3 +204,21 @@ export async function complete3DS(orderId: string): Promise<TamiCompleteResponse
   console.log('[tami] complete3DS response:', JSON.stringify(raw))
   return raw
 }
+
+/** Tahsilat başarılı → ERP'deki web siparişini "ödendi / onaylandı" yap. Hata ödemeyi bozmasın diye yutulur. */
+export async function notifyErpPaid(orderId: string, result: TamiCompleteResponse): Promise<void> {
+  const apiUrl = process.env.INTERNAL_API_URL || process.env.NEXT_PUBLIC_API_URL || ''
+  try {
+    const res = await fetch(`${apiUrl}/public/orders/${encodeURIComponent(orderId)}/payment-confirmed`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-payment-signature': createHmac('sha256', SECRET_KEY.trim()).update(orderId).digest('hex'),
+      },
+      body: JSON.stringify({ bankAuthCode: result.bankAuthCode, amount: result.amount }),
+    })
+    if (!res.ok) console.error('[tami] ERP ödeme bildirimi başarısız:', res.status, await res.text())
+  } catch (err) {
+    console.error('[tami] ERP ödeme bildirimi hatası:', err)
+  }
+}

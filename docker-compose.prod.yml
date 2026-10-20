@@ -26,6 +26,8 @@ services:
       DATABASE_URL: "postgresql://${POSTGRES_USER:-erhanflowers}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-erhan_flowers_panel}?schema=public"
       PRODUCT_IMAGE_ROOT: "/data/urun-gorseller"
       STOCK_IMAGE_ROOT: "/data/stok-gorseller"
+      # Site → ERP "kartla ödendi" bildiriminin imzasını doğrulamak için
+      TAMI_SECRET_KEY: ${TAMI_SECRET_KEY:-}
     volumes:
       - backend_uploads:/app/uploads
       - /data/urun-gorseller:/data/urun-gorseller

@@ -2388,6 +2388,8 @@ model WebOrder {
   note          String?
   subtotal      Decimal               @db.Decimal(14, 2)
   grandTotal    Decimal               @map("grand_total") @db.Decimal(14, 2)
+  paidAt        DateTime?             @map("paid_at")
+  paymentRef    String?               @map("payment_ref")
   items         WebOrderItem[]
   createdAt     DateTime              @default(now()) @map("created_at")
   updatedAt     DateTime              @updatedAt @map("updated_at")
