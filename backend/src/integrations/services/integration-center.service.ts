@@ -80,7 +80,7 @@ const platformCredentialFields: Record<string, string[]> = {
   TICIMAX: ['UYE_KODU', 'API_KEY', 'API_SECRET'],
   AMAZON: ['MERCHANT_ID', 'API_KEY', 'API_SECRET'],
   PAZARAMA: ['API_KEY', 'API_SECRET'],
-  IDEFIX: ['SUPPLIER_ID', 'API_KEY'],
+  IDEFIX: ['SUPPLIER_ID', 'API_KEY', 'API_SECRET'],
   TEKLIKLE: ['API_KEY', 'API_SECRET'],
   TRENDRUM: ['API_KEY', 'API_SECRET'],
 };
