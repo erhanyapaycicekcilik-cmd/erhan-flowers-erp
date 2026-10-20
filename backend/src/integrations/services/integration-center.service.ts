@@ -926,7 +926,7 @@ export class IntegrationCenterService {
     return { total: products.length, sent, errors, details };
   }
 
-  async syncTrendyolToIdefix(): Promise<{ total: number; sent: number; errors: number; details: string[]; firstError?: string | null }> {
+  async syncTrendyolToIdefix(): Promise<{ total: number; sent: number; errors: number; details: string[]; firstError?: string | null; debug?: string }> {
     const trendyol = new TrendyolAdapter(await this.runtimeCredentials('TRENDYOL'));
     const idefix = new IdefixAdapter(await this.runtimeCredentials('IDEFIX'));
 
@@ -936,33 +936,21 @@ export class IntegrationCenterService {
     } catch (err: unknown) {
       return { total: 0, sent: 0, errors: 1, details: [`Trendyol ürün listesi alınamadı: ${err instanceof Error ? err.message : String(err)}`] };
     }
-    const details: string[] = [];
-    let sent = 0;
-    let errors = 0;
 
-    for (const p of products) {
-      const payload = {
+    // İlk ürünü test et ve debug bilgisi döndür
+    if (products.length > 0) {
+      const p = products[0];
+      const testPayload = {
         barcode: String(p.barcode ?? p.productCode ?? ''),
         salePrice: Number(p.salePrice ?? 0),
         listPrice: Number(p.listPrice ?? p.salePrice ?? 0),
         stockQuantity: Number(p.quantity ?? p.stockCount ?? 0),
       };
-
-      if (!payload.barcode) {
-        errors++;
-        details.push(`Atlandı (barcode yok): ${String(p.title ?? p.name ?? '')}`);
-        continue;
-      }
-
-      const result = await idefix.pushPrice(payload);
-      if (result.ok) {
-        sent++;
-      } else {
-        errors++;
-        if (details.length < 5) details.push(`Hata [${payload.barcode}]: ${result.message}`);
-      }
+      const testResult = await idefix.pushPrice(testPayload);
+      const debugInfo = `İlk ürün: barcode=${testPayload.barcode}, salePrice=${testPayload.salePrice}, qty=${testPayload.stockQuantity} | Idefix yanıt: ok=${testResult.ok}, msg=${testResult.message}`;
+      return { total: products.length, sent: 0, errors: 1, details: [debugInfo], firstError: debugInfo, debug: debugInfo };
     }
 
-    return { total: products.length, sent, errors, details, firstError: details[0] ?? null };
+    return { total: 0, sent: 0, errors: 0, details: [], firstError: 'Ürün bulunamadı' };
   }
 }
