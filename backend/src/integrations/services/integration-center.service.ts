@@ -9,6 +9,7 @@ import { TicimaxAdapter } from '../adapters/ticimax.adapter';
 import { TrendyolAdapter } from '../adapters/trendyol.adapter';
 import { TrendrumAdapter } from '../adapters/trendrum.adapter';
 import { PazaramaAdapter } from '../adapters/pazarama.adapter';
+import { IdefixAdapter } from '../adapters/idefix.adapter';
 import { MockMarketplaceAdapter } from '../adapters/mock/mock-marketplace.adapter';
 import { CredentialVaultService } from './credential-vault.service';
 
@@ -79,7 +80,7 @@ const platformCredentialFields: Record<string, string[]> = {
   TICIMAX: ['UYE_KODU', 'API_KEY', 'API_SECRET'],
   AMAZON: ['MERCHANT_ID', 'API_KEY', 'API_SECRET'],
   PAZARAMA: ['API_KEY', 'API_SECRET'],
-  IDEFIX: ['API_KEY', 'API_SECRET'],
+  IDEFIX: ['SUPPLIER_ID', 'API_KEY'],
   TEKLIKLE: ['API_KEY', 'API_SECRET'],
   TRENDRUM: ['API_KEY', 'API_SECRET'],
 };
@@ -870,6 +871,7 @@ export class IntegrationCenterService {
     if (platform === 'TICIMAX') return new TicimaxAdapter(await this.ticimaxRuntimeCredentials());
     if (platform === 'TRENDRUM') return new TrendrumAdapter(await this.runtimeCredentials(platform));
     if (platform === 'PAZARAMA') return new PazaramaAdapter(await this.runtimeCredentials(platform));
+    if (platform === 'IDEFIX') return new IdefixAdapter(await this.runtimeCredentials(platform));
     throw new BadRequestException('Platform desteklenmiyor.');
   }
 
@@ -908,6 +910,41 @@ export class IntegrationCenterService {
       }
 
       const result = await pazarama.pushProduct(payload);
+      if (result.ok) {
+        sent++;
+      } else {
+        errors++;
+        details.push(`Hata [${payload.barcode}]: ${result.message}`);
+      }
+    }
+
+    return { total: products.length, sent, errors, details };
+  }
+
+  async syncTrendyolToIdefix(): Promise<{ total: number; sent: number; errors: number; details: string[] }> {
+    const trendyol = new TrendyolAdapter(await this.runtimeCredentials('TRENDYOL'));
+    const idefix = new IdefixAdapter(await this.runtimeCredentials('IDEFIX'));
+
+    const products = await trendyol.fetchSellerProducts(100);
+    const details: string[] = [];
+    let sent = 0;
+    let errors = 0;
+
+    for (const p of products) {
+      const payload = {
+        barcode: String(p.barcode ?? p.productCode ?? ''),
+        salePrice: Number(p.salePrice ?? 0),
+        listPrice: Number(p.listPrice ?? p.salePrice ?? 0),
+        stockQuantity: Number(p.quantity ?? p.stockCount ?? 0),
+      };
+
+      if (!payload.barcode) {
+        errors++;
+        details.push(`Atlandı (barcode yok): ${String(p.title ?? p.name ?? '')}`);
+        continue;
+      }
+
+      const result = await idefix.pushPrice(payload);
       if (result.ok) {
         sent++;
       } else {

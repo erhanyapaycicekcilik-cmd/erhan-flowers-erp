@@ -121,8 +121,8 @@ const platformFields: Record<PlatformCode, Array<{ key: string; label: string; t
     { key: 'API_SECRET', label: 'API Secret', type: 'password' },
   ],
   IDEFIX: [
-    { key: 'API_KEY', label: 'API Key' },
-    { key: 'API_SECRET', label: 'API Secret', type: 'password' },
+    { key: 'SUPPLIER_ID', label: 'Satıcı ID' },
+    { key: 'API_KEY', label: 'API Key', type: 'password' },
   ],
   TEKLIKLE: [
     { key: 'API_KEY', label: 'API Key' },
@@ -240,6 +240,20 @@ const [channels, setChannels] = useState<SalesChannel[]>([]);
     } catch (error) {
       const msg = error instanceof Error ? error.message : 'Aktarım yapılamadı.';
       setPlatformMessages((prev) => ({ ...prev, PAZARAMA: msg }));
+    } finally {
+      setLoadingPlatform('');
+    }
+  }
+
+  async function syncTrendyolToIdefix() {
+    setLoadingPlatform('SYNC_IDEFIX');
+    setPlatformMessages((prev) => ({ ...prev, IDEFIX: '' }));
+    try {
+      const result = await api<{ total: number; sent: number; errors: number; details: string[] }>('/integrations/idefix/sync-from-trendyol', { method: 'POST' });
+      setPlatformMessages((prev) => ({ ...prev, IDEFIX: `Trendyol'dan aktarım tamamlandı: ${result.sent}/${result.total} ürün gönderildi, ${result.errors} hata.` }));
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : 'Aktarım yapılamadı.';
+      setPlatformMessages((prev) => ({ ...prev, IDEFIX: msg }));
     } finally {
       setLoadingPlatform('');
     }
@@ -598,6 +612,12 @@ const [channels, setChannels] = useState<SalesChannel[]>([]);
                       <button className="btn btn-primary" type="button" onClick={syncTrendyolToPazarama} disabled={loadingPlatform === 'SYNC_PAZARAMA'}>
                         <Download size={16} />
                         {loadingPlatform === 'SYNC_PAZARAMA' ? 'Aktarılıyor…' : 'Trendyol\'dan Aktar'}
+                      </button>
+                    )}
+                    {platform === 'IDEFIX' && (
+                      <button className="btn btn-primary" type="button" onClick={syncTrendyolToIdefix} disabled={loadingPlatform === 'SYNC_IDEFIX'}>
+                        <Download size={16} />
+                        {loadingPlatform === 'SYNC_IDEFIX' ? 'Aktarılıyor…' : 'Trendyol\'dan Aktar'}
                       </button>
                     )}
                   </div>

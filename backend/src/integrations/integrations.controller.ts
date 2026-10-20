@@ -331,4 +331,10 @@ export class IntegrationsController {
     return this.integrationCenter.syncTrendyolToPazarama();
   }
 
+  @Post('idefix/sync-from-trendyol')
+  @UseGuards(OwnerGuard)
+  syncTrendyolToIdefix() {
+    return this.integrationCenter.syncTrendyolToIdefix();
+  }
+
 }
