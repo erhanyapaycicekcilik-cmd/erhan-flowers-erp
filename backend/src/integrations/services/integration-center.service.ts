@@ -879,7 +879,12 @@ export class IntegrationCenterService {
     const trendyol = new TrendyolAdapter(await this.runtimeCredentials('TRENDYOL'));
     const pazarama = new PazaramaAdapter(await this.runtimeCredentials('PAZARAMA'));
 
-    const products = await trendyol.fetchSellerProducts(100);
+    let products: Array<Record<string, unknown>>;
+    try {
+      products = await trendyol.fetchSellerProducts(100);
+    } catch (err: unknown) {
+      return { total: 0, sent: 0, errors: 1, details: [`Trendyol ürün listesi alınamadı: ${err instanceof Error ? err.message : String(err)}`] };
+    }
     const details: string[] = [];
     let sent = 0;
     let errors = 0;
@@ -925,7 +930,12 @@ export class IntegrationCenterService {
     const trendyol = new TrendyolAdapter(await this.runtimeCredentials('TRENDYOL'));
     const idefix = new IdefixAdapter(await this.runtimeCredentials('IDEFIX'));
 
-    const products = await trendyol.fetchSellerProducts(100);
+    let products: Array<Record<string, unknown>>;
+    try {
+      products = await trendyol.fetchSellerProducts(100);
+    } catch (err: unknown) {
+      return { total: 0, sent: 0, errors: 1, details: [`Trendyol ürün listesi alınamadı: ${err instanceof Error ? err.message : String(err)}`] };
+    }
     const details: string[] = [];
     let sent = 0;
     let errors = 0;
