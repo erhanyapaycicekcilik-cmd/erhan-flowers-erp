@@ -87,6 +87,8 @@ export class PazaramaAdapter extends BaseIntegrationAdapter {
     return {
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json',
+      'User-Agent': 'Mozilla/5.0 (compatible; ErhanFlowersERP/1.0)',
+      'Accept': 'application/json',
     };
   }
 
@@ -140,7 +142,7 @@ export class PazaramaAdapter extends BaseIntegrationAdapter {
         return { ok: false, status: 'MISSING_CREDENTIALS', message: 'Pazarama: token alınamadı.' };
       }
 
-      const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+      const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json', 'User-Agent': 'Mozilla/5.0 (compatible; ErhanFlowersERP/1.0)', 'Accept': 'application/json' };
       const res = await fetch(`${PAZARAMA_API}/api/order/orders?status=1&pageSize=1&pageIndex=0`, {
         headers,
         signal: AbortSignal.timeout(8000),
