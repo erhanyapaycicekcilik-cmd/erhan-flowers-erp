@@ -24,17 +24,6 @@ type LogRow = {
   startedAt: string;
 };
 
-type TicimaxSettings = {
-  tenant: string;
-  siteUrl: string;
-  serviceEndpoint: string;
-  wsdlUrl: string;
-  status: string;
-  lastTestAt?: string | null;
-  lastError?: string | null;
-  hasUyeKodu: boolean;
-  uyeKoduMasked?: string;
-};
 
 type SalesChannel = {
   id: number;
@@ -75,7 +64,7 @@ type SyncJob = {
   createdAt: string;
 };
 
-type PlatformCode = 'TRENDYOL' | 'HEPSIBURADA' | 'N11' | 'TICIMAX' | 'AMAZON' | 'PAZARAMA' | 'IDEFIX' | 'TEKLIKLE' | 'TRENDRUM';
+type PlatformCode = 'TRENDYOL' | 'HEPSIBURADA' | 'N11' | 'AMAZON' | 'PAZARAMA' | 'IDEFIX' | 'TEKLIKLE' | 'TRENDRUM';
 type CompanyCode = 'ERHAN' | 'FLORA';
 
 type PlatformSettings = {
@@ -122,11 +111,6 @@ const platformFields: Record<PlatformCode, Array<{ key: string; label: string; t
     { key: 'API_KEY', label: 'API Key' },
     { key: 'API_SECRET', label: 'API Secret', type: 'password' },
   ],
-  TICIMAX: [
-    { key: 'UYE_KODU', label: 'UyeKodu', type: 'password' },
-    { key: 'API_KEY', label: 'API Key' },
-    { key: 'API_SECRET', label: 'API Secret', type: 'password' },
-  ],
   AMAZON: [
     { key: 'MERCHANT_ID', label: 'Merchant ID' },
     { key: 'API_KEY', label: 'API Key' },
@@ -150,18 +134,6 @@ const platformFields: Record<PlatformCode, Array<{ key: string; label: string; t
   ],
 };
 
-const defaultTicimaxSettings: TicimaxSettings & { uyeKodu: string } = {
-  tenant: 'Erhan Flowers',
-  siteUrl: 'https://www.erhanflowers.com',
-  serviceEndpoint: 'https://www.erhanflowers.com/servis/UrunServis.svc',
-  wsdlUrl: 'https://www.erhanflowers.com/servis/UrunServis.svc?wsdl',
-  status: 'NOT_CONFIGURED',
-  lastTestAt: null,
-  lastError: null,
-  hasUyeKodu: false,
-  uyeKoduMasked: '',
-  uyeKodu: '',
-};
 
 type TrendyolDiagnose = {
   ok: boolean;
@@ -176,8 +148,7 @@ export default function IntegrationsPage() {
   const [history, setHistory] = useState<LogRow[]>([]);
   const [errors, setErrors] = useState<LogRow[]>([]);
   const [summary, setSummary] = useState<Record<string, unknown>>({});
-  const [ticimax, setTicimax] = useState(defaultTicimaxSettings);
-  const [channels, setChannels] = useState<SalesChannel[]>([]);
+const [channels, setChannels] = useState<SalesChannel[]>([]);
   const [accounts, setAccounts] = useState<ChannelAccount[]>([]);
   const [syncJobs, setSyncJobs] = useState<SyncJob[]>([]);
   const [platformSettings, setPlatformSettings] = useState<PlatformSettings[]>([]);
@@ -197,13 +168,11 @@ export default function IntegrationsPage() {
       api<LogRow[]>('/integrations/history'),
       api<LogRow[]>('/integrations/errors'),
       api<Record<string, unknown>>('/integrations/operations'),
-      api<TicimaxSettings>('/integrations/ticimax'),
-    ]).then(([nextConnections, nextHistory, nextErrors, nextSummary, nextTicimax]) => {
+    ]).then(([nextConnections, nextHistory, nextErrors, nextSummary]) => {
       setConnections(nextConnections);
       setHistory(nextHistory);
       setErrors(nextErrors);
       setSummary(nextSummary);
-      setTicimax({ ...defaultTicimaxSettings, ...nextTicimax, uyeKodu: '' });
     }).catch((error) => setMessage(error instanceof Error ? error.message : 'Entegrasyon verileri yüklenemedi.'));
   }
 
@@ -293,46 +262,6 @@ export default function IntegrationsPage() {
     }
   }
 
-  async function saveTicimax() {
-    setLoadingPlatform('TICIMAX_SETTINGS');
-    setMessage('');
-    try {
-      const saved = await api<TicimaxSettings>('/integrations/ticimax', {
-        method: 'PUT',
-        json: {
-          tenant: ticimax.tenant,
-          siteUrl: ticimax.siteUrl,
-          serviceEndpoint: ticimax.serviceEndpoint,
-          wsdlUrl: ticimax.wsdlUrl,
-          uyeKodu: ticimax.uyeKodu,
-        },
-      });
-      setTicimax({ ...defaultTicimaxSettings, ...saved, uyeKodu: '' });
-      setMessage('Ticimax bağlantı ayarları kaydedildi.');
-      load();
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Ticimax ayarları kaydedilemedi.');
-    } finally {
-      setLoadingPlatform('');
-    }
-  }
-
-  async function testTicimax() {
-    setLoadingPlatform('TICIMAX_TEST');
-    setMessage('');
-    try {
-      const result = await api<{ ok: boolean; message: string }>('/integrations/ticimax/test', {
-        method: 'POST',
-        json: { tenant: ticimax.tenant },
-      });
-      setMessage(result.message);
-      load();
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Ticimax bağlantı testi yapılamadı.');
-    } finally {
-      setLoadingPlatform('');
-    }
-  }
 
   async function testAccount(accountId: number) {
     setLoadingPlatform(`ACCOUNT_TEST_${accountId}`);
@@ -789,58 +718,6 @@ export default function IntegrationsPage() {
           </div>
         </section>
 
-        <section className="panel p-5">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <h2 className="text-lg font-bold text-ink">Ticimax Bağlantı Ayarları</h2>
-              <p className="text-sm text-slate-500">www.erhanflowers.com sitesini ERP bağlantısına hazırlamak için temel servis bilgileri.</p>
-            </div>
-            <StatusBadge status={ticimax.status} />
-          </div>
-
-          <div className="mt-4 grid gap-3 lg:grid-cols-2">
-            <label className="block space-y-1.5">
-              <span className="label">Tenant / Firma</span>
-              <input className="field" value={ticimax.tenant} onChange={(event) => setTicimax({ ...ticimax, tenant: event.target.value })} />
-            </label>
-            <label className="block space-y-1.5">
-              <span className="label">Site Adresi</span>
-              <input className="field" value={ticimax.siteUrl} onChange={(event) => setTicimax({ ...ticimax, siteUrl: event.target.value })} />
-            </label>
-            <label className="block space-y-1.5">
-              <span className="label">Servis Endpoint</span>
-              <input className="field" value={ticimax.serviceEndpoint} onChange={(event) => setTicimax({ ...ticimax, serviceEndpoint: event.target.value })} />
-            </label>
-            <label className="block space-y-1.5">
-              <span className="label">WSDL Adresi</span>
-              <input className="field" value={ticimax.wsdlUrl} onChange={(event) => setTicimax({ ...ticimax, wsdlUrl: event.target.value })} />
-            </label>
-            <label className="block space-y-1.5 lg:col-span-2">
-              <span className="label">UyeKodu</span>
-              <input
-                className="field"
-                type="password"
-                placeholder={ticimax.hasUyeKodu ? `Kayıtlı: ${ticimax.uyeKoduMasked || '••••'}` : 'Ticimax UyeKodu'}
-                value={ticimax.uyeKodu}
-                onChange={(event) => setTicimax({ ...ticimax, uyeKodu: event.target.value })}
-              />
-              <span className="block text-xs text-slate-500">Boş bırakırsan kayıtlı UyeKodu korunur. Ekranda açık gösterilmez.</span>
-            </label>
-          </div>
-
-          <div className="mt-4 flex flex-wrap items-center gap-2">
-            <button className="btn btn-primary" type="button" onClick={saveTicimax} disabled={loadingPlatform === 'TICIMAX_SETTINGS'}>
-              <Save size={16} />
-              Kaydet
-            </button>
-            <button className="btn btn-secondary" type="button" onClick={testTicimax} disabled={loadingPlatform === 'TICIMAX_TEST'}>
-              <TestTube2 size={16} />
-              Bağlantıyı Test Et
-            </button>
-            <span className="text-xs text-slate-500">Son test: {date(ticimax.lastTestAt)}</span>
-            {ticimax.lastError && <span className="text-xs font-semibold text-red-600">{ticimax.lastError}</span>}
-          </div>
-        </section>
 
         <section className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
           <Metric label="Bugünkü Sipariş" value={summary.todayOrders} />
@@ -971,7 +848,6 @@ function platformLabel(platform: PlatformCode) {
     TRENDYOL: 'Trendyol',
     HEPSIBURADA: 'Hepsiburada',
     N11: 'N11',
-    TICIMAX: 'Ticimax',
     AMAZON: 'Amazon',
     PAZARAMA: 'Pazarama',
     IDEFIX: 'Idefix',
