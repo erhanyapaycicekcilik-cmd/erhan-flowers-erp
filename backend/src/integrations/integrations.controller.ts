@@ -328,7 +328,7 @@ export class IntegrationsController {
   @Post('pazarama/sync-from-trendyol')
   @UseGuards(OwnerGuard)
   syncTrendyolToPazarama() {
-    return this.integrations.syncTrendyolToPazarama();
+    return this.integrationCenter.syncTrendyolToPazarama();
   }
 
 }
