@@ -1057,4 +1057,52 @@ export class ProductsService {
       select: { id: true, driveFolderId: true },
     });
   }
+
+  async sendToPazarama(): Promise<{ total: number; sent: number; errors: number; details: Record<string, string> }> {
+    const products = await this.prisma.product.findMany({
+      where: { status: 'ACTIVE' },
+      include: { category: true, mediaFiles: true, productCostDraft: true },
+    });
+
+    let sent = 0;
+    let errors = 0;
+    const details: Record<string, string> = {};
+    const BATCH = 5;
+
+    for (let i = 0; i < products.length; i += BATCH) {
+      const batch = products.slice(i, i + BATCH);
+      await Promise.allSettled(
+        batch.map(async (product) => {
+          const key = product.barcode ?? product.modelCode;
+          const imageUrls = [
+            ...(Array.isArray(product.imageUrls) ? (product.imageUrls as string[]) : []),
+            ...product.mediaFiles.map((f) => f.filePath).filter(Boolean) as string[],
+          ];
+          const draft = product.productCostDraft as any;
+          const salePrice = Number(
+            draft?.marketplaceSalePrice > 0 ? draft.marketplaceSalePrice
+            : draft?.salePrice ?? product.marketPrice ?? product.shopPrice ?? 0,
+          );
+          const payload = {
+            barcode: product.barcode ?? product.modelCode,
+            modelCode: product.modelCode,
+            productName: product.productName,
+            description: product.productName,
+            salePrice,
+            listPrice: Number(product.listPrice ?? salePrice),
+            stockQuantity: Number(product.stockQuantity ?? 0),
+            imageUrls,
+            brand: product.brand ?? 'Erhan Flowers',
+            categoryName: (product.category as any)?.name ?? '',
+          };
+          const res = await this.integrations.pushProduct('PAZARAMA', payload);
+          if (res.ok) { sent++; details[key] = 'OK'; }
+          else { errors++; details[key] = res.message; }
+        }),
+      );
+      await new Promise((r) => setTimeout(r, 300));
+    }
+
+    return { total: products.length, sent, errors, details };
+  }
 }

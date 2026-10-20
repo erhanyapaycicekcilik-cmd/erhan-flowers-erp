@@ -48,6 +48,12 @@ export class ProductsController {
     return this.products.broadcastAll();
   }
 
+  @Post('send-to-pazarama')
+  @UseGuards(OwnerGuard)
+  sendToPazarama() {
+    return this.products.sendToPazarama();
+  }
+
   @Post('broadcast-images-all')
   @UseGuards(OwnerGuard)
   broadcastImagesAll() {
