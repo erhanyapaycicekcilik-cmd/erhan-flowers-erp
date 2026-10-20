@@ -69,31 +69,44 @@ export class DashboardService {
     const weekStart = new Date(todayStart.getTime() - 6 * 86400000);
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
-    const [todayOrders, yesterdayOrders, weekOrders, monthOrders] = await Promise.all([
+    const [marketOrders, webOrders] = await Promise.all([
       this.prisma.marketplaceOrder.findMany({
-        where: { orderDate: { gte: todayStart }, status: { not: 'Cancelled' } },
-        select: { platform: true, totalAmount: true },
+        where: { orderDate: { gte: monthStart < weekStart ? monthStart : weekStart }, status: { not: 'Cancelled' } },
+        select: { platform: true, totalAmount: true, orderDate: true },
       }),
-      this.prisma.marketplaceOrder.findMany({
-        where: { orderDate: { gte: yesterdayStart, lt: todayStart }, status: { not: 'Cancelled' } },
-        select: { platform: true, totalAmount: true },
-      }),
-      this.prisma.marketplaceOrder.findMany({
-        where: { orderDate: { gte: weekStart }, status: { not: 'Cancelled' } },
-        select: { platform: true, totalAmount: true },
-      }),
-      this.prisma.marketplaceOrder.findMany({
-        where: { orderDate: { gte: monthStart }, status: { not: 'Cancelled' } },
-        select: { platform: true, totalAmount: true },
-      }),
+      this.webSiteOrders(monthStart < weekStart ? monthStart : weekStart),
     ]);
+    const all = [
+      ...marketOrders.map((o) => ({ platform: o.platform, totalAmount: o.totalAmount, date: o.orderDate as Date })),
+      ...webOrders,
+    ];
+    const between = (from: Date, to?: Date) => all.filter((o) => o.date >= from && (!to || o.date < to));
 
     return {
-      today: this.aggregateSales(todayOrders),
-      yesterday: this.aggregateSales(yesterdayOrders),
-      thisWeek: this.aggregateSales(weekOrders),
-      thisMonth: this.aggregateSales(monthOrders),
+      today: this.aggregateSales(between(todayStart)),
+      yesterday: this.aggregateSales(between(yesterdayStart, todayStart)),
+      thisWeek: this.aggregateSales(between(weekStart)),
+      thisMonth: this.aggregateSales(between(monthStart)),
     };
+  }
+
+  /** www.erhanflowers.com siparişleri — iptaller ve ödemesi tamamlanmamış kartlı siparişler hariç */
+  private async webSiteOrders(from: Date, to?: Date) {
+    const rows = await this.prisma.webOrder.findMany({
+      where: {
+        createdAt: { gte: from, ...(to ? { lt: to } : {}) },
+        status: { not: 'CANCELLED' },
+        OR: [{ paymentMethod: { not: 'ONLINE' } }, { paidAt: { not: null } }],
+      },
+      select: { grandTotal: true, createdAt: true, orderNumber: true, customerName: true },
+    });
+    return rows.map((o) => ({
+      platform: 'WEB SİTESİ',
+      totalAmount: o.grandTotal,
+      date: o.createdAt,
+      orderNumber: o.orderNumber,
+      customerName: o.customerName,
+    }));
   }
 
   private aggregateSales(orders: Array<{ platform: string; totalAmount: unknown }>) {
@@ -112,11 +125,12 @@ export class DashboardService {
     const dayStart = new Date(date.getFullYear(), date.getMonth(), date.getDate());
     const dayEnd = new Date(dayStart.getTime() + 86400000);
 
-    const [marketplaceOrders, retailSales, stockMovements] = await Promise.all([
+    const [marketOrders, webOrders, retailSales, stockMovements] = await Promise.all([
       this.prisma.marketplaceOrder.findMany({
         where: { orderDate: { gte: dayStart, lt: dayEnd }, status: { not: 'Cancelled' } },
         select: { platform: true, totalAmount: true, cargoAmount: true, orderNumber: true, customerName: true },
       }),
+      this.webSiteOrders(dayStart, dayEnd),
       this.prisma.retailSale.findMany({
         where: { createdAt: { gte: dayStart, lt: dayEnd }, status: { not: 'CANCELLED' } },
         select: { grandTotal: true, channel: true, saleNumber: true },
@@ -126,6 +140,11 @@ export class DashboardService {
         include: { stockCard: { select: { name: true, purchasePrice: true, unit: true } } },
       }),
     ]);
+
+    const marketplaceOrders = [
+      ...marketOrders,
+      ...webOrders.map((o) => ({ platform: o.platform, totalAmount: o.totalAmount, cargoAmount: 0, orderNumber: o.orderNumber, customerName: o.customerName })),
+    ];
 
     // Ciro hesapla
     const marketplaceRevenue = marketplaceOrders.reduce((s, o) => s + Number(o.totalAmount), 0);

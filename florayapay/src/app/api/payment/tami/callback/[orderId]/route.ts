@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { complete3DS } from '@/lib/tami'
+import { complete3DS, notifyErpPaid } from '@/lib/tami'
 
 const SITE_URL = process.env.SITE_URL || 'https://www.erhanflowers.com'
 
@@ -22,6 +22,7 @@ async function handleCallback(orderId: string, params: Record<string, string>): 
   console.log('[tami callback path] complete3DS result:', JSON.stringify(result))
 
   if (result.success) {
+    await notifyErpPaid(orderId, result)
     return NextResponse.redirect(
       `${SITE_URL}/odeme-basarili?siparis=${encodeURIComponent(orderId)}&banka=${encodeURIComponent(result.bankAuthCode || '')}`,
       { status: 302 },
