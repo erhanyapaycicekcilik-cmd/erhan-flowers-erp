@@ -183,6 +183,11 @@ export default function WebSiparislerPage() {
                     {selected.customerEmail && <p className="text-gray-600">✉️ {selected.customerEmail}</p>}
                     <p className="text-gray-600">📍 {fullAddress(selected)}</p>
                     {selected.note && <p className="text-gray-500 italic whitespace-pre-line">📝 {selected.note}</p>}
+                    {selected.invoiceCorporate ? (
+                      <p className="text-gray-600">🧾 Kurumsal fatura: {selected.companyTitle} · VKN {selected.taxNumber} · {selected.taxOffice} VD</p>
+                    ) : selected.tcKimlik ? (
+                      <p className="text-gray-600">🧾 Bireysel fatura · TC {selected.tcKimlik}</p>
+                    ) : null}
                     {selected.paymentMethod === 'ONLINE' && (
                       selected.paidAt ? (
                         <p className="text-purple-700 font-medium">

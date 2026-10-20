@@ -2,3 +2,9 @@ ALTER TYPE "WebOrderPaymentMethod" ADD VALUE IF NOT EXISTS 'ONLINE';
 
 ALTER TABLE "web_orders" ADD COLUMN IF NOT EXISTS "paid_at" TIMESTAMP(3);
 ALTER TABLE "web_orders" ADD COLUMN IF NOT EXISTS "payment_ref" TEXT;
+
+ALTER TABLE "web_orders" ADD COLUMN IF NOT EXISTS "tc_kimlik" TEXT;
+ALTER TABLE "web_orders" ADD COLUMN IF NOT EXISTS "invoice_corporate" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "web_orders" ADD COLUMN IF NOT EXISTS "company_title" TEXT;
+ALTER TABLE "web_orders" ADD COLUMN IF NOT EXISTS "tax_number" TEXT;
+ALTER TABLE "web_orders" ADD COLUMN IF NOT EXISTS "tax_office" TEXT;

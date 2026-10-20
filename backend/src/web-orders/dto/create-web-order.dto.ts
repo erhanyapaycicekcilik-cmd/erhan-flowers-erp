@@ -17,5 +17,10 @@ export class CreateWebOrderDto {
   address!: string
   postalCode?: string
   note?: string
+  tcKimlik?: string
+  faturaKurumsal?: boolean
+  firmaUnvan?: string
+  vergiNo?: string
+  vergiDairesi?: string
   items!: CreateWebOrderItemDto[]
 }

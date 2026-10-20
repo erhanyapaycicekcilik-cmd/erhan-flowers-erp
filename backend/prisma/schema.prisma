@@ -2386,6 +2386,11 @@ model WebOrder {
   address       String
   postalCode    String?               @map("postal_code")
   note          String?
+  tcKimlik      String?               @map("tc_kimlik")
+  invoiceCorporate Boolean            @default(false) @map("invoice_corporate")
+  companyTitle  String?               @map("company_title")
+  taxNumber     String?               @map("tax_number")
+  taxOffice     String?               @map("tax_office")
   subtotal      Decimal               @db.Decimal(14, 2)
   grandTotal    Decimal               @map("grand_total") @db.Decimal(14, 2)
   paidAt        DateTime?             @map("paid_at")
