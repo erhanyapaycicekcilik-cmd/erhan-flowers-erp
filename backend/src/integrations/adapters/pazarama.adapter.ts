@@ -96,13 +96,54 @@ export class PazaramaAdapter extends BaseIntegrationAdapter {
     const missing = this.missingKeys();
     if (missing.length) return this.missing(missing);
 
+    // Önce token al ve sonucunu göster
+    const apiKey = this.env('API_KEY');
+    const apiSecret = this.env('API_SECRET');
+    let tokenSource = 'fallback';
+
+    if (apiSecret) {
+      try {
+        const body = new URLSearchParams({
+          grant_type: 'client_credentials',
+          client_id: apiKey,
+          client_secret: apiSecret,
+          scope: 'merchantgatewayapi.fullaccess',
+        });
+        const basicAuth = Buffer.from(`${apiKey}:${apiSecret}`).toString('base64');
+        const tokenRes = await fetch(PAZARAMA_AUTH_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Authorization': `Basic ${basicAuth}`,
+          },
+          body: body.toString(),
+          signal: AbortSignal.timeout(8000),
+        });
+        if (!tokenRes.ok) {
+          const errBody = await tokenRes.text().catch(() => '');
+          return {
+            ok: false,
+            status: 'MISSING_CREDENTIALS',
+            message: `Pazarama token alınamadı. HTTP ${tokenRes.status}: ${errBody.slice(0, 200)}`,
+          };
+        }
+        tokenSource = 'oauth2';
+      } catch (err: unknown) {
+        return {
+          ok: false,
+          status: 'FAILED',
+          message: `Pazarama token endpoint ulaşılamadı: ${err instanceof Error ? err.message : String(err)}`,
+        };
+      }
+    }
+
     try {
+      this.cachedToken = null; // cache'i temizle, taze token al
       const token = await this.getToken();
       if (!token) {
-        return { ok: false, status: 'MISSING_CREDENTIALS', message: 'Pazarama: token alınamadı. API Key/Secret kontrol edin.' };
+        return { ok: false, status: 'MISSING_CREDENTIALS', message: 'Pazarama: token alınamadı.' };
       }
 
-      // Gerçek bir API endpoint'i test et
       const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
       const res = await fetch(`${PAZARAMA_API}/api/order/orders?status=1&pageSize=1&pageIndex=0`, {
         headers,
@@ -110,20 +151,16 @@ export class PazaramaAdapter extends BaseIntegrationAdapter {
       });
 
       if (res.ok || res.status === 204) {
-        return { ok: true, status: 'CONNECTED', message: 'Pazarama API bağlantısı doğrulandı.' };
+        return { ok: true, status: 'CONNECTED', message: `Pazarama API bağlantısı doğrulandı (token: ${tokenSource}).` };
       }
       if (res.status === 401 || res.status === 403) {
-        return { ok: false, status: 'MISSING_CREDENTIALS', message: `Pazarama: kimlik doğrulama başarısız. HTTP ${res.status}` };
+        const body = await res.text().catch(() => '');
+        return { ok: false, status: 'MISSING_CREDENTIALS', message: `Pazarama API: kimlik doğrulama başarısız. HTTP ${res.status} (token: ${tokenSource}). ${body.slice(0, 200)}` };
       }
-      // 4xx ama 401/403 değilse — API sunucusuna ulaşıldı
       if (res.status < 500) {
-        return { ok: true, status: 'CONNECTED', message: `Pazarama API erişilebilir (HTTP ${res.status}).` };
+        return { ok: true, status: 'CONNECTED', message: `Pazarama API erişilebilir (HTTP ${res.status}, token: ${tokenSource}).` };
       }
-      return {
-        ok: false,
-        status: 'FAILED',
-        message: `Pazarama API sunucu hatası. HTTP ${res.status}`,
-      };
+      return { ok: false, status: 'FAILED', message: `Pazarama API sunucu hatası. HTTP ${res.status}` };
     } catch (err: unknown) {
       return {
         ok: false,
