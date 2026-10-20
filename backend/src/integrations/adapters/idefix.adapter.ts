@@ -2,10 +2,10 @@ import { Inject, Injectable, Optional } from '@nestjs/common';
 import { BaseIntegrationAdapter } from './base-adapter';
 import { AdapterConnectionResult, ExternalOrder } from './integration-adapter.interface';
 
-// Idefix Entegrasyon API — https://satici.idefix.com/api/v1
-// Auth: Header'da "ApiKey <API_KEY>" veya "Authorization: ApiKey <key>"
-// Satıcı ID ayrıca gerekli (SUPPLIER_ID)
-const IDEFIX_API = 'https://satici.idefix.com/api/v1';
+// Idefix Merchant API — https://merchantapi.idefix.com/pim/catalog/{vendorId}/
+// Auth: Authorization: ApiKey <API_KEY>
+// Stok/Fiyat: POST /inventory-upload
+const IDEFIX_API = 'https://merchantapi.idefix.com/pim/catalog';
 
 @Injectable()
 export class IdefixAdapter extends BaseIntegrationAdapter {
@@ -50,7 +50,7 @@ export class IdefixAdapter extends BaseIntegrationAdapter {
 
     try {
       const supplierId = this.env('SUPPLIER_ID');
-      const res = await fetch(`${IDEFIX_API}/sellers/${supplierId}/products?pageSize=1&pageIndex=0`, {
+      const res = await fetch(`${IDEFIX_API}/${supplierId}/inventory-list?pageSize=1&pageIndex=0`, {
         headers: this.apiHeaders(),
         signal: AbortSignal.timeout(10000),
       });
@@ -81,7 +81,7 @@ export class IdefixAdapter extends BaseIntegrationAdapter {
 
     const supplierId = this.env('SUPPLIER_ID');
     try {
-      const res = await fetch(`${IDEFIX_API}/sellers/${supplierId}/orders?pageSize=50&pageIndex=0&status=New`, {
+      const res = await fetch(`${IDEFIX_API}/${supplierId}/orders?pageSize=50&pageIndex=0&status=New`, {
         headers: this.apiHeaders(),
         signal: AbortSignal.timeout(15000),
       });
@@ -109,10 +109,10 @@ export class IdefixAdapter extends BaseIntegrationAdapter {
     if (!barcode) return { ok: false, status: 'FAILED', message: 'Idefix: barcode zorunlu.' };
 
     try {
-      const res = await fetch(`${IDEFIX_API}/sellers/${supplierId}/products/price-and-inventory`, {
-        method: 'PUT',
+      const res = await fetch(`${IDEFIX_API}/${supplierId}/inventory-upload`, {
+        method: 'POST',
         headers: this.apiHeaders(),
-        body: JSON.stringify([{ barcode, salePrice, listPrice, stockCount: quantity }]),
+        body: JSON.stringify([{ barcode, price: salePrice, comparePrice: listPrice, inventoryQuantity: quantity }]),
         signal: AbortSignal.timeout(10000),
       });
       if (res.ok) return { ok: true, status: 'CONNECTED', message: 'Idefix fiyat/stok güncellendi.' };
