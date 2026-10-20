@@ -216,6 +216,21 @@ export class DashboardService {
       ORDER BY co.code
     `;
 
+    // www.erhanflowers.com — ayrı kanal olarak (retail_sales'e yazılmıyor)
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const web = await this.webSiteOrders(monthStart);
+    const webToday = web.filter((o) => o.date >= todayStart);
+    rows.push({
+      companyCode: 'WEB',
+      companyName: 'Web Sitesi',
+      todayRevenue: webToday.reduce((s, o) => s + Number(o.totalAmount), 0),
+      todayOrders: webToday.length,
+      monthRevenue: web.reduce((s, o) => s + Number(o.totalAmount), 0),
+      monthOrders: web.length,
+    });
+
     const totalToday = rows.reduce((sum, r) => sum + Number(r.todayRevenue), 0);
     const totalMonth = rows.reduce((sum, r) => sum + Number(r.monthRevenue), 0);
     const totalTodayOrders = rows.reduce((sum, r) => sum + Number(r.todayOrders), 0);

@@ -32,6 +32,13 @@ type DashboardSummary = {
 type SalesPeriod = { orderCount: number; revenue: number; platforms: Record<string, number> };
 type DailySalesData = { today: SalesPeriod; yesterday: SalesPeriod; thisWeek: SalesPeriod; thisMonth: SalesPeriod };
 
+// Şirket adları veritabanında ikisi de "ERHAN FLOWERS" olabildiği için kartlar koda göre etiketlenir
+const CHANNEL_CARD: Record<string, { title: string; sub: string; box: string; head: string; value: string }> = {
+  ERHAN: { title: 'Erhan Flowers', sub: 'Pazaryerleri', box: 'border-blue-200 bg-blue-50', head: 'text-blue-600', value: 'text-blue-800' },
+  FLORA: { title: 'Flora Yapay Çiçek', sub: 'Trendyol', box: 'border-emerald-200 bg-emerald-50', head: 'text-emerald-600', value: 'text-emerald-800' },
+  WEB: { title: 'Web Sitesi', sub: 'erhanflowers.com', box: 'border-purple-200 bg-purple-50', head: 'text-purple-600', value: 'text-purple-800' },
+}
+
 type CompanyRevRow = { companyCode: string; companyName: string; todayRevenue: number; todayOrders: number; monthRevenue: number; monthOrders: number };
 type CompanyRevenueData = { byCompany: CompanyRevRow[]; total: { todayRevenue: number; todayOrders: number; monthRevenue: number; monthOrders: number } };
 
@@ -74,15 +81,19 @@ export default function DashboardPage() {
               <p className="text-xl font-black text-ink">{money(companyRev.total.todayRevenue)}</p>
               <p className="text-xs text-slate-500">{companyRev.total.todayOrders} sipariş · Bugün genel toplam</p>
             </div>
-            <div className="flex gap-2">
-              {companyRev.byCompany.map(r => (
-                <div key={r.companyCode} className={`rounded-xl border px-4 py-3 text-center ${r.companyCode === 'FLORA' ? 'border-emerald-200 bg-emerald-50' : 'border-blue-200 bg-blue-50'}`}>
-                  <p className={`text-xs font-bold uppercase tracking-wide ${r.companyCode === 'FLORA' ? 'text-emerald-600' : 'text-blue-600'}`}>{r.companyName}</p>
-                  <p className={`text-lg font-black ${r.companyCode === 'FLORA' ? 'text-emerald-800' : 'text-blue-800'}`}>{money(r.todayRevenue)}</p>
+            <div className="flex flex-wrap gap-2">
+              {companyRev.byCompany.map(r => {
+                const ch = CHANNEL_CARD[r.companyCode] ?? { title: r.companyName, sub: '', box: 'border-blue-200 bg-blue-50', head: 'text-blue-600', value: 'text-blue-800' }
+                return (
+                <div key={r.companyCode} className={`rounded-xl border px-4 py-3 text-center ${ch.box}`}>
+                  <p className={`text-xs font-bold uppercase tracking-wide ${ch.head}`}>{ch.title}</p>
+                  {ch.sub && <p className="text-[10px] text-slate-500 -mt-0.5">{ch.sub}</p>}
+                  <p className={`text-lg font-black ${ch.value}`}>{money(r.todayRevenue)}</p>
                   <p className="text-xs text-slate-500">{r.todayOrders} sipariş bugün</p>
                   <p className="mt-1 text-xs text-slate-400">Bu ay: {money(r.monthRevenue)}</p>
                 </div>
-              ))}
+                )
+              })}
             </div>
           </div>
         </div>
