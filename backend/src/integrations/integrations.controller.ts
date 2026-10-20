@@ -343,16 +343,5 @@ export class IntegrationsController {
     return this.integrations.deleteAllProducts(p as 'N11' | 'HEPSIBURADA');
   }
 
-  @Post('pazarama/sync-from-trendyol')
-  @UseGuards(OwnerGuard)
-  syncTrendyolToPazarama() {
-    return this.integrationCenter.syncTrendyolToPazarama();
-  }
-
-  @Post('idefix/sync-from-trendyol')
-  @UseGuards(OwnerGuard)
-  syncTrendyolToIdefix() {
-    return this.integrationCenter.syncTrendyolToIdefix();
-  }
 
 }
