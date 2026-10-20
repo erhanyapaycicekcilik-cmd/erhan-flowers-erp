@@ -49,8 +49,6 @@ export class PazaramaAdapter extends BaseIntegrationAdapter {
       try {
         const body = new URLSearchParams({
           grant_type: 'client_credentials',
-          client_id: apiKey,
-          client_secret: apiSecret,
           scope: 'merchantgatewayapi.fullaccess',
         });
         const basicAuth = Buffer.from(`${apiKey}:${apiSecret}`).toString('base64');
@@ -105,8 +103,6 @@ export class PazaramaAdapter extends BaseIntegrationAdapter {
       try {
         const body = new URLSearchParams({
           grant_type: 'client_credentials',
-          client_id: apiKey,
-          client_secret: apiSecret,
           scope: 'merchantgatewayapi.fullaccess',
         });
         const basicAuth = Buffer.from(`${apiKey}:${apiSecret}`).toString('base64');
