@@ -90,13 +90,16 @@ export class DashboardService {
     };
   }
 
-  /** www.erhanflowers.com siparişleri — iptaller ve ödemesi tamamlanmamış kartlı siparişler hariç */
+  /**
+   * www.erhanflowers.com siparişleri — sadece gerçekleşen satışlar: kartla ödenmiş ya da
+   * ERP'de onaylanmış (WhatsApp/EFT siparişi "Yeni" durumdayken ciroya girmez)
+   */
   private async webSiteOrders(from: Date, to?: Date) {
     const rows = await this.prisma.webOrder.findMany({
       where: {
         createdAt: { gte: from, ...(to ? { lt: to } : {}) },
         status: { not: 'CANCELLED' },
-        OR: [{ paymentMethod: { not: 'ONLINE' } }, { paidAt: { not: null } }],
+        OR: [{ paidAt: { not: null } }, { status: { in: ['CONFIRMED', 'PREPARING', 'SHIPPED', 'DELIVERED'] } }],
       },
       select: { grandTotal: true, createdAt: true, orderNumber: true, customerName: true },
     });
