@@ -903,6 +903,65 @@ export class IntegrationCenterService {
     };
   }
 
+  // Trendyol'dan çek → tüm platformlara eşit fiyat + görsel ile gönder
+  async syncAllFromTrendyol(debugMode = false): Promise<{
+    total: number;
+    platforms: Record<string, { sent: number; errors: number; firstError?: string }>;
+  }> {
+    const trendyol = new TrendyolAdapter(await this.runtimeCredentials('TRENDYOL'));
+
+    let products: Array<Record<string, unknown>>;
+    try {
+      products = await trendyol.fetchSellerProducts(debugMode ? 1 : 50);
+    } catch (err: unknown) {
+      throw new Error(`Trendyol ürün listesi alınamadı: ${err instanceof Error ? err.message : String(err)}`);
+    }
+
+    if (products.length === 0) return { total: 0, platforms: {} };
+
+    // Adapter'ları hazırla — credential yoksa atla
+    const adapters: Array<{ name: string; adapter: { pushProduct: (p: unknown) => Promise<{ ok: boolean; message?: string }> } }> = [];
+    const platformKeys = ['PAZARAMA', 'IDEFIX', 'N11', 'HEPSIBURADA', 'TRENDRUM'] as const;
+    for (const key of platformKeys) {
+      try {
+        const creds = await this.runtimeCredentials(key);
+        const credValues = Object.values(creds);
+        if (credValues.length === 0 || credValues.every((v) => !v)) continue;
+        let adapter;
+        if (key === 'PAZARAMA') adapter = new PazaramaAdapter(creds);
+        else if (key === 'IDEFIX') adapter = new IdefixAdapter(creds);
+        else if (key === 'N11') adapter = new N11Adapter(creds);
+        else if (key === 'HEPSIBURADA') adapter = new HepsiburadaAdapter(creds);
+        else if (key === 'TRENDRUM') adapter = new TrendrumAdapter(creds);
+        if (adapter) adapters.push({ name: key, adapter });
+      } catch { /* credentials bulunamazsa atla */ }
+    }
+
+    const result: Record<string, { sent: number; errors: number; firstError?: string }> = {};
+    for (const { name } of adapters) result[name] = { sent: 0, errors: 0 };
+
+    for (const p of products) {
+      const payload = this.buildSyncPayload(p, 0); // Aynı fiyat — indirim yok
+      if (!payload.barcode) continue;
+      for (const { name, adapter } of adapters) {
+        try {
+          const r = await adapter.pushProduct(payload);
+          if (r.ok) {
+            result[name].sent++;
+          } else {
+            result[name].errors++;
+            if (!result[name].firstError) result[name].firstError = r.message ?? 'Bilinmeyen hata';
+          }
+        } catch (err: unknown) {
+          result[name].errors++;
+          if (!result[name].firstError) result[name].firstError = err instanceof Error ? err.message : String(err);
+        }
+      }
+    }
+
+    return { total: products.length, platforms: result };
+  }
+
   async syncTrendyolToPazarama(debugMode = false): Promise<{ total: number; sent: number; errors: number; details: string[]; debug?: string }> {
     const trendyol = new TrendyolAdapter(await this.runtimeCredentials('TRENDYOL'));
     const pazarama = new PazaramaAdapter(await this.runtimeCredentials('PAZARAMA'));

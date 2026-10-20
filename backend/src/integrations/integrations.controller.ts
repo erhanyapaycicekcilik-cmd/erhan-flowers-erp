@@ -317,6 +317,12 @@ export class IntegrationsController {
     return this.integrations.syncTrendyolStockCards();
   }
 
+  @Post('sync-all-from-trendyol')
+  @UseGuards(OwnerGuard)
+  syncAllFromTrendyol(@Body() body: { debug?: boolean } = {}) {
+    return this.integrationCenter.syncAllFromTrendyol(body?.debug ?? false);
+  }
+
   @Post('pazarama/sync-from-trendyol')
   @UseGuards(OwnerGuard)
   syncTrendyolToPazarama(@Body() body: { debug?: boolean } = {}) {
