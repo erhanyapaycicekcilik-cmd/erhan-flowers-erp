@@ -134,8 +134,8 @@ export class TrendyolProductSyncService {
             select: { id: true, sitePrice: true },
           });
 
-          // Site fiyatı = Trendyol fiyatı - komisyon (%21 sabit)
-          const sitePrice = Math.round(salePrice * 0.79);
+          // Site fiyatı = Trendyol fiyatı - %20 (www.erhanflowers.com sadece site fiyatı bu kadar düşük)
+          const sitePrice = Math.round(salePrice * 0.80);
 
           if (existing) {
             const updateData: Record<string, unknown> = {

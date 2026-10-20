@@ -875,38 +875,113 @@ export class IntegrationCenterService {
     throw new BadRequestException('Platform desteklenmiyor.');
   }
 
-  async syncTrendyolToPazarama(): Promise<{ total: number; sent: number; errors: number; details: string[] }> {
+  // Trendyol'dan ürün listesini çeker, price discount uygular
+  private buildSyncPayload(p: Record<string, unknown>, priceDiscount = 0): {
+    barcode: string; modelCode: string; productName: string; description: string;
+    salePrice: number; listPrice: number; stockQuantity: number;
+    imageUrls: string[]; brand: string; categoryName: string;
+    attributes: Record<string, unknown>[];
+  } {
+    const baseSalePrice = Number(p.salePrice ?? 0);
+    const baseListPrice = Number(p.listPrice ?? p.salePrice ?? 0);
+    const discount = Math.max(0, Math.min(1, priceDiscount));
+    const salePrice = Math.round(baseSalePrice * (1 - discount) * 100) / 100;
+    const listPrice = Math.round(baseListPrice * (1 - discount) * 100) / 100;
+    const images = Array.isArray(p.images)
+      ? (p.images as Record<string, unknown>[]).map((img) => String(img.url ?? img.imageUrl ?? '')).filter(Boolean)
+      : [];
+    const attrs = Array.isArray(p.attributes) ? (p.attributes as Record<string, unknown>[]) : [];
+    return {
+      barcode: String(p.barcode ?? p.productCode ?? ''),
+      modelCode: String(p.productCode ?? p.barcode ?? ''),
+      productName: String(p.title ?? p.name ?? ''),
+      description: String(p.description ?? p.title ?? ''),
+      salePrice,
+      listPrice,
+      stockQuantity: Number(p.quantity ?? p.stockCount ?? 0),
+      imageUrls: images,
+      brand: String(p.brand ?? 'Erhan Flowers'),
+      categoryName: String(p.categoryName ?? ''),
+      attributes: attrs,
+    };
+  }
+
+  // Trendyol'dan çek → tüm platformlara eşit fiyat + görsel ile gönder
+  async syncAllFromTrendyol(debugMode = false): Promise<{
+    total: number;
+    platforms: Record<string, { sent: number; errors: number; firstError?: string }>;
+  }> {
+    const trendyol = new TrendyolAdapter(await this.runtimeCredentials('TRENDYOL'));
+
+    let products: Array<Record<string, unknown>>;
+    try {
+      products = await trendyol.fetchSellerProducts(debugMode ? 1 : 50);
+    } catch (err: unknown) {
+      throw new Error(`Trendyol ürün listesi alınamadı: ${err instanceof Error ? err.message : String(err)}`);
+    }
+
+    if (products.length === 0) return { total: 0, platforms: {} };
+
+    // Adapter'ları hazırla — credential yoksa atla
+    const adapters: Array<{ name: string; adapter: { pushProduct: (p: unknown) => Promise<{ ok: boolean; message?: string }> } }> = [];
+    const platformKeys = ['PAZARAMA', 'IDEFIX', 'N11', 'HEPSIBURADA', 'TRENDRUM'] as const;
+    for (const key of platformKeys) {
+      try {
+        const creds = await this.runtimeCredentials(key);
+        const credValues = Object.values(creds);
+        if (credValues.length === 0 || credValues.every((v) => !v)) continue;
+        let adapter;
+        if (key === 'PAZARAMA') adapter = new PazaramaAdapter(creds);
+        else if (key === 'IDEFIX') adapter = new IdefixAdapter(creds);
+        else if (key === 'N11') adapter = new N11Adapter(creds);
+        else if (key === 'HEPSIBURADA') adapter = new HepsiburadaAdapter(creds);
+        else if (key === 'TRENDRUM') adapter = new TrendrumAdapter(creds);
+        if (adapter) adapters.push({ name: key, adapter });
+      } catch { /* credentials bulunamazsa atla */ }
+    }
+
+    const result: Record<string, { sent: number; errors: number; firstError?: string }> = {};
+    for (const { name } of adapters) result[name] = { sent: 0, errors: 0 };
+
+    for (const p of products) {
+      const payload = this.buildSyncPayload(p, 0); // Aynı fiyat — indirim yok
+      if (!payload.barcode) continue;
+      for (const { name, adapter } of adapters) {
+        try {
+          const r = await adapter.pushProduct(payload);
+          if (r.ok) {
+            result[name].sent++;
+          } else {
+            result[name].errors++;
+            if (!result[name].firstError) result[name].firstError = r.message ?? 'Bilinmeyen hata';
+          }
+        } catch (err: unknown) {
+          result[name].errors++;
+          if (!result[name].firstError) result[name].firstError = err instanceof Error ? err.message : String(err);
+        }
+      }
+    }
+
+    return { total: products.length, platforms: result };
+  }
+
+  async syncTrendyolToPazarama(debugMode = false): Promise<{ total: number; sent: number; errors: number; details: string[]; debug?: string }> {
     const trendyol = new TrendyolAdapter(await this.runtimeCredentials('TRENDYOL'));
     const pazarama = new PazaramaAdapter(await this.runtimeCredentials('PAZARAMA'));
 
     let products: Array<Record<string, unknown>>;
     try {
-      products = await trendyol.fetchSellerProducts(100);
+      products = await trendyol.fetchSellerProducts(debugMode ? 1 : 100);
     } catch (err: unknown) {
       return { total: 0, sent: 0, errors: 1, details: [`Trendyol ürün listesi alınamadı: ${err instanceof Error ? err.message : String(err)}`] };
     }
+
     const details: string[] = [];
     let sent = 0;
     let errors = 0;
 
     for (const p of products) {
-      const attrs = Array.isArray(p.attributes) ? (p.attributes as Record<string, unknown>[]) : [];
-      const images = Array.isArray(p.images)
-        ? (p.images as Record<string, unknown>[]).map((img) => String(img.url ?? ''))
-        : [];
-      const payload = {
-        barcode: String(p.barcode ?? p.productCode ?? ''),
-        modelCode: String(p.productCode ?? p.barcode ?? ''),
-        productName: String(p.title ?? p.name ?? ''),
-        description: String(p.description ?? p.title ?? ''),
-        salePrice: Number(p.salePrice ?? 0),
-        listPrice: Number(p.listPrice ?? p.salePrice ?? 0),
-        stockQuantity: Number(p.quantity ?? p.stockCount ?? 0),
-        imageUrls: images,
-        brand: String(p.brand ?? 'Erhan Flowers'),
-        categoryName: String(p.categoryName ?? ''),
-        attributes: attrs,
-      };
+      const payload = this.buildSyncPayload(p, 0);
 
       if (!payload.barcode) {
         errors++;
@@ -921,36 +996,46 @@ export class IntegrationCenterService {
         errors++;
         details.push(`Hata [${payload.barcode}]: ${result.message}`);
       }
+      if (debugMode) break;
     }
 
     return { total: products.length, sent, errors, details };
   }
 
-  async syncTrendyolToIdefix(): Promise<{ total: number; sent: number; errors: number; details: string[]; firstError?: string | null; debug?: string }> {
+  async syncTrendyolToIdefix(debugMode = false): Promise<{ total: number; sent: number; errors: number; details: string[]; firstError?: string | null; debug?: string }> {
     const trendyol = new TrendyolAdapter(await this.runtimeCredentials('TRENDYOL'));
     const idefix = new IdefixAdapter(await this.runtimeCredentials('IDEFIX'));
 
     let products: Array<Record<string, unknown>>;
     try {
-      products = await trendyol.fetchSellerProducts(100);
+      products = await trendyol.fetchSellerProducts(debugMode ? 1 : 100);
     } catch (err: unknown) {
       return { total: 0, sent: 0, errors: 1, details: [`Trendyol ürün listesi alınamadı: ${err instanceof Error ? err.message : String(err)}`] };
     }
 
-    // İlk ürünü test et ve debug bilgisi döndür
-    if (products.length > 0) {
-      const p = products[0];
-      const testPayload = {
-        barcode: String(p.barcode ?? p.productCode ?? ''),
-        salePrice: Number(p.salePrice ?? 0),
-        listPrice: Number(p.listPrice ?? p.salePrice ?? 0),
-        stockQuantity: Number(p.quantity ?? p.stockCount ?? 0),
-      };
-      const testResult = await idefix.pushPrice(testPayload);
-      const debugInfo = `İlk ürün: barcode=${testPayload.barcode}, salePrice=${testPayload.salePrice}, qty=${testPayload.stockQuantity} | Idefix yanıt: ok=${testResult.ok}, msg=${testResult.message}`;
+    if (products.length === 0) return { total: 0, sent: 0, errors: 0, details: [], firstError: 'Ürün bulunamadı' };
+
+    if (debugMode) {
+      const payload = this.buildSyncPayload(products[0], 0);
+      const testResult = await idefix.pushPrice(payload);
+      const debugInfo = `İlk ürün: barcode=${payload.barcode}, salePrice=${payload.salePrice}, qty=${payload.stockQuantity} | Idefix yanıt: ok=${testResult.ok}, msg=${testResult.message}`;
       return { total: products.length, sent: 0, errors: 1, details: [debugInfo], firstError: debugInfo, debug: debugInfo };
     }
 
-    return { total: 0, sent: 0, errors: 0, details: [], firstError: 'Ürün bulunamadı' };
+    let sent = 0;
+    let errors = 0;
+    const details: string[] = [];
+    for (const p of products) {
+      const payload = this.buildSyncPayload(p, 0);
+      if (!payload.barcode) continue;
+      const result = await idefix.pushProduct(payload);
+      if (result.ok) {
+        sent++;
+      } else {
+        errors++;
+        details.push(`${payload.barcode}: ${result.message}`);
+      }
+    }
+    return { total: products.length, sent, errors, details };
   }
 }
