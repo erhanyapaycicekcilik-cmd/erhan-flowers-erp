@@ -872,4 +872,50 @@ export class IntegrationCenterService {
     if (platform === 'PAZARAMA') return new PazaramaAdapter(await this.runtimeCredentials(platform));
     throw new BadRequestException('Platform desteklenmiyor.');
   }
+
+  async syncTrendyolToPazarama(): Promise<{ total: number; sent: number; errors: number; details: string[] }> {
+    const trendyol = new TrendyolAdapter(await this.runtimeCredentials('TRENDYOL'));
+    const pazarama = new PazaramaAdapter(await this.runtimeCredentials('PAZARAMA'));
+
+    const products = await trendyol.fetchSellerProducts(100);
+    const details: string[] = [];
+    let sent = 0;
+    let errors = 0;
+
+    for (const p of products) {
+      const attrs = Array.isArray(p.attributes) ? (p.attributes as Record<string, unknown>[]) : [];
+      const images = Array.isArray(p.images)
+        ? (p.images as Record<string, unknown>[]).map((img) => String(img.url ?? ''))
+        : [];
+      const payload = {
+        barcode: String(p.barcode ?? p.productCode ?? ''),
+        modelCode: String(p.productCode ?? p.barcode ?? ''),
+        productName: String(p.title ?? p.name ?? ''),
+        description: String(p.description ?? p.title ?? ''),
+        salePrice: Number(p.salePrice ?? 0),
+        listPrice: Number(p.listPrice ?? p.salePrice ?? 0),
+        stockQuantity: Number(p.quantity ?? p.stockCount ?? 0),
+        imageUrls: images,
+        brand: String(p.brand ?? 'Erhan Flowers'),
+        categoryName: String(p.categoryName ?? ''),
+        attributes: attrs,
+      };
+
+      if (!payload.barcode) {
+        errors++;
+        details.push(`Atlandı (barcode yok): ${payload.productName}`);
+        continue;
+      }
+
+      const result = await pazarama.pushProduct(payload);
+      if (result.ok) {
+        sent++;
+      } else {
+        errors++;
+        details.push(`Hata [${payload.barcode}]: ${result.message}`);
+      }
+    }
+
+    return { total: products.length, sent, errors, details };
+  }
 }

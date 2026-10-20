@@ -231,6 +231,20 @@ const [channels, setChannels] = useState<SalesChannel[]>([]);
     }
   }
 
+  async function syncTrendyolToPazarama() {
+    setLoadingPlatform('SYNC_PAZARAMA');
+    setPlatformMessages((prev) => ({ ...prev, PAZARAMA: '' }));
+    try {
+      const result = await api<{ total: number; sent: number; errors: number; details: string[] }>('/integrations/pazarama/sync-from-trendyol', { method: 'POST' });
+      setPlatformMessages((prev) => ({ ...prev, PAZARAMA: `Trendyol'dan aktarım tamamlandı: ${result.sent}/${result.total} ürün gönderildi, ${result.errors} hata.` }));
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : 'Aktarım yapılamadı.';
+      setPlatformMessages((prev) => ({ ...prev, PAZARAMA: msg }));
+    } finally {
+      setLoadingPlatform('');
+    }
+  }
+
   async function sync(platform: string) {
     setLoadingPlatform(platform);
     setMessage('');
@@ -578,6 +592,12 @@ const [channels, setChannels] = useState<SalesChannel[]>([]);
                       <button className="btn btn-secondary" type="button" onClick={() => test(platform)} disabled={loadingPlatform === platform}>
                         <TestTube2 size={16} />
                         {loadingPlatform === platform ? 'Test ediliyor…' : 'Bağlantıyı test et'}
+                      </button>
+                    )}
+                    {platform === 'PAZARAMA' && (
+                      <button className="btn btn-primary" type="button" onClick={syncTrendyolToPazarama} disabled={loadingPlatform === 'SYNC_PAZARAMA'}>
+                        <Download size={16} />
+                        {loadingPlatform === 'SYNC_PAZARAMA' ? 'Aktarılıyor…' : 'Trendyol\'dan Aktar'}
                       </button>
                     )}
                   </div>
