@@ -319,14 +319,14 @@ export class IntegrationsController {
 
   @Post('pazarama/sync-from-trendyol')
   @UseGuards(OwnerGuard)
-  syncTrendyolToPazarama() {
-    return this.integrationCenter.syncTrendyolToPazarama();
+  syncTrendyolToPazarama(@Body() body: { debug?: boolean } = {}) {
+    return this.integrationCenter.syncTrendyolToPazarama(body?.debug ?? false);
   }
 
   @Post('idefix/sync-from-trendyol')
   @UseGuards(OwnerGuard)
-  syncTrendyolToIdefix() {
-    return this.integrationCenter.syncTrendyolToIdefix();
+  syncTrendyolToIdefix(@Body() body: { debug?: boolean } = {}) {
+    return this.integrationCenter.syncTrendyolToIdefix(body?.debug ?? false);
   }
 
   @Post(':platform/delete-all')

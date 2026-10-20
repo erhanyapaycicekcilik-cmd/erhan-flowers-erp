@@ -653,19 +653,40 @@ export default function IntegrationsPage() {
                     )}
                   </div>
                   {(platform === 'PAZARAMA' || platform === 'IDEFIX') && (
-                    <div className="mt-3">
+                    <div className="mt-3 flex flex-wrap gap-2">
                       <button
                         className="btn btn-secondary text-sm"
                         type="button"
-                        disabled={loadingPlatform === `SYNC_${platform}`}
+                        disabled={!!loadingPlatform}
+                        onClick={async () => {
+                          setLoadingPlatform(`DEBUG_${platform}`);
+                          setPlatformMessages((prev) => ({ ...prev, [platform]: '' }));
+                          try {
+                            const endpoint = platform === 'PAZARAMA' ? '/integrations/pazarama/sync-from-trendyol' : '/integrations/idefix/sync-from-trendyol';
+                            const result = await api<{ total: number; sent: number; errors: number; details: string[]; debug?: string }>(endpoint, { method: 'POST', body: JSON.stringify({ debug: true }), headers: { 'Content-Type': 'application/json' } });
+                            const msg = result.debug ?? (result.details[0] ?? 'Sonuç yok');
+                            setPlatformMessages((prev) => ({ ...prev, [platform]: `[DEBUG] ${msg}` }));
+                          } catch (error) {
+                            setPlatformMessages((prev) => ({ ...prev, [platform]: error instanceof Error ? error.message : 'Test başarısız.' }));
+                          } finally {
+                            setLoadingPlatform('');
+                          }
+                        }}
+                      >
+                        {loadingPlatform === `DEBUG_${platform}` ? 'Test ediliyor…' : '1 Ürün Test Et'}
+                      </button>
+                      <button
+                        className="btn btn-primary text-sm"
+                        type="button"
+                        disabled={!!loadingPlatform}
                         onClick={async () => {
                           setLoadingPlatform(`SYNC_${platform}`);
                           setPlatformMessages((prev) => ({ ...prev, [platform]: '' }));
                           try {
                             const endpoint = platform === 'PAZARAMA' ? '/integrations/pazarama/sync-from-trendyol' : '/integrations/idefix/sync-from-trendyol';
-                            const result = await api<{ total: number; sent: number; errors: number; details: string[]; debug?: string }>(endpoint, { method: 'POST' });
-                            const debugText = result.debug ? ` | Debug: ${result.debug}` : (result.details.length ? ` | ${result.details[0]}` : '');
-                            setPlatformMessages((prev) => ({ ...prev, [platform]: `Trendyol'dan aktarım: ${result.sent}/${result.total} gönderildi, ${result.errors} hata.${debugText}` }));
+                            const result = await api<{ total: number; sent: number; errors: number; details: string[]; debug?: string }>(endpoint, { method: 'POST', body: JSON.stringify({ debug: false }), headers: { 'Content-Type': 'application/json' } });
+                            const errDetail = result.details.length ? ` | İlk hata: ${result.details[0]}` : '';
+                            setPlatformMessages((prev) => ({ ...prev, [platform]: `Aktarım tamamlandı: ${result.sent}/${result.total} gönderildi, ${result.errors} hata.${errDetail}` }));
                           } catch (error) {
                             setPlatformMessages((prev) => ({ ...prev, [platform]: error instanceof Error ? error.message : 'Aktarım yapılamadı.' }));
                           } finally {
@@ -673,7 +694,7 @@ export default function IntegrationsPage() {
                           }
                         }}
                       >
-                        {loadingPlatform === `SYNC_${platform}` ? 'Aktarılıyor…' : "Trendyol'dan Aktar"}
+                        {loadingPlatform === `SYNC_${platform}` ? 'Aktarılıyor…' : 'Tümünü Aktar (-%20 fiyat)'}
                       </button>
                     </div>
                   )}

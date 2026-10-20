@@ -875,67 +875,109 @@ export class IntegrationCenterService {
     throw new BadRequestException('Platform desteklenmiyor.');
   }
 
-  async syncTrendyolToPazarama(): Promise<{ total: number; sent: number; errors: number; details: string[]; debug?: string }> {
+  // Trendyol'dan ürün listesini çeker, price discount uygular
+  private buildSyncPayload(p: Record<string, unknown>, priceDiscount = 0): {
+    barcode: string; modelCode: string; productName: string; description: string;
+    salePrice: number; listPrice: number; stockQuantity: number;
+    imageUrls: string[]; brand: string; categoryName: string;
+  } {
+    const baseSalePrice = Number(p.salePrice ?? 0);
+    const baseListPrice = Number(p.listPrice ?? p.salePrice ?? 0);
+    const discount = Math.max(0, Math.min(1, priceDiscount));
+    const salePrice = Math.round(baseSalePrice * (1 - discount) * 100) / 100;
+    const listPrice = Math.round(baseListPrice * (1 - discount) * 100) / 100;
+    const images = Array.isArray(p.images)
+      ? (p.images as Record<string, unknown>[]).map((img) => String(img.url ?? img.imageUrl ?? '')).filter(Boolean)
+      : [];
+    return {
+      barcode: String(p.barcode ?? p.productCode ?? ''),
+      modelCode: String(p.productCode ?? p.barcode ?? ''),
+      productName: String(p.title ?? p.name ?? ''),
+      description: String(p.description ?? p.title ?? ''),
+      salePrice,
+      listPrice,
+      stockQuantity: Number(p.quantity ?? p.stockCount ?? 0),
+      imageUrls: images,
+      brand: String(p.brand ?? 'Erhan Flowers'),
+      categoryName: String(p.categoryName ?? ''),
+    };
+  }
+
+  async syncTrendyolToPazarama(debugMode = false): Promise<{ total: number; sent: number; errors: number; details: string[]; debug?: string }> {
     const trendyol = new TrendyolAdapter(await this.runtimeCredentials('TRENDYOL'));
     const pazarama = new PazaramaAdapter(await this.runtimeCredentials('PAZARAMA'));
 
     let products: Array<Record<string, unknown>>;
     try {
-      products = await trendyol.fetchSellerProducts(100);
+      products = await trendyol.fetchSellerProducts(debugMode ? 1 : 50);
     } catch (err: unknown) {
       return { total: 0, sent: 0, errors: 1, details: [`Trendyol ürün listesi alınamadı: ${err instanceof Error ? err.message : String(err)}`] };
     }
 
-    if (products.length > 0) {
-      const p = products[0];
-      const images = Array.isArray(p.images)
-        ? (p.images as Record<string, unknown>[]).map((img) => String(img.url ?? ''))
-        : [];
-      const testPayload = {
-        barcode: String(p.barcode ?? p.productCode ?? ''),
-        modelCode: String(p.productCode ?? p.barcode ?? ''),
-        productName: String(p.title ?? p.name ?? ''),
-        description: String(p.description ?? p.title ?? ''),
-        salePrice: Number(p.salePrice ?? 0),
-        listPrice: Number(p.listPrice ?? p.salePrice ?? 0),
-        stockQuantity: Number(p.quantity ?? p.stockCount ?? 0),
-        imageUrls: images,
-        brand: String(p.brand ?? 'Erhan Flowers'),
-        categoryName: String(p.categoryName ?? ''),
-        attributes: [],
-      };
-      const testResult = await pazarama.pushProduct(testPayload);
-      const debug = `İlk ürün: barcode=${testPayload.barcode}, salePrice=${testPayload.salePrice} | Pazarama yanıt: ok=${testResult.ok}, status=${testResult.status}, msg=${testResult.message}`;
-      return { total: products.length, sent: 0, errors: 1, details: [debug], debug };
+    if (products.length === 0) return { total: 0, sent: 0, errors: 0, details: [] };
+
+    // Debug: sadece ilk ürünü dene
+    if (debugMode) {
+      const payload = this.buildSyncPayload(products[0], 0.20);
+      const result = await pazarama.pushProduct(payload);
+      const msg = `İlk ürün: barcode=${payload.barcode}, salePrice=${payload.salePrice} | Pazarama: ok=${result.ok}, status=${result.status}, msg=${result.message}`;
+      return { total: products.length, sent: result.ok ? 1 : 0, errors: result.ok ? 0 : 1, details: [msg], debug: msg };
     }
 
-    return { total: 0, sent: 0, errors: 0, details: [], debug: 'Ürün bulunamadı' };
+    // Tam senkronizasyon — Trendyol fiyatından %20 indirimli
+    let sent = 0;
+    let errors = 0;
+    const details: string[] = [];
+    for (const p of products) {
+      const payload = this.buildSyncPayload(p, 0.20);
+      if (!payload.barcode) continue;
+      const result = await pazarama.pushProduct(payload);
+      if (result.ok) {
+        sent++;
+      } else {
+        errors++;
+        details.push(`${payload.barcode}: ${result.message}`);
+      }
+    }
+    return { total: products.length, sent, errors, details };
   }
 
-  async syncTrendyolToIdefix(): Promise<{ total: number; sent: number; errors: number; details: string[]; debug?: string }> {
+  async syncTrendyolToIdefix(debugMode = false): Promise<{ total: number; sent: number; errors: number; details: string[]; debug?: string }> {
     const trendyol = new TrendyolAdapter(await this.runtimeCredentials('TRENDYOL'));
     const idefix = new IdefixAdapter(await this.runtimeCredentials('IDEFIX'));
 
     let products: Array<Record<string, unknown>>;
     try {
-      products = await trendyol.fetchSellerProducts(100);
+      products = await trendyol.fetchSellerProducts(debugMode ? 1 : 50);
     } catch (err: unknown) {
       return { total: 0, sent: 0, errors: 1, details: [`Trendyol ürün listesi alınamadı: ${err instanceof Error ? err.message : String(err)}`] };
     }
 
-    if (products.length > 0) {
-      const p = products[0];
-      const testPayload = {
-        barcode: String(p.barcode ?? p.productCode ?? ''),
-        salePrice: Number(p.salePrice ?? 0),
-        listPrice: Number(p.listPrice ?? p.salePrice ?? 0),
-        stockQuantity: Number(p.quantity ?? p.stockCount ?? 0),
-      };
-      const testResult = await idefix.pushPrice(testPayload);
-      const debug = `İlk ürün: barcode=${testPayload.barcode}, salePrice=${testPayload.salePrice}, qty=${testPayload.stockQuantity} | Idefix yanıt: ok=${testResult.ok}, msg=${testResult.message}`;
-      return { total: products.length, sent: 0, errors: 1, details: [debug], debug };
+    if (products.length === 0) return { total: 0, sent: 0, errors: 0, details: [] };
+
+    // Debug: sadece ilk ürünü dene
+    if (debugMode) {
+      const payload = this.buildSyncPayload(products[0], 0.20);
+      const result = await idefix.pushProduct(payload);
+      const msg = `İlk ürün: barcode=${payload.barcode}, salePrice=${payload.salePrice} | Idefix: ok=${result.ok}, msg=${result.message}`;
+      return { total: products.length, sent: result.ok ? 1 : 0, errors: result.ok ? 0 : 1, details: [msg], debug: msg };
     }
 
-    return { total: 0, sent: 0, errors: 0, details: [], debug: 'Ürün bulunamadı' };
+    // Tam senkronizasyon — Trendyol fiyatından %20 indirimli
+    let sent = 0;
+    let errors = 0;
+    const details: string[] = [];
+    for (const p of products) {
+      const payload = this.buildSyncPayload(p, 0.20);
+      if (!payload.barcode) continue;
+      const result = await idefix.pushProduct(payload);
+      if (result.ok) {
+        sent++;
+      } else {
+        errors++;
+        details.push(`${payload.barcode}: ${result.message}`);
+      }
+    }
+    return { total: products.length, sent, errors, details };
   }
 }
