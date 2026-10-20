@@ -926,7 +926,7 @@ export class IntegrationCenterService {
     return { total: products.length, sent, errors, details };
   }
 
-  async syncTrendyolToIdefix(): Promise<{ total: number; sent: number; errors: number; details: string[] }> {
+  async syncTrendyolToIdefix(): Promise<{ total: number; sent: number; errors: number; details: string[]; firstError?: string | null }> {
     const trendyol = new TrendyolAdapter(await this.runtimeCredentials('TRENDYOL'));
     const idefix = new IdefixAdapter(await this.runtimeCredentials('IDEFIX'));
 
