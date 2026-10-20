@@ -32,15 +32,13 @@ export class IdefixAdapter extends BaseIntegrationAdapter {
   private missingKeys(): string[] {
     const missing: string[] = [];
     if (!this.env('API_KEY')) missing.push('IDEFIX_API_KEY');
-    if (!this.env('API_SECRET')) missing.push('IDEFIX_API_SECRET');
     if (!this.env('SUPPLIER_ID')) missing.push('IDEFIX_SUPPLIER_ID');
     return missing;
   }
 
   private apiHeaders(): Record<string, string> {
-    const token = Buffer.from(`${this.env('API_KEY')}:${this.env('API_SECRET')}`).toString('base64');
     return {
-      'X-API-KEY': token,
+      'X-API-KEY': this.env('API_KEY'),
       'Content-Type': 'application/json',
       'Accept': 'application/json',
     };
