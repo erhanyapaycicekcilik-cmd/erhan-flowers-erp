@@ -419,8 +419,8 @@ const [channels, setChannels] = useState<SalesChannel[]>([]);
 
   function downloadTemplate(platform: PlatformCode) {
     const rows = [
-      ['Platform', 'Magaza Adi', 'Supplier/Merchant ID', ...platformFields[platform].map((field) => field.label)],
-      [platformLabel(platform), '', '', ...platformFields[platform].map(() => '')],
+      ['Platform', 'Magaza Adi', 'Supplier/Merchant ID', ...(platformFields[platform] ?? []).map((field) => field.label)],
+      [platformLabel(platform), '', '', ...(platformFields[platform] ?? []).map(() => '')],
     ];
     const csv = rows.map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(';')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
@@ -547,7 +547,7 @@ const [channels, setChannels] = useState<SalesChannel[]>([]);
                       <span className="label">Supplier / Merchant ID</span>
                       <input className="field" value={form.externalAccountId} onChange={(event) => updatePlatformForm(platform, { externalAccountId: event.target.value })} />
                     </label>
-                    {platformFields[platform].map((field) => (
+                    {(platformFields[platform] ?? []).map((field) => (
                       <label key={field.key} className="block space-y-1.5">
                         <span className="label">{field.label}</span>
                         <input
