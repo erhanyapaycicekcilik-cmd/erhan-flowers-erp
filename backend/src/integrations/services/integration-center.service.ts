@@ -963,6 +963,6 @@ export class IntegrationCenterService {
       }
     }
 
-    return { total: products.length, sent, errors, details };
+    return { total: products.length, sent, errors, details, firstError: details[0] ?? null };
   }
 }
