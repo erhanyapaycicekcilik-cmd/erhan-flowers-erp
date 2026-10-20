@@ -317,6 +317,18 @@ export class IntegrationsController {
     return this.integrations.syncTrendyolStockCards();
   }
 
+  @Post('pazarama/sync-from-trendyol')
+  @UseGuards(OwnerGuard)
+  syncTrendyolToPazarama() {
+    return this.integrationCenter.syncTrendyolToPazarama();
+  }
+
+  @Post('idefix/sync-from-trendyol')
+  @UseGuards(OwnerGuard)
+  syncTrendyolToIdefix() {
+    return this.integrationCenter.syncTrendyolToIdefix();
+  }
+
   @Post(':platform/delete-all')
   @UseGuards(OwnerGuard)
   deleteAllProducts(@Param('platform') platform: string) {

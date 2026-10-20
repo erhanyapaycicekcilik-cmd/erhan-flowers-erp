@@ -652,6 +652,31 @@ export default function IntegrationsPage() {
                       </button>
                     )}
                   </div>
+                  {(platform === 'PAZARAMA' || platform === 'IDEFIX') && (
+                    <div className="mt-3">
+                      <button
+                        className="btn btn-secondary text-sm"
+                        type="button"
+                        disabled={loadingPlatform === `SYNC_${platform}`}
+                        onClick={async () => {
+                          setLoadingPlatform(`SYNC_${platform}`);
+                          setPlatformMessages((prev) => ({ ...prev, [platform]: '' }));
+                          try {
+                            const endpoint = platform === 'PAZARAMA' ? '/integrations/pazarama/sync-from-trendyol' : '/integrations/idefix/sync-from-trendyol';
+                            const result = await api<{ total: number; sent: number; errors: number; details: string[]; debug?: string }>(endpoint, { method: 'POST' });
+                            const debugText = result.debug ? ` | Debug: ${result.debug}` : (result.details.length ? ` | ${result.details[0]}` : '');
+                            setPlatformMessages((prev) => ({ ...prev, [platform]: `Trendyol'dan aktarım: ${result.sent}/${result.total} gönderildi, ${result.errors} hata.${debugText}` }));
+                          } catch (error) {
+                            setPlatformMessages((prev) => ({ ...prev, [platform]: error instanceof Error ? error.message : 'Aktarım yapılamadı.' }));
+                          } finally {
+                            setLoadingPlatform('');
+                          }
+                        }}
+                      >
+                        {loadingPlatform === `SYNC_${platform}` ? 'Aktarılıyor…' : "Trendyol'dan Aktar"}
+                      </button>
+                    </div>
+                  )}
                   {platform === 'TRENDYOL' && (
                     <div className="mt-3 rounded-md border border-dashed border-slate-300 p-3">
                       <div className="mb-1 text-xs font-semibold text-slate-600">

@@ -9,6 +9,7 @@ import { TicimaxAdapter } from '../adapters/ticimax.adapter';
 import { TrendyolAdapter } from '../adapters/trendyol.adapter';
 import { TrendrumAdapter } from '../adapters/trendrum.adapter';
 import { PazaramaAdapter } from '../adapters/pazarama.adapter';
+import { IdefixAdapter } from '../adapters/idefix.adapter';
 import { MockMarketplaceAdapter } from '../adapters/mock/mock-marketplace.adapter';
 import { CredentialVaultService } from './credential-vault.service';
 
@@ -870,6 +871,71 @@ export class IntegrationCenterService {
     if (platform === 'TICIMAX') return new TicimaxAdapter(await this.ticimaxRuntimeCredentials());
     if (platform === 'TRENDRUM') return new TrendrumAdapter(await this.runtimeCredentials(platform));
     if (platform === 'PAZARAMA') return new PazaramaAdapter(await this.runtimeCredentials(platform));
+    if (platform === 'IDEFIX') return new IdefixAdapter(await this.runtimeCredentials(platform));
     throw new BadRequestException('Platform desteklenmiyor.');
+  }
+
+  async syncTrendyolToPazarama(): Promise<{ total: number; sent: number; errors: number; details: string[]; debug?: string }> {
+    const trendyol = new TrendyolAdapter(await this.runtimeCredentials('TRENDYOL'));
+    const pazarama = new PazaramaAdapter(await this.runtimeCredentials('PAZARAMA'));
+
+    let products: Array<Record<string, unknown>>;
+    try {
+      products = await trendyol.fetchSellerProducts(100);
+    } catch (err: unknown) {
+      return { total: 0, sent: 0, errors: 1, details: [`Trendyol ürün listesi alınamadı: ${err instanceof Error ? err.message : String(err)}`] };
+    }
+
+    if (products.length > 0) {
+      const p = products[0];
+      const images = Array.isArray(p.images)
+        ? (p.images as Record<string, unknown>[]).map((img) => String(img.url ?? ''))
+        : [];
+      const testPayload = {
+        barcode: String(p.barcode ?? p.productCode ?? ''),
+        modelCode: String(p.productCode ?? p.barcode ?? ''),
+        productName: String(p.title ?? p.name ?? ''),
+        description: String(p.description ?? p.title ?? ''),
+        salePrice: Number(p.salePrice ?? 0),
+        listPrice: Number(p.listPrice ?? p.salePrice ?? 0),
+        stockQuantity: Number(p.quantity ?? p.stockCount ?? 0),
+        imageUrls: images,
+        brand: String(p.brand ?? 'Erhan Flowers'),
+        categoryName: String(p.categoryName ?? ''),
+        attributes: [],
+      };
+      const testResult = await pazarama.pushProduct(testPayload);
+      const debug = `İlk ürün: barcode=${testPayload.barcode}, salePrice=${testPayload.salePrice} | Pazarama yanıt: ok=${testResult.ok}, status=${testResult.status}, msg=${testResult.message}`;
+      return { total: products.length, sent: 0, errors: 1, details: [debug], debug };
+    }
+
+    return { total: 0, sent: 0, errors: 0, details: [], debug: 'Ürün bulunamadı' };
+  }
+
+  async syncTrendyolToIdefix(): Promise<{ total: number; sent: number; errors: number; details: string[]; debug?: string }> {
+    const trendyol = new TrendyolAdapter(await this.runtimeCredentials('TRENDYOL'));
+    const idefix = new IdefixAdapter(await this.runtimeCredentials('IDEFIX'));
+
+    let products: Array<Record<string, unknown>>;
+    try {
+      products = await trendyol.fetchSellerProducts(100);
+    } catch (err: unknown) {
+      return { total: 0, sent: 0, errors: 1, details: [`Trendyol ürün listesi alınamadı: ${err instanceof Error ? err.message : String(err)}`] };
+    }
+
+    if (products.length > 0) {
+      const p = products[0];
+      const testPayload = {
+        barcode: String(p.barcode ?? p.productCode ?? ''),
+        salePrice: Number(p.salePrice ?? 0),
+        listPrice: Number(p.listPrice ?? p.salePrice ?? 0),
+        stockQuantity: Number(p.quantity ?? p.stockCount ?? 0),
+      };
+      const testResult = await idefix.pushPrice(testPayload);
+      const debug = `İlk ürün: barcode=${testPayload.barcode}, salePrice=${testPayload.salePrice}, qty=${testPayload.stockQuantity} | Idefix yanıt: ok=${testResult.ok}, msg=${testResult.message}`;
+      return { total: products.length, sent: 0, errors: 1, details: [debug], debug };
+    }
+
+    return { total: 0, sent: 0, errors: 0, details: [], debug: 'Ürün bulunamadı' };
   }
 }
