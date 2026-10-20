@@ -3,8 +3,9 @@ import { BaseIntegrationAdapter } from './base-adapter';
 import { AdapterConnectionResult, ExternalOrder } from './integration-adapter.interface';
 
 // Pazarama Entegrasyon API — https://isortagim.pazarama.com/
-// Auth: OAuth2 client_credentials veya doğrudan API Key Bearer token
+// Auth: OAuth2 client_credentials, token endpoint ayrı domain
 const PAZARAMA_API = 'https://isortagim.pazarama.com';
+const PAZARAMA_AUTH_URL = 'https://isortagimgiris.pazarama.com/connect/token';
 
 @Injectable()
 export class PazaramaAdapter extends BaseIntegrationAdapter {
@@ -50,9 +51,10 @@ export class PazaramaAdapter extends BaseIntegrationAdapter {
           grant_type: 'client_credentials',
           client_id: apiKey,
           client_secret: apiSecret,
+          scope: 'merchantgatewayapi.fullaccess',
         });
         const basicAuth = Buffer.from(`${apiKey}:${apiSecret}`).toString('base64');
-        const res = await fetch(`${PAZARAMA_API}/connect/token`, {
+        const res = await fetch(PAZARAMA_AUTH_URL, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
