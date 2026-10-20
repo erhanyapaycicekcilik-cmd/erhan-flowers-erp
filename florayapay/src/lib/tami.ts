@@ -185,16 +185,22 @@ export async function complete3DS(orderId: string): Promise<TamiCompleteResponse
   const bodyWithoutHash = { orderId }
   const securityHash = generateSecurityHash(bodyWithoutHash)
 
+  // TAMI her istekte 'correlationId' header'ı ister; eksikse
+  // "Headerda korelasyon numarası bilgisi gönderilmelidir" hatası döner.
+  const correlationId = randomUUID()
   const res = await fetch(`${API_URL}/payment/complete-3ds`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'PG-Api-Version': 'v3',
       'PG-Auth-Token': generatePGAuthToken(),
-      'X-Correlation-ID': randomUUID(),
+      'correlationId': correlationId,
+      'X-Correlation-ID': correlationId,
     },
     body: JSON.stringify({ ...bodyWithoutHash, securityHash }),
   })
 
-  return res.json()
+  const raw = await res.json()
+  console.log('[tami] complete3DS response:', JSON.stringify(raw))
+  return raw
 }
