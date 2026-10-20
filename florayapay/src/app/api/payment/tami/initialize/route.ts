@@ -12,8 +12,7 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
     const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || '127.0.0.1'
-    // orderId'yi callbackUrl'ye gömüş ol — Tami callback'e parametre göndermiyor
-    const callbackUrl = `${SITE_URL}/api/payment/tami/callback?orderId=${encodeURIComponent(body.orderId)}`
+    const callbackUrl = `${SITE_URL}/api/payment/tami/callback/${encodeURIComponent(body.orderId)}`
     const result = await initiate3DS({ ...body, musteri: { ...body.musteri, ip }, callbackUrl })
 
     if (!result.success || !result.threeDSHtmlContent) {
