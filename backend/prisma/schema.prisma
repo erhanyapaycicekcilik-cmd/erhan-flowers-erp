@@ -2370,6 +2370,7 @@ enum WebOrderStatus {
 enum WebOrderPaymentMethod {
   WHATSAPP
   EFT
+  ONLINE
 }
 
 model WebOrder {

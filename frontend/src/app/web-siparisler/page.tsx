@@ -116,6 +116,9 @@ export default function WebSiparislerPage() {
                           {order.paymentMethod === 'EFT' && (
                             <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-semibold">EFT</span>
                           )}
+                          {order.paymentMethod === 'ONLINE' && (
+                            <span className="text-xs px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 font-semibold">KART</span>
+                          )}
                         </div>
                         <p className="font-semibold text-gray-900 mt-1">{order.customerName}</p>
                         <p className="text-sm text-gray-500">{order.customerPhone} · {order.city}{order.district ? ', ' + order.district : ''}</p>

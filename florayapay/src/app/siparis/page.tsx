@@ -161,6 +161,13 @@ export default function SiparisPage() {
       })
 
       const data = res.ok ? await res.json() : {}
+
+      if (odemeYontemi === 'kart' && !data.orderNumber) {
+        // Sipariş ERP'ye kaydedilmeden karttan para çekme — adres/ürün bilgisi kaybolur
+        alert('Siparişiniz kaydedilemedi, lütfen tekrar deneyin veya WhatsApp ile sipariş verin.')
+        setLoading(false)
+        return
+      }
       const orderNumber = data.orderNumber || 'WEB-' + Date.now().toString(36).toUpperCase()
 
       if (odemeYontemi === 'kart') {
@@ -196,18 +203,8 @@ export default function SiparisPage() {
         clearCart()
         router.push('/siparis-tamamlandi')
       } else {
-        // Kart ödemesinde backend erişilemese de devam et — sipariş callback'te kaydedilir
-        const orderNumber = 'WEB-' + Date.now().toString(36).toUpperCase()
-        const orderPayload = {
-          orderId: orderNumber,
-          amount: Math.round(genelToplam),
-          musteri: { ad: form.ad, soyad: form.soyad, email: form.email || `${form.telefon}@erhanflowers.com`, telefon: form.telefon },
-          adres: { adres: form.adres, sehir: form.sehir, ulke: 'Turkey' },
-          urunler: items.map(i => ({ id: String(i.id), ad: i.name, kategori: 'YAPAY_CICEK', fiyat: i.price, adet: i.quantity })),
-        }
-        clearCart()
-        router.push(`/odeme-kart?data=${encodeURIComponent(JSON.stringify(orderPayload))}`)
-        return
+        // Sipariş kaydedilemeden kartla ödeme alınmasın
+        alert('Siparişiniz kaydedilemedi, lütfen tekrar deneyin veya WhatsApp ile sipariş verin.')
         setLoading(false)
       }
     }
