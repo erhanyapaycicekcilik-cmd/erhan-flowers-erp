@@ -384,6 +384,8 @@ export default function ProductsPage() {
   const [broadcastResult, setBroadcastResult] = useState<{ total: number; sent: number; skipped: number; errors: number } | null>(null);
   const [broadcastingImages, setBroadcastingImages] = useState(false);
   const [broadcastImagesResult, setBroadcastImagesResult] = useState<{ sent: number; errors: number } | null>(null);
+  const [sendingToPazarama, setSendingToPazarama] = useState(false);
+  const [pazaramaResult, setPazaramaResult] = useState<{ total: number; sent: number; errors: number } | null>(null);
   const [syncingFromTrendyol, setSyncingFromTrendyol] = useState(false);
   const [syncFromTrendyolResult, setSyncFromTrendyolResult] = useState<{ updated: number; notFound: number; total: number; error?: string } | null>(null);
   const [recalculating, setRecalculating] = useState(false);
@@ -1897,6 +1899,29 @@ export default function ProductsPage() {
             {broadcastingImages ? <RefreshCw size={17} className="animate-spin" /> : <Send size={17} />}
             {broadcastingImages ? 'Görseller Gönderiliyor...' : 'Tüm Görselleri Platformlara Gönder'}
           </button>
+          <button
+            className="btn btn-secondary"
+            disabled={sendingToPazarama}
+            onClick={async () => {
+              if (!confirm('Tüm aktif ürünler Pazarama\'ya gönderilecek. Bu işlem birkaç dakika sürebilir. Devam edilsin mi?')) return;
+              setSendingToPazarama(true);
+              setPazaramaResult(null);
+              try {
+                const result = await api<{ total: number; sent: number; errors: number }>('/products/send-to-pazarama', { method: 'POST' });
+                setPazaramaResult(result);
+              } catch (err) {
+                alert('Pazarama gönderimi sırasında hata oluştu: ' + (err instanceof Error ? err.message : String(err)));
+              } finally {
+                setSendingToPazarama(false);
+              }
+            }}
+          >
+            {sendingToPazarama ? <RefreshCw size={17} className="animate-spin" /> : <Send size={17} />}
+            {sendingToPazarama ? 'Pazarama\'ya Gönderiliyor...' : 'Tüm Ürünleri Pazarama\'ya Gönder'}
+          </button>
+          {pazaramaResult && (
+            <p className="text-sm text-gray-600">Pazarama: {pazaramaResult.sent} gönderildi, {pazaramaResult.errors} hata (toplam {pazaramaResult.total})</p>
+          )}
           <button
             className="btn btn-secondary"
             disabled={syncingFromTrendyol}

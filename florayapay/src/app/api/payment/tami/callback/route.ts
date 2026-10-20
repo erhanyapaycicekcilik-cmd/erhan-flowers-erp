@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { complete3DS, verifyCallbackHashedData } from '@/lib/tami'
+import { complete3DS, notifyErpPaid, verifyCallbackHashedData } from '@/lib/tami'
 
 const SITE_URL = process.env.SITE_URL || 'https://www.erhanflowers.com'
 
@@ -50,6 +50,7 @@ async function handleCallback(params: Record<string, string>): Promise<NextRespo
     return NextResponse.redirect(`${SITE_URL}/odeme-basarisiz?kod=eksik_siparis_id`, { status: 302 })
   }
 
+  // Explicit failure signals
   if (success === 'false' || (mdStatus && mdStatus !== '1' && !isGarantiApproval)) {
     return NextResponse.redirect(
       `${SITE_URL}/odeme-basarisiz?kod=3ds_hata&mdStatus=${mdStatus}`,
@@ -57,7 +58,11 @@ async function handleCallback(params: Record<string, string>): Promise<NextRespo
     )
   }
 
-  if (!isTamiSuccess && !isMdStatusOk && !isGarantiApproval) {
+  // If Tami sends bare GET with only orderId (no status params), call complete3DS directly
+  const hasStatusParams = success || mdStatus || garantiResponse || garantiProcCode
+  if (!hasStatusParams) {
+    console.log('[tami callback] bare GET with orderId only, calling complete3DS directly')
+  } else if (!isTamiSuccess && !isMdStatusOk && !isGarantiApproval) {
     return NextResponse.redirect(
       `${SITE_URL}/odeme-basarisiz?kod=3ds_hata&mdStatus=${mdStatus}`,
       { status: 302 },
@@ -67,6 +72,7 @@ async function handleCallback(params: Record<string, string>): Promise<NextRespo
   const result = await complete3DS(orderId)
 
   if (result.success) {
+    await notifyErpPaid(orderId, result)
     return NextResponse.redirect(
       `${SITE_URL}/odeme-basarili?siparis=${encodeURIComponent(orderId)}&banka=${encodeURIComponent(result.bankAuthCode || '')}`,
       { status: 302 },

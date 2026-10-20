@@ -8,7 +8,7 @@ export class CreateWebOrderItemDto {
 }
 
 export class CreateWebOrderDto {
-  paymentMethod!: 'WHATSAPP' | 'EFT'
+  paymentMethod!: 'WHATSAPP' | 'EFT' | 'ONLINE'
   customerName!: string
   customerPhone!: string
   customerEmail?: string
@@ -17,5 +17,10 @@ export class CreateWebOrderDto {
   address!: string
   postalCode?: string
   note?: string
+  tcKimlik?: string
+  faturaKurumsal?: boolean
+  firmaUnvan?: string
+  vergiNo?: string
+  vergiDairesi?: string
   items!: CreateWebOrderItemDto[]
 }

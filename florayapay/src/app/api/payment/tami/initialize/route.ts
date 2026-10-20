@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
     const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || '127.0.0.1'
-    const callbackUrl = `${SITE_URL}/api/payment/tami/callback`
+    const callbackUrl = `${SITE_URL}/api/payment/tami/callback/${encodeURIComponent(body.orderId)}`
     const result = await initiate3DS({ ...body, musteri: { ...body.musteri, ip }, callbackUrl })
 
     if (!result.success || !result.threeDSHtmlContent) {

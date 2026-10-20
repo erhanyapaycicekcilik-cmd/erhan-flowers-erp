@@ -1057,4 +1057,57 @@ export class ProductsService {
       select: { id: true, driveFolderId: true },
     });
   }
+
+  async sendToPazarama(): Promise<{ total: number; sent: number; errors: number; details: Record<string, string> }> {
+    const products = await (this.prisma.product as any).findMany({
+      where: { status: 'ACTIVE' },
+      include: { category: true, mediaFiles: true, productCostDraft: true },
+    }) as any[];
+
+    let sent = 0;
+    let errors = 0;
+    const details: Record<string, string> = {};
+    const BATCH = 5;
+
+    for (let i = 0; i < products.length; i += BATCH) {
+      const batch = products.slice(i, i + BATCH);
+      await Promise.allSettled(
+        batch.map(async (product: any) => {
+          const key = product.barcode ?? product.modelCode;
+          const imageUrls = [
+            ...(Array.isArray(product.imageUrls) ? (product.imageUrls as string[]) : []),
+            ...((product.mediaFiles ?? []) as any[]).map((f: any) => f.filePath).filter(Boolean),
+          ];
+          const draft = product.productCostDraft;
+          const salePrice = Number(
+            draft?.marketplaceSalePrice > 0 ? draft.marketplaceSalePrice
+            : draft?.salePrice ?? product.marketPrice ?? product.shopPrice ?? 0,
+          );
+          const payload = {
+            barcode: product.barcode ?? product.modelCode,
+            modelCode: product.modelCode,
+            productName: product.productName,
+            description: product.productName,
+            salePrice,
+            listPrice: Number(product.listPrice ?? salePrice),
+            stockQuantity: Number(product.stockQuantity ?? 0),
+            imageUrls,
+            brand: product.brand ?? 'Erhan Flowers',
+            categoryName: product.category?.name ?? '',
+          };
+          try {
+            const res = await this.integrations.pushProduct('PAZARAMA', payload);
+            if (res.ok) { sent++; details[key] = 'OK'; }
+            else { errors++; details[key] = res.message; }
+          } catch (err: unknown) {
+            errors++;
+            details[key] = err instanceof Error ? err.message : String(err);
+          }
+        }),
+      );
+      await new Promise((r) => setTimeout(r, 300));
+    }
+
+    return { total: products.length, sent, errors, details };
+  }
 }

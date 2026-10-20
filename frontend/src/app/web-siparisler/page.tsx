@@ -20,6 +20,34 @@ function fmt(n: number) {
   return '₺' + new Intl.NumberFormat('tr-TR').format(n)
 }
 
+function fullAddress(o: any) {
+  return [o.address, [o.district, o.city].filter(Boolean).join(' / '), o.postalCode].filter(Boolean).join(', ')
+}
+
+function esc(v: unknown) {
+  return String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!))
+}
+
+/** 10x15 kargo etiketi — alıcı bilgileri + ürün listesi, yazdırma penceresinde açılır */
+function printShippingLabel(o: any) {
+  const w = window.open('', '_blank', 'width=480,height=720')
+  if (!w) return alert('Açılır pencere engellendi, tarayıcıda izin verin.')
+  const items = (o.items ?? []).map((i: any) => `<li>${esc(i.productName)} × ${esc(i.quantity)}</li>`).join('')
+  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${esc(o.orderNumber)}</title>
+<style>@page{size:100mm 150mm;margin:6mm}body{font-family:Arial,sans-serif;font-size:13px;margin:0}
+h1{font-size:15px;margin:0 0 6px}.box{border:2px solid #000;padding:8px;margin-bottom:8px}
+.lbl{font-size:10px;color:#555;text-transform:uppercase;margin-bottom:2px}.big{font-size:17px;font-weight:bold}
+ul{margin:4px 0 0 16px;padding:0}</style></head><body>
+<div class="box"><div class="lbl">Alıcı</div><div class="big">${esc(o.customerName)}</div>
+<div>${esc(o.customerPhone)}</div><div style="margin-top:6px">${esc(o.address)}</div>
+<div class="big">${esc([o.district, o.city].filter(Boolean).join(' / '))}${o.postalCode ? ' ' + esc(o.postalCode) : ''}</div></div>
+<div class="box"><div class="lbl">Gönderen</div><div><b>Erhan Flowers</b> · 0544 654 62 20</div></div>
+<div class="box"><div class="lbl">Sipariş ${esc(o.orderNumber)}</div><ul>${items}</ul>
+${o.note ? `<div style="margin-top:6px"><i>Not: ${esc(o.note)}</i></div>` : ''}</div>
+<script>window.onload=function(){window.print()}</script></body></html>`)
+  w.document.close()
+}
+
 export default function WebSiparislerPage() {
   const [orders, setOrders] = useState<any[]>([])
   const [total, setTotal] = useState(0)
@@ -116,6 +144,11 @@ export default function WebSiparislerPage() {
                           {order.paymentMethod === 'EFT' && (
                             <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-semibold">EFT</span>
                           )}
+                          {order.paymentMethod === 'ONLINE' && (order.paidAt ? (
+                            <span className="text-xs px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 font-semibold">KART · ÖDENDİ</span>
+                          ) : (
+                            <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 font-semibold">KART · ödeme yok</span>
+                          ))}
                         </div>
                         <p className="font-semibold text-gray-900 mt-1">{order.customerName}</p>
                         <p className="text-sm text-gray-500">{order.customerPhone} · {order.city}{order.district ? ', ' + order.district : ''}</p>
@@ -148,8 +181,37 @@ export default function WebSiparislerPage() {
                     <p className="font-semibold text-gray-900">{selected.customerName}</p>
                     <p className="text-gray-600">📞 {selected.customerPhone}</p>
                     {selected.customerEmail && <p className="text-gray-600">✉️ {selected.customerEmail}</p>}
-                    <p className="text-gray-600">📍 {selected.address}, {selected.district ? selected.district + ', ' : ''}{selected.city}</p>
-                    {selected.note && <p className="text-gray-500 italic">📝 {selected.note}</p>}
+                    <p className="text-gray-600">📍 {fullAddress(selected)}</p>
+                    {selected.note && <p className="text-gray-500 italic whitespace-pre-line">📝 {selected.note}</p>}
+                    {selected.invoiceCorporate ? (
+                      <p className="text-gray-600">🧾 Kurumsal fatura: {selected.companyTitle} · VKN {selected.taxNumber} · {selected.taxOffice} VD</p>
+                    ) : selected.tcKimlik ? (
+                      <p className="text-gray-600">🧾 Bireysel fatura · TC {selected.tcKimlik}</p>
+                    ) : null}
+                    {selected.paymentMethod === 'ONLINE' && (
+                      selected.paidAt ? (
+                        <p className="text-purple-700 font-medium">
+                          💳 Kartla ödendi · {new Date(selected.paidAt).toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                          {selected.paymentRef && <> · Onay {selected.paymentRef}</>}
+                        </p>
+                      ) : (
+                        <p className="text-red-600 font-medium">💳 Kart ödemesi tamamlanmadı — kargolamayın</p>
+                      )
+                    )}
+                    <div className="flex gap-2 pt-2">
+                      <button
+                        onClick={() => navigator.clipboard.writeText([selected.customerName, selected.customerPhone, fullAddress(selected)].join('\n'))}
+                        className="flex-1 py-1.5 rounded-lg border border-gray-200 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+                      >
+                        📋 Adresi Kopyala
+                      </button>
+                      <button
+                        onClick={() => printShippingLabel(selected)}
+                        className="flex-1 py-1.5 rounded-lg border border-gray-200 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+                      >
+                        🏷️ Kargo Etiketi
+                      </button>
+                    </div>
                   </div>
 
                   {/* Ürünler */}
