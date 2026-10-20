@@ -694,7 +694,7 @@ export default function IntegrationsPage() {
                           }
                         }}
                       >
-                        {loadingPlatform === `SYNC_${platform}` ? 'Aktarılıyor…' : 'Tümünü Aktar (-%20 fiyat)'}
+                        {loadingPlatform === `SYNC_${platform}` ? 'Aktarılıyor…' : 'Tümünü Aktar'}
                       </button>
                     </div>
                   )}

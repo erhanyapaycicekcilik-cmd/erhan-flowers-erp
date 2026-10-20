@@ -916,20 +916,19 @@ export class IntegrationCenterService {
 
     if (products.length === 0) return { total: 0, sent: 0, errors: 0, details: [] };
 
-    // Debug: sadece ilk ürünü dene
     if (debugMode) {
-      const payload = this.buildSyncPayload(products[0], 0.20);
+      const payload = this.buildSyncPayload(products[0], 0);
       const result = await pazarama.pushProduct(payload);
       const msg = `İlk ürün: barcode=${payload.barcode}, salePrice=${payload.salePrice} | Pazarama: ok=${result.ok}, status=${result.status}, msg=${result.message}`;
       return { total: products.length, sent: result.ok ? 1 : 0, errors: result.ok ? 0 : 1, details: [msg], debug: msg };
     }
 
-    // Tam senkronizasyon — Trendyol fiyatından %20 indirimli
+    // Tam senkronizasyon — aynı fiyat (Trendyol = referans fiyat)
     let sent = 0;
     let errors = 0;
     const details: string[] = [];
     for (const p of products) {
-      const payload = this.buildSyncPayload(p, 0.20);
+      const payload = this.buildSyncPayload(p, 0);
       if (!payload.barcode) continue;
       const result = await pazarama.pushProduct(payload);
       if (result.ok) {
@@ -955,20 +954,19 @@ export class IntegrationCenterService {
 
     if (products.length === 0) return { total: 0, sent: 0, errors: 0, details: [] };
 
-    // Debug: sadece ilk ürünü dene
     if (debugMode) {
-      const payload = this.buildSyncPayload(products[0], 0.20);
+      const payload = this.buildSyncPayload(products[0], 0);
       const result = await idefix.pushProduct(payload);
       const msg = `İlk ürün: barcode=${payload.barcode}, salePrice=${payload.salePrice} | Idefix: ok=${result.ok}, msg=${result.message}`;
       return { total: products.length, sent: result.ok ? 1 : 0, errors: result.ok ? 0 : 1, details: [msg], debug: msg };
     }
 
-    // Tam senkronizasyon — Trendyol fiyatından %20 indirimli
+    // Tam senkronizasyon — aynı fiyat (Trendyol = referans fiyat)
     let sent = 0;
     let errors = 0;
     const details: string[] = [];
     for (const p of products) {
-      const payload = this.buildSyncPayload(p, 0.20);
+      const payload = this.buildSyncPayload(p, 0);
       if (!payload.barcode) continue;
       const result = await idefix.pushProduct(payload);
       if (result.ok) {
