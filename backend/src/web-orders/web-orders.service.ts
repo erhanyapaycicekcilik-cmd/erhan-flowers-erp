@@ -26,6 +26,11 @@ export class WebOrdersService {
         address: dto.address,
         postalCode: dto.postalCode,
         note: dto.note,
+        tcKimlik: dto.tcKimlik?.trim() || null,
+        invoiceCorporate: !!dto.faturaKurumsal,
+        companyTitle: dto.faturaKurumsal ? dto.firmaUnvan?.trim() || null : null,
+        taxNumber: dto.faturaKurumsal ? dto.vergiNo?.trim() || null : null,
+        taxOffice: dto.faturaKurumsal ? dto.vergiDairesi?.trim() || null : null,
         subtotal,
         grandTotal,
         items: {
