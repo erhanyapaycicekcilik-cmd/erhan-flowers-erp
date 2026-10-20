@@ -116,10 +116,11 @@ export class IdefixAdapter extends BaseIntegrationAdapter {
         signal: AbortSignal.timeout(10000),
       });
       if (res.ok) return { ok: true, status: 'CONNECTED', message: 'Idefix fiyat/stok güncellendi.' };
+      const errBody = await res.text().catch(() => '');
       return {
         ok: false,
         status: res.status === 401 || res.status === 403 ? 'MISSING_CREDENTIALS' : 'FAILED',
-        message: `Idefix fiyat/stok güncelleme başarısız. HTTP ${res.status}`,
+        message: `Idefix fiyat/stok güncelleme başarısız. HTTP ${res.status}: ${errBody.slice(0, 300)}`,
       };
     } catch (err: unknown) {
       return {

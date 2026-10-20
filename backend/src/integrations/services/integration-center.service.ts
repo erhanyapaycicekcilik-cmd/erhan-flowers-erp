@@ -949,7 +949,7 @@ export class IntegrationCenterService {
         sent++;
       } else {
         errors++;
-        details.push(`Hata [${payload.barcode}]: ${result.message}`);
+        if (details.length < 5) details.push(`Hata [${payload.barcode}]: ${result.message}`);
       }
     }
 
