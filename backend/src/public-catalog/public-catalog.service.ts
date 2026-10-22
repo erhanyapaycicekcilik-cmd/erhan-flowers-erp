@@ -250,6 +250,8 @@ export class PublicCatalogService {
       where: { status: 'ACTIVE', sitePrice: 0 },
       select: {
         id: true,
+        marketPrice: true,
+        listPrice: true,
         productCenterVariant: {
           select: { trendyolSalePrice: true, commissionPercent: true, status: true },
         },
@@ -261,12 +263,22 @@ export class PublicCatalogService {
 
     for (const product of products) {
       const variant = product.productCenterVariant;
-      if (!variant || variant.status !== 'ACTIVE') { skipped++; continue; }
 
-      const trendyolPrice = Number(variant.trendyolSalePrice ?? 0);
+      let trendyolPrice = 0;
+      let commission = 20;
+
+      if (variant && variant.status === 'ACTIVE') {
+        trendyolPrice = Number(variant.trendyolSalePrice ?? 0);
+        commission = Number(variant.commissionPercent ?? 20);
+      }
+
+      // Varyant bağlantısı yoksa marketPrice veya listPrice'dan fiyat al (yüklenen ürünler için)
+      if (trendyolPrice <= 0) {
+        trendyolPrice = Number(product.marketPrice ?? 0) || Number(product.listPrice ?? 0);
+      }
+
       if (trendyolPrice <= 0) { skipped++; continue; }
 
-      const commission = Number(variant.commissionPercent ?? 20);
       const sitePrice = this.calcSitePrice(trendyolPrice, commission);
 
       await this.prisma.product.update({

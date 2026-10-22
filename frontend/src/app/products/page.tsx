@@ -390,6 +390,8 @@ export default function ProductsPage() {
   const [syncFromTrendyolResult, setSyncFromTrendyolResult] = useState<{ updated: number; notFound: number; total: number; error?: string } | null>(null);
   const [syncingSitePrices, setSyncingSitePrices] = useState(false);
   const [syncSitePricesResult, setSyncSitePricesResult] = useState<{ updated: number; skipped: number } | null>(null);
+  const [syncingTrendyolProducts, setSyncingTrendyolProducts] = useState(false);
+  const [syncTrendyolProductsResult, setSyncTrendyolProductsResult] = useState<{ created: number; updated: number; deactivated: number; error?: string } | null>(null);
   const [recalculating, setRecalculating] = useState(false);
   const [backfillingCosts, setBackfillingCosts] = useState(false);
   const [backfillResult, setBackfillResult] = useState<{ checked: number; created: number; skipped: number } | null>(null);
@@ -1974,6 +1976,33 @@ export default function ProductsPage() {
           {syncSitePricesResult && (
             <span className="text-sm text-green-600">
               {syncSitePricesResult.updated} ürüne site fiyatı atandı, {syncSitePricesResult.skipped} atlandı.
+            </span>
+          )}
+          <button
+            className="btn btn-secondary"
+            disabled={syncingTrendyolProducts}
+            onClick={async () => {
+              if (!confirm('Trendyol\'daki tüm ürünler ERP\'ye çekilecek. Yeni ürünler eklenecek, mevcut ürünlerin fiyat/stok/görseli güncellenecek. Devam edilsin mi?')) return;
+              setSyncingTrendyolProducts(true);
+              setSyncTrendyolProductsResult(null);
+              try {
+                const result = await api<{ created: number; updated: number; deactivated: number; error?: string }>('/products/trendyol-full-sync', { method: 'POST' });
+                setSyncTrendyolProductsResult(result);
+              } catch (e: unknown) {
+                setSyncTrendyolProductsResult({ created: 0, updated: 0, deactivated: 0, error: e instanceof Error ? e.message : 'Hata oluştu' });
+              } finally {
+                setSyncingTrendyolProducts(false);
+              }
+            }}
+          >
+            {syncingTrendyolProducts ? <RefreshCw size={17} className="animate-spin" /> : <RefreshCw size={17} />}
+            {syncingTrendyolProducts ? 'Trendyol Senkronize Ediliyor...' : 'Trendyol\'dan Ürün Senkronize Et'}
+          </button>
+          {syncTrendyolProductsResult && (
+            <span className={`text-sm ${syncTrendyolProductsResult.error ? 'text-red-600' : 'text-green-600'}`}>
+              {syncTrendyolProductsResult.error
+                ? `Trendyol hatası: ${syncTrendyolProductsResult.error}`
+                : `Trendyol: ${syncTrendyolProductsResult.created} yeni ürün, ${syncTrendyolProductsResult.updated} güncellendi, ${syncTrendyolProductsResult.deactivated} pasifleştirildi.`}
             </span>
           )}
           <button

@@ -4,6 +4,7 @@ import { InternalKeyGuard } from '../auth/internal-key.guard';
 import { OwnerGuard } from '../auth/owner.guard';
 import { GeminiContentService } from './gemini-content.service';
 import { ProductsService } from './products.service';
+import { TrendyolProductSyncService } from '../public-catalog/trendyol-product-sync.service';
 
 @UseGuards(AuthGuard)
 @Controller('products')
@@ -11,6 +12,7 @@ export class ProductsController {
   constructor(
     private readonly products: ProductsService,
     private readonly geminiContent: GeminiContentService,
+    private readonly trendyolSync: TrendyolProductSyncService,
   ) {}
 
   @Get()
@@ -64,6 +66,12 @@ export class ProductsController {
   @UseGuards(OwnerGuard)
   syncFromTrendyol() {
     return this.products.syncFromTrendyol();
+  }
+
+  @Post('trendyol-full-sync')
+  @UseGuards(OwnerGuard)
+  trendyolFullSync() {
+    return this.trendyolSync.syncNow();
   }
 
   @Post(':id/broadcast-images')
