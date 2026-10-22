@@ -253,8 +253,7 @@ export class PazaramaAdapter extends BaseIntegrationAdapter {
     const listPrice = Number(p.listPrice ?? p.salePrice ?? 0);
     const quantity = Number(p.stockQuantity ?? 0);
 
-    // Pazarama product/create endpoint'i array bekliyor
-    const body = [{
+    const body = {
       productCode: barcode,
       name: String(p.productName ?? ''),
       displayName: String(p.productName ?? ''),
@@ -267,7 +266,7 @@ export class PazaramaAdapter extends BaseIntegrationAdapter {
       images: Array.isArray(p.imageUrls) ? (p.imageUrls as string[]).map((url, i) => ({ url, order: i + 1 })) : [],
       brand: String(p.brand ?? 'Erhan Flowers'),
       categoryName: String(p.categoryName ?? ''),
-    }];
+    };
 
     try {
       const res = await fetch(`${PAZARAMA_API}/product/create`, {
