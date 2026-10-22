@@ -19,6 +19,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${BASE}/sepet`, changeFrequency: 'never', priority: 0.3 },
   ]
 
+  // Kategori sayfaları: /urunler?kategori=X — artık her biri kendi canonical URL'ine sahip
   const categoryPages: MetadataRoute.Sitemap = [
     'yapay-agac-yesil', 'yapay-agac-renkli', 'bambu', 'sarmasik',
     'dikey-bahce', 'demet-cicek', 'saksili', 'cicekler',

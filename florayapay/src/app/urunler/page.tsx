@@ -33,10 +33,17 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
     ? `${categoryName} kategorisinde yapay çiçek ve dekorasyon ürünleri. Kaliteli, solmayan ürünler. Hızlı kargo, kolay iade.`
     : "Türkiye'nin en kaliteli yapay çiçek koleksiyonu. 349+ ürün. Yapay ağaç, çiçek, dikey bahçe. Hızlı kargo."
 
+  // Kategori filtresi varken canonical o URL'e işaret eder (her kategori ayrı sayfa gibi davranır).
+  // Sadece sayfa/sıralama parametrelerinde canonical /urunler olur.
+  const canonical = searchParams.kategori
+    ? `/urunler?kategori=${searchParams.kategori}`
+    : '/urunler'
+
   return {
     title,
     description,
-    alternates: { canonical: '/urunler' },
+    alternates: { canonical },
+    robots: searchParams.q ? { index: false, follow: false } : { index: true, follow: true },
     openGraph: { title, description, type: 'website' },
   }
 }
