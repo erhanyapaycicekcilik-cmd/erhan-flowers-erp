@@ -2,9 +2,9 @@ import { Inject, Injectable, Optional } from '@nestjs/common';
 import { BaseIntegrationAdapter } from './base-adapter';
 import { AdapterConnectionResult, ExternalOrder } from './integration-adapter.interface';
 
-// Pazarama Entegrasyon API — https://isortagim.pazarama.com/
-// Auth: OAuth2 client_credentials, token endpoint ayrı domain
-const PAZARAMA_API = 'https://isortagim.pazarama.com';
+// Pazarama Entegrasyon API
+// Auth: isortagimgiris.pazarama.com — API: isortagimapi.pazarama.com
+const PAZARAMA_API = 'https://isortagimapi.pazarama.com';
 const PAZARAMA_AUTH_URL = 'https://isortagimgiris.pazarama.com/connect/token';
 
 @Injectable()
@@ -153,7 +153,7 @@ export class PazaramaAdapter extends BaseIntegrationAdapter {
     if (!headers) return [];
 
     try {
-      const res = await fetch(`${PAZARAMA_API}/api/order/orders?status=1&pageSize=50&pageIndex=0`, {
+      const res = await fetch(`${PAZARAMA_API}/order/getOrdersForApi?status=1&pageSize=50&pageIndex=0`, {
         headers,
         signal: AbortSignal.timeout(15000),
       });
@@ -175,7 +175,7 @@ export class PazaramaAdapter extends BaseIntegrationAdapter {
     if (!headers) return null;
 
     try {
-      const res = await fetch(`${PAZARAMA_API}/api/order/orders/${_externalOrderId}`, {
+      const res = await fetch(`${PAZARAMA_API}/order/getOrdersForApi?orderCode=${_externalOrderId}`, {
         headers,
         signal: AbortSignal.timeout(8000),
       });
@@ -201,17 +201,29 @@ export class PazaramaAdapter extends BaseIntegrationAdapter {
     if (!barcode) return { ok: false, status: 'FAILED', message: 'Pazarama: barcode/modelCode zorunlu.' };
 
     try {
-      const res = await fetch(`${PAZARAMA_API}/api/product/updatestockandsaleprice`, {
+      // Stok güncelle
+      const stockRes = await fetch(`${PAZARAMA_API}/product/updateStock`, {
         method: 'POST',
         headers,
-        body: JSON.stringify([{ productCode: barcode, stockCount: quantity }]),
+        body: JSON.stringify({ productCode: barcode, stockCount: quantity }),
         signal: AbortSignal.timeout(10000),
       });
+      // Fiyat güncelle
+      const priceBody = p.salePrice !== undefined ? { productCode: barcode, salePrice: Number(p.salePrice ?? 0), listPrice: Number(p.listPrice ?? p.salePrice ?? 0) } : null;
+      if (priceBody) {
+        await fetch(`${PAZARAMA_API}/product/updatePrice`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(priceBody),
+          signal: AbortSignal.timeout(10000),
+        }).catch(() => null);
+      }
+      const res = stockRes;
       if (res.ok) return { ok: true, status: 'CONNECTED', message: 'Pazarama stok güncellendi.' };
       return {
         ok: false,
         status: res.status === 401 || res.status === 403 ? 'MISSING_CREDENTIALS' : 'FAILED',
-        message: `Pazarama stok güncelleme başarısız. HTTP ${res.status}`,
+        message: `Pazarama stok güncelleme başarısız. HTTP ${res.status}: ${await res.text().catch(() => '')}`,
       };
     } catch (err: unknown) {
       return {
@@ -239,30 +251,35 @@ export class PazaramaAdapter extends BaseIntegrationAdapter {
     const listPrice = Number(p.listPrice ?? p.salePrice ?? 0);
     const quantity = Number(p.stockQuantity ?? 0);
 
-    const body = {
+    // Pazarama product/create endpoint'i array bekliyor
+    const body = [{
       productCode: barcode,
       name: String(p.productName ?? ''),
+      displayName: String(p.productName ?? ''),
       description: String(p.description ?? p.productName ?? ''),
       salePrice,
       listPrice,
       stockCount: quantity,
-      images: Array.isArray(p.imageUrls) ? (p.imageUrls as string[]).map((url, i) => ({ url, order: i })) : [],
+      vatRate: 10,
+      desi: 1,
+      images: Array.isArray(p.imageUrls) ? (p.imageUrls as string[]).map((url, i) => ({ url, order: i + 1 })) : [],
       brand: String(p.brand ?? 'Erhan Flowers'),
       categoryName: String(p.categoryName ?? ''),
-    };
+    }];
 
     try {
-      const res = await fetch(`${PAZARAMA_API}/api/product/createorupdate`, {
+      const res = await fetch(`${PAZARAMA_API}/product/create`, {
         method: 'POST',
         headers,
         body: JSON.stringify(body),
         signal: AbortSignal.timeout(15000),
       });
+      const responseText = await res.text().catch(() => '');
       if (res.ok) return { ok: true, status: 'CONNECTED', message: 'Pazarama ürün gönderimi tamamlandı.' };
       return {
         ok: false,
         status: res.status === 401 || res.status === 403 ? 'MISSING_CREDENTIALS' : 'FAILED',
-        message: `Pazarama ürün gönderimi başarısız. HTTP ${res.status}: ${await res.text().catch(() => '')}`,
+        message: `Pazarama ürün gönderimi başarısız. HTTP ${res.status}: ${responseText}`,
       };
     } catch (err: unknown) {
       return {
@@ -285,7 +302,7 @@ export class PazaramaAdapter extends BaseIntegrationAdapter {
     if (!orderId) return { ok: false, status: 'FAILED', message: 'Pazarama: orderId zorunlu.' };
 
     try {
-      const res = await fetch(`${PAZARAMA_API}/api/order/updatestatus`, {
+      const res = await fetch(`${PAZARAMA_API}/order/updatestatus`, {
         method: 'POST',
         headers,
         body: JSON.stringify({ orderNumber: orderId, status: p.status }),
