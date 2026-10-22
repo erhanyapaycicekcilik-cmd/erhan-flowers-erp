@@ -63,7 +63,9 @@ export class PazaramaAdapter extends BaseIntegrationAdapter {
         });
         if (res.ok) {
           const data = await res.json() as Record<string, unknown>;
-          const token = String(data?.access_token ?? data?.accessToken ?? data?.token ?? '') || null;
+          // Pazarama response: { success: true, data: { accessToken: "..." } }
+          const inner = (data?.data ?? data) as Record<string, unknown>;
+          const token = String(inner?.accessToken ?? inner?.access_token ?? data?.access_token ?? data?.token ?? '') || null;
           if (token) {
             this.cachedToken = token;
             this.tokenExpiresAt = Date.now() + 50 * 60 * 1000;
