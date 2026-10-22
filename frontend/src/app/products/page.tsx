@@ -388,6 +388,8 @@ export default function ProductsPage() {
   const [pazaramaResult, setPazaramaResult] = useState<{ total: number; sent: number; errors: number } | null>(null);
   const [syncingFromTrendyol, setSyncingFromTrendyol] = useState(false);
   const [syncFromTrendyolResult, setSyncFromTrendyolResult] = useState<{ updated: number; notFound: number; total: number; error?: string } | null>(null);
+  const [syncingSitePrices, setSyncingSitePrices] = useState(false);
+  const [syncSitePricesResult, setSyncSitePricesResult] = useState<{ updated: number; skipped: number } | null>(null);
   const [recalculating, setRecalculating] = useState(false);
   const [backfillingCosts, setBackfillingCosts] = useState(false);
   const [backfillResult, setBackfillResult] = useState<{ checked: number; created: number; skipped: number } | null>(null);
@@ -1947,6 +1949,31 @@ export default function ProductsPage() {
               {syncFromTrendyolResult.error
                 ? `Trendyol hatası: ${syncFromTrendyolResult.error}`
                 : `Trendyol: ${syncFromTrendyolResult.total} ürün kontrol edildi, ${syncFromTrendyolResult.updated} güncellendi, ${syncFromTrendyolResult.notFound} eşleşmedi.`}
+            </span>
+          )}
+          <button
+            className="btn btn-secondary"
+            disabled={syncingSitePrices}
+            onClick={async () => {
+              if (!confirm('Site fiyatı (sitePrice) girilmemiş tüm ürünlere Trendyol satış fiyatı otomatik atanacak. Devam edilsin mi?')) return;
+              setSyncingSitePrices(true);
+              setSyncSitePricesResult(null);
+              try {
+                const result = await api<{ updated: number; skipped: number }>('/public/catalog/admin/sync-site-prices', { method: 'POST' });
+                setSyncSitePricesResult(result);
+              } catch (e: unknown) {
+                alert(e instanceof Error ? e.message : 'Hata oluştu');
+              } finally {
+                setSyncingSitePrices(false);
+              }
+            }}
+          >
+            {syncingSitePrices ? <RefreshCw size={17} className="animate-spin" /> : <RefreshCw size={17} />}
+            {syncingSitePrices ? 'Site Fiyatları Dolduruluyor...' : 'Trendyol\'dan Site Fiyatı Doldur'}
+          </button>
+          {syncSitePricesResult && (
+            <span className="text-sm text-green-600">
+              {syncSitePricesResult.updated} ürüne site fiyatı atandı, {syncSitePricesResult.skipped} atlandı.
             </span>
           )}
           <button
