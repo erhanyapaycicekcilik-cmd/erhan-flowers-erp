@@ -262,10 +262,10 @@ export class ProductsService {
           this.logger.warn(`Platform yayını hatası (update): ${String(err)}`),
         );
       }
-      // Görsel değiştiyse tüm platformlara görsel gönder
-      if (patch['imageUrls'] !== undefined) {
+      // Görsel veya açıklama değiştiyse tüm platformlara gönder
+      if (patch['imageUrls'] !== undefined || patch['description'] !== undefined) {
         this.broadcastImages(id).catch((err) =>
-          this.logger.warn(`Görsel platform yayını hatası (update): ${String(err)}`),
+          this.logger.warn(`Görsel/açıklama platform yayını hatası (update): ${String(err)}`),
         );
       }
       return product;
