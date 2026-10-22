@@ -621,8 +621,25 @@ const [channels, setChannels] = useState<SalesChannel[]>([]);
                         {loadingPlatform === 'SYNC_IDEFIX' ? 'Aktarılıyor…' : 'Trendyol\'dan Aktar'}
                       </button>
                     )}
+                    {(platform === 'N11' || platform === 'HEPSIBURADA') && (
+                      <button className="btn btn-primary" type="button" disabled={!!loadingPlatform} onClick={async () => {
+                        setLoadingPlatform(`SYNC_${platform}`);
+                        setPlatformMessages((prev) => ({ ...prev, [platform]: '' }));
+                        try {
+                          const ep = platform === 'N11' ? '/integrations/n11/sync-from-trendyol' : '/integrations/hepsiburada/sync-from-trendyol';
+                          const r = await api<{ total: number; sent: number; errors: number; details: string[] }>(ep, { method: 'POST', body: JSON.stringify({ debug: false }), headers: { 'Content-Type': 'application/json' } });
+                          const errDetail = r.details.length ? ` | İlk hata: ${r.details[0]}` : '';
+                          setPlatformMessages((prev) => ({ ...prev, [platform]: `Aktarım tamamlandı: ${r.sent}/${r.total} gönderildi, ${r.errors} hata.${errDetail}` }));
+                        } catch (error) {
+                          setPlatformMessages((prev) => ({ ...prev, [platform]: error instanceof Error ? error.message : 'Aktarım yapılamadı.' }));
+                        } finally { setLoadingPlatform(''); }
+                      }}>
+                        <Download size={16} />
+                        {loadingPlatform === `SYNC_${platform}` ? 'Aktarılıyor…' : 'Trendyol\'dan Aktar'}
+                      </button>
+                    )}
                   </div>
-                  {(platform === 'PAZARAMA' || platform === 'IDEFIX') && (
+                  {(platform === 'PAZARAMA' || platform === 'IDEFIX' || platform === 'N11' || platform === 'HEPSIBURADA') && (
                     <div className="mt-3 flex flex-wrap gap-2">
                       <button
                         className="btn btn-secondary text-sm"
@@ -632,7 +649,8 @@ const [channels, setChannels] = useState<SalesChannel[]>([]);
                           setLoadingPlatform(`DEBUG_${platform}`);
                           setPlatformMessages((prev) => ({ ...prev, [platform]: '' }));
                           try {
-                            const endpoint = platform === 'PAZARAMA' ? '/integrations/pazarama/sync-from-trendyol' : '/integrations/idefix/sync-from-trendyol';
+                            const epMap: Record<string, string> = { PAZARAMA: '/integrations/pazarama/sync-from-trendyol', IDEFIX: '/integrations/idefix/sync-from-trendyol', N11: '/integrations/n11/sync-from-trendyol', HEPSIBURADA: '/integrations/hepsiburada/sync-from-trendyol' };
+                            const endpoint = epMap[platform] ?? `/integrations/${platform.toLowerCase()}/sync-from-trendyol`;
                             const result = await api<{ total: number; sent: number; errors: number; details: string[]; debug?: string }>(endpoint, { method: 'POST', body: JSON.stringify({ debug: true }), headers: { 'Content-Type': 'application/json' } });
                             const msg = result.debug ?? (result.details[0] ?? 'Sonuç yok');
                             setPlatformMessages((prev) => ({ ...prev, [platform]: `[DEBUG] ${msg}` }));
@@ -653,7 +671,8 @@ const [channels, setChannels] = useState<SalesChannel[]>([]);
                           setLoadingPlatform(`SYNC_${platform}`);
                           setPlatformMessages((prev) => ({ ...prev, [platform]: '' }));
                           try {
-                            const endpoint = platform === 'PAZARAMA' ? '/integrations/pazarama/sync-from-trendyol' : '/integrations/idefix/sync-from-trendyol';
+                            const epMap2: Record<string, string> = { PAZARAMA: '/integrations/pazarama/sync-from-trendyol', IDEFIX: '/integrations/idefix/sync-from-trendyol', N11: '/integrations/n11/sync-from-trendyol', HEPSIBURADA: '/integrations/hepsiburada/sync-from-trendyol' };
+                            const endpoint = epMap2[platform] ?? `/integrations/${platform.toLowerCase()}/sync-from-trendyol`;
                             const result = await api<{ total: number; sent: number; errors: number; details: string[]; debug?: string }>(endpoint, { method: 'POST', body: JSON.stringify({ debug: false }), headers: { 'Content-Type': 'application/json' } });
                             const errDetail = result.details.length ? ` | İlk hata: ${result.details[0]}` : '';
                             setPlatformMessages((prev) => ({ ...prev, [platform]: `Aktarım tamamlandı: ${result.sent}/${result.total} gönderildi, ${result.errors} hata.${errDetail}` }));
