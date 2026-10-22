@@ -906,18 +906,59 @@ export class IntegrationCenterService {
     };
   }
 
-  // Trendyol'dan çek → tüm platformlara eşit fiyat + görsel ile gönder
+  // ERP veritabanından ürünleri çeker (Trendyol API'ye bağımlılık yok)
+  private async fetchProductsFromDb(limit?: number): Promise<Array<Record<string, unknown>>> {
+    const rows = await this.prisma.product.findMany({
+      where: { status: 'ACTIVE' },
+      take: limit,
+      select: {
+        id: true,
+        productName: true,
+        barcode: true,
+        modelCode: true,
+        marketPrice: true,
+        listPrice: true,
+        shopPrice: true,
+        stockQuantity: true,
+        imageUrls: true,
+        brand: true,
+        description: true,
+        category: { select: { name: true } },
+      },
+    });
+    return rows.map((p) => ({
+      barcode: p.barcode ?? p.modelCode ?? '',
+      modelCode: p.modelCode ?? '',
+      productName: p.productName,
+      // buildSyncPayload uyumlu alanlar
+      title: p.productName,
+      name: p.productName,
+      productCode: p.modelCode ?? p.barcode ?? '',
+      salePrice: Number(p.marketPrice ?? p.shopPrice ?? 0),
+      listPrice: Number(p.listPrice ?? p.marketPrice ?? 0),
+      quantity: Number(p.stockQuantity ?? 0),
+      stockQuantity: Number(p.stockQuantity ?? 0),
+      images: Array.isArray(p.imageUrls)
+        ? (p.imageUrls as string[]).map((url) => ({ url }))
+        : [],
+      imageUrls: Array.isArray(p.imageUrls) ? p.imageUrls : [],
+      brand: p.brand ?? 'Erhan Flowers',
+      description: (p.description as string | null) ?? p.productName,
+      categoryName: (p.category as any)?.name ?? '',
+      attributes: [],
+    }));
+  }
+
+  // ERP DB'den çek → tüm platformlara eşit fiyat + görsel ile gönder
   async syncAllFromTrendyol(debugMode = false): Promise<{
     total: number;
     platforms: Record<string, { sent: number; errors: number; firstError?: string }>;
   }> {
-    const trendyol = new TrendyolAdapter(await this.runtimeCredentials('TRENDYOL'));
-
     let products: Array<Record<string, unknown>>;
     try {
-      products = await trendyol.fetchSellerProducts(debugMode ? 1 : 50);
+      products = await this.fetchProductsFromDb(debugMode ? 1 : undefined);
     } catch (err: unknown) {
-      throw new Error(`Trendyol ürün listesi alınamadı: ${err instanceof Error ? err.message : String(err)}`);
+      throw new Error(`Ürün listesi alınamadı: ${err instanceof Error ? err.message : String(err)}`);
     }
 
     if (products.length === 0) return { total: 0, platforms: {} };
@@ -966,14 +1007,13 @@ export class IntegrationCenterService {
   }
 
   async syncTrendyolToPazarama(debugMode = false): Promise<{ total: number; sent: number; errors: number; details: string[]; debug?: string }> {
-    const trendyol = new TrendyolAdapter(await this.runtimeCredentials('TRENDYOL'));
     const pazarama = new PazaramaAdapter(await this.runtimeCredentials('PAZARAMA'));
 
     let products: Array<Record<string, unknown>>;
     try {
-      products = await trendyol.fetchSellerProducts(debugMode ? 1 : 100);
+      products = await this.fetchProductsFromDb(debugMode ? 1 : undefined);
     } catch (err: unknown) {
-      return { total: 0, sent: 0, errors: 1, details: [`Trendyol ürün listesi alınamadı: ${err instanceof Error ? err.message : String(err)}`] };
+      return { total: 0, sent: 0, errors: 1, details: [`Ürün listesi alınamadı: ${err instanceof Error ? err.message : String(err)}`] };
     }
 
     const details: string[] = [];
@@ -1003,14 +1043,13 @@ export class IntegrationCenterService {
   }
 
   async syncTrendyolToIdefix(debugMode = false): Promise<{ total: number; sent: number; errors: number; details: string[]; firstError?: string | null; debug?: string }> {
-    const trendyol = new TrendyolAdapter(await this.runtimeCredentials('TRENDYOL'));
     const idefix = new IdefixAdapter(await this.runtimeCredentials('IDEFIX'));
 
     let products: Array<Record<string, unknown>>;
     try {
-      products = await trendyol.fetchSellerProducts(debugMode ? 1 : 100);
+      products = await this.fetchProductsFromDb(debugMode ? 1 : undefined);
     } catch (err: unknown) {
-      return { total: 0, sent: 0, errors: 1, details: [`Trendyol ürün listesi alınamadı: ${err instanceof Error ? err.message : String(err)}`] };
+      return { total: 0, sent: 0, errors: 1, details: [`Ürün listesi alınamadı: ${err instanceof Error ? err.message : String(err)}`] };
     }
 
     if (products.length === 0) return { total: 0, sent: 0, errors: 0, details: [], firstError: 'Ürün bulunamadı' };
