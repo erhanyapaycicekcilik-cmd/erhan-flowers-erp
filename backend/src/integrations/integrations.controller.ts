@@ -335,6 +335,18 @@ export class IntegrationsController {
     return this.integrationCenter.syncTrendyolToIdefix(body?.debug ?? false);
   }
 
+  @Post('n11/sync-from-trendyol')
+  @UseGuards(OwnerGuard)
+  syncToN11(@Body() body: { debug?: boolean } = {}) {
+    return this.integrationCenter.syncToN11(body?.debug ?? false);
+  }
+
+  @Post('hepsiburada/sync-from-trendyol')
+  @UseGuards(OwnerGuard)
+  syncToHepsiburada(@Body() body: { debug?: boolean } = {}) {
+    return this.integrationCenter.syncToHepsiburada(body?.debug ?? false);
+  }
+
   @Post(':platform/delete-all')
   @UseGuards(OwnerGuard)
   deleteAllProducts(@Param('platform') platform: string) {

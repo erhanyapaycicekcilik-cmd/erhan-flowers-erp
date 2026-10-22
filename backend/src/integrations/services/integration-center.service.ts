@@ -1042,6 +1042,56 @@ export class IntegrationCenterService {
     return { total: products.length, sent, errors, details };
   }
 
+  async syncToN11(debugMode = false): Promise<{ total: number; sent: number; errors: number; details: string[]; debug?: string }> {
+    const n11 = new N11Adapter(await this.runtimeCredentials('N11'));
+    let products: Array<Record<string, unknown>>;
+    try {
+      products = await this.fetchProductsFromDb(debugMode ? 1 : undefined);
+    } catch (err: unknown) {
+      return { total: 0, sent: 0, errors: 1, details: [`Ürün listesi alınamadı: ${err instanceof Error ? err.message : String(err)}`] };
+    }
+    if (products.length === 0) return { total: 0, sent: 0, errors: 0, details: [] };
+    if (debugMode) {
+      const payload = this.buildSyncPayload(products[0], 0);
+      const r = await n11.pushProduct(payload);
+      const msg = `İlk ürün: barcode=${payload.barcode} | N11: ok=${r.ok}, msg=${r.message}`;
+      return { total: products.length, sent: 0, errors: 0, details: [msg], debug: msg };
+    }
+    let sent = 0; let errors = 0; const details: string[] = [];
+    for (const p of products) {
+      const payload = this.buildSyncPayload(p, 0);
+      if (!payload.barcode) continue;
+      const r = await n11.pushProduct(payload);
+      if (r.ok) { sent++; } else { errors++; if (details.length < 10) details.push(`${payload.barcode}: ${r.message}`); }
+    }
+    return { total: products.length, sent, errors, details };
+  }
+
+  async syncToHepsiburada(debugMode = false): Promise<{ total: number; sent: number; errors: number; details: string[]; debug?: string }> {
+    const hb = new HepsiburadaAdapter(await this.runtimeCredentials('HEPSIBURADA'));
+    let products: Array<Record<string, unknown>>;
+    try {
+      products = await this.fetchProductsFromDb(debugMode ? 1 : undefined);
+    } catch (err: unknown) {
+      return { total: 0, sent: 0, errors: 1, details: [`Ürün listesi alınamadı: ${err instanceof Error ? err.message : String(err)}`] };
+    }
+    if (products.length === 0) return { total: 0, sent: 0, errors: 0, details: [] };
+    if (debugMode) {
+      const payload = this.buildSyncPayload(products[0], 0);
+      const r = await hb.pushProduct(payload);
+      const msg = `İlk ürün: barcode=${payload.barcode} | HB: ok=${r.ok}, msg=${r.message}`;
+      return { total: products.length, sent: 0, errors: 0, details: [msg], debug: msg };
+    }
+    let sent = 0; let errors = 0; const details: string[] = [];
+    for (const p of products) {
+      const payload = this.buildSyncPayload(p, 0);
+      if (!payload.barcode) continue;
+      const r = await hb.pushProduct(payload);
+      if (r.ok) { sent++; } else { errors++; if (details.length < 10) details.push(`${payload.barcode}: ${r.message}`); }
+    }
+    return { total: products.length, sent, errors, details };
+  }
+
   async syncTrendyolToIdefix(debugMode = false): Promise<{ total: number; sent: number; errors: number; details: string[]; firstError?: string | null; debug?: string }> {
     const idefix = new IdefixAdapter(await this.runtimeCredentials('IDEFIX'));
 
