@@ -110,7 +110,13 @@ export class ProductsService {
           desi: data.desi ?? 1,
           shippingCost: data.shippingCost ?? 5,
           shopPrice: data.shopPrice ?? 0,
-          sitePrice: data.sitePrice ?? 0,
+          sitePrice: data.sitePrice && data.sitePrice > 0
+            ? data.sitePrice
+            : data.marketPrice && data.marketPrice > 0
+              ? Math.round(data.marketPrice * 0.80)
+              : data.shopPrice && data.shopPrice > 0
+                ? Math.round(data.shopPrice * 0.80)
+                : 0,
           marketPrice: data.marketPrice ?? 0,
           listPrice: data.listPrice ?? 0,
           imageUrls: data.imageUrls ?? [],
@@ -220,7 +226,16 @@ export class ProductsService {
     if (hasKey('shippingCost') || hasKey('shipping_cost')) patch['shippingCost'] = data.shippingCost;
     if (hasKey('shopPrice') || hasKey('shop_price')) patch['shopPrice'] = data.shopPrice;
     if (hasKey('sitePrice') || hasKey('site_price')) patch['sitePrice'] = data.sitePrice;
-    if (hasKey('marketPrice') || hasKey('market_price')) patch['marketPrice'] = data.marketPrice;
+    if (hasKey('marketPrice') || hasKey('market_price')) {
+      patch['marketPrice'] = data.marketPrice;
+      // marketPrice geldi ama sitePrice gönderilmediyse, mevcut sitePrice=0 ise otomatik hesapla
+      if (!hasKey('sitePrice') && !hasKey('site_price') && data.marketPrice && data.marketPrice > 0) {
+        const existing = await this.prisma.product.findUnique({ where: { id }, select: { sitePrice: true } });
+        if (!existing || Number(existing.sitePrice) === 0) {
+          patch['sitePrice'] = Math.round(data.marketPrice * 0.80);
+        }
+      }
+    }
     if (hasKey('listPrice') || hasKey('list_price')) patch['listPrice'] = data.listPrice;
     if (hasKey('imageUrls') || hasKey('image_urls')) patch['imageUrls'] = data.imageUrls;
     if (hasKey('brand')) patch['brand'] = data.brand;
