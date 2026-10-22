@@ -391,7 +391,7 @@ export default function ProductsPage() {
   const [syncingSitePrices, setSyncingSitePrices] = useState(false);
   const [syncSitePricesResult, setSyncSitePricesResult] = useState<{ updated: number; skipped: number } | null>(null);
   const [syncingTrendyolProducts, setSyncingTrendyolProducts] = useState(false);
-  const [syncTrendyolProductsResult, setSyncTrendyolProductsResult] = useState<{ created: number; updated: number; deactivated: number; error?: string } | null>(null);
+  const [syncTrendyolProductsResult, setSyncTrendyolProductsResult] = useState<{ inserted: number; updated: number; skipped: number; error?: string } | null>(null);
   const [recalculating, setRecalculating] = useState(false);
   const [backfillingCosts, setBackfillingCosts] = useState(false);
   const [backfillResult, setBackfillResult] = useState<{ checked: number; created: number; skipped: number } | null>(null);
@@ -1986,7 +1986,7 @@ export default function ProductsPage() {
               setSyncingTrendyolProducts(true);
               setSyncTrendyolProductsResult(null);
               try {
-                const result = await api<{ created: number; updated: number; deactivated: number; error?: string }>('/products/trendyol-full-sync', { method: 'POST' });
+                const result = await api<{ inserted: number; updated: number; skipped: number; error?: string }>('/products/trendyol-full-sync', { method: 'POST' });
                 setSyncTrendyolProductsResult(result);
               } catch (e: unknown) {
                 setSyncTrendyolProductsResult({ created: 0, updated: 0, deactivated: 0, error: e instanceof Error ? e.message : 'Hata oluştu' });
@@ -2002,7 +2002,7 @@ export default function ProductsPage() {
             <span className={`text-sm ${syncTrendyolProductsResult.error ? 'text-red-600' : 'text-green-600'}`}>
               {syncTrendyolProductsResult.error
                 ? `Trendyol hatası: ${syncTrendyolProductsResult.error}`
-                : `Trendyol: ${syncTrendyolProductsResult.created} yeni ürün, ${syncTrendyolProductsResult.updated} güncellendi, ${syncTrendyolProductsResult.deactivated} pasifleştirildi.`}
+                : `Trendyol: ${syncTrendyolProductsResult.inserted} yeni ürün, ${syncTrendyolProductsResult.updated} güncellendi, ${syncTrendyolProductsResult.skipped} atlandı.`}
             </span>
           )}
           <button
