@@ -417,7 +417,7 @@ export class TrendyolAdapter extends BaseIntegrationAdapter {
     const supplierId = this.env('SUPPLIER_ID');
     const all: Array<Record<string, unknown>> = [];
     for (let page = 0; page < maxPages; page += 1) {
-      const response = await fetch(`${this.productApiBase()}/product/sellers/${supplierId}/v2/products?approved=true&archived=false&page=${page}&size=200`, {
+      const response = await fetch(`${this.productApiBase()}/product/sellers/${supplierId}/v2/products?approved=true&archived=false&pageNumber=${page}&size=200`, {
         headers: this.productHeaders(supplierId),
       });
       if (!response.ok) throw new Error(`Trendyol urun listesi alinamadi. HTTP ${response.status}: ${await this.safeErrorText(response)}`);
