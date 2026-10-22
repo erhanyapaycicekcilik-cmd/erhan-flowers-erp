@@ -75,6 +75,52 @@ const nextConfig = {
   async redirects() {
     return [
       // www'suz → www'lu yönlendirme (production'da Caddy/nginx yapacak ama yedek)
+
+      // ── Eski hukuki sayfa URL'leri → yeni URL'lere yönlendirme ──────────────
+      { source: '/iade-sartlari', destination: '/kargo-ve-iade', permanent: true },
+      { source: '/uyelik-ve-gizlilik', destination: '/gizlilik-politikasi', permanent: true },
+      { source: '/kisisel-veri-aydinlatma-metni', destination: '/gizlilik-politikasi', permanent: true },
+
+      // ── Eski ürün URL'leri (root seviyesinde, /urun/ prefix'siz) ────────────
+      // Slug'ı al (sayısal suffix'i sil), /urun/{slug} → /urunler
+      // Genel catch-all: /yapay-* ve /islak-* gibi eski ürün URL'leri
+      {
+        source: '/:slug(yapay-[^/]+)',
+        destination: '/urunler',
+        permanent: true,
+      },
+      {
+        source: '/:slug(islak-[^/]+)',
+        destination: '/urunler',
+        permanent: true,
+      },
+      {
+        source: '/:slug(bambu-[^/]+)',
+        destination: '/urunler',
+        permanent: true,
+      },
+      {
+        source: '/:slug(sarmasik-[^/]+)',
+        destination: '/urunler',
+        permanent: true,
+      },
+      {
+        source: '/:slug(cicek-[^/]+)',
+        destination: '/urunler',
+        permanent: true,
+      },
+      {
+        source: '/:slug(saksili-[^/]+)',
+        destination: '/urunler',
+        permanent: true,
+      },
+
+      // ── Ticimax template URL'i ───────────────────────────────────────────────
+      {
+        source: '/:lang/Arama',
+        destination: '/urunler',
+        permanent: true,
+      },
     ]
   },
 
