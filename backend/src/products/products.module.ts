@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import { IntegrationsModule } from '../integrations/integrations.module';
+import { PublicCatalogModule } from '../public-catalog/public-catalog.module';
 import { DriveSyncController } from './drive-sync.controller';
 import { ModelCodesController } from './model-codes.controller';
 import { ModelCodesService } from './model-codes.service';
@@ -9,7 +10,7 @@ import { ProductsController } from './products.controller';
 import { ProductsService } from './products.service';
 
 @Module({
-  imports: [AuthModule, IntegrationsModule],
+  imports: [AuthModule, IntegrationsModule, PublicCatalogModule],
   controllers: [ProductsController, ModelCodesController, DriveSyncController],
   providers: [ProductsService, ModelCodesService, GeminiContentService],
   exports: [ProductsService, ModelCodesService],
