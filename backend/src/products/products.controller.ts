@@ -70,8 +70,10 @@ export class ProductsController {
 
   @Post('trendyol-full-sync')
   @UseGuards(OwnerGuard)
-  trendyolFullSync() {
-    return this.trendyolSync.syncNow();
+  async trendyolFullSync() {
+    const syncResult = await this.trendyolSync.syncNow();
+    const broadcastResult = await this.products.broadcastAll();
+    return { ...syncResult, broadcast: broadcastResult };
   }
 
   @Post(':id/broadcast-images')
