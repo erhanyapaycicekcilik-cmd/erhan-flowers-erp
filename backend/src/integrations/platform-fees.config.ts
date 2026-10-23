@@ -4,12 +4,12 @@
  * Örnek: marketPrice=100, commission=0.15, buffer=5 → 100/0.85 + 5 = 122.76 → 123₺
  */
 export const PLATFORM_FEES: Record<string, { commission: number; buffer: number }> = {
-  TRENDYOL:      { commission: 0.15, buffer: 0 },
-  N11:           { commission: 0.12, buffer: 0 },
-  HEPSIBURADA:   { commission: 0.15, buffer: 0 },
-  PAZARAMA:      { commission: 0.15, buffer: 0 },
-  IDEFIX:        { commission: 0.15, buffer: 0 },
-  TRENDRUM:      { commission: 0.15, buffer: 0 },
+  TRENDYOL:      { commission: 0, buffer: 0 },
+  N11:           { commission: 0, buffer: 0 },
+  HEPSIBURADA:   { commission: 0, buffer: 0 },
+  PAZARAMA:      { commission: 0, buffer: 0 },
+  IDEFIX:        { commission: 0, buffer: 0 },
+  TRENDRUM:      { commission: 0, buffer: 0 },
 };
 
 /**
