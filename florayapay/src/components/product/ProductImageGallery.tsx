@@ -42,9 +42,10 @@ export function ProductImageGallery({ images, productName }: Props) {
             src={images[active]}
             alt={`${productName} — görsel ${active + 1}`}
             fill
-            sizes="(max-width: 1024px) 100vw, 50vw"
+            sizes="(max-width: 768px) 100vw, (max-width: 1024px) 60vw, 50vw"
             className="object-contain"
             priority
+            quality={60}
           />
 
           {/* Zoom ikonu */}
@@ -106,6 +107,7 @@ export function ProductImageGallery({ images, productName }: Props) {
                   width={64}
                   height={64}
                   className="object-cover w-full h-full"
+                  quality={40}
                 />
               </button>
             ))}
