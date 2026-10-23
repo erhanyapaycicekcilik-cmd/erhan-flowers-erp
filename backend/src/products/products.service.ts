@@ -3,6 +3,7 @@ import { cleanMojibakeDeep } from '../common/mojibake';
 import { Prisma } from '../generated/prisma-client';
 import { PrismaService } from '../prisma/prisma.service';
 import { IntegrationsService } from '../integrations/integrations.service';
+import { calcPlatformPrice } from '../integrations/platform-fees.config';
 
 type ProductPayload = {
   productName?: string;
@@ -395,12 +396,15 @@ export class ProductsService {
     if (!platforms.length) return;
 
     await Promise.allSettled(
-      platforms.map((platform) =>
-        this.integrations.pushPrice(platform, payload).then((result) => {
+      platforms.map((platform) => {
+        const platformPrice = calcPlatformPrice(salePrice, platform);
+        const platformListPrice = platformPrice > listPrice ? Math.ceil(platformPrice * 1.1) : listPrice;
+        const platformPayload = { ...payload, salePrice: platformPrice, listPrice: platformListPrice };
+        return this.integrations.pushPrice(platform, platformPayload).then((result) => {
           if (!result.ok) this.logger.warn(`${platform} fiyat/stok yayını başarısız: ${result.message}`);
-          else this.logger.log(`${platform} fiyat/stok yayını tamam: ${payload.barcode || payload.modelCode}`);
-        }),
-      ),
+          else this.logger.log(`${platform} fiyat/stok yayını tamam: ${payload.barcode || payload.modelCode} (${salePrice}₺ → ${platformPrice}₺)`);
+        });
+      }),
     );
   }
 
@@ -542,6 +546,26 @@ export class ProductsService {
     return { checked: products.length, created, skipped };
   }
 
+  /** sitePrice = marketPrice olan ürünleri sitePrice = marketPrice * 0.80 yapar */
+  async backfillSitePrice(): Promise<{ updated: number; skipped: number }> {
+    const products = await this.prisma.product.findMany({
+      where: { status: 'ACTIVE', marketPrice: { gt: 0 } },
+      select: { id: true, marketPrice: true, sitePrice: true },
+    });
+    let updated = 0; let skipped = 0;
+    for (const p of products) {
+      const market = Number(p.marketPrice);
+      const site = Number(p.sitePrice);
+      const target = Math.round(market * 0.80);
+      // Zaten doğru hesaplanmışsa atla (±1₺ tolerans)
+      if (Math.abs(site - target) <= 1) { skipped++; continue; }
+      await this.prisma.product.update({ where: { id: p.id }, data: { sitePrice: target } });
+      updated++;
+    }
+    this.logger.log(`sitePrice backfill: ${updated} güncellendi, ${skipped} atlandı`);
+    return { updated, skipped };
+  }
+
   async bulkSetModelCodes(items: { barcode: string; modelCode: string }[]): Promise<{ updated: number; notFound: string[]; conflict: string[] }> {
     let updated = 0;
     const notFound: string[] = [];
@@ -627,7 +651,11 @@ export class ProductsService {
       const batch = payloads.slice(i, i + BATCH);
       const batchResults = await Promise.allSettled(
         batch.flatMap((payload) =>
-          connections.map(({ platform }) => this.integrations.pushPrice(platform, payload)),
+          connections.map(({ platform }) => {
+            const platformPrice = calcPlatformPrice(payload.salePrice, platform);
+            const platformListPrice = platformPrice > payload.listPrice ? Math.ceil(platformPrice * 1.1) : payload.listPrice;
+            return this.integrations.pushPrice(platform, { ...payload, salePrice: platformPrice, listPrice: platformListPrice });
+          }),
         ),
       );
 
@@ -1098,13 +1126,15 @@ export class ProductsService {
             draft?.marketplaceSalePrice > 0 ? draft.marketplaceSalePrice
             : draft?.salePrice ?? product.marketPrice ?? product.shopPrice ?? 0,
           );
+          const platformPrice = calcPlatformPrice(salePrice, 'PAZARAMA');
+          const rawListPrice = Number(product.listPrice ?? salePrice);
           const payload = {
             barcode: product.barcode ?? product.modelCode,
             modelCode: product.modelCode,
             productName: product.productName,
             description: product.productName,
-            salePrice,
-            listPrice: Number(product.listPrice ?? salePrice),
+            salePrice: platformPrice,
+            listPrice: platformPrice > rawListPrice ? Math.ceil(platformPrice * 1.1) : rawListPrice,
             stockQuantity: Number(product.stockQuantity ?? 0),
             imageUrls,
             brand: product.brand ?? 'Erhan Flowers',

@@ -92,6 +92,12 @@ export class ProductsController {
     return this.products.backfillCostDrafts();
   }
 
+  @Post('backfill-site-price')
+  @UseGuards(OwnerGuard)
+  backfillSitePrice() {
+    return this.products.backfillSitePrice();
+  }
+
   @Patch(':id')
   update(@Param('id') id: string, @Body() body: unknown) {
     return this.products.update(Number(id), body);

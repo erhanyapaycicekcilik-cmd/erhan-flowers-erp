@@ -392,6 +392,8 @@ export default function ProductsPage() {
   const [syncSitePricesResult, setSyncSitePricesResult] = useState<{ updated: number; skipped: number } | null>(null);
   const [syncingTrendyolProducts, setSyncingTrendyolProducts] = useState(false);
   const [syncTrendyolProductsResult, setSyncTrendyolProductsResult] = useState<{ inserted: number; updated: number; skipped: number; error?: string } | null>(null);
+  const [fixingSitePrices, setFixingSitePrices] = useState(false);
+  const [fixSitePricesResult, setFixSitePricesResult] = useState<{ updated: number; skipped: number } | null>(null);
   const [recalculating, setRecalculating] = useState(false);
   const [backfillingCosts, setBackfillingCosts] = useState(false);
   const [backfillResult, setBackfillResult] = useState<{ checked: number; created: number; skipped: number } | null>(null);
@@ -1976,6 +1978,31 @@ export default function ProductsPage() {
           {syncSitePricesResult && (
             <span className="text-sm text-green-600">
               {syncSitePricesResult.updated} ürüne site fiyatı atandı, {syncSitePricesResult.skipped} atlandı.
+            </span>
+          )}
+          <button
+            className="btn btn-secondary"
+            disabled={fixingSitePrices}
+            onClick={async () => {
+              if (!confirm('Tüm aktif ürünlerde site fiyatı = piyasa fiyatı × %80 olarak güncellenecek. Devam edilsin mi?')) return;
+              setFixingSitePrices(true);
+              setFixSitePricesResult(null);
+              try {
+                const result = await api<{ updated: number; skipped: number }>('/products/backfill-site-price', { method: 'POST' });
+                setFixSitePricesResult(result);
+              } catch (e: unknown) {
+                alert(e instanceof Error ? e.message : 'Hata oluştu');
+              } finally {
+                setFixingSitePrices(false);
+              }
+            }}
+          >
+            {fixingSitePrices ? <RefreshCw size={17} className="animate-spin" /> : <RefreshCw size={17} />}
+            {fixingSitePrices ? 'Site Fiyatları Düzeltiliyor...' : 'Site Fiyatlarını Düzelt (%80)'}
+          </button>
+          {fixSitePricesResult && (
+            <span className="text-sm text-green-600">
+              {fixSitePricesResult.updated} ürün düzeltildi, {fixSitePricesResult.skipped} zaten doğruydu.
             </span>
           )}
           <button
