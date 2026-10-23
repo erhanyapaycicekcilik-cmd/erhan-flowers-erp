@@ -70,6 +70,15 @@ export default function WebSiparislerPage() {
 
   useEffect(() => { load() }, [filterStatus])
 
+  async function selectOrder(order: any) {
+    // Fetch full detail (with items) in case list response was partial
+    try {
+      const res = await fetch(`${API}/web-orders/${order.id}`, { credentials: 'include' })
+      if (res.ok) { setSelected(await res.json()); return }
+    } catch {}
+    setSelected(order)
+  }
+
   async function changeStatus(id: number, status: string) {
     await fetch(`${API}/web-orders/${id}/status`, {
       method: 'PATCH',
@@ -131,7 +140,7 @@ export default function WebSiparislerPage() {
                 return (
                   <div
                     key={order.id}
-                    onClick={() => setSelected(order)}
+                    onClick={() => selectOrder(order)}
                     className={`bg-white rounded-xl border p-4 cursor-pointer hover:shadow-md transition-shadow ${
                       selected?.id === order.id ? 'border-blue-500 ring-1 ring-blue-500' : 'border-gray-200'
                     }`}
