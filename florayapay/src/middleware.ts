@@ -29,6 +29,17 @@ export function middleware(request: NextRequest) {
   trackVisit(request)
 
   const { pathname } = request.nextUrl
+
+  // /urun/slug.180 → /urun/slug-180 (nokta içeren ürün URL'lerini tireye çevir)
+  if (pathname.startsWith('/urun/')) {
+    const slug = pathname.slice('/urun/'.length)
+    if (slug.includes('.')) {
+      const url = request.nextUrl.clone()
+      url.pathname = `/urun/${slug.replace(/\./g, '-')}`
+      return NextResponse.redirect(url, 301)
+    }
+  }
+
   if (!pathname.startsWith('/admin')) return NextResponse.next()
   if (pathname === '/admin/login') return NextResponse.next()
 
