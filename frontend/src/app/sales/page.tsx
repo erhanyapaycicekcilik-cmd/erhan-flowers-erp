@@ -398,7 +398,11 @@ function SalesCenterPageContent() {
   }
 
   async function completeSale() {
-    const sale = savedSale ?? await saveSale('CONFIRMED');
+    const isStorePickup = delivery.method === STORE_PICKUP;
+    const effectiveCustomer = (isStorePickup && !customer.firstName.trim())
+      ? { ...customer, firstName: 'Dükkan', lastName: 'Satış', phone: customer.phone || '0000000000', whatsappPhone: customer.whatsappPhone || customer.phone || '0000000000', source: 'STORE' }
+      : customer;
+    const sale = savedSale ?? await saveSale('CONFIRMED', { customer: effectiveCustomer });
     if (!sale) return;
     const completed = await api<Record<string, any>>(`/sales/${sale.id}/complete`, { method: 'POST' });
     setSavedSale(completed);
@@ -451,7 +455,7 @@ function SalesCenterPageContent() {
 
   function validateSale(nextCustomer = customer, nextDelivery = delivery) {
     const nextIsStorePickup = nextDelivery.method === STORE_PICKUP;
-    if (!nextCustomer.firstName.trim() || !nextCustomer.lastName.trim() || !nextCustomer.phone.trim()) {
+    if (!nextIsStorePickup && (!nextCustomer.firstName.trim() || !nextCustomer.lastName.trim() || !nextCustomer.phone.trim())) {
       setMessage('Ad soyad ve telefon alanları zorunludur.');
       return false;
     }
