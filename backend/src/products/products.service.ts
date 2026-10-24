@@ -589,7 +589,7 @@ export class ProductsService {
     return { updated, notFound, conflict };
   }
 
-  async broadcastAll(): Promise<{ total: number; sent: number; skipped: number; errors: number }> {
+  async broadcastAll(): Promise<{ total: number; sent: number; skipped: number; errors: number; platformErrors: number }> {
     this.invalidatePlatformCache();
     const platformNames = await this.getConnectedPlatforms();
     const connections = platformNames.map((platform) => ({ platform }));
@@ -644,7 +644,7 @@ export class ProductsService {
 
     if (connections.length === 0) return { total, sent: 0, skipped: total, errors: 0 };
 
-    let sent = 0; let errors = 0;
+    let sent = 0; let errors = 0; let platformErrors = 0;
     const BATCH = 10;
 
     for (let i = 0; i < payloads.length; i += BATCH) {
@@ -664,13 +664,14 @@ export class ProductsService {
         const anyOk = platformResults.some((r) => r.status === 'fulfilled' && r.value.ok);
         const failCount = platformResults.filter((r) => r.status === 'rejected' || (r.status === 'fulfilled' && !r.value.ok)).length;
         if (anyOk) sent++;
-        errors += failCount;
+        else errors++;
+        platformErrors += failCount;
       }
 
       if (i + BATCH < payloads.length) await new Promise((res) => setTimeout(res, 500));
     }
 
-    return { total, sent, skipped, errors };
+    return { total, sent, skipped, errors, platformErrors };
   }
 
   async syncFromTrendyol(): Promise<{ updated: number; notFound: number; total: number; error?: string }> {

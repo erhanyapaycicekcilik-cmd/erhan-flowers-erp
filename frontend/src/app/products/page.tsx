@@ -381,7 +381,7 @@ export default function ProductsPage() {
   const [entries, setEntries] = useState<Entry[]>([]);
   const [importingExcel, setImportingExcel] = useState(false);
   const [broadcastingAll, setBroadcastingAll] = useState(false);
-  const [broadcastResult, setBroadcastResult] = useState<{ total: number; sent: number; skipped: number; errors: number } | null>(null);
+  const [broadcastResult, setBroadcastResult] = useState<{ total: number; sent: number; skipped: number; errors: number; platformErrors?: number } | null>(null);
   const [broadcastingImages, setBroadcastingImages] = useState(false);
   const [broadcastImagesResult, setBroadcastImagesResult] = useState<{ sent: number; errors: number } | null>(null);
   const [sendingToPazarama, setSendingToPazarama] = useState(false);
@@ -1873,7 +1873,7 @@ export default function ProductsPage() {
               setBroadcastingAll(true);
               setBroadcastResult(null);
               try {
-                const result = await api<{ total: number; sent: number; skipped: number; errors: number }>('/products/broadcast-all', { method: 'POST' });
+                const result = await api<{ total: number; sent: number; skipped: number; errors: number; platformErrors?: number }>('/products/broadcast-all', { method: 'POST' });
                 setBroadcastResult(result);
               } catch {
                 alert('Toplu yayın sırasında hata oluştu.');
@@ -2063,7 +2063,7 @@ export default function ProductsPage() {
       )}
       {broadcastResult && (
         <div className="mb-4 rounded-md bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-800">
-          Toplu yayın tamamlandı — Toplam: {broadcastResult.total} | Gönderildi: {broadcastResult.sent} | Atlandı: {broadcastResult.skipped} | Hata: {broadcastResult.errors}
+          Toplu yayın tamamlandı — Toplam: {broadcastResult.total} | Gönderildi: {broadcastResult.sent} | Atlandı: {broadcastResult.skipped} | Hata: {broadcastResult.errors}{broadcastResult.platformErrors != null && broadcastResult.platformErrors !== broadcastResult.errors ? ` (platform hatası: ${broadcastResult.platformErrors})` : ''}
           <button className="ml-3 text-blue-500 hover:underline" onClick={() => setBroadcastResult(null)}>×</button>
         </div>
       )}
