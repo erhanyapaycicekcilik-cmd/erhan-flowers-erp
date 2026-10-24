@@ -43,7 +43,7 @@ function slugify(value: string) {
 }
 
 function productSlug(name: string, modelCode: string) {
-  return `${slugify(name)}-${modelCode.toLowerCase()}`;
+  return `${slugify(name)}-${slugify(modelCode)}`;
 }
 
 @Injectable()
@@ -212,17 +212,22 @@ export class PublicCatalogService {
   }
 
   async getProductBySlug(slug: string) {
-    // Slug = slugify(name)-modelCode.toLowerCase()
-    // modelCode formatları: ERH.180.YPY.A (noktalı, tire yok) veya YC-1019 (tireli)
-    // Son 1-4 bölümü deneye kadar eşleşme ara
+    // Slug = slugify(name)-slugify(modelCode)
+    // modelCode formatları: ERH.180.YPY.A (noktalı) veya YC-1019 (tireli)
+    // Noktalı modelCode slug'da tire olur (ERH.180 → erh-180), tireli modelCode aynen tire kalır
+    // Her iki formatı da dene: tire olarak ve tire→nokta dönüşümüyle
     const parts = slug.split('-');
-    for (let take = 1; take <= 4; take++) {
-      const modelCode = parts.slice(-take).join('-').toUpperCase();
-      const product = await this.prisma.product.findFirst({
-        where: { modelCode, status: 'ACTIVE', sitePrice: { gt: 0 } },
-        select: SAFE_SELECT,
-      });
-      if (product) return this.toPublicProduct(product);
+    for (let take = 1; take <= 6; take++) {
+      const segment = parts.slice(-take).join('-').toUpperCase();
+      // Olası modelCode varyantları: tire ile, nokta ile
+      const candidates = [segment, segment.replace(/-/g, '.')];
+      for (const modelCode of candidates) {
+        const product = await this.prisma.product.findFirst({
+          where: { modelCode, status: 'ACTIVE', sitePrice: { gt: 0 } },
+          select: SAFE_SELECT,
+        });
+        if (product) return this.toPublicProduct(product);
+      }
     }
     return null;
   }
