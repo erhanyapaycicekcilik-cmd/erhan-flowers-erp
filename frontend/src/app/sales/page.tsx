@@ -902,7 +902,7 @@ function SalesCenterPageContent() {
                             <div className="absolute right-0 z-20 mt-1 w-60 rounded-md border border-line bg-white p-2 shadow-xl">
                               <a href={`/sales/print/${sale.id}/address-label`} target="_blank" rel="noopener noreferrer" className="block w-full rounded px-3 py-2 text-left hover:bg-slate-50">10×15 Adres Etiketi</a>
                               <a href={`/sales/print/${sale.id}/delivery-form`} target="_blank" rel="noopener noreferrer" className="block w-full rounded px-3 py-2 text-left hover:bg-slate-50">A5 Teslimat Formu</a>
-                              <a href={`/sales/print/${sale.id}/order-form`} target="_blank" rel="noopener noreferrer" className="block w-full rounded px-3 py-2 text-left hover:bg-slate-50">A4 Sipariş Formu</a>
+                              <a href={`/sales/print/${sale.id}/order-form`} target="_blank" rel="noopener noreferrer" className="block w-full rounded px-3 py-2 text-left hover:bg-slate-50">A5 Sipariş Formu</a>
                             </div>
                           </details>
                           <button className="btn btn-secondary" type="button" onClick={() => openCustomerCard(sale.id)}>
@@ -1446,7 +1446,7 @@ function PrintActions({
         </a>
         <a className="btn btn-primary justify-center" href={`/sales/print/${sale.id}/order-form`} target="_blank" rel="noreferrer">
           <FileText size={17} />
-          A4 Sipariş Formu Yazdır
+          A5 Sipariş Formu Yazdır
         </a>
       </div>
       <p className="mt-3 text-xs text-emerald-800">Butonlar yazdırmaya hazır belge önizlemesini yeni sekmede açar.</p>
@@ -1464,8 +1464,8 @@ function buildPrintPreview(data: Record<string, any>, type: PrintType) {
     ? '10×15 Adres Etiketi'
     : type === 'delivery-form'
       ? 'A5 Teslimat Formu'
-      : 'A4 Sipariş Formu';
-  const pageSize = type === 'address-label' ? '100mm 150mm' : type === 'delivery-form' ? 'A5 portrait' : 'A4 portrait';
+      : 'A5 Sipariş Formu';
+  const pageSize = type === 'address-label' ? '100mm 150mm' : 'A5 portrait';
   const compact = type === 'address-label';
   const address = [
     sale.full_address ?? sale.fullAddress,

@@ -35,8 +35,8 @@ export default function SalePrintPreviewPage() {
   const sale = data.sale ?? {};
   const company = data.company ?? {};
   const isLabel = printType === 'address-label';
-  const isA5 = printType === 'delivery-form';
-  const title = isLabel ? '10×15 Adres Etiketi' : isA5 ? 'A5 Teslimat Formu' : 'A4 Sipariş Formu';
+  const isA5 = printType === 'delivery-form' || printType === 'order-form';
+  const title = isLabel ? '10×15 Adres Etiketi' : printType === 'delivery-form' ? 'A5 Teslimat Formu' : 'A5 Sipariş Formu';
   const address = [sale.full_address ?? sale.fullAddress, sale.district, sale.city].filter(Boolean).join(' / ');
 
   return (
