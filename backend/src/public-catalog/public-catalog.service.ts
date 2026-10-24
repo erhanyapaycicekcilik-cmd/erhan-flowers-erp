@@ -380,10 +380,13 @@ export class PublicCatalogService {
       { keywords: ['sarmaşık', 'sarmasik'],                                                                                                                      categoryName: 'Yapay Sarmaşık' },
       { keywords: ['demet', 'buket'],                                                                                                                            categoryName: 'Demet Çiçek' },
       { keywords: ['aranjman', 'arajman', 'kompozisyon'],                                                                                                       categoryName: 'Aranjman' },
+      { keywords: ['bonzai', 'bonsai'],                                                                                                                          categoryName: 'Bonsai' },
+      { keywords: ['zeytin'],                                                                                                                                    categoryName: 'Zeytin Ağacı' },
+      { keywords: ['mini', 'küçük saksı', 'kucuk saksi', 'masa bitkisi', 'masa bitki', 'sukulent', 'kaktüs', 'kaktus', 'lavanta', 'şimşir', 'simsir'],        categoryName: 'Mini Saksılı Bitki' },
       { keywords: ['saksı', 'saksi', 'vazo', 'saksılı', 'saksili'],                                                                                            categoryName: 'Saksı & Vazo' },
-      { keywords: ['ağaç', 'agac', 'bonzai', 'bonsai', 'palmiye', 'zeytin', 'ficus', 'benjamin', 'areka', 'strelitzia', 'kiraz', 'erik', 'bahar dal'],        categoryName: 'Yapay Ağaç' },
+      { keywords: ['ağaç', 'agac', 'palmiye', 'ficus', 'benjamin', 'areka', 'strelitzia', 'kiraz', 'erik', 'bahar dal'],                                      categoryName: 'Yapay Ağaç' },
       { keywords: ['çiçek', 'cicek', 'orkide', 'gül', 'gul', 'lale', 'kasımpatı', 'kasimpati', 'dal çiçek', 'dal cicek'],                                     categoryName: 'Demet Çiçek' },
-      { keywords: ['bitki', 'sukulent', 'kaktüs', 'kaktus', 'lavanta', 'şimşir', 'simsir'],                                                                    categoryName: 'Yapay Bitki' },
+      { keywords: ['bitki', 'kaktüs', 'kaktus', 'lavanta'],                                                                                                    categoryName: 'Yapay Bitki' },
     ];
 
     const allCategories = await this.prisma.category.findMany({ select: { id: true, name: true } });
