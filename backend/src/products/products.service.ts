@@ -375,21 +375,57 @@ export class ProductsService {
     // listPrice her zaman salePrice'dan büyük olmalı (platform kuralı)
     const listPrice = rawListPrice > salePrice ? rawListPrice : Math.ceil(salePrice * 1.1);
 
-    const payload = {
-      trendyolBarcode: product.trendyolBarcode ?? null,
-      barcode: product.barcode ?? product.modelCode ?? '',
-      modelCode: product.modelCode ?? product.barcode ?? '',
-      salePrice,
-      listPrice,
-      stockQuantity,
-    };
+    const barcode = product.barcode ?? product.trendyolBarcode ?? undefined;
+    const modelCode = product.modelCode ?? undefined;
 
     // Katalog stratejisi ekranından satışa kapatılan (PASSIVE) ürün, ürün kaydı
     // sırasında stokla tekrar satışa açılmasın.
-    if (product.barcode) {
-      const closed = await this.prisma.trendyolProductVariant.findFirst({ where: { barcode: product.barcode, status: 'PASSIVE' }, select: { id: true } });
+    if (barcode) {
+      const closed = await this.prisma.trendyolProductVariant.findFirst({ where: { barcode, status: 'PASSIVE' }, select: { id: true } });
       if (closed) return;
     }
+
+    // Tam ürün verisini çek (pushProduct için isim+görsel gerekli)
+    let productName: string | undefined;
+    let images: unknown;
+    let brand: string | undefined;
+    let description: string | undefined;
+
+    const trendyolVariant = barcode
+      ? await this.prisma.trendyolProductVariant.findFirst({ where: { barcode }, select: { productName: true, images: true, brand: true, productDescription: true } })
+      : modelCode
+        ? await this.prisma.trendyolProductVariant.findFirst({ where: { currentModelCode: modelCode }, select: { productName: true, images: true, brand: true, productDescription: true } })
+        : null;
+
+    if (trendyolVariant) {
+      productName = trendyolVariant.productName;
+      images = trendyolVariant.images;
+      brand = trendyolVariant.brand ?? undefined;
+      description = trendyolVariant.productDescription ?? undefined;
+    } else if (barcode || modelCode) {
+      const dbProduct = await this.prisma.product.findFirst({
+        where: barcode ? { barcode } : { modelCode: modelCode! },
+        select: { productName: true, imageUrls: true, brand: true },
+      });
+      if (dbProduct) {
+        productName = dbProduct.productName;
+        images = dbProduct.imageUrls;
+        brand = dbProduct.brand;
+      }
+    }
+
+    const payload = {
+      trendyolBarcode: product.trendyolBarcode ?? null,
+      barcode: barcode ?? modelCode ?? '',
+      modelCode: modelCode ?? barcode ?? '',
+      salePrice,
+      listPrice,
+      stockQuantity,
+      productName,
+      images,
+      brand,
+      description,
+    };
 
     // Cache'den bağlı platformları al (5dk TTL, DB sorgusu atmaz)
     const platforms = await this.getConnectedPlatforms();
@@ -400,9 +436,9 @@ export class ProductsService {
         const platformPrice = calcPlatformPrice(salePrice, platform);
         const platformListPrice = platformPrice > listPrice ? Math.ceil(platformPrice * 1.1) : listPrice;
         const platformPayload = { ...payload, salePrice: platformPrice, listPrice: platformListPrice };
-        return this.integrations.pushPrice(platform, platformPayload).then((result) => {
-          if (!result.ok) this.logger.warn(`${platform} fiyat/stok yayını başarısız: ${result.message}`);
-          else this.logger.log(`${platform} fiyat/stok yayını tamam: ${payload.barcode || payload.modelCode} (${salePrice}₺ → ${platformPrice}₺)`);
+        return this.integrations.pushProduct(platform, platformPayload).then((result) => {
+          if (!result.ok) this.logger.warn(`${platform} yayın başarısız: ${result.message}`);
+          else this.logger.log(`${platform} yayın tamam: ${payload.barcode || payload.modelCode} (${salePrice}₺ → ${platformPrice}₺)`);
         });
       }),
     );
