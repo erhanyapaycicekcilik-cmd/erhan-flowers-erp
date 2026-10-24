@@ -28,7 +28,7 @@ export class CategoriesSeedService implements OnModuleInit {
         skipDuplicates: true,
       });
     } catch (err) {
-      this.logger.warn('Category seed failed (non-fatal): ' + err?.message);
+      this.logger.warn('Category seed failed (non-fatal): ' + (err instanceof Error ? err.message : String(err)));
     }
   }
 }
