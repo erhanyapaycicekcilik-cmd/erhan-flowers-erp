@@ -900,9 +900,9 @@ function SalesCenterPageContent() {
                               Yazdır
                             </summary>
                             <div className="absolute right-0 z-20 mt-1 w-60 rounded-md border border-line bg-white p-2 shadow-xl">
-                              <button className="w-full rounded px-3 py-2 text-left hover:bg-slate-50" type="button" onClick={() => openPrint(sale.id, 'address-label')}>10×15 Adres Etiketi</button>
-                              <button className="w-full rounded px-3 py-2 text-left hover:bg-slate-50" type="button" onClick={() => openPrint(sale.id, 'delivery-form')}>A5 Teslimat Formu</button>
-                              <button className="w-full rounded px-3 py-2 text-left hover:bg-slate-50" type="button" onClick={() => openPrint(sale.id, 'order-form')}>A4 Sipariş Formu</button>
+                              <a href={`/sales/print/${sale.id}/address-label`} target="_blank" rel="noopener noreferrer" className="block w-full rounded px-3 py-2 text-left hover:bg-slate-50">10×15 Adres Etiketi</a>
+                              <a href={`/sales/print/${sale.id}/delivery-form`} target="_blank" rel="noopener noreferrer" className="block w-full rounded px-3 py-2 text-left hover:bg-slate-50">A5 Teslimat Formu</a>
+                              <a href={`/sales/print/${sale.id}/order-form`} target="_blank" rel="noopener noreferrer" className="block w-full rounded px-3 py-2 text-left hover:bg-slate-50">A4 Sipariş Formu</a>
                             </div>
                           </details>
                           <button className="btn btn-secondary" type="button" onClick={() => openCustomerCard(sale.id)}>
