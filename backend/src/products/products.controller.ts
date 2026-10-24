@@ -1,4 +1,6 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, Res, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, Req, Res, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { Request } from 'express';
 import { Response } from 'express';
 import { AuthGuard } from '../auth/auth.guard';
 import { InternalKeyGuard } from '../auth/internal-key.guard';
@@ -109,6 +111,14 @@ export class ProductsController {
   @UseGuards(OwnerGuard)
   backfillSitePrice() {
     return this.products.backfillSitePrice();
+  }
+
+  @Post('import-prices-excel')
+  @UseGuards(OwnerGuard)
+  @UseInterceptors(FileInterceptor('file'))
+  async importPricesExcel(@UploadedFile() file: Express.Multer.File) {
+    if (!file) throw new Error('Dosya yüklenmedi');
+    return this.products.importPricesFromExcel(file.buffer);
   }
 
   @Patch(':id')
