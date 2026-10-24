@@ -694,7 +694,7 @@ export class ProductsService {
     const payloads = Array.from(payloadMap.values());
     const total = payloads.length + skipped;
 
-    if (connections.length === 0) return { total, sent: 0, skipped: total, errors: 0 };
+    if (connections.length === 0) return { total, sent: 0, skipped: total, errors: 0, platformErrors: 0 };
 
     let sent = 0; let errors = 0; let platformErrors = 0;
     const BATCH = 10;
