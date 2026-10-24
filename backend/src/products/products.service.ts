@@ -351,6 +351,7 @@ export class ProductsService {
     modelCode?: string | null;
     marketPrice?: unknown;
     shopPrice?: unknown;
+    sitePrice?: unknown;
     stockQuantity?: unknown;
   }): Promise<void> {
     return this.broadcastPriceStock(product);
@@ -363,18 +364,21 @@ export class ProductsService {
     marketPrice?: unknown;
     listPrice?: unknown;
     shopPrice?: unknown;
+    sitePrice?: unknown;
     stockQuantity?: unknown;
   }): Promise<void> {
     if (!product.barcode && !product.modelCode && !product.trendyolBarcode) return;
 
-    // Tüm platformlara aynı fiyat gider (kullanıcı tercihi: tek fiyat politikası)
-    // marketPrice = platform satış fiyatı, listPrice = KDV dahil liste fiyatı
-    const salePrice = Number(product.marketPrice ?? product.shopPrice ?? 0);
+    // Platform fiyatı = sitePrice × 1.25 (kendi sitemizin fiyatı baz alınır)
+    // sitePrice = 0 ise marketPrice fallback olarak kullanılır
+    const sitePriceRaw = Number(product.sitePrice ?? 0);
+    const salePrice = sitePriceRaw > 0
+      ? Math.round(sitePriceRaw * 1.25)
+      : Math.round(Number(product.marketPrice ?? product.shopPrice ?? 0));
     const stockQuantity = Number(product.stockQuantity ?? 0);
     if (!salePrice) return;
-    const rawListPrice = Number(product.listPrice ?? product.marketPrice ?? 0);
     // listPrice her zaman salePrice'dan büyük olmalı (platform kuralı)
-    const listPrice = rawListPrice > salePrice ? rawListPrice : Math.ceil(salePrice * 1.1);
+    const listPrice = Math.ceil(salePrice * 1.1);
 
     const barcode = product.barcode ?? product.trendyolBarcode ?? undefined;
     const modelCode = product.modelCode ?? undefined;
@@ -672,19 +676,22 @@ export class ProductsService {
     // 2) Ürünler tablosu — Trendyol'da olmayan ürünleri de kapsa
     const products = await this.prisma.product.findMany({
       where: { status: 'ACTIVE' },
-      select: { id: true, barcode: true, modelCode: true, productName: true, marketPrice: true, listPrice: true, shopPrice: true, stockQuantity: true, imageUrls: true, brand: true },
+      select: { id: true, barcode: true, modelCode: true, productName: true, marketPrice: true, listPrice: true, shopPrice: true, sitePrice: true, stockQuantity: true, imageUrls: true, brand: true },
     });
 
     for (const product of products) {
       const key = product.barcode ?? product.modelCode;
       if (!key || payloadMap.has(key)) continue; // Trendyol varyantında varsa zaten eklendi
-      const salePrice = Number(product.marketPrice ?? product.shopPrice ?? 0);
+      const sitePriceVal = Number(product.sitePrice ?? 0);
+      const salePrice = sitePriceVal > 0
+        ? Math.round(sitePriceVal * 1.25)
+        : Math.round(Number(product.marketPrice ?? product.shopPrice ?? 0));
       if (!salePrice) { skipped++; continue; }
       payloadMap.set(key, {
         barcode: product.barcode ?? product.modelCode ?? '',
         modelCode: product.modelCode ?? product.barcode ?? '',
         salePrice,
-        listPrice: Number(product.listPrice ?? product.marketPrice ?? 0),
+        listPrice: Math.ceil(salePrice * 1.1),
         stockQuantity: Number(product.stockQuantity ?? 0),
         productName: product.productName ?? undefined,
         images: product.imageUrls ?? undefined,
@@ -1250,20 +1257,11 @@ export class ProductsService {
       const variant = product.productCenterVariant;
       const variantActive = variant?.status === 'ACTIVE';
 
-      // Platform bazlı fiyat: platforma özel fiyat → Trendyol fiyatı → ERP shopPrice/marketPrice
-      const trendyolPrice = variantActive ? Math.round(Number(variant?.trendyolSalePrice ?? 0)) : 0;
-      let price = 0;
-      if (p === 'TRENDYOL') {
-        price = trendyolPrice || Math.round(product.marketPrice);
-      } else if (p === 'N11') {
-        const n11Price = variantActive ? Math.round(Number(variant?.n11SalePrice ?? 0)) : 0;
-        price = n11Price || trendyolPrice || Math.round(product.shopPrice);
-      } else if (p === 'HEPSIBURADA' || p === 'HB') {
-        const hbPrice = variantActive ? Math.round(Number(variant?.hepsiburadaSalePrice ?? 0)) : 0;
-        price = hbPrice || trendyolPrice || Math.round(product.shopPrice);
-      } else {
-        price = trendyolPrice || Math.round(product.shopPrice || product.marketPrice || 0);
-      }
+      // Platform fiyatı = sitePrice × 1.25 (kendi sitemiz baz fiyat, tüm platformlar eşit)
+      const sitePriceVal = Number(product.sitePrice ?? 0);
+      const price = sitePriceVal > 0
+        ? Math.round(sitePriceVal * 1.25)
+        : Math.round(Number(product.marketPrice || product.shopPrice || 0));
 
       if (price <= 0) continue;
 
