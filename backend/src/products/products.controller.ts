@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, Res, UseGuards } from '@nestjs/common';
+import { Response } from 'express';
 import { AuthGuard } from '../auth/auth.guard';
 import { InternalKeyGuard } from '../auth/internal-key.guard';
 import { OwnerGuard } from '../auth/owner.guard';
@@ -18,6 +19,18 @@ export class ProductsController {
   @Get()
   list() {
     return this.products.list();
+  }
+
+  @Get('export-excel')
+  async exportExcel(@Query('platform') platform: string = 'GENEL', @Res() res: Response) {
+    const buffer = await this.products.exportExcel(platform);
+    const filename = `urunler-${platform.toLowerCase()}-${new Date().toISOString().slice(0, 10)}.xlsx`;
+    res.set({
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Content-Length': buffer.length,
+    });
+    res.send(buffer);
   }
 
   @Post()
