@@ -1217,6 +1217,54 @@ export class ProductsService {
     return { total: products.length, sent, errors, details };
   }
 
+  /** Trendyol Excel'inden fiyat aktarımı: sitePrice = trendyolFiyatı × 0.80, marketPrice = trendyolFiyatı */
+  async importPricesFromExcel(buffer: Buffer): Promise<{ updated: number; skipped: number; notFound: number; errors: string[] }> {
+    const wb = XLSX.read(buffer, { type: 'buffer' });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json<Record<string, string | number>>(ws);
+
+    let updated = 0, skipped = 0, notFound = 0;
+    const errors: string[] = [];
+
+    for (const row of rows) {
+      const barcode = row['Barkod'] ? String(row['Barkod']).trim() : null;
+      const modelCode = row['Model Kodu'] ? String(row['Model Kodu']).trim() : null;
+      const rawPrice = row['Trendyolda Satılacak Fiyat (KDV Dahil)'] ?? row['Piyasa Satış Fiyatı (KDV Dahil)'];
+      const trendyolPrice = rawPrice ? Math.round(Number(String(rawPrice).replace(',', '.'))) : 0;
+
+      if (!trendyolPrice || trendyolPrice <= 0) { skipped++; continue; }
+      if (!barcode && !modelCode) { skipped++; continue; }
+
+      try {
+        const where = barcode
+          ? { barcode }
+          : { modelCode: modelCode! };
+
+        const product = await this.prisma.product.findFirst({ where, select: { id: true } });
+        if (!product) {
+          // barcode ile bulunamazsa modelCode ile dene
+          const byModel = modelCode ? await this.prisma.product.findFirst({ where: { modelCode }, select: { id: true } }) : null;
+          if (!byModel) { notFound++; continue; }
+          await this.prisma.product.update({
+            where: { id: byModel.id },
+            data: { marketPrice: trendyolPrice, sitePrice: Math.round(trendyolPrice * 0.80) },
+          });
+        } else {
+          await this.prisma.product.update({
+            where: { id: product.id },
+            data: { marketPrice: trendyolPrice, sitePrice: Math.round(trendyolPrice * 0.80) },
+          });
+        }
+        updated++;
+      } catch (err) {
+        errors.push(`${barcode ?? modelCode}: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+
+    this.logger.log(`Excel fiyat aktarımı: ${updated} güncellendi, ${skipped} atlandı, ${notFound} bulunamadı`);
+    return { updated, skipped, notFound, errors };
+  }
+
   async exportExcel(platform: string): Promise<Buffer> {
     const products = await this.prisma.product.findMany({
       where: { status: 'ACTIVE' },

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { apiBaseUrl } from '@/lib/api'
 
 const PLATFORMS = [
@@ -15,14 +15,20 @@ const PLATFORMS = [
 export default function ExcelExportPage() {
   const [loading, setLoading] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [importResult, setImportResult] = useState<{ updated: number; skipped: number; notFound: number; errors: string[] } | null>(null)
+  const [importing, setImporting] = useState(false)
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  function getToken() {
+    return localStorage.getItem(`auth_token_${window.location.hostname}_${window.location.port || 'default'}`) ?? localStorage.getItem('auth_token') ?? ''
+  }
 
   async function download(platform: string) {
     setLoading(platform)
     setError(null)
     try {
-      const token = localStorage.getItem(`auth_token_${window.location.hostname}_${window.location.port || 'default'}`) ?? localStorage.getItem('auth_token') ?? ''
       const res = await fetch(`${apiBaseUrl}/products/export-excel?platform=${platform}`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${getToken()}` },
       })
       if (!res.ok) throw new Error(`Sunucu hatası: ${res.status}`)
       const blob = await res.blob()
@@ -39,6 +45,31 @@ export default function ExcelExportPage() {
     }
   }
 
+  async function importPrices(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setImporting(true)
+    setError(null)
+    setImportResult(null)
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      const res = await fetch(`${apiBaseUrl}/products/import-prices-excel`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${getToken()}` },
+        body: formData,
+      })
+      if (!res.ok) throw new Error(`Sunucu hatası: ${res.status}`)
+      const result = await res.json()
+      setImportResult(result)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setImporting(false)
+      if (fileRef.current) fileRef.current.value = ''
+    }
+  }
+
   return (
     <div className="p-6 max-w-3xl mx-auto">
       <h1 className="text-2xl font-bold mb-2">Toplu Excel İndirme</h1>
@@ -49,6 +80,32 @@ export default function ExcelExportPage() {
       {error && (
         <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm">{error}</div>
       )}
+
+      {/* Trendyol Excel'inden Fiyat Aktarımı */}
+      <div className="mb-6 p-4 bg-orange-50 border border-orange-200 rounded-xl">
+        <h2 className="font-semibold text-orange-800 mb-1">Trendyol Excel'inden Fiyat Aktar</h2>
+        <p className="text-xs text-orange-700 mb-3">
+          Trendyol satıcı panelinden indirilen ürün Excel'ini yükleyin. Fiyatlar otomatik aktarılır:<br />
+          <strong>Site fiyatı = Trendyol fiyatı × %80</strong> · <strong>Platformlar = Trendyol fiyatı</strong>
+        </p>
+        <label className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium cursor-pointer transition-colors ${importing ? 'bg-gray-400 text-white cursor-not-allowed' : 'bg-orange-600 text-white hover:bg-orange-700'}`}>
+          {importing ? 'Aktarılıyor…' : 'Excel Seç & Aktar'}
+          <input ref={fileRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={importPrices} disabled={importing} />
+        </label>
+
+        {importResult && (
+          <div className="mt-3 p-3 bg-white border border-orange-200 rounded-lg text-sm">
+            <div className="flex gap-4 font-medium text-green-700">
+              <span>✓ {importResult.updated} güncellendi</span>
+              <span className="text-gray-500">{importResult.skipped} atlandı</span>
+              <span className="text-red-500">{importResult.notFound} bulunamadı</span>
+            </div>
+            {importResult.errors.length > 0 && (
+              <div className="mt-2 text-red-600 text-xs">{importResult.errors.slice(0, 5).join(' · ')}</div>
+            )}
+          </div>
+        )}
+      </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {PLATFORMS.map((p) => (
@@ -72,10 +129,10 @@ export default function ExcelExportPage() {
       <div className="mt-8 p-4 bg-yellow-50 border border-yellow-200 rounded-xl text-sm text-yellow-800">
         <strong>Nasıl kullanılır?</strong>
         <ol className="list-decimal ml-4 mt-2 space-y-1">
+          <li>Trendyol panelinden ürün listesini Excel olarak indirin → <strong>Fiyat Aktar</strong> butonu ile yükleyin</li>
+          <li>ERP fiyatları güncellenir (site %20 ucuz, platformlar aynı)</li>
           <li>İstediğiniz platformun Excel'ini indirin</li>
-          <li>Fiyatları kontrol edin, gerekirse düzeltin</li>
-          <li>İlgili pazaryerinin satıcı paneliне → <em>Ürünlerim → Fiyat/Stok Güncelle → Excel ile yükle</em></li>
-          <li>İndirdiğiniz dosyayı seçip yükleyin</li>
+          <li>İlgili pazaryerinin satıcı paneline → <em>Ürünlerim → Fiyat/Stok Güncelle → Excel ile yükle</em></li>
         </ol>
       </div>
     </div>
