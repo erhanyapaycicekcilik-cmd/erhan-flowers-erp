@@ -594,11 +594,14 @@ export class ProductsService {
     const platformNames = await this.getConnectedPlatforms();
     const connections = platformNames.map((platform) => ({ platform }));
 
-    type Payload = { barcode: string; modelCode: string; salePrice: number; listPrice: number; stockQuantity: number };
+    type Payload = {
+      barcode: string; modelCode: string; salePrice: number; listPrice: number; stockQuantity: number;
+      productName?: string; images?: unknown; description?: string; brand?: string;
+    };
     const payloadMap = new Map<string, Payload>(); // barcode/modelCode → payload (tekrar eklemeyi önle)
     let skipped = 0;
 
-    // 1) Trendyol varyantları — bunlar ana katalog (425 aktif ürün)
+    // 1) Trendyol varyantları — bunlar ana katalog
     const variants = await this.prisma.trendyolProductVariant.findMany({
       where: { status: 'ACTIVE' },
       include: { productCostDraft: true },
@@ -616,13 +619,23 @@ export class ProductsService {
       if (!salePrice) { skipped++; continue; }
       const stockQuantity = Number(v.stockQuantity ?? 0);
       const listPrice = Math.ceil(salePrice * 1.1);
-      payloadMap.set(key, { barcode: v.barcode ?? key, modelCode: v.currentModelCode ?? key, salePrice, listPrice, stockQuantity });
+      payloadMap.set(key, {
+        barcode: v.barcode ?? key,
+        modelCode: v.currentModelCode ?? key,
+        salePrice,
+        listPrice,
+        stockQuantity,
+        productName: v.productName,
+        images: v.images,
+        description: v.productDescription ?? undefined,
+        brand: v.brand ?? undefined,
+      });
     }
 
     // 2) Ürünler tablosu — Trendyol'da olmayan ürünleri de kapsa
     const products = await this.prisma.product.findMany({
       where: { status: 'ACTIVE' },
-      select: { id: true, barcode: true, modelCode: true, marketPrice: true, listPrice: true, shopPrice: true, stockQuantity: true },
+      select: { id: true, barcode: true, modelCode: true, productName: true, marketPrice: true, listPrice: true, shopPrice: true, stockQuantity: true, imageUrls: true, brand: true },
     });
 
     for (const product of products) {
@@ -636,6 +649,9 @@ export class ProductsService {
         salePrice,
         listPrice: Number(product.listPrice ?? product.marketPrice ?? 0),
         stockQuantity: Number(product.stockQuantity ?? 0),
+        productName: product.productName ?? undefined,
+        images: product.imageUrls ?? undefined,
+        brand: product.brand ?? undefined,
       });
     }
 
@@ -654,7 +670,7 @@ export class ProductsService {
           connections.map(({ platform }) => {
             const platformPrice = calcPlatformPrice(payload.salePrice, platform);
             const platformListPrice = platformPrice > payload.listPrice ? Math.ceil(platformPrice * 1.1) : payload.listPrice;
-            return this.integrations.pushPrice(platform, { ...payload, salePrice: platformPrice, listPrice: platformListPrice });
+            return this.integrations.pushProduct(platform, { ...payload, salePrice: platformPrice, listPrice: platformListPrice });
           }),
         ),
       );
