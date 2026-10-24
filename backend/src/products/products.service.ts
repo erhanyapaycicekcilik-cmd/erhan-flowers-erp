@@ -1250,16 +1250,19 @@ export class ProductsService {
       const variant = product.productCenterVariant;
       const variantActive = variant?.status === 'ACTIVE';
 
-      // Platform bazlı fiyat: variant'tan al, yoksa marketPrice/shopPrice
+      // Platform bazlı fiyat: platforma özel fiyat → Trendyol fiyatı → ERP shopPrice/marketPrice
+      const trendyolPrice = variantActive ? Math.round(Number(variant?.trendyolSalePrice ?? 0)) : 0;
       let price = 0;
       if (p === 'TRENDYOL') {
-        price = variantActive ? Math.round(Number(variant?.trendyolSalePrice ?? 0)) : Math.round(product.marketPrice);
+        price = trendyolPrice || Math.round(product.marketPrice);
       } else if (p === 'N11') {
-        price = variantActive ? Math.round(Number(variant?.n11SalePrice ?? 0)) : Math.round(product.shopPrice);
+        const n11Price = variantActive ? Math.round(Number(variant?.n11SalePrice ?? 0)) : 0;
+        price = n11Price || trendyolPrice || Math.round(product.shopPrice);
       } else if (p === 'HEPSIBURADA' || p === 'HB') {
-        price = variantActive ? Math.round(Number(variant?.hepsiburadaSalePrice ?? 0)) : Math.round(product.shopPrice);
+        const hbPrice = variantActive ? Math.round(Number(variant?.hepsiburadaSalePrice ?? 0)) : 0;
+        price = hbPrice || trendyolPrice || Math.round(product.shopPrice);
       } else {
-        price = Math.round(product.shopPrice || product.marketPrice || 0);
+        price = trendyolPrice || Math.round(product.shopPrice || product.marketPrice || 0);
       }
 
       if (price <= 0) continue;
