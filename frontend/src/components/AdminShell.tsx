@@ -59,6 +59,7 @@ const navGroups: { section: string; icon: LucideIcon; items: NavItem[] }[] = [
     icon: Boxes,
     items: [
       { href: '/products', label: 'Ürün Merkezi', icon: Boxes, roles: ALL },
+      { href: '/products/excel-export', label: 'Excel İndir (Pazaryeri)', icon: Boxes, roles: OWNER_MANAGER },
       { href: '/stock-cards', label: 'Stok Kartları', icon: Warehouse, roles: OWNER_MANAGER },
       { href: '/stock-cards/upload-images', label: 'Toplu Görsel Yükle', icon: Warehouse, roles: OWNER_MANAGER },
       { href: '/stok-raporu', label: 'Stok Hareketleri', icon: Warehouse, roles: OWNER_ONLY },
@@ -139,7 +140,7 @@ const bottomTabs: BottomTab[] = [
 const roleAllowedPaths: Record<UserRole, string[]> = {
   OWNER: [],
   MANAGER: [
-    '/dashboard', '/products', '/media', '/model-codes', '/barcodes', '/stock-cards',
+    '/dashboard', '/products', '/products/excel-export', '/media', '/model-codes', '/barcodes', '/stock-cards',
     '/hesap-makinesi', '/orders', '/staff/orders', '/sales', '/crm',
     '/integrations', '/market-analizi', '/reports', '/staff/tasks',
     '/urun-duzenle', '/kategoriler', '/referanslar', '/eft-yonetim', '/musteri-sorulari',

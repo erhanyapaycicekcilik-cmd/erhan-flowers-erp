@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import * as XLSX from 'xlsx';
 import { cleanMojibakeDeep } from '../common/mojibake';
 import { Prisma } from '../generated/prisma-client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -1207,5 +1208,133 @@ export class ProductsService {
     }
 
     return { total: products.length, sent, errors, details };
+  }
+
+  async exportExcel(platform: string): Promise<Buffer> {
+    const products = await this.prisma.product.findMany({
+      where: { status: 'ACTIVE' },
+      select: {
+        id: true,
+        productName: true,
+        modelCode: true,
+        barcode: true,
+        trendyolBarcode: true,
+        stockQuantity: true,
+        marketPrice: true,
+        shopPrice: true,
+        sitePrice: true,
+        brand: true,
+        colorVariant: true,
+        desi: true,
+        vatRate: true,
+        description: true,
+        imageUrls: true,
+        category: { select: { name: true } },
+        productCenterVariant: {
+          select: {
+            trendyolSalePrice: true,
+            n11SalePrice: true,
+            hepsiburadaSalePrice: true,
+            status: true,
+          },
+        },
+      },
+      orderBy: { id: 'asc' },
+    });
+
+    const p = platform.toUpperCase();
+    let rows: Record<string, string | number>[] = [];
+
+    for (const product of products) {
+      const sku = product.barcode ?? product.modelCode;
+      const variant = product.productCenterVariant;
+      const variantActive = variant?.status === 'ACTIVE';
+
+      // Platform bazlı fiyat: variant'tan al, yoksa marketPrice/shopPrice
+      let price = 0;
+      if (p === 'TRENDYOL') {
+        price = variantActive ? Math.round(Number(variant?.trendyolSalePrice ?? 0)) : Math.round(product.marketPrice);
+      } else if (p === 'N11') {
+        price = variantActive ? Math.round(Number(variant?.n11SalePrice ?? 0)) : Math.round(product.shopPrice);
+      } else if (p === 'HEPSIBURADA' || p === 'HB') {
+        price = variantActive ? Math.round(Number(variant?.hepsiburadaSalePrice ?? 0)) : Math.round(product.shopPrice);
+      } else {
+        price = Math.round(product.shopPrice || product.marketPrice || 0);
+      }
+
+      if (price <= 0) continue;
+
+      const stock = product.stockQuantity ?? 0;
+      const imageList = Array.isArray(product.imageUrls) ? (product.imageUrls as string[]) : [];
+
+      if (p === 'TRENDYOL') {
+        const barcode = product.trendyolBarcode ?? product.barcode ?? product.modelCode;
+        rows.push({
+          'Barkod': barcode ?? '',
+          'Miktar': stock,
+          'Satış Fiyatı': price,
+          'Piyasa Fiyatı': Math.round(price * 1.1),
+        });
+      } else if (p === 'N11') {
+        rows.push({
+          'Ürün Kodu': product.modelCode ?? '',
+          'Barkod': product.barcode ?? '',
+          'Ürün Adı': product.productName ?? '',
+          'Marka': product.brand ?? 'Erhan Flowers',
+          'Kategori': product.category?.name ?? '',
+          'Fiyat': price,
+          'Stok': stock,
+          'Kargo Süresi': 1,
+          'Görsel 1': imageList[0] ?? '',
+          'Görsel 2': imageList[1] ?? '',
+        });
+      } else if (p === 'HEPSIBURADA' || p === 'HB') {
+        rows.push({
+          'Satıcı Stok Kodu': sku ?? '',
+          'Fiyat': price,
+          'Stok': stock,
+        });
+      } else if (p === 'PAZARAMA') {
+        rows.push({
+          'stockCode': sku ?? '',
+          'price': price,
+          'quantity': stock,
+          'imageUrl': imageList[0] ?? '',
+          'title': product.productName ?? '',
+          'brand': product.brand ?? 'Erhan Flowers',
+          'category': product.category?.name ?? '',
+        });
+      } else if (p === 'IDEAFIX') {
+        rows.push({
+          'Ürün Kodu': product.modelCode ?? '',
+          'Barkod': product.barcode ?? '',
+          'Ürün Adı': product.productName ?? '',
+          'Marka': product.brand ?? 'Erhan Flowers',
+          'Fiyat': price,
+          'Stok': stock,
+          'KDV': product.vatRate ?? 20,
+          'Görsel': imageList[0] ?? '',
+        });
+      } else {
+        // Genel — tüm alanlar
+        rows.push({
+          'Model Kodu': product.modelCode ?? '',
+          'Barkod': product.barcode ?? '',
+          'Ürün Adı': product.productName ?? '',
+          'Marka': product.brand ?? '',
+          'Kategori': product.category?.name ?? '',
+          'Fiyat': price,
+          'Stok': stock,
+          'Desi': product.desi ?? 1,
+          'Renk': product.colorVariant ?? '',
+          'Görsel': imageList[0] ?? '',
+        });
+      }
+    }
+
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, platform.toUpperCase());
+    return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
   }
 }
