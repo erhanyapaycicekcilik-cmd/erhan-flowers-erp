@@ -37,6 +37,22 @@ export default function SiteAyarlari() {
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState('')
 
+  const [tamiTesting, setTamiTesting] = useState(false)
+  const [tamiResult, setTamiResult] = useState<Record<string, unknown> | null>(null)
+
+  async function testTami() {
+    setTamiTesting(true)
+    setTamiResult(null)
+    try {
+      const res = await fetch('/api/payment/tami/test')
+      setTamiResult(await res.json())
+    } catch {
+      setTamiResult({ ok: false, error: 'Sunucuya bağlanılamadı' })
+    } finally {
+      setTamiTesting(false)
+    }
+  }
+
   useEffect(() => {
     fetch('/api/admin/site-config')
       .then(r => r.json())
@@ -216,6 +232,24 @@ export default function SiteAyarlari() {
           {saving ? 'Kaydediliyor…' : 'Kaydet'}
         </button>
         {msg && <span className={`text-sm font-medium ${msg.startsWith('✓') ? 'text-[#5C7A62]' : 'text-red-600'}`}>{msg}</span>}
+      </div>
+
+      {/* Tami POS Bağlantı Testi */}
+      <div className="mt-8 bg-white rounded-2xl border border-[#E0DDD4] p-6">
+        <p className="text-xs font-semibold uppercase tracking-widest text-[#5C7A62] mb-4">Kredi Kartı (Tami) Bağlantı Testi</p>
+        <p className="text-xs text-[#8C8A82] mb-4">Müşteriler ödeme yapamıyorsa buradan Tami bağlantısını test edin. Sonuç, sunucu .env dosyasındaki Tami ayarlarını ve API erişimini kontrol eder.</p>
+        <button
+          onClick={testTami}
+          disabled={tamiTesting}
+          className="bg-blue-600 text-white px-6 py-2.5 rounded-xl text-sm font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50"
+        >
+          {tamiTesting ? 'Test ediliyor…' : '🔍 Tami Bağlantısını Test Et'}
+        </button>
+        {tamiResult && (
+          <div className={`mt-4 rounded-xl p-4 text-xs font-mono whitespace-pre-wrap break-all ${tamiResult.ok ? 'bg-green-50 border border-green-200 text-green-800' : 'bg-red-50 border border-red-200 text-red-800'}`}>
+            {JSON.stringify(tamiResult, null, 2)}
+          </div>
+        )}
       </div>
     </div>
   )
