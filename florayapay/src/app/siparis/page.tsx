@@ -555,6 +555,18 @@ export default function SiparisPage() {
                       </div>
                     )}
                     {promoError && <p className="text-red-500 text-xs mt-1">{promoError}</p>}
+                    <p className="text-xs text-[#8C8A82] mt-2">
+                      💬 <strong>Kod nasıl alınır?</strong> Google&apos;a yorum yaptıysanız, yorumun ekran görüntüsünü{' '}
+                      <a
+                        href="https://wa.me/905446546220?text=Google+yorumu+ekran+g%C3%B6r%C3%BCnt%C3%BCs%C3%BC+%E2%80%94+indirim+kodu+almak+istiyorum"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="underline text-green-700"
+                      >
+                        WhatsApp&apos;tan bize atın
+                      </a>
+                      , size özel indirim kodu gönderelim.
+                    </p>
                   </div>
 
                   <div className="space-y-2 text-sm">
