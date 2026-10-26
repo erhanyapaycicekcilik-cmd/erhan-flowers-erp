@@ -67,8 +67,47 @@ export default function SiparisPage() {
   const [loading, setLoading] = useState(false)
   const [errors, setErrors] = useState<Partial<typeof form>>({})
 
+  // Promo kod
+  const [promoInput, setPromoInput] = useState('')
+  const [promoLoading, setPromoLoading] = useState(false)
+  const [promoError, setPromoError] = useState('')
+  const [promoApplied, setPromoApplied] = useState<{ code: string; type: 'percent' | 'fixed'; value: number; description: string } | null>(null)
+
+  async function applyPromo() {
+    if (!promoInput.trim()) return
+    setPromoLoading(true)
+    setPromoError('')
+    try {
+      const res = await fetch(`/api/promo/validate?code=${encodeURIComponent(promoInput.trim())}`)
+      const data = await res.json()
+      if (data.ok) {
+        setPromoApplied(data)
+        setPromoInput('')
+      } else {
+        setPromoError(data.error || 'Geçersiz kod')
+      }
+    } catch {
+      setPromoError('Bağlantı hatası')
+    } finally {
+      setPromoLoading(false)
+    }
+  }
+
+  function removePromo() {
+    setPromoApplied(null)
+    setPromoError('')
+  }
+
+  const promoIndirimTutar = promoApplied
+    ? promoApplied.type === 'percent'
+      ? Math.round(total * promoApplied.value / 100)
+      : promoApplied.value
+    : 0
+
   const eftIndirimTutar = total * EFT_INDIRIM
-  const genelToplam = odemeYontemi === 'eft' ? total - eftIndirimTutar : total
+  const genelToplam = Math.max(0,
+    (odemeYontemi === 'eft' ? total - eftIndirimTutar : total) - promoIndirimTutar
+  )
 
   function set(key: keyof typeof form, val: string) {
     setForm((f) => ({ ...f, [key]: val }))
@@ -102,6 +141,9 @@ export default function SiparisPage() {
     const eftNot = odemeYontemi === 'eft'
       ? `\n*Ödeme Yöntemi:* EFT/Havale (%3 indirim uygulandı)\n*Ödenecek Tutar:* ${fmt(genelToplam)}`
       : '\n*Ödeme Yöntemi:* Teslimatta Nakit / Havale'
+    const promoNot = promoApplied
+      ? `\n*İndirim Kodu:* ${promoApplied.code} (${promoApplied.type === 'percent' ? '%' + promoApplied.value : fmt(promoApplied.value) + ' TL'} indirim)`
+      : ''
     const msg = [
       `🌿 *Erhan Flowers — Yeni Sipariş #${orderNumber}*`,
       '',
@@ -111,6 +153,7 @@ export default function SiparisPage() {
       `*Teslimat Adresi:*\n${form.adres}, ${form.ilce} ${form.sehir}${form.postaKodu ? ' ' + form.postaKodu : ''}`,
       form.not ? `*Not:* ${form.not}` : '',
       eftNot,
+      promoNot,
       '',
       '*Ürünler:*',
       urunler,
@@ -157,8 +200,20 @@ export default function SiparisPage() {
             unitPrice: i.price,
             quantity: i.quantity,
           })),
+          promoCode: promoApplied?.code || undefined,
+          promoDiscount: promoIndirimTutar || undefined,
+          totalAmount: genelToplam,
         }),
       })
+
+      // Promo kodu kullanıldıysa kullanım sayısını artır
+      if (promoApplied) {
+        fetch('/api/promo/validate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code: promoApplied.code }),
+        }).catch(() => {})
+      }
 
       const data = res.ok ? await res.json() : {}
 
@@ -469,7 +524,40 @@ export default function SiparisPage() {
                     })}
                   </div>
 
-                  <div className="border-t border-[#E0DDD4] pt-4 space-y-2 text-sm">
+                  {/* İndirim kodu */}
+                  <div className="border-t border-[#E0DDD4] pt-4 mb-3">
+                    {promoApplied ? (
+                      <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-3 py-2 text-sm">
+                        <div>
+                          <span className="font-semibold text-green-700">🎉 {promoApplied.code}</span>
+                          <span className="text-green-600 ml-2 text-xs">{promoApplied.description}</span>
+                        </div>
+                        <button onClick={removePromo} className="text-green-600 hover:text-red-500 text-xs ml-2">✕</button>
+                      </div>
+                    ) : (
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={promoInput}
+                          onChange={(e) => { setPromoInput(e.target.value.toUpperCase()); setPromoError('') }}
+                          onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), applyPromo())}
+                          placeholder="İndirim kodu"
+                          className="flex-1 border border-[#C8C5BC] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#5C7A62]"
+                        />
+                        <button
+                          type="button"
+                          onClick={applyPromo}
+                          disabled={promoLoading || !promoInput.trim()}
+                          className="px-4 py-2 bg-[#0D1510] text-white rounded-lg text-sm font-medium disabled:opacity-50 hover:bg-[#1E3A28] transition-colors"
+                        >
+                          {promoLoading ? '...' : 'Uygula'}
+                        </button>
+                      </div>
+                    )}
+                    {promoError && <p className="text-red-500 text-xs mt-1">{promoError}</p>}
+                  </div>
+
+                  <div className="space-y-2 text-sm">
                     <div className="flex justify-between text-[#8C8A82]">
                       <span>Ara toplam</span>
                       <span>{fmt(total)}</span>
@@ -478,6 +566,12 @@ export default function SiparisPage() {
                       <div className="flex justify-between text-[#5C7A62] font-medium">
                         <span>EFT indirimi (%3)</span>
                         <span>-{fmt(eftIndirimTutar)}</span>
+                      </div>
+                    )}
+                    {promoApplied && (
+                      <div className="flex justify-between text-green-600 font-medium">
+                        <span>İndirim kodu ({promoApplied.type === 'percent' ? '%' + promoApplied.value : fmt(promoApplied.value) + ' TL'})</span>
+                        <span>-{fmt(promoIndirimTutar)}</span>
                       </div>
                     )}
                     <div className="flex justify-between text-[#8C8A82]">
