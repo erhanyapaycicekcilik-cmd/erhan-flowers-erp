@@ -33,6 +33,17 @@ export interface PromoBannerItem {
   active: boolean
 }
 
+export interface PromoCode {
+  code: string           // "TAKIPET10"
+  type: 'percent' | 'fixed'
+  value: number          // 10 → %10 indirim veya 100 → 100₺ indirim
+  active: boolean
+  description: string    // "Instagram takip indirimi"
+  usageLimit: number     // 0 = sınırsız
+  usedCount: number
+  expiresAt: string | null  // ISO tarih veya null
+}
+
 export interface SiteConfig {
   // Duyuru çubuğu (Header top bar)
   announcementBar: string
@@ -62,6 +73,8 @@ export interface SiteConfig {
   iyzicoAktif: boolean
   // Online ödeme (Tami Sanal POS)
   tamiAktif: boolean
+  // Promosyon / indirim kodları
+  promoCodes: PromoCode[]
 }
 
 export const DEFAULT_CONFIG: SiteConfig = {
@@ -100,6 +113,7 @@ export const DEFAULT_CONFIG: SiteConfig = {
   ibanSwift: process.env.IBAN_SWIFT || '',
   iyzicoAktif: !!(process.env.IYZICO_API_KEY && process.env.IYZICO_SECRET_KEY),
   tamiAktif: !!(process.env.TAMI_MERCHANT_ID && process.env.TAMI_TERMINAL_ID && process.env.TAMI_SECRET_KEY),
+  promoCodes: [],
 }
 
 export function readSiteConfig(): SiteConfig {
