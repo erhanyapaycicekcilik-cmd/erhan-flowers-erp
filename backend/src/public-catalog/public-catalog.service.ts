@@ -171,11 +171,37 @@ export class PublicCatalogService {
       sitePrice: { gt: 0 }, // Sadece site fiyatı tanımlanmış ürünler
     };
 
-    // Kategori filtresi
+    // Kategori filtresi — bir site slug'ı birden fazla ERP kategorisini kapsayabilir
     if (params.categorySlug) {
       const allCategories = await this.prisma.category.findMany({ select: { id: true, name: true } });
-      const matchedCat = allCategories.find((c) => slugify(c.name) === params.categorySlug);
-      if (matchedCat) where['categoryId'] = matchedCat.id;
+
+      // Site slug → ERP kategori adları eşleştirme tablosu
+      const SLUG_CATEGORY_MAP: Record<string, string[]> = {
+        'yapay-agac':    ['Yapay Ağaç', 'Zeytin Ağacı', 'Bonsai'],
+        'demet-cicek':   ['Demet Çiçek', 'Aranjman', 'Buket'],
+        'bambu':         ['Bambu'],
+        'yapay-bitki':   ['Yapay Bitki', 'Mini Saksılı Bitki'],
+        'sarmasik':      ['Yapay Sarmaşık'],
+        'dikey-bahce':   ['Dikey Bahçe'],
+        'saksilar':      ['Saksı & Vazo', 'Mini Saksılı Bitki'],
+      };
+
+      const targetNames = SLUG_CATEGORY_MAP[params.categorySlug];
+      if (targetNames) {
+        // Eşleştirme tablosundaki adlara göre bul (büyük/küçük harf duyarsız)
+        const matchedIds = allCategories
+          .filter((c) => targetNames.some((n) => n.toLocaleLowerCase('tr-TR') === c.name.toLocaleLowerCase('tr-TR')))
+          .map((c) => c.id);
+        if (matchedIds.length === 1) {
+          where['categoryId'] = matchedIds[0];
+        } else if (matchedIds.length > 1) {
+          where['categoryId'] = { in: matchedIds };
+        }
+      } else {
+        // Tabloda yoksa eski slug-based tek eşleştirme ile dene
+        const matchedCat = allCategories.find((c) => slugify(c.name) === params.categorySlug);
+        if (matchedCat) where['categoryId'] = matchedCat.id;
+      }
     }
 
     // Arama filtresi
