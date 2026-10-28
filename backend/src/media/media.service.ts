@@ -74,15 +74,10 @@ export class MediaService {
       include: { product: true },
     });
 
-    let cleanBackground: Awaited<ReturnType<typeof this.runPhotoroom>> | null = null;
-    try {
-      cleanBackground = await this.runPhotoroom(created);
-    } catch {
-      // Otomatik arka plan temizleme başarısız olsa bile yükleme başarılı sayılır;
-      // kullanıcı isterse manuel "Arka Planı Temizle" ile tekrar deneyebilir.
-    }
+    // Fire-and-forget: Photoroom arka planda çalışır, yükleme anında döner
+    this.runPhotoroom(created).catch(() => undefined);
 
-    return cleanMojibakeDeep({ ...created, cleanBackground });
+    return cleanMojibakeDeep(created);
   }
 
   async processWithPhotoroom(id: number) {
