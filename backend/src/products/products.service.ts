@@ -931,7 +931,7 @@ export class ProductsService {
   private barcodePart(value: string, maxLength: number) {
     const normalized = value
       .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[̀-ͯ]/g, '')
       .replace(/ı/g, 'i')
       .replace(/İ/g, 'I')
       .replace(/ğ/g, 'g')
@@ -973,7 +973,7 @@ export class ProductsService {
   private normalizeCodeText(value: string) {
     return value
       .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[̀-ͯ]/g, '')
       .toUpperCase()
       .replace(/[^A-Z0-9]/g, '');
   }
@@ -1384,6 +1384,90 @@ export class ProductsService {
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, platform.toUpperCase());
+    return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+  }
+
+  async exportExcelByCategory(): Promise<Buffer> {
+    const SITE_CATEGORIES: { label: string; erpNames: string[] }[] = [
+      { label: 'Yapay Agaclar',   erpNames: ['Yapay Ağaç', 'Zeytin Ağacı', 'Bonsai'] },
+      { label: 'Demet Cicekler',  erpNames: ['Demet Çiçek', 'Aranjman', 'Buket'] },
+      { label: 'Bambular',        erpNames: ['Bambu'] },
+      { label: 'Yapay Bitkiler',  erpNames: ['Yapay Bitki', 'Mini Saksili Bitki'] },
+      { label: 'Yapay Sarmasiklar', erpNames: ['Yapay Sarmaşık'] },
+      { label: 'Dikey Bahce',     erpNames: ['Dikey Bahçe'] },
+      { label: 'Saksilar',        erpNames: ['Saksı & Vazo', 'Mini Saksılı Bitki'] },
+      { label: 'Diger',           erpNames: [] },
+    ];
+
+    const products = await this.prisma.product.findMany({
+      where: { status: 'ACTIVE' },
+      select: {
+        id: true,
+        productName: true,
+        modelCode: true,
+        barcode: true,
+        trendyolBarcode: true,
+        stockQuantity: true,
+        marketPrice: true,
+        shopPrice: true,
+        sitePrice: true,
+        brand: true,
+        colorVariant: true,
+        desi: true,
+        vatRate: true,
+        imageUrls: true,
+        category: { select: { name: true } },
+        productCenterVariant: { select: { trendyolSalePrice: true, n11SalePrice: true, hepsiburadaSalePrice: true, status: true } },
+      },
+      orderBy: { productName: 'asc' },
+    });
+
+    const toRow = (product: (typeof products)[0]) => {
+      const sitePriceVal = Number(product.sitePrice ?? 0);
+      const price = sitePriceVal > 0
+        ? Math.round(sitePriceVal * 1.25)
+        : Math.round(Number(product.marketPrice || product.shopPrice || 0));
+      const imageList = Array.isArray(product.imageUrls) ? (product.imageUrls as string[]) : [];
+      return {
+        'Model Kodu': product.modelCode ?? '',
+        'Barkod': product.barcode ?? '',
+        'Ürün Adı': product.productName ?? '',
+        'Marka': product.brand ?? '',
+        'ERP Kategorisi': product.category?.name ?? '',
+        'Fiyat (TL)': price,
+        'Stok': product.stockQuantity ?? 0,
+        'Desi': product.desi ?? 1,
+        'Renk': product.colorVariant ?? '',
+        'Görsel': imageList[0] ?? '',
+      };
+    };
+
+    const wb = XLSX.utils.book_new();
+    const assignedIds = new Set<number>();
+
+    for (const cat of SITE_CATEGORIES) {
+      if (cat.erpNames.length === 0) continue;
+      const lower = cat.erpNames.map((n) => n.toLocaleLowerCase('tr-TR'));
+      const catProducts = products.filter((p) => {
+        const catName = (p.category?.name ?? '').toLocaleLowerCase('tr-TR');
+        return lower.some((n) => catName === n);
+      });
+      catProducts.forEach((p) => assignedIds.add(p.id));
+      const rows = catProducts.map(toRow);
+      const ws = XLSX.utils.json_to_sheet(rows.length ? rows : [{}]);
+      XLSX.utils.book_append_sheet(wb, ws, cat.label);
+    }
+
+    // Diğer: hiçbir kategoriye girmeyen ürünler
+    const digerProducts = products.filter((p) => !assignedIds.has(p.id));
+    const digerWs = XLSX.utils.json_to_sheet(digerProducts.length ? digerProducts.map(toRow) : [{}]);
+    XLSX.utils.book_append_sheet(wb, digerWs, 'Diger');
+
+    // Tüm ürünler özet sheet
+    const allRows = products.map(toRow);
+    const allWs = XLSX.utils.json_to_sheet(allRows.length ? allRows : [{}]);
+    XLSX.utils.book_append_sheet(wb, allWs, 'Tum Urunler');
+
     return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
   }
 }

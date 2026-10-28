@@ -35,6 +35,18 @@ export class ProductsController {
     res.send(buffer);
   }
 
+  @Get('export-excel-by-category')
+  async exportExcelByCategory(@Res() res: Response) {
+    const buffer = await this.products.exportExcelByCategory();
+    const filename = `urunler-9-kategori-${new Date().toISOString().slice(0, 10)}.xlsx`;
+    res.set({
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Content-Length': buffer.length,
+    });
+    res.send(buffer);
+  }
+
   @Post()
   create(@Body() body: unknown) {
     return this.products.create(body);

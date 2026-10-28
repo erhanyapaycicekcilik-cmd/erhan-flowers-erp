@@ -1,7 +1,6 @@
 import type { Metadata } from 'next'
 import { Header } from '@/components/layout/Header'
 import { Footer } from '@/components/layout/Footer'
-import { HeroSection } from '@/components/home/HeroSection'
 import { CategoryGrid } from '@/components/home/CategoryGrid'
 import { FeaturedProducts } from '@/components/home/FeaturedProducts'
 import { TrustBadges } from '@/components/home/TrustBadges'
@@ -41,7 +40,6 @@ export default function HomePage() {
       <Header />
       <main>
         <SocialProofBar />
-        <HeroSection />
         <TrustBadges />
         <CategoryGrid />
         {/* <PromoBanners /> */}
