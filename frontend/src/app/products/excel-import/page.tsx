@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { AdminShell } from '@/components/AdminShell';
-import { api } from '@/lib/api';
+import { api, apiBaseUrl } from '@/lib/api';
 import { CheckCircle2, Upload, XCircle } from 'lucide-react';
 
 type PreviewRow = {
@@ -40,7 +40,7 @@ export default function ExcelImportPage() {
     try {
       const fd = new FormData();
       fd.append('file', f);
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? ''}/api/products/parse-excel-preview`, {
+      const res = await fetch(`${apiBaseUrl}/products/parse-excel-preview`, {
         method: 'POST',
         body: fd,
         credentials: 'include',
@@ -70,7 +70,7 @@ export default function ExcelImportPage() {
       const fd = new FormData();
       fd.append('file', file);
       fd.append('assignments', JSON.stringify(assigned.map(([k, v]) => ({ rowIndex: Number(k), categoryId: Number(v) }))));
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? ''}/api/products/import-from-excel-with-categories`, {
+      const res = await fetch(`${apiBaseUrl}/products/import-from-excel-with-categories`, {
         method: 'POST',
         body: fd,
         credentials: 'include',
