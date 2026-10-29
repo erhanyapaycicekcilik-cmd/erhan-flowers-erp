@@ -178,12 +178,13 @@ export class PublicCatalogService {
       // Site slug → ERP kategori adları eşleştirme tablosu
       const SLUG_CATEGORY_MAP: Record<string, string[]> = {
         'yapay-agac':    ['Yapay Ağaç', 'Zeytin Ağacı', 'Bonsai'],
-        'demet-cicek':   ['Demet Çiçek', 'Aranjman', 'Buket'],
+        'demet-cicek':   ['Demet Çiçek', 'Buket'],
+        'aranjman':      ['Aranjman'],
         'bambu':         ['Bambu'],
         'yapay-bitki':   ['Yapay Bitki', 'Mini Saksılı Bitki'],
         'sarmasik':      ['Yapay Sarmaşık'],
         'dikey-bahce':   ['Dikey Bahçe'],
-        'saksilar':      ['Saksı & Vazo', 'Mini Saksılı Bitki'],
+        'saksilar':      ['Saksı & Vazo'],
       };
 
       const targetNames = SLUG_CATEGORY_MAP[params.categorySlug];
