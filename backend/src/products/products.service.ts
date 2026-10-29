@@ -1265,6 +1265,93 @@ export class ProductsService {
     return { updated, skipped, notFound, errors };
   }
 
+  /** Trendyol Excel'ini otomatik kategorilere ayırarak ERP'ye aktarır */
+  async importTrendyolExcel(buffer: Buffer): Promise<{ created: number; updated: number; skipped: number; errors: string[] }> {
+    const wb = XLSX.read(buffer, { type: 'buffer' });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json<Record<string, string | number>>(ws);
+
+    // ERP kategori adı → otomatik atama kuralları
+    const RULES: Array<{ erpCat: string; keywords: string[] }> = [
+      { erpCat: 'Bambu',           keywords: ['bambu'] },
+      { erpCat: 'Aranjman',        keywords: ['aranjman', 'arajman'] },
+      { erpCat: 'Demet Çiçek',     keywords: ['demet', 'buket'] },
+      { erpCat: 'Yapay Sarmaşık',  keywords: ['sarmaşık', 'sarmasik', 'sarkan', 'sarkıt', 'asılı'] },
+      { erpCat: 'Dikey Bahçe',     keywords: ['dikey', 'panel', 'yosun', 'moss'] },
+      { erpCat: 'Yapay Bitki',     keywords: ['kaladyum', 'caladium', 'difenbahya', 'areka', 'sukulent', 'kaktü', 'lavanta', 'papatya', 'gerbera', 'lale', 'orkide', 'saksılı', 'saksida', 'mini', 'bitki', 'çiçeği', 'çiçegi'] },
+      { erpCat: 'Yapay Ağaç',      keywords: ['ağaç', 'agac', 'benjamin', 'söğüt', 'sogut', 'palmiye', 'zeytin', 'bonsai', 'bonzai', 'ficus', 'schefflera', 'yuka', 'yucca', 'kauçuk', 'kafur', 'dracaena', 'limon'] },
+      { erpCat: 'Saksı & Vazo',    keywords: ['saksı', 'saksi', 'vazo'] },
+    ];
+
+    function guessCat(name: string): string {
+      const n = name.toLocaleLowerCase('tr-TR');
+      for (const r of RULES) {
+        if (r.keywords.some(k => n.includes(k))) return r.erpCat;
+      }
+      return 'Yapay Bitki';
+    }
+
+    const allCats = await this.prisma.category.findMany({ select: { id: true, name: true } });
+    const catMap = new Map(allCats.map(c => [c.name.toLocaleLowerCase('tr-TR'), c.id]));
+
+    let created = 0, updated = 0, skipped = 0;
+    const errors: string[] = [];
+
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const productName = String(row['Ürün Adı'] ?? '').trim();
+      const barcode = String(row['Barkod'] ?? '').trim() || null;
+      const modelCode = String(row['Model Kodu'] ?? row['Tedarikçi Stok Kodu'] ?? '').trim() || null;
+      const rawPrice = row['Trendyolda Satılacak Fiyat (KDV Dahil)'] ?? row['Piyasa Satış Fiyatı (KDV Dahil)'] ?? 0;
+      const trendyolPrice = Math.round(Number(String(rawPrice).replace(',', '.')) || 0);
+      const stock = Math.round(Number(row['Ürün Stok Adedi'] ?? 0) || 0);
+
+      if (!productName && !barcode) { skipped++; continue; }
+
+      const catName = guessCat(productName);
+      const categoryId = catMap.get(catName.toLocaleLowerCase('tr-TR'));
+      if (!categoryId) { errors.push(`Kategori bulunamadı: ${catName} (satır ${i + 1})`); skipped++; continue; }
+
+      try {
+        const existing = barcode
+          ? await this.prisma.product.findFirst({ where: { barcode }, select: { id: true } })
+          : modelCode
+          ? await this.prisma.product.findFirst({ where: { modelCode }, select: { id: true } })
+          : null;
+
+        const data = {
+          categoryId,
+          ...(trendyolPrice > 0 && { marketPrice: trendyolPrice, sitePrice: Math.round(trendyolPrice * 0.80) }),
+          stockQuantity: stock,
+        };
+
+        if (existing) {
+          await this.prisma.product.update({ where: { id: existing.id }, data });
+          updated++;
+        } else {
+          await this.prisma.product.create({
+            data: {
+              productName: productName || (barcode ?? modelCode ?? `Ürün-${i}`),
+              barcode: barcode || undefined,
+              modelCode: modelCode || undefined,
+              categoryId,
+              marketPrice: trendyolPrice,
+              sitePrice: Math.round(trendyolPrice * 0.80),
+              stockQuantity: stock,
+              status: 'ACTIVE',
+            },
+          });
+          created++;
+        }
+      } catch (err) {
+        errors.push(`Satır ${i + 1} (${productName.slice(0, 30)}): ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+
+    this.logger.log(`Trendyol Excel aktarımı: ${created} yeni, ${updated} güncellendi, ${skipped} atlandı`);
+    return { created, updated, skipped, errors };
+  }
+
   /** Excel'i parse edip önizleme için satırları döndürür — kaydetmez */
   async parseExcelPreview(buffer: Buffer): Promise<{ rows: Array<{ rowIndex: number; productName: string; barcode: string; modelCode: string; price: number; stock: number; imageUrl: string }> }> {
     const wb = XLSX.read(buffer, { type: 'buffer' });
