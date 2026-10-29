@@ -60,6 +60,7 @@ const navGroups: { section: string; icon: LucideIcon; items: NavItem[] }[] = [
     items: [
       { href: '/products', label: 'Ürün Merkezi', icon: Boxes, roles: ALL },
       { href: '/products/excel-export', label: 'Excel İndir (Pazaryeri)', icon: Boxes, roles: OWNER_MANAGER },
+      { href: '/products/excel-import', label: 'Excel\'den Ürün Aktar', icon: Boxes, roles: OWNER_MANAGER },
       { href: '/stock-cards', label: 'Stok Kartları', icon: Warehouse, roles: OWNER_MANAGER },
       { href: '/stock-cards/upload-images', label: 'Toplu Görsel Yükle', icon: Warehouse, roles: OWNER_MANAGER },
       { href: '/stok-raporu', label: 'Stok Hareketleri', icon: Warehouse, roles: OWNER_ONLY },

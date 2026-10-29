@@ -133,6 +133,24 @@ export class ProductsController {
     return this.products.importPricesFromExcel(file.buffer);
   }
 
+  @Post('parse-excel-preview')
+  @UseInterceptors(FileInterceptor('file'))
+  async parseExcelPreview(@UploadedFile() file: Express.Multer.File) {
+    if (!file) throw new Error('Dosya yüklenmedi');
+    return this.products.parseExcelPreview(file.buffer);
+  }
+
+  @Post('import-from-excel-with-categories')
+  @UseInterceptors(FileInterceptor('file'))
+  async importFromExcelWithCategories(
+    @UploadedFile() file: Express.Multer.File,
+    @Body('assignments') assignmentsJson: string,
+  ) {
+    if (!file) throw new Error('Dosya yüklenmedi');
+    const assignments = JSON.parse(assignmentsJson ?? '[]') as Array<{ rowIndex: number; categoryId: number }>;
+    return this.products.importFromExcelWithCategories(file.buffer, assignments);
+  }
+
   @Patch(':id')
   update(@Param('id') id: string, @Body() body: unknown) {
     return this.products.update(Number(id), body);
