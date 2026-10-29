@@ -1265,6 +1265,96 @@ export class ProductsService {
     return { updated, skipped, notFound, errors };
   }
 
+  /** Excel'i parse edip önizleme için satırları döndürür — kaydetmez */
+  async parseExcelPreview(buffer: Buffer): Promise<{ rows: Array<{ rowIndex: number; productName: string; barcode: string; modelCode: string; price: number; stock: number; imageUrl: string }> }> {
+    const wb = XLSX.read(buffer, { type: 'buffer' });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const raw = XLSX.utils.sheet_to_json<Record<string, string | number>>(ws);
+
+    const rows = raw.slice(0, 500).map((row, i) => {
+      const productName = String(row['Ürün Adı'] ?? row['Urun Adi'] ?? row['productName'] ?? row['Product Name'] ?? '').trim();
+      const barcode = String(row['Barkod'] ?? row['Barcode'] ?? row['barcode'] ?? '').trim();
+      const modelCode = String(row['Model Kodu'] ?? row['Model No'] ?? row['modelCode'] ?? '').trim();
+      const rawPrice = row['Trendyolda Satılacak Fiyat (KDV Dahil)'] ?? row['Satış Fiyatı'] ?? row['Fiyat'] ?? row['Price'] ?? row['salePrice'] ?? 0;
+      const price = Math.round(Number(String(rawPrice).replace(',', '.')) || 0);
+      const stock = Math.round(Number(row['Stok'] ?? row['Miktar'] ?? row['Stock'] ?? row['stockQuantity'] ?? 0) || 0);
+      const imageUrl = String(row['Görsel'] ?? row['Image'] ?? row['Resim'] ?? row['imageUrl'] ?? '').trim();
+      return { rowIndex: i, productName, barcode, modelCode, price, stock, imageUrl };
+    }).filter(r => r.productName || r.barcode || r.modelCode);
+
+    return { rows };
+  }
+
+  /** Excel satırlarını kategori atamasıyla ERP'ye aktarır */
+  async importFromExcelWithCategories(
+    buffer: Buffer,
+    assignments: Array<{ rowIndex: number; categoryId: number }>,
+  ): Promise<{ created: number; updated: number; skipped: number; errors: string[] }> {
+    const wb = XLSX.read(buffer, { type: 'buffer' });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const raw = XLSX.utils.sheet_to_json<Record<string, string | number>>(ws);
+
+    const assignMap = new Map(assignments.map(a => [a.rowIndex, a.categoryId]));
+    let created = 0, updated = 0, skipped = 0;
+    const errors: string[] = [];
+
+    for (let i = 0; i < raw.length && i < 500; i++) {
+      const row = raw[i];
+      const categoryId = assignMap.get(i);
+      if (!categoryId) { skipped++; continue; }
+
+      const productName = String(row['Ürün Adı'] ?? row['Urun Adi'] ?? row['productName'] ?? row['Product Name'] ?? '').trim();
+      const barcode = String(row['Barkod'] ?? row['Barcode'] ?? row['barcode'] ?? '').trim() || null;
+      const modelCode = String(row['Model Kodu'] ?? row['Model No'] ?? row['modelCode'] ?? '').trim() || null;
+      const rawPrice = row['Trendyolda Satılacak Fiyat (KDV Dahil)'] ?? row['Satış Fiyatı'] ?? row['Fiyat'] ?? row['Price'] ?? row['salePrice'] ?? 0;
+      const price = Math.round(Number(String(rawPrice).replace(',', '.')) || 0);
+      const stock = Math.round(Number(row['Stok'] ?? row['Miktar'] ?? row['Stock'] ?? row['stockQuantity'] ?? 0) || 0);
+
+      if (!productName && !barcode && !modelCode) { skipped++; continue; }
+
+      try {
+        const existing = barcode
+          ? await this.prisma.product.findFirst({ where: { barcode }, select: { id: true } })
+          : modelCode
+          ? await this.prisma.product.findFirst({ where: { modelCode }, select: { id: true } })
+          : null;
+
+        const data: Record<string, unknown> = {
+          categoryId,
+          ...(productName && { productName }),
+          ...(barcode && { barcode }),
+          ...(modelCode && { modelCode }),
+          ...(price > 0 && { marketPrice: price, sitePrice: Math.round(price * 0.80) }),
+          ...(stock > 0 && { stockQuantity: stock }),
+        };
+
+        if (existing) {
+          await this.prisma.product.update({ where: { id: existing.id }, data });
+          updated++;
+        } else {
+          await this.prisma.product.create({
+            data: {
+              productName: productName || (barcode ?? modelCode ?? `Ürün-${i}`),
+              barcode: barcode || undefined,
+              modelCode: modelCode || undefined,
+              categoryId,
+              marketPrice: price,
+              sitePrice: Math.round(price * 0.80),
+              stockQuantity: stock,
+              status: 'ACTIVE',
+            },
+          });
+          created++;
+        }
+      } catch (err) {
+        errors.push(`Satır ${i + 1}: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+
+    this.logger.log(`Excel kategori aktarımı: ${created} yeni, ${updated} güncellendi, ${skipped} atlandı`);
+    return { created, updated, skipped, errors };
+  }
+
   async exportExcel(platform: string): Promise<Buffer> {
     const products = await this.prisma.product.findMany({
       where: { status: 'ACTIVE' },
