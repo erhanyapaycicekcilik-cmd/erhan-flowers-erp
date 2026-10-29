@@ -91,7 +91,6 @@ export default function KatalogPage() {
     const allFiltered = filtered.length > 0 && filtered.every(p => selected.has(p.id));
     return (
       <div className="min-h-screen bg-gray-50">
-        {/* Üst bar */}
         <div className="bg-white border-b border-gray-200 sticky top-0 z-10 px-6 py-3 flex items-center justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-3">
             <h1 className="font-semibold text-gray-800">PDF Katalog — Ürün Seçimi</h1>
@@ -128,7 +127,6 @@ export default function KatalogPage() {
           </div>
         </div>
 
-        {/* Tablo */}
         <div className="overflow-x-auto">
           <table className="min-w-full text-sm">
             <thead className="bg-gray-100 text-gray-500 text-xs uppercase tracking-wide sticky top-[57px]">
@@ -208,7 +206,6 @@ export default function KatalogPage() {
         body { background: white; font-family: 'Segoe UI', sans-serif; }
       `}</style>
 
-      {/* Kapak */}
       <div className="min-h-screen flex flex-col items-center justify-center bg-[#0D1510] text-white px-8 print:min-h-0 print:py-32">
         <div className="text-center max-w-lg">
           <div className="w-20 h-20 bg-[#8FBF97] rounded-full flex items-center justify-center mx-auto mb-8 text-3xl font-bold text-[#0D1510]">EF</div>
@@ -221,7 +218,6 @@ export default function KatalogPage() {
         </div>
       </div>
 
-      {/* İçindekiler */}
       <div className="page-break py-16 px-12 max-w-3xl mx-auto">
         <h2 className="text-2xl font-semibold text-gray-800 mb-8 pb-3 border-b border-gray-200">İçindekiler</h2>
         <div className="space-y-3">
@@ -237,7 +233,6 @@ export default function KatalogPage() {
         </div>
       </div>
 
-      {/* Kategoriler */}
       {[...grouped.entries()].map(([cat, prods], catIdx) => (
         <div key={cat} className={catIdx > 0 ? 'page-break' : ''}>
           <div className="bg-[#F4F2EC] px-12 py-8 border-b border-gray-200">
@@ -269,7 +264,6 @@ export default function KatalogPage() {
         </div>
       ))}
 
-      {/* Son sayfa */}
       <div className="page-break min-h-64 flex flex-col items-center justify-center py-24 bg-[#0D1510] text-white">
         <p className="text-[#8FBF97] text-lg mb-2">Erhan Flowers</p>
         <p className="text-white/50 text-sm">0544 654 62 20</p>
