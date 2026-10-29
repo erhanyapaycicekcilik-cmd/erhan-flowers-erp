@@ -1332,8 +1332,8 @@ export class ProductsService {
           await this.prisma.product.create({
             data: {
               productName: productName || (barcode ?? modelCode ?? `Ürün-${i}`),
-              barcode: barcode || undefined,
-              modelCode: modelCode || undefined,
+              ...(barcode && { barcode }),
+              modelCode: modelCode || barcode || `URUN-${i}`,
               categoryId,
               marketPrice: trendyolPrice,
               sitePrice: Math.round(trendyolPrice * 0.80),
@@ -1422,8 +1422,8 @@ export class ProductsService {
           await this.prisma.product.create({
             data: {
               productName: productName || (barcode ?? modelCode ?? `Ürün-${i}`),
-              barcode: barcode || undefined,
-              modelCode: modelCode || undefined,
+              ...(barcode && { barcode }),
+              modelCode: modelCode || barcode || `URUN-${i}`,
               categoryId,
               marketPrice: price,
               sitePrice: Math.round(price * 0.80),
