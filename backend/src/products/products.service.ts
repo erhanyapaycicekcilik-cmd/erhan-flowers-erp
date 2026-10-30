@@ -305,10 +305,19 @@ export class ProductsService {
         : variant.trendyolSalePrice ?? draft?.salePrice ?? 0,
     );
     if (!salePrice) return;
+    // sitePrice sıfırsa otomatik hesapla, sitede görünmesi için
+    const productForVariant = await this.prisma.product.findFirst({
+      where: { OR: [{ barcode: variant.barcode ?? undefined }, { modelCode: variant.currentModelCode ?? undefined }] },
+      select: { id: true, sitePrice: true },
+    });
+    if (productForVariant && Number(productForVariant.sitePrice) === 0) {
+      await this.prisma.product.update({ where: { id: productForVariant.id }, data: { sitePrice: Math.round(salePrice * 0.80) } });
+    }
     await this.broadcastPriceStock({
       barcode: variant.barcode,
       modelCode: variant.currentModelCode,
       marketPrice: salePrice,
+      sitePrice: productForVariant && Number(productForVariant.sitePrice) === 0 ? Math.round(salePrice * 0.80) : undefined,
       stockQuantity: Number(variant.stockQuantity ?? 0),
     }).catch(() => undefined);
   }
@@ -336,7 +345,17 @@ export class ProductsService {
               ? (variant.productCostDraft as any).marketplaceSalePrice
               : variant.trendyolSalePrice ?? variant.productCostDraft?.salePrice ?? 0
           ) || cardFallbackPrice;
-          await this.broadcastPriceStock({ barcode: variant.barcode, modelCode: variant.currentModelCode, marketPrice: salePrice, stockQuantity: Number(card.stockQuantity) }).catch(() => undefined);
+          // sitePrice sıfırsa otomatik hesapla
+          const prod = await this.prisma.product.findFirst({
+            where: { OR: [{ barcode: variant.barcode ?? undefined }, { modelCode: variant.currentModelCode ?? undefined }] },
+            select: { id: true, sitePrice: true },
+          });
+          let sitePriceArg: number | undefined;
+          if (prod && Number(prod.sitePrice) === 0 && salePrice > 0) {
+            sitePriceArg = Math.round(salePrice * 0.80);
+            await this.prisma.product.update({ where: { id: prod.id }, data: { sitePrice: sitePriceArg } });
+          }
+          await this.broadcastPriceStock({ barcode: variant.barcode, modelCode: variant.currentModelCode, marketPrice: salePrice, sitePrice: sitePriceArg, stockQuantity: Number(card.stockQuantity) }).catch(() => undefined);
         }
       } else {
         await this.broadcastPriceStock({ barcode: card.barcode, modelCode: card.sku ?? card.oldModelCode, marketPrice: cardFallbackPrice, stockQuantity: Number(card.stockQuantity) }).catch(() => undefined);
