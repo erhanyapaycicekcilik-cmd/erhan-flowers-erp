@@ -128,7 +128,7 @@ export class HepsiburadaAdapter extends HttpMarketplaceOrderAdapter {
           sku: merchantSku || undefined,
           barcode: String(line.barcode ?? line.ean ?? merchantSku) || undefined,
           modelCode: merchantSku || undefined,
-          imageUrl: String(line.imageUrl ?? line.productImageUrlFormat ?? '') || undefined,
+          imageUrl: String(line.imageUrl ?? line.productImageUrl ?? line.productImageUrlFormat ?? line.thumbnailUrl ?? line.img ?? '') || undefined,
           quantity: Number(line.quantity ?? line.qty ?? 1),
           unitPrice: this.hbPrice(line.price ?? line.unitPrice ?? line.salePrice ?? 0),
         };
