@@ -587,13 +587,14 @@ export class ProductsService {
     return { checked: products.length, created, skipped };
   }
 
-  /** sitePrice = marketPrice olan ürünleri sitePrice = marketPrice * 0.80 yapar */
+  /** sitePrice = marketPrice × 0.80 yapar, ardından tüm platformlara fiyat yayınlar */
   async backfillSitePrice(): Promise<{ updated: number; skipped: number }> {
     const products = await this.prisma.product.findMany({
       where: { status: 'ACTIVE', marketPrice: { gt: 0 } },
-      select: { id: true, marketPrice: true, sitePrice: true },
+      select: { id: true, barcode: true, modelCode: true, marketPrice: true, sitePrice: true, stockQuantity: true },
     });
     let updated = 0; let skipped = 0;
+    const tobroadcast: typeof products = [];
     for (const p of products) {
       const market = Number(p.marketPrice);
       const site = Number(p.sitePrice);
@@ -601,9 +602,25 @@ export class ProductsService {
       // Zaten doğru hesaplanmışsa atla (±1₺ tolerans)
       if (Math.abs(site - target) <= 1) { skipped++; continue; }
       await this.prisma.product.update({ where: { id: p.id }, data: { sitePrice: target } });
+      tobroadcast.push({ ...p, sitePrice: target });
       updated++;
     }
     this.logger.log(`sitePrice backfill: ${updated} güncellendi, ${skipped} atlandı`);
+    // DB güncellenen ürünleri platformlara yayınla (arka planda)
+    if (tobroadcast.length > 0) {
+      setImmediate(async () => {
+        for (const p of tobroadcast) {
+          await this.broadcastPriceStock({
+            barcode: p.barcode,
+            modelCode: p.modelCode,
+            marketPrice: Number(p.marketPrice),
+            sitePrice: Number(p.sitePrice),
+            stockQuantity: Number(p.stockQuantity ?? 0),
+          }).catch(() => undefined);
+        }
+        this.logger.log(`sitePrice backfill broadcast tamamlandı: ${tobroadcast.length} ürün`);
+      });
+    }
     return { updated, skipped };
   }
 
