@@ -115,9 +115,9 @@ export class ProductsService {
           sitePrice: data.sitePrice && data.sitePrice > 0
             ? data.sitePrice
             : data.marketPrice && data.marketPrice > 0
-              ? Math.round(data.marketPrice * 0.80)
+              ? Math.round(data.marketPrice)
               : data.shopPrice && data.shopPrice > 0
-                ? Math.round(data.shopPrice * 0.80)
+                ? Math.round(data.shopPrice)
                 : 0,
           marketPrice: data.marketPrice ?? 0,
           listPrice: data.listPrice ?? 0,
@@ -234,7 +234,7 @@ export class ProductsService {
       if (!hasKey('sitePrice') && !hasKey('site_price') && data.marketPrice && data.marketPrice > 0) {
         const existing = await this.prisma.product.findUnique({ where: { id }, select: { sitePrice: true } });
         if (!existing || Number(existing.sitePrice) === 0) {
-          patch['sitePrice'] = Math.round(data.marketPrice * 0.80);
+          patch['sitePrice'] = Math.round(data.marketPrice);
         }
       }
     }
@@ -311,13 +311,13 @@ export class ProductsService {
       select: { id: true, sitePrice: true },
     });
     if (productForVariant && Number(productForVariant.sitePrice) === 0) {
-      await this.prisma.product.update({ where: { id: productForVariant.id }, data: { sitePrice: Math.round(salePrice * 0.80) } });
+      await this.prisma.product.update({ where: { id: productForVariant.id }, data: { sitePrice: Math.round(salePrice) } });
     }
     await this.broadcastPriceStock({
       barcode: variant.barcode,
       modelCode: variant.currentModelCode,
       marketPrice: salePrice,
-      sitePrice: productForVariant && Number(productForVariant.sitePrice) === 0 ? Math.round(salePrice * 0.80) : undefined,
+      sitePrice: productForVariant && Number(productForVariant.sitePrice) === 0 ? Math.round(salePrice) : undefined,
       stockQuantity: Number(variant.stockQuantity ?? 0),
     }).catch(() => undefined);
   }
@@ -352,7 +352,7 @@ export class ProductsService {
           });
           let sitePriceArg: number | undefined;
           if (prod && Number(prod.sitePrice) === 0 && salePrice > 0) {
-            sitePriceArg = Math.round(salePrice * 0.80);
+            sitePriceArg = Math.round(salePrice);
             await this.prisma.product.update({ where: { id: prod.id }, data: { sitePrice: sitePriceArg } });
           }
           await this.broadcastPriceStock({ barcode: variant.barcode, modelCode: variant.currentModelCode, marketPrice: salePrice, sitePrice: sitePriceArg, stockQuantity: Number(card.stockQuantity) }).catch(() => undefined);
@@ -388,12 +388,8 @@ export class ProductsService {
   }): Promise<void> {
     if (!product.barcode && !product.modelCode && !product.trendyolBarcode) return;
 
-    // Platform fiyatı = sitePrice × 1.25 (kendi sitemizin fiyatı baz alınır)
-    // sitePrice = 0 ise marketPrice fallback olarak kullanılır
-    const sitePriceRaw = Number(product.sitePrice ?? 0);
-    const salePrice = sitePriceRaw > 0
-      ? Math.round(sitePriceRaw * 1.25)
-      : Math.round(Number(product.marketPrice ?? product.shopPrice ?? 0));
+    // Platform fiyatı = marketPrice (site fiyatıyla aynı)
+    const salePrice = Math.round(Number(product.marketPrice ?? product.sitePrice ?? product.shopPrice ?? 0));
     const stockQuantity = Number(product.stockQuantity ?? 0);
     if (!salePrice) return;
     // listPrice her zaman salePrice'dan büyük olmalı (platform kuralı)
@@ -606,7 +602,7 @@ export class ProductsService {
     return { checked: products.length, created, skipped };
   }
 
-  /** sitePrice = marketPrice × 0.80 yapar, ardından tüm platformlara fiyat yayınlar */
+  /** sitePrice = marketPrice yapar, ardından tüm platformlara fiyat yayınlar */
   async backfillSitePrice(): Promise<{ updated: number; skipped: number }> {
     const products = await this.prisma.product.findMany({
       where: { status: 'ACTIVE', marketPrice: { gt: 0 } },
@@ -617,7 +613,7 @@ export class ProductsService {
     for (const p of products) {
       const market = Number(p.marketPrice);
       const site = Number(p.sitePrice);
-      const target = Math.round(market * 0.80);
+      const target = Math.round(market);
       // Zaten doğru hesaplanmışsa atla (±1₺ tolerans)
       if (Math.abs(site - target) <= 1) { skipped++; continue; }
       await this.prisma.product.update({ where: { id: p.id }, data: { sitePrice: target } });
@@ -718,10 +714,7 @@ export class ProductsService {
     for (const product of products) {
       const key = product.barcode ?? product.modelCode;
       if (!key || payloadMap.has(key)) continue; // Trendyol varyantında varsa zaten eklendi
-      const sitePriceVal = Number(product.sitePrice ?? 0);
-      const salePrice = sitePriceVal > 0
-        ? Math.round(sitePriceVal * 1.25)
-        : Math.round(Number(product.marketPrice ?? product.shopPrice ?? 0));
+      const salePrice = Math.round(Number(product.sitePrice ?? product.marketPrice ?? product.shopPrice ?? 0));
       if (!salePrice) { skipped++; continue; }
       payloadMap.set(key, {
         barcode: product.barcode ?? product.modelCode ?? '',
@@ -1253,7 +1246,7 @@ export class ProductsService {
     return { total: products.length, sent, errors, details };
   }
 
-  /** Trendyol Excel'inden fiyat aktarımı: sitePrice = trendyolFiyatı × 0.80, marketPrice = trendyolFiyatı */
+  /** Trendyol Excel'inden fiyat aktarımı: sitePrice = trendyolFiyatı, marketPrice = trendyolFiyatı */
   async importPricesFromExcel(buffer: Buffer): Promise<{ updated: number; skipped: number; notFound: number; errors: string[] }> {
     const wb = XLSX.read(buffer, { type: 'buffer' });
     const ws = wb.Sheets[wb.SheetNames[0]];
@@ -1283,12 +1276,12 @@ export class ProductsService {
           if (!byModel) { notFound++; continue; }
           await this.prisma.product.update({
             where: { id: byModel.id },
-            data: { marketPrice: trendyolPrice, sitePrice: Math.round(trendyolPrice * 0.80) },
+            data: { marketPrice: trendyolPrice, sitePrice: Math.round(trendyolPrice) },
           });
         } else {
           await this.prisma.product.update({
             where: { id: product.id },
-            data: { marketPrice: trendyolPrice, sitePrice: Math.round(trendyolPrice * 0.80) },
+            data: { marketPrice: trendyolPrice, sitePrice: Math.round(trendyolPrice) },
           });
         }
         updated++;
@@ -1357,7 +1350,7 @@ export class ProductsService {
 
         const data = {
           categoryId,
-          ...(trendyolPrice > 0 && { marketPrice: trendyolPrice, sitePrice: Math.round(trendyolPrice * 0.80) }),
+          ...(trendyolPrice > 0 && { marketPrice: trendyolPrice, sitePrice: Math.round(trendyolPrice) }),
           stockQuantity: stock,
         };
 
@@ -1372,7 +1365,7 @@ export class ProductsService {
               modelCode: modelCode || barcode || `URUN-${i}`,
               categoryId,
               marketPrice: trendyolPrice,
-              sitePrice: Math.round(trendyolPrice * 0.80),
+              sitePrice: Math.round(trendyolPrice),
               stockQuantity: stock,
               status: 'ACTIVE',
             },
@@ -1447,7 +1440,7 @@ export class ProductsService {
           ...(productName && { productName }),
           ...(barcode && { barcode }),
           ...(modelCode && { modelCode }),
-          ...(price > 0 && { marketPrice: price, sitePrice: Math.round(price * 0.80) }),
+          ...(price > 0 && { marketPrice: price, sitePrice: Math.round(price) }),
           ...(stock > 0 && { stockQuantity: stock }),
         };
 
@@ -1462,7 +1455,7 @@ export class ProductsService {
               modelCode: modelCode || barcode || `URUN-${i}`,
               categoryId,
               marketPrice: price,
-              sitePrice: Math.round(price * 0.80),
+              sitePrice: Math.round(price),
               stockQuantity: stock,
               status: 'ACTIVE',
             },
@@ -1518,11 +1511,7 @@ export class ProductsService {
       const variant = product.productCenterVariant;
       const variantActive = variant?.status === 'ACTIVE';
 
-      // Platform fiyatı = sitePrice × 1.25 (kendi sitemiz baz fiyat, tüm platformlar eşit)
-      const sitePriceVal = Number(product.sitePrice ?? 0);
-      const price = sitePriceVal > 0
-        ? Math.round(sitePriceVal * 1.25)
-        : Math.round(Number(product.marketPrice || product.shopPrice || 0));
+      const price = Math.round(Number(product.sitePrice ?? product.marketPrice ?? product.shopPrice ?? 0));
 
       if (price <= 0) continue;
 
@@ -1636,10 +1625,7 @@ export class ProductsService {
     });
 
     const toRow = (product: (typeof products)[0]) => {
-      const sitePriceVal = Number(product.sitePrice ?? 0);
-      const price = sitePriceVal > 0
-        ? Math.round(sitePriceVal * 1.25)
-        : Math.round(Number(product.marketPrice || product.shopPrice || 0));
+      const price = Math.round(Number(product.sitePrice ?? product.marketPrice ?? product.shopPrice ?? 0));
       const imageList = Array.isArray(product.imageUrls) ? (product.imageUrls as string[]) : [];
       return {
         'Model Kodu': product.modelCode ?? '',
