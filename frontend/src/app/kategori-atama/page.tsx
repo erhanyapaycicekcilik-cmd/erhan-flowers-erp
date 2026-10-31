@@ -5,7 +5,7 @@ import { AdminShell } from '@/components/AdminShell'
 import { api } from '@/lib/api'
 
 const CATS: Record<string, { label: string; subs: string[] }> = {
-  Agaclar:        { label: 'Ağaçlar',                   subs: ['Yeşil Ağaçlar', 'Hazır Ağaçlar', 'Renkli Ağaçlar', 'Bambu Ağaçlar', 'Palmiye ve Areka Ağaçlar'] },
+  Agaclar:        { label: 'Ağaçlar',                   subs: ['Yeşil Ağaçlar', 'Hazır Ağaçlar', 'Renkli Ağaçlar', 'Bambu Ağaçlar', 'Palmiye ve Areka Ağaçlar', 'Saksısız Ağaçlar'] },
   Bambu:          { label: 'Bambu',                     subs: ['Tekli Bambu', 'Separatör'] },
   YapayKursekler: { label: 'Yapay Çiçekler',            subs: ['Renkli Çiçekler', 'Yeşil Çiçekler'] },
   Buketler:       { label: 'Buketler',                  subs: [] },
