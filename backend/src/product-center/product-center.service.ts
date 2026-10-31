@@ -1217,14 +1217,13 @@ export class ProductCenterService {
     if (body.shopCategoryId !== undefined) variantData.shopCategoryId = body.shopCategoryId
     if (body.videoUrl !== undefined) variantData.videoUrl = body.videoUrl
 
-    const variant = await this.prisma.trendyolProductVariant.update({
-      where: { id },
-      data: variantData,
-      select: { id: true, productId: true, productName: true, barcode: true, currentModelCode: true,
+    const variantSelect = { id: true, productId: true, productName: true, barcode: true, currentModelCode: true,
                 supplierStockCode: true, productDescription: true, images: true, shopCategoryId: true,
                 trendyolSalePrice: true, stockQuantity: true, status: true,
-                shopCategory: { select: { id: true, name: true } } },
-    })
+                shopCategory: { select: { id: true, name: true } } }
+    const variant = Object.keys(variantData).length > 0
+      ? await this.prisma.trendyolProductVariant.update({ where: { id }, data: variantData, select: variantSelect })
+      : await this.prisma.trendyolProductVariant.findUniqueOrThrow({ where: { id }, select: variantSelect })
 
     // Fiziksel özellikleri bağlı Product'a yaz
     const physicalFields: any = {}
