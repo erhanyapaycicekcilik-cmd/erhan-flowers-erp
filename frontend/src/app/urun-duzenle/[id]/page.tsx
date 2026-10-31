@@ -14,7 +14,7 @@ const CATS: Record<string, { label: string; subs: string[] }> = {
   Sarmasiklar:    { label: 'Sarmaşıklar',               subs: ['Yeşil Sarmaşıklar', 'Renkli Sarmaşıklar'] },
   BonsaiZeytin:   { label: 'Bonsai ve Zeytin Ağaçları', subs: ['Bonsai', 'Zeytin Ağacı'] },
   SaksiAranjman:  { label: 'Saksı Aranjmanları',        subs: [] },
-  YapayBitkiler:  { label: 'Yapay Bitkiler',            subs: ['Yeşil Bitkiler', 'Renkli Bitkiler'] },
+  YapayBitkiler:  { label: 'Yapay Bitkiler',            subs: ['Yeşil Bitkiler', 'Renkli Bitkiler', 'Yapraklar'] },
   Saksilar:       { label: 'Saksılar',                  subs: ['Metal Saksılar', 'Plastik Saksılar', 'MDF Saksılar', 'Fiber Saksılar', 'Ahşap Saksılar', 'Beton Saksılar', 'Yanmaz Saksılar'] },
 }
 const CATS_KEYS = Object.keys(CATS)
