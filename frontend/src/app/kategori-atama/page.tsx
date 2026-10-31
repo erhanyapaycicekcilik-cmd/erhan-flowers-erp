@@ -192,6 +192,13 @@ export default function KategoriAtamaPage() {
             </p>
           </div>
           <div className="flex-1" />
+          {lastBarcode && (
+            <button
+              onClick={() => rowRefs.current[lastBarcode]?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
+              className="text-xs bg-orange-100 border border-orange-300 text-orange-700 rounded-lg px-3 py-1.5 font-semibold hover:bg-orange-200 transition-all">
+              📍 Kaldığım Yere Git
+            </button>
+          )}
           <button onClick={load} className="text-xs border border-gray-200 rounded-lg px-3 py-1.5 text-gray-500 hover:border-blue-400 hover:text-blue-600 transition-all">
             ↻ Yenile
           </button>
@@ -270,7 +277,7 @@ export default function KategoriAtamaPage() {
                   return (
                     <tr key={p.id}
                       ref={el => { rowRefs.current[p.barcode] = el }}
-                      className={`border-b transition-colors ${isLast ? 'bg-blue-50 border-l-4 border-l-blue-500' : 'border-gray-100 hover:bg-blue-50/30'}`}>
+                      className={`border-b transition-colors ${isLast ? 'bg-yellow-50 border-l-[6px] border-l-orange-400' : 'border-gray-100 hover:bg-blue-50/30'}`}>
                       <td className="p-2">
                         {img ? (
                           <a href={img} target="_blank" rel="noreferrer">
@@ -282,11 +289,11 @@ export default function KategoriAtamaPage() {
                       </td>
                       <td className="p-2">
                         <div className="flex items-start gap-1.5">
-                          {isLast && <span className="mt-0.5 text-blue-500 text-base leading-none">→</span>}
+                          {isLast && <span className="mt-0.5 text-orange-500 text-xl leading-none font-bold">▶</span>}
                           <div>
                             <p className="text-sm font-medium text-gray-900 leading-tight max-w-xs">{p.productName}</p>
                             <p className="text-xs text-gray-400 mt-0.5">{p.barcode}</p>
-                            {isLast && <span className="text-[10px] text-blue-500 font-semibold">kaldığınız yer</span>}
+                            {isLast && <span className="text-[11px] text-orange-500 font-bold">📍 kaldığınız yer</span>}
                           </div>
                         </div>
                       </td>
