@@ -6,7 +6,7 @@ import { api } from '@/lib/api'
 
 const CATS: Record<string, { label: string; subs: string[] }> = {
   Agaclar:        { label: 'Ağaçlar',                   subs: ['Yeşil Ağaçlar', 'Hazır Ağaçlar', 'Renkli Ağaçlar', 'Bambu Ağaçlar', 'Palmiye ve Areka Ağaçlar', 'Saksısız Ağaçlar'] },
-  Bambu:          { label: 'Bambu',                     subs: ['Tekli Bambu', 'Separatör'] },
+  Bambu:          { label: 'Bambu',                     subs: ['Tekli Bambu', 'Plastik Separatör', 'MDF Separatör', 'Fiber Separatör'] },
   YapayKursekler: { label: 'Yapay Çiçekler',            subs: ['Renkli Çiçekler', 'Yeşil Çiçekler'] },
   Buketler:       { label: 'Buketler',                  subs: [] },
   DikeyBahce:     { label: 'Dikey Bahçeler',            subs: ['Paneller', 'Kapı Önü Dekorlar', 'Tavan Dekorları'] },
@@ -57,7 +57,14 @@ function guessSub(n: string, k: string): string {
     return 'Yeşil Ağaçlar'
   }
   if (k === 'BonsaiZeytin') return /zeytin/.test(s) ? 'Zeytin Ağacı' : 'Bonsai'
-  if (k === 'Bambu') return /separat|paravan/.test(s) ? 'Separatör' : 'Tekli Bambu'
+  if (k === 'Bambu') {
+    if (/separat|paravan/.test(s)) {
+      if (/mdf/.test(s)) return 'MDF Separatör'
+      if (/fiber/.test(s)) return 'Fiber Separatör'
+      return 'Plastik Separatör'
+    }
+    return 'Tekli Bambu'
+  }
   if (k === 'YapayKursekler') return /renk|pembe|mor|sarı|kırmızı|beyaz|renkli/.test(s) ? 'Renkli Çiçekler' : 'Yeşil Çiçekler'
   if (k === 'DikeyBahce') { if (/panel/.test(s)) return 'Paneller'; if (/tavan/.test(s)) return 'Tavan Dekorları'; return 'Kapı Önü Dekorlar' }
   if (k === 'Sarmasiklar') return /renk|pembe|mor|sarı|kırmızı|beyaz|renkli/.test(s) ? 'Renkli Sarmaşıklar' : 'Yeşil Sarmaşıklar'
