@@ -87,6 +87,7 @@ type Variant = {
   id: number; barcode: string; currentModelCode?: string; productName: string
   trendyolSalePrice?: string; stockQuantity: number; images?: string[]
   productCostDraft?: { marketplaceSalePrice?: string }
+  product?: { catalogCategory?: string | null; catalogSubCategory?: string | null }
 }
 type State = Record<string, { k: string; sub: string }>
 
@@ -134,13 +135,22 @@ export default function KategoriAtamaPage() {
       const data = await api<Variant[]>('/product-center/variants')
       const active = (Array.isArray(data) ? data : []).filter(v => v.stockQuantity > 0)
       setProducts(active)
-      setState(prev => {
-        const next = { ...loadState(), ...prev }
+      setState(() => {
+        const fromStorage = loadState()
+        const next: State = {}
         active.forEach(v => {
-          if (!next[v.barcode]) {
-            const k = guessKey(v.productName)
-            if (k) next[v.barcode] = { k, sub: guessSub(v.productName, k) }
+          // 1. Öncelik: veritabanındaki katalog kategorisi
+          const dbCatLabel = v.product?.catalogCategory
+          const dbSub = v.product?.catalogSubCategory || ''
+          if (dbCatLabel) {
+            const k = KEYS.find(k => CATS[k].label === dbCatLabel) || ''
+            if (k) { next[v.barcode] = { k, sub: dbSub }; return }
           }
+          // 2. localStorage'daki atama
+          if (fromStorage[v.barcode]?.k) { next[v.barcode] = fromStorage[v.barcode]; return }
+          // 3. Otomatik tahmin
+          const k = guessKey(v.productName)
+          if (k) next[v.barcode] = { k, sub: guessSub(v.productName, k) }
         })
         saveState(next)
         return next
