@@ -265,6 +265,7 @@ const emptyForm = {
   potH: '',
   potVolumeLitre: '',
   catalogCategory: '',
+  catalogSubCategory: '',
 };
 
 const emptyQuickForm: QuickForm = {
@@ -303,38 +304,19 @@ const compositeProductKinds: Array<{ key: CompositeProductKind; label: string }>
   { key: 'BAMBOO', label: 'Bambu' },
 ];
 
-const CATALOG_CATEGORIES = [
-  'Bambular > Bambu Ağaçlar',
-  'Bambular > Bambu Seperatör',
-  'Bambular > Bambu Tekli',
-  'Bitkiler > Mini Masa Bitkileri',
-  'Bitkiler > Renkli Bitkiler',
-  'Bitkiler > Yeşil Bitkiler',
-  'Demet Çiçekler',
-  'Dikey Bahçe & Panel > Çiçekli Panel',
-  'Dikey Bahçe & Panel > Yeşil Panel',
-  'Duvar Dekorları > Çiçekli Duvar Paneli',
-  'Kuru Çiçek & Doğal > Pamuk Dalları',
-  'Saksı Aranjmanları',
-  'Saksılar & Vazolar > Dekoratif Vazolar',
-  'Saksılar & Vazolar > MDF Saksı',
-  'Saksılar & Vazolar > Metal Saksı',
-  'Saksılar & Vazolar > Plastik Saksı',
-  'Yapay Ağaçlar > Ficus Ağaçlar',
-  'Yapay Ağaçlar > Hazır Gövde Ağaçlar',
-  'Yapay Ağaçlar > Palmiye Ağaçlar',
-  'Yapay Ağaçlar > Renkli Ağaçlar',
-  'Yapay Ağaçlar > Yeşil Ağaçlar',
-  'Yapay Ağaçlar > Zeytin & Meyve Ağaçları',
-  'Yapay Çiçekler > Güller',
-  'Yapay Çiçekler > Karma Çiçekler',
-  'Yapay Çiçekler > Orkideler',
-  'Yapay Çiçekler > Papatyalar',
-  'Yapay Dal & Yaprak > Tek Dal Çiçekler',
-  'Yapay Dal & Yaprak > Yapraklı Dallar',
-  'Yapay Sarmaşıklar > Renkli Sarmaşık',
-  'Yapay Sarmaşıklar > Yeşil Sarmaşık',
-];
+const CATS: Record<string, { label: string; subs: string[] }> = {
+  Agaclar:        { label: 'Ağaçlar',                   subs: ['Yeşil Ağaçlar', 'Hazır Ağaçlar', 'Renkli Ağaçlar', 'Bambu Ağaçlar', 'Palmiye ve Areka Ağaçlar', 'Saksısız Ağaçlar'] },
+  Bambu:          { label: 'Bambu',                     subs: ['Tekli Bambu', 'Plastik Separatör', 'MDF Separatör', 'Fiber Separatör'] },
+  YapayKursekler: { label: 'Yapay Çiçekler',            subs: ['Renkli Çiçekler', 'Yeşil Çiçekler'] },
+  Buketler:       { label: 'Buketler',                  subs: [] },
+  DikeyBahce:     { label: 'Dikey Bahçeler',            subs: ['Paneller', 'Kapı Önü Dekorlar', 'Tavan Dekorları'] },
+  Sarmasiklar:    { label: 'Sarmaşıklar',               subs: ['Yeşil Sarmaşıklar', 'Renkli Sarmaşıklar'] },
+  BonsaiZeytin:   { label: 'Bonsai ve Zeytin Ağaçları', subs: ['Bonsai', 'Zeytin Ağacı'] },
+  SaksiAranjman:  { label: 'Saksı Aranjmanları',        subs: [] },
+  YapayBitkiler:  { label: 'Yapay Bitkiler',            subs: ['Yeşil Bitkiler', 'Renkli Bitkiler', 'Yapraklar'] },
+  Saksilar:       { label: 'Saksılar',                  subs: ['Metal Saksılar', 'Plastik Saksılar', 'MDF Saksılar', 'Fiber Saksılar', 'Ahşap Saksılar', 'Beton Saksılar', 'Yanmaz Saksılar'] },
+}
+const CATS_KEYS = Object.keys(CATS)
 
 const steps = ['Ürün Bilgileri', 'Reçete/Malzeme', 'Maliyet/Fiyat', 'Görsel/SEO', 'Kanallara Gönder'];
 const visibleStepIndexes = [0, 1, 2, 3, 4] as const;
@@ -1010,6 +992,7 @@ export default function ProductsPage() {
         };
       })(),
       catalogCategory: (entry as any).catalogCategory || '',
+      catalogSubCategory: (entry as any).catalogSubCategory || '',
     });
     setStep(0);
     loadCost(entry.variantId).catch(() => setCostDetail(null));
@@ -1043,6 +1026,7 @@ export default function ProductsPage() {
         leavesPerBranch: (form as any).leavesPerBranch ? Number((form as any).leavesPerBranch) : undefined,
         leafCount: (form as any).leafCount ? Number((form as any).leafCount) : undefined,
         catalogCategory: (form as any).catalogCategory || null,
+        catalogSubCategory: (form as any).catalogSubCategory || null,
       },
     });
     const costSaved = costDetail ? await saveCostDraftForVariant(result.entry.variantId, false) : false;
@@ -2450,15 +2434,32 @@ export default function ProductsPage() {
                 <Field label="Katalog Kategorisi">
                   <select
                     className="field"
-                    value={(form as any).catalogCategory || ''}
-                    onChange={(e) => setForm((c) => ({ ...c, catalogCategory: e.target.value }))}
+                    value={CATS_KEYS.find(k => CATS[k].label === (form as any).catalogCategory) || ''}
+                    onChange={(e) => setForm((c) => ({ ...c, catalogCategory: e.target.value ? CATS[e.target.value].label : '', catalogSubCategory: '' }))}
                   >
                     <option value="">— Seçin —</option>
-                    {CATALOG_CATEGORIES.map((cat) => (
-                      <option key={cat} value={cat}>{cat}</option>
+                    {CATS_KEYS.map((k) => (
+                      <option key={k} value={k}>{CATS[k].label}</option>
                     ))}
                   </select>
                 </Field>
+                {(() => {
+                  const catKey = CATS_KEYS.find(k => CATS[k].label === (form as any).catalogCategory)
+                  const subs = catKey ? CATS[catKey].subs : []
+                  if (!subs.length) return null
+                  return (
+                    <Field label="Alt Kategori">
+                      <select
+                        className="field"
+                        value={(form as any).catalogSubCategory || ''}
+                        onChange={(e) => setForm((c) => ({ ...c, catalogSubCategory: e.target.value }))}
+                      >
+                        <option value="">— Seçin —</option>
+                        {subs.map((s) => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                    </Field>
+                  )
+                })()}
                 <Field label="Renk / çeşit"><input className="field" value={form.colorVariant} onChange={(event) => update('colorVariant', event.target.value)} /></Field>
                 {/* Fiziksel özellikler */}
                 <Field label="Ürün boyu"><input className="field" value={(form as any).productHeight || ''} onChange={(e) => update('productHeight' as any, e.target.value)} placeholder="180 cm" /></Field>
