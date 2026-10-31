@@ -5,6 +5,23 @@ import { useParams, useRouter } from 'next/navigation'
 import { AdminShell } from '@/components/AdminShell'
 import { api, apiFileUrl } from '@/lib/api'
 
+const CATS: Record<string, { label: string; subs: string[] }> = {
+  Agaclar:        { label: 'Ağaçlar',                   subs: ['Yeşil Ağaçlar', 'Hazır Ağaçlar', 'Renkli Ağaçlar', 'Bambu Ağaçlar', 'Palmiye ve Areka Ağaçlar', 'Saksısız Ağaçlar'] },
+  Bambu:          { label: 'Bambu',                     subs: ['Tekli Bambu', 'Separatör'] },
+  YapayKursekler: { label: 'Yapay Çiçekler',            subs: ['Renkli Çiçekler', 'Yeşil Çiçekler'] },
+  Buketler:       { label: 'Buketler',                  subs: [] },
+  DikeyBahce:     { label: 'Dikey Bahçeler',            subs: ['Paneller', 'Kapı Önü Dekorlar', 'Tavan Dekorları'] },
+  Sarmasiklar:    { label: 'Sarmaşıklar',               subs: ['Yeşil Sarmaşıklar', 'Renkli Sarmaşıklar'] },
+  BonsaiZeytin:   { label: 'Bonsai ve Zeytin Ağaçları', subs: ['Bonsai', 'Zeytin Ağacı'] },
+  SaksiAranjman:  { label: 'Saksı Aranjmanları',        subs: [] },
+  YapayBitkiler:  { label: 'Yapay Bitkiler',            subs: ['Yeşil Bitkiler', 'Renkli Bitkiler'] },
+  Saksilar:       { label: 'Saksılar',                  subs: ['Metal Saksılar', 'Plastik Saksılar', 'MDF Saksılar', 'Fiber Saksılar', 'Ahşap Saksılar', 'Beton Saksılar', 'Yanmaz Saksılar'] },
+}
+const CATS_KEYS = Object.keys(CATS)
+function labelToKey(label: string): string {
+  return CATS_KEYS.find(k => CATS[k].label === label) ?? ''
+}
+
 function fmt(n: number) {
   return '₺' + new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2 }).format(n)
 }
@@ -27,6 +44,8 @@ function buildForm(p: any) {
     productHeight: prod.productHeight ?? '', leafCount: prod.leafCount ?? '',
     stemCount: prod.stemCount ?? '', branchCount: prod.branchCount ?? '',
     leavesPerBranch: prod.leavesPerBranch ?? '',
+    catalogCatKey: labelToKey(prod.catalogCategory ?? ''),
+    catalogSubCategory: prod.catalogSubCategory ?? '',
   }
 }
 
@@ -135,6 +154,8 @@ export default function UrunDetayPage() {
           stemCount: form.stemCount !== '' ? Number(form.stemCount) : null,
           branchCount: form.branchCount !== '' ? Number(form.branchCount) : null,
           leavesPerBranch: form.leavesPerBranch !== '' ? Number(form.leavesPerBranch) : null,
+          catalogCategory: form.catalogCatKey ? CATS[form.catalogCatKey].label : null,
+          catalogSubCategory: form.catalogSubCategory || null,
         },
       })
       setSaved(true)
@@ -344,6 +365,30 @@ export default function UrunDetayPage() {
                 <span className="text-gray-400"> (kayıtta atanır)</span>
               </p>
             )}
+          </div>
+
+          {/* Katalog Kategorisi */}
+          <div>
+            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Katalog Kategorisi</label>
+            <div className="mt-1 grid grid-cols-2 gap-2">
+              <select
+                className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                value={form.catalogCatKey}
+                onChange={(e) => { setForm({ ...form, catalogCatKey: e.target.value, catalogSubCategory: '' }); setSaved(false) }}
+              >
+                <option value="">— Ana Kategori —</option>
+                {CATS_KEYS.map(k => <option key={k} value={k}>{CATS[k].label}</option>)}
+              </select>
+              <select
+                className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                value={form.catalogSubCategory}
+                onChange={(e) => { setForm({ ...form, catalogSubCategory: e.target.value }); setSaved(false) }}
+                disabled={!form.catalogCatKey || !CATS[form.catalogCatKey]?.subs.length}
+              >
+                <option value="">— Alt Kategori —</option>
+                {(form.catalogCatKey ? CATS[form.catalogCatKey]?.subs ?? [] : []).map((s: string) => <option key={s}>{s}</option>)}
+              </select>
+            </div>
           </div>
 
           {/* Kodlar — salt okunur */}
