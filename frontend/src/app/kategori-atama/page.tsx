@@ -14,6 +14,7 @@ const CATS: Record<string, { label: string; subs: string[] }> = {
   BonsaiZeytin:   { label: 'Bonsai ve Zeytin Ağaçları', subs: [] },
   SaksiAranjman:  { label: 'Saksı Aranjmanları',        subs: [] },
   YapayBitkiler:  { label: 'Yapay Bitkiler',            subs: ['Yeşil Bitkiler', 'Renkli Bitkiler'] },
+  Saksilar:       { label: 'Saksılar',                  subs: ['Metal Saksılar', 'Plastik Saksılar', 'MDF Saksılar', 'Fiber Saksılar', 'Ahşap Saksılar', 'Beton Saksılar', 'Yanmaz Saksılar'] },
 }
 const KEYS = Object.keys(CATS)
 
@@ -29,6 +30,7 @@ function guessKey(n: string): string {
   if (/aranjman/.test(s)) return 'SaksiAranjman'
   if (/ağaç|agac|ficus|benjamin|strelitzia|monstera|dracena|yuka/.test(s)) return 'Agaclar'
   if (/yapay.*bitki|bitki.*saksı/.test(s)) return 'YapayBitkiler'
+  if (/metal.*saks|plastik.*saks|mdf.*saks|fiber.*saks|ahşap.*saks|beton.*saks|yanmaz.*saks|saksı/.test(s)) return 'Saksilar'
   return ''
 }
 function guessSub(n: string, k: string): string {
@@ -45,6 +47,15 @@ function guessSub(n: string, k: string): string {
   if (k === 'DikeyBahce') { if (/panel/.test(s)) return 'Paneller'; if (/tavan/.test(s)) return 'Tavan Dekorları'; return 'Kapı Önü Dekorlar' }
   if (k === 'Sarmasiklar') return /renk|pembe|mor|sarı|kırmızı|beyaz|renkli/.test(s) ? 'Renkli Sarmaşıklar' : 'Yeşil Sarmaşıklar'
   if (k === 'YapayBitkiler') return /renk|pembe|mor|sarı|kırmızı|beyaz|renkli/.test(s) ? 'Renkli Bitkiler' : 'Yeşil Bitkiler'
+  if (k === 'Saksilar') {
+    if (/metal/.test(s)) return 'Metal Saksılar'
+    if (/plastik/.test(s)) return 'Plastik Saksılar'
+    if (/mdf/.test(s)) return 'MDF Saksılar'
+    if (/fiber/.test(s)) return 'Fiber Saksılar'
+    if (/ahşap|ahsap/.test(s)) return 'Ahşap Saksılar'
+    if (/beton/.test(s)) return 'Beton Saksılar'
+    if (/yanmaz/.test(s)) return 'Yanmaz Saksılar'
+  }
   return ''
 }
 
