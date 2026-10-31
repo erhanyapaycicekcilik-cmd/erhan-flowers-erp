@@ -298,7 +298,7 @@ export default function KategoriAtamaPage() {
                   const k = state[p.barcode]?.k || ''
                   const sub = state[p.barcode]?.sub || ''
                   const isLast = p.barcode === lastBarcode
-                  const color = (k && manual.has(p.barcode)) ? CAT_COLORS[k] : null
+                  const color = k ? CAT_COLORS[k] : null
                   return (
                     <tr key={p.id}
                       ref={el => { rowRefs.current[p.barcode] = el }}
