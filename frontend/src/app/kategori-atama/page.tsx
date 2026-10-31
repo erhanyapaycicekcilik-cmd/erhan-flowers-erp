@@ -18,6 +18,19 @@ const CATS: Record<string, { label: string; subs: string[] }> = {
 }
 const KEYS = Object.keys(CATS)
 
+const CAT_COLORS: Record<string, { bg: string; text: string; border: string }> = {
+  Agaclar:        { bg: 'bg-green-100',   text: 'text-green-700',  border: 'border-green-400' },
+  Bambu:          { bg: 'bg-lime-100',    text: 'text-lime-700',   border: 'border-lime-400' },
+  YapayKursekler: { bg: 'bg-pink-100',    text: 'text-pink-700',   border: 'border-pink-400' },
+  Buketler:       { bg: 'bg-rose-100',    text: 'text-rose-700',   border: 'border-rose-400' },
+  DikeyBahce:     { bg: 'bg-teal-100',    text: 'text-teal-700',   border: 'border-teal-400' },
+  Sarmasiklar:    { bg: 'bg-emerald-100', text: 'text-emerald-700',border: 'border-emerald-400' },
+  BonsaiZeytin:   { bg: 'bg-yellow-100',  text: 'text-yellow-700', border: 'border-yellow-400' },
+  SaksiAranjman:  { bg: 'bg-purple-100',  text: 'text-purple-700', border: 'border-purple-400' },
+  YapayBitkiler:  { bg: 'bg-cyan-100',    text: 'text-cyan-700',   border: 'border-cyan-400' },
+  Saksilar:       { bg: 'bg-orange-100',  text: 'text-orange-700', border: 'border-orange-400' },
+}
+
 function guessKey(n: string): string {
   const s = n.toLowerCase()
   if (/bonsai|bonsaı|zeytin/.test(s)) return 'BonsaiZeytin'
@@ -274,24 +287,39 @@ export default function KategoriAtamaPage() {
                   const k = state[p.barcode]?.k || ''
                   const sub = state[p.barcode]?.sub || ''
                   const isLast = p.barcode === lastBarcode
+                  const color = k ? CAT_COLORS[k] : null
                   return (
                     <tr key={p.id}
                       ref={el => { rowRefs.current[p.barcode] = el }}
-                      className={`border-b transition-colors ${isLast ? 'bg-yellow-50 border-l-[6px] border-l-orange-400' : 'border-gray-100 hover:bg-blue-50/30'}`}>
+                      className={`border-b transition-colors ${isLast ? 'bg-yellow-50 border-l-[6px] border-l-orange-400' : 'border-gray-100 hover:bg-gray-50'}`}>
                       <td className="p-2">
-                        {img ? (
-                          <a href={img} target="_blank" rel="noreferrer">
-                            <img src={img} alt="" className="w-12 h-12 rounded-lg object-cover border border-gray-100" />
-                          </a>
-                        ) : (
-                          <div className="w-12 h-12 rounded-lg bg-gray-100 flex items-center justify-center text-xl text-gray-300">🌸</div>
-                        )}
+                        <div className="relative inline-block">
+                          {img ? (
+                            <a href={img} target="_blank" rel="noreferrer">
+                              <img src={img} alt="" className="w-12 h-12 rounded-lg object-cover border border-gray-100" />
+                            </a>
+                          ) : (
+                            <div className="w-12 h-12 rounded-lg bg-gray-100 flex items-center justify-center text-xl text-gray-300">🌸</div>
+                          )}
+                          {color && (
+                            <span className={`absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full border-2 border-white flex items-center justify-center text-[10px] font-bold ${color.bg} ${color.text}`}>
+                              ✓
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="p-2">
                         <div className="flex items-start gap-1.5">
                           {isLast && <span className="mt-0.5 text-orange-500 text-xl leading-none font-bold">▶</span>}
                           <div>
-                            <p className="text-sm font-medium text-gray-900 leading-tight max-w-xs">{p.productName}</p>
+                            <div className="flex items-center gap-1.5">
+                              <p className="text-sm font-medium text-gray-900 leading-tight max-w-xs">{p.productName}</p>
+                              {color && (
+                                <span className={`shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded-full border ${color.bg} ${color.text} ${color.border}`}>
+                                  ✓ {CATS[k].label}
+                                </span>
+                              )}
+                            </div>
                             <p className="text-xs text-gray-400 mt-0.5">{p.barcode}</p>
                             {isLast && <span className="text-[11px] text-orange-500 font-bold">📍 kaldığınız yer</span>}
                           </div>
