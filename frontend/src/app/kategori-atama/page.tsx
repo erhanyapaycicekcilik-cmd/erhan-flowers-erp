@@ -83,6 +83,7 @@ type State = Record<string, { k: string; sub: string }>
 
 const STORAGE_KEY = 'kategori_atama_v1'
 const LAST_KEY = 'kategori_atama_last'
+const MANUAL_KEY = 'kategori_atama_manual'
 
 function loadState(): State {
   try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}') } catch { return {} }
@@ -96,6 +97,12 @@ function loadLast(): string {
 function saveLast(barcode: string) {
   try { localStorage.setItem(LAST_KEY, barcode) } catch { /* ignore */ }
 }
+function loadManual(): Set<string> {
+  try { return new Set(JSON.parse(localStorage.getItem(MANUAL_KEY) || '[]')) } catch { return new Set() }
+}
+function saveManual(s: Set<string>) {
+  try { localStorage.setItem(MANUAL_KEY, JSON.stringify([...s])) } catch { /* ignore */ }
+}
 
 export default function KategoriAtamaPage() {
   const [products, setProducts] = useState<Variant[]>([])
@@ -108,6 +115,7 @@ export default function KategoriAtamaPage() {
   const [bulkKey, setBulkKey] = useState('')
   const [bulkSub, setBulkSub] = useState('')
   const [lastBarcode, setLastBarcode] = useState<string>('')
+  const [manual, setManual] = useState<Set<string>>(new Set())
   const searchTimeout = useRef<any>(null)
   const rowRefs = useRef<Record<string, HTMLTableRowElement | null>>({})
 
@@ -134,6 +142,7 @@ export default function KategoriAtamaPage() {
 
   useEffect(() => {
     setLastBarcode(loadLast())
+    setManual(loadManual())
     load()
   }, [load])
 
@@ -150,10 +159,12 @@ export default function KategoriAtamaPage() {
   const setCat = (barcode: string, k: string) => {
     updateState({ ...state, [barcode]: { k, sub: '' } })
     setLastBarcode(barcode); saveLast(barcode)
+    const m = new Set(manual); m.add(barcode); setManual(m); saveManual(m)
   }
   const setSubCat = (barcode: string, sub: string) => {
     updateState({ ...state, [barcode]: { ...(state[barcode] || { k: '' }), sub } })
     setLastBarcode(barcode); saveLast(barcode)
+    const m = new Set(manual); m.add(barcode); setManual(m); saveManual(m)
   }
 
   const filtered = products.filter(p => {
@@ -287,7 +298,7 @@ export default function KategoriAtamaPage() {
                   const k = state[p.barcode]?.k || ''
                   const sub = state[p.barcode]?.sub || ''
                   const isLast = p.barcode === lastBarcode
-                  const color = k ? CAT_COLORS[k] : null
+                  const color = (k && manual.has(p.barcode)) ? CAT_COLORS[k] : null
                   return (
                     <tr key={p.id}
                       ref={el => { rowRefs.current[p.barcode] = el }}
