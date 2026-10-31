@@ -11,7 +11,7 @@ const CATS: Record<string, { label: string; subs: string[] }> = {
   Buketler:       { label: 'Buketler',                  subs: [] },
   DikeyBahce:     { label: 'Dikey Bahçeler',            subs: ['Paneller', 'Kapı Önü Dekorlar', 'Tavan Dekorları'] },
   Sarmasiklar:    { label: 'Sarmaşıklar',               subs: ['Yeşil Sarmaşıklar', 'Renkli Sarmaşıklar'] },
-  BonsaiZeytin:   { label: 'Bonsai ve Zeytin Ağaçları', subs: [] },
+  BonsaiZeytin:   { label: 'Bonsai ve Zeytin Ağaçları', subs: ['Bonsai', 'Zeytin Ağacı'] },
   SaksiAranjman:  { label: 'Saksı Aranjmanları',        subs: [] },
   YapayBitkiler:  { label: 'Yapay Bitkiler',            subs: ['Yeşil Bitkiler', 'Renkli Bitkiler'] },
   Saksilar:       { label: 'Saksılar',                  subs: ['Metal Saksılar', 'Plastik Saksılar', 'MDF Saksılar', 'Fiber Saksılar', 'Ahşap Saksılar', 'Beton Saksılar', 'Yanmaz Saksılar'] },
@@ -33,7 +33,8 @@ const CAT_COLORS: Record<string, { bg: string; text: string; border: string }> =
 
 function guessKey(n: string): string {
   const s = n.toLowerCase()
-  if (/bonsai|bonsaı|zeytin/.test(s)) return 'BonsaiZeytin'
+  if (/bonsai|bonsaı/.test(s)) return 'BonsaiZeytin'
+  if (/zeytin/.test(s)) return 'BonsaiZeytin'
   if (/dikey|panel|tavan|yapay.*çit/.test(s)) return 'DikeyBahce'
   if (/sarmaş/.test(s)) return 'Sarmasiklar'
   if (/palmiye|areka/.test(s)) return 'Agaclar'
@@ -55,6 +56,7 @@ function guessSub(n: string, k: string): string {
     if (/hazır|set/.test(s)) return 'Hazır Ağaçlar'
     return 'Yeşil Ağaçlar'
   }
+  if (k === 'BonsaiZeytin') return /zeytin/.test(s) ? 'Zeytin Ağacı' : 'Bonsai'
   if (k === 'Bambu') return /separat|paravan/.test(s) ? 'Separatör' : 'Tekli Bambu'
   if (k === 'YapayKursekler') return /renk|pembe|mor|sarı|kırmızı|beyaz|renkli/.test(s) ? 'Renkli Çiçekler' : 'Yeşil Çiçekler'
   if (k === 'DikeyBahce') { if (/panel/.test(s)) return 'Paneller'; if (/tavan/.test(s)) return 'Tavan Dekorları'; return 'Kapı Önü Dekorlar' }
