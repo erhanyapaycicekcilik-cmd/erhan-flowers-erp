@@ -1403,7 +1403,7 @@ Sadece 3 satır ürün adı yaz, başka hiçbir şey yazma.`;
         },
       },
       orderBy: { productName: 'asc' },
-      take: 200,
+      take: 5000,
     })
   }
 
