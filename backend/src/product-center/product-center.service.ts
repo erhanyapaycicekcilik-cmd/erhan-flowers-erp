@@ -1404,6 +1404,7 @@ Sadece 3 satır ürün adı yaz, başka hiçbir şey yazma.`;
           select: {
             potSize: true, potType: true, productHeight: true,
             leafCount: true, stemCount: true, branchCount: true, leavesPerBranch: true,
+            catalogCategory: true, catalogSubCategory: true,
           }
         },
       },
