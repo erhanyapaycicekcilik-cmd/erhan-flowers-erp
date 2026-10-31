@@ -410,11 +410,12 @@ export class ProductsService {
     let images: unknown;
     let brand: string | undefined;
     let description: string | undefined;
+    let videoUrl: string | undefined;
 
     const trendyolVariant = barcode
-      ? await this.prisma.trendyolProductVariant.findFirst({ where: { barcode }, select: { productName: true, images: true, brand: true, productDescription: true } })
+      ? await this.prisma.trendyolProductVariant.findFirst({ where: { barcode }, select: { productName: true, images: true, brand: true, productDescription: true, videoUrl: true } })
       : modelCode
-        ? await this.prisma.trendyolProductVariant.findFirst({ where: { currentModelCode: modelCode }, select: { productName: true, images: true, brand: true, productDescription: true } })
+        ? await this.prisma.trendyolProductVariant.findFirst({ where: { currentModelCode: modelCode }, select: { productName: true, images: true, brand: true, productDescription: true, videoUrl: true } })
         : null;
 
     if (trendyolVariant) {
@@ -422,6 +423,7 @@ export class ProductsService {
       images = trendyolVariant.images;
       brand = trendyolVariant.brand ?? undefined;
       description = trendyolVariant.productDescription ?? undefined;
+      videoUrl = trendyolVariant.videoUrl ?? undefined;
     } else if (barcode || modelCode) {
       const dbProduct = await this.prisma.product.findFirst({
         where: barcode ? { barcode } : { modelCode: modelCode! },
@@ -445,6 +447,7 @@ export class ProductsService {
       images,
       brand,
       description,
+      videoUrl,
     };
 
     // Cache'den bağlı platformları al (5dk TTL, DB sorgusu atmaz)

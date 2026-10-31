@@ -895,6 +895,7 @@ model TrendyolProductVariant {
   stockQuantity         Int                       @default(0) @map("stock_quantity")
   trendyolProductUrl    String?                   @map("trendyol_product_url")
   images                Json?
+  videoUrl              String?                   @map("video_url")
   suggestedFamilyName   String?                   @map("suggested_family_name")
   detectedSize          String?                   @map("detected_size")
   detectedPot           String?                   @map("detected_pot")

@@ -1205,6 +1205,7 @@ export class ProductCenterService {
     leavesPerBranch?: number | null;
     catalogCategory?: string | null;
     catalogSubCategory?: string | null;
+    videoUrl?: string | null;
   }) {
     const variantData: any = {}
     if (body.productName !== undefined) variantData.productName = body.productName
@@ -1214,6 +1215,7 @@ export class ProductCenterService {
     if (body.supplierStockCode !== undefined) variantData.supplierStockCode = body.supplierStockCode
     if (body.barcode !== undefined) variantData.barcode = body.barcode
     if (body.shopCategoryId !== undefined) variantData.shopCategoryId = body.shopCategoryId
+    if (body.videoUrl !== undefined) variantData.videoUrl = body.videoUrl
 
     const variant = await this.prisma.trendyolProductVariant.update({
       where: { id },
@@ -1335,7 +1337,7 @@ export class ProductCenterService {
         id: true, productName: true, barcode: true, currentModelCode: true,
         supplierStockCode: true, productDescription: true, images: true,
         shopCategoryId: true, shopCategory: { select: { id: true, name: true, parent: { select: { id: true, name: true } } } },
-        trendyolSalePrice: true, stockQuantity: true, status: true,
+        trendyolSalePrice: true, stockQuantity: true, status: true, videoUrl: true,
         productCostDraft: { select: { salePrice: true, marketplaceSalePrice: true } },
         product: {
           select: {

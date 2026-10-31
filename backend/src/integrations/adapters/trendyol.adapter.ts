@@ -565,6 +565,7 @@ export class TrendyolAdapter extends BaseIntegrationAdapter {
           title: this.text(data.productName),
           description: this.text(data.description),
           images: this.array(data.images).map((imageUrl) => ({ url: String(imageUrl) })),
+          ...(data.videoUrl ? { videos: [{ url: String(data.videoUrl) }] } : {}),
           // Trendyol, onaylı bir üründe varyant tanımlayan özniteliği ("Renk")
           // değiştirmeye izin vermiyor ve HTTP 400 ile reddediyor. Bu yüzden
           // içerik güncellemesinde renk alanlarını hiç göndermiyoruz.
@@ -692,6 +693,7 @@ export class TrendyolAdapter extends BaseIntegrationAdapter {
       listPrice: Number(data.listPrice ?? data.salePrice ?? 0),
       salePrice: Number(data.salePrice ?? 0),
       images: this.array(data.images).map((url) => ({ url: String(url) })),
+      ...(data.videoUrl ? { videos: [{ url: String(data.videoUrl) }] } : {}),
       attributes: this.buildAttributes(data),
     };
   }
