@@ -7,7 +7,7 @@ import { api, apiFileUrl } from '@/lib/api'
 
 const CATS: Record<string, { label: string; subs: string[] }> = {
   Agaclar:        { label: 'Ağaçlar',                   subs: ['Yeşil Ağaçlar', 'Hazır Ağaçlar', 'Renkli Ağaçlar', 'Bambu Ağaçlar', 'Palmiye ve Areka Ağaçlar', 'Saksısız Ağaçlar'] },
-  Bambu:          { label: 'Bambu',                     subs: ['Tekli Bambu', 'Separatör'] },
+  Bambu:          { label: 'Bambu',                     subs: ['Tekli Bambu', 'Plastik Separatör', 'MDF Separatör', 'Fiber Separatör'] },
   YapayKursekler: { label: 'Yapay Çiçekler',            subs: ['Renkli Çiçekler', 'Yeşil Çiçekler'] },
   Buketler:       { label: 'Buketler',                  subs: [] },
   DikeyBahce:     { label: 'Dikey Bahçeler',            subs: ['Paneller', 'Kapı Önü Dekorlar', 'Tavan Dekorları'] },
