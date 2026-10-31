@@ -40,6 +40,7 @@ function buildForm(p: any) {
     productDescription: p?.productDescription || physLines.join('\n'),
     images: Array.isArray(p?.images) ? p.images.join('\n') : (p?.images ?? ''),
     shopCategoryId: p?.shopCategoryId ? String(p.shopCategoryId) : '',
+    videoUrl: p?.videoUrl ?? '',
     potSize: prod.potSize ?? '', potType: prod.potType ?? '',
     productHeight: prod.productHeight ?? '', leafCount: prod.leafCount ?? '',
     stemCount: prod.stemCount ?? '', branchCount: prod.branchCount ?? '',
@@ -154,6 +155,7 @@ export default function UrunDetayPage() {
           stemCount: form.stemCount !== '' ? Number(form.stemCount) : null,
           branchCount: form.branchCount !== '' ? Number(form.branchCount) : null,
           leavesPerBranch: form.leavesPerBranch !== '' ? Number(form.leavesPerBranch) : null,
+          videoUrl: form.videoUrl || null,
           catalogCategory: form.catalogCatKey ? CATS[form.catalogCatKey].label : null,
           catalogSubCategory: form.catalogSubCategory || null,
         },
@@ -364,6 +366,20 @@ export default function UrunDetayPage() {
                 Bu kategoride sonraki model kodu: <strong>{nextCode}</strong>
                 <span className="text-gray-400"> (kayıtta atanır)</span>
               </p>
+            )}
+          </div>
+
+          {/* Video URL */}
+          <div>
+            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Video (YouTube)</label>
+            <input
+              className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="https://www.youtube.com/watch?v=..."
+              value={form.videoUrl}
+              onChange={(e) => { setForm({ ...form, videoUrl: e.target.value }); setSaved(false) }}
+            />
+            {form.videoUrl && (
+              <p className="mt-1 text-xs text-green-600">✓ Video var — kaydet ile platformlara gönderilir</p>
             )}
           </div>
 
