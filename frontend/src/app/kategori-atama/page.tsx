@@ -58,12 +58,19 @@ type Variant = {
 type State = Record<string, { k: string; sub: string }>
 
 const STORAGE_KEY = 'kategori_atama_v1'
+const LAST_KEY = 'kategori_atama_last'
 
 function loadState(): State {
   try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}') } catch { return {} }
 }
 function saveState(s: State) {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(s)) } catch { /* ignore */ }
+}
+function loadLast(): string {
+  try { return localStorage.getItem(LAST_KEY) || '' } catch { return '' }
+}
+function saveLast(barcode: string) {
+  try { localStorage.setItem(LAST_KEY, barcode) } catch { /* ignore */ }
 }
 
 export default function KategoriAtamaPage() {
@@ -76,7 +83,9 @@ export default function KategoriAtamaPage() {
   const [sendMsg, setSendMsg] = useState('')
   const [bulkKey, setBulkKey] = useState('')
   const [bulkSub, setBulkSub] = useState('')
+  const [lastBarcode, setLastBarcode] = useState<string>('')
   const searchTimeout = useRef<any>(null)
+  const rowRefs = useRef<Record<string, HTMLTableRowElement | null>>({})
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -99,15 +108,28 @@ export default function KategoriAtamaPage() {
     setLoading(false)
   }, [])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    setLastBarcode(loadLast())
+    load()
+  }, [load])
+
+  useEffect(() => {
+    if (!loading && lastBarcode && rowRefs.current[lastBarcode]) {
+      setTimeout(() => {
+        rowRefs.current[lastBarcode]?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }, 100)
+    }
+  }, [loading, lastBarcode])
 
   const updateState = (next: State) => { setState(next); saveState(next) }
 
   const setCat = (barcode: string, k: string) => {
     updateState({ ...state, [barcode]: { k, sub: '' } })
+    setLastBarcode(barcode); saveLast(barcode)
   }
   const setSubCat = (barcode: string, sub: string) => {
     updateState({ ...state, [barcode]: { ...(state[barcode] || { k: '' }), sub } })
+    setLastBarcode(barcode); saveLast(barcode)
   }
 
   const filtered = products.filter(p => {
@@ -233,8 +255,11 @@ export default function KategoriAtamaPage() {
                   const price = Number(p.productCostDraft?.marketplaceSalePrice || p.trendyolSalePrice || 0)
                   const k = state[p.barcode]?.k || ''
                   const sub = state[p.barcode]?.sub || ''
+                  const isLast = p.barcode === lastBarcode
                   return (
-                    <tr key={p.id} className="border-b border-gray-100 hover:bg-blue-50/30 transition-colors">
+                    <tr key={p.id}
+                      ref={el => { rowRefs.current[p.barcode] = el }}
+                      className={`border-b transition-colors ${isLast ? 'bg-blue-50 border-l-4 border-l-blue-500' : 'border-gray-100 hover:bg-blue-50/30'}`}>
                       <td className="p-2">
                         {img ? (
                           <a href={img} target="_blank" rel="noreferrer">
@@ -245,8 +270,14 @@ export default function KategoriAtamaPage() {
                         )}
                       </td>
                       <td className="p-2">
-                        <p className="text-sm font-medium text-gray-900 leading-tight max-w-xs">{p.productName}</p>
-                        <p className="text-xs text-gray-400 mt-0.5">{p.barcode}</p>
+                        <div className="flex items-start gap-1.5">
+                          {isLast && <span className="mt-0.5 text-blue-500 text-base leading-none">→</span>}
+                          <div>
+                            <p className="text-sm font-medium text-gray-900 leading-tight max-w-xs">{p.productName}</p>
+                            <p className="text-xs text-gray-400 mt-0.5">{p.barcode}</p>
+                            {isLast && <span className="text-[10px] text-blue-500 font-semibold">kaldığınız yer</span>}
+                          </div>
+                        </div>
                       </td>
                       <td className="p-2">
                         <code className="text-xs text-gray-600">{p.currentModelCode || '—'}</code>
