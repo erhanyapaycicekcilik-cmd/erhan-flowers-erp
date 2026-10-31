@@ -195,10 +195,10 @@ export default function KategoriAtamaPage() {
       try {
         await api(`/product-center/variants/${p.id}`, {
           method: 'PATCH',
-          body: JSON.stringify({
-            categoryName: CATS[state[p.barcode].k].label,
-            subCategoryName: state[p.barcode].sub || undefined,
-          }),
+          json: {
+            catalogCategory: CATS[state[p.barcode].k].label,
+            catalogSubCategory: state[p.barcode].sub || null,
+          },
         })
         ok++
       } catch { err++ }
@@ -220,7 +220,11 @@ export default function KategoriAtamaPage() {
           <div className="flex-1" />
           {lastBarcode && (
             <button
-              onClick={() => rowRefs.current[lastBarcode]?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
+              onClick={() => {
+                setFilter('all')
+                setSearch('')
+                setTimeout(() => rowRefs.current[lastBarcode]?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50)
+              }}
               className="text-xs bg-orange-100 border border-orange-300 text-orange-700 rounded-lg px-3 py-1.5 font-semibold hover:bg-orange-200 transition-all">
               📍 Kaldığım Yere Git
             </button>

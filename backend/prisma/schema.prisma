@@ -458,6 +458,7 @@ model Product {
   leavesPerBranch      Int?                    @map("leaves_per_branch")
   leafCount            Int?                    @map("leaf_count")
   catalogCategory      String?                 @map("catalog_category")
+  catalogSubCategory   String?                 @map("catalog_sub_category")
   status               RecordStatus            @default(ACTIVE)
   description          String?
   createdAt            DateTime                @default(now()) @map("created_at")

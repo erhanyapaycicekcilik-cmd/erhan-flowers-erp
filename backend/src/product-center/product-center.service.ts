@@ -1203,6 +1203,8 @@ export class ProductCenterService {
     stemCount?: number | null;
     branchCount?: number | null;
     leavesPerBranch?: number | null;
+    catalogCategory?: string | null;
+    catalogSubCategory?: string | null;
   }) {
     const variantData: any = {}
     if (body.productName !== undefined) variantData.productName = body.productName
@@ -1233,6 +1235,8 @@ export class ProductCenterService {
     if (body.leavesPerBranch !== undefined) physicalFields.leavesPerBranch = body.leavesPerBranch
     if (body.productName !== undefined) physicalFields.productName = body.productName
     if (body.currentModelCode !== undefined) physicalFields.modelCode = body.currentModelCode
+    if (body.catalogCategory !== undefined) physicalFields.catalogCategory = body.catalogCategory
+    if (body.catalogSubCategory !== undefined) physicalFields.catalogSubCategory = body.catalogSubCategory
 
     if (variant.productId && Object.keys(physicalFields).length > 0) {
       await this.prisma.product.update({ where: { id: variant.productId }, data: physicalFields }).catch(() => undefined)
@@ -1337,6 +1341,7 @@ export class ProductCenterService {
           select: {
             potSize: true, potType: true, productHeight: true,
             leafCount: true, stemCount: true, branchCount: true, leavesPerBranch: true,
+            catalogCategory: true, catalogSubCategory: true,
           }
         },
       },
