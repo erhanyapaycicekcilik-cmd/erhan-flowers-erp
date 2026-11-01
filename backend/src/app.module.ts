@@ -37,7 +37,8 @@ import { CustomerQuestionsModule } from './customer-questions/customer-questions
 import { ShopCategoriesModule } from './shop-categories/shop-categories.module';
 import { ProjectReferencesModule } from './project-references/project-references.module';
 import { VisitorLogsModule } from './visitor-logs/visitor-logs.module';
-import { BillAccountsModule } from './bill-accounts/bill-accounts.module';
+import { BillAccountsModule } from './bill-accounts/bill-accounts.module'
+import { ReturnsModule } from './returns/returns.module';
 
 @Module({
   imports: [
@@ -86,6 +87,7 @@ import { BillAccountsModule } from './bill-accounts/bill-accounts.module';
     ProjectReferencesModule,
     VisitorLogsModule,
     BillAccountsModule,
+    ReturnsModule,
   ],
   controllers: [AppController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
