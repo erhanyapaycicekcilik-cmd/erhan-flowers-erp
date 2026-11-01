@@ -2293,10 +2293,28 @@ model MarketplaceOrder {
   updatedAt            DateTime               @updatedAt @map("updated_at")
   items                MarketplaceOrderItem[]
 
+  returnNote   String?             @map("return_note") @db.Text
+  returnVideos ReturnVideo[]
+
   @@unique([platform, externalOrderId])
   @@index([platform, orderDate])
   @@index([platform, status])
   @@map("marketplace_orders")
+}
+
+model ReturnVideo {
+  id         Int              @id @default(autoincrement())
+  orderId    Int              @map("order_id")
+  filename   String
+  originalName String?        @map("original_name")
+  mimeType   String?          @map("mime_type")
+  sizeByte   Int?             @map("size_byte")
+  note       String?          @db.Text
+  createdAt  DateTime         @default(now()) @map("created_at")
+  order      MarketplaceOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@map("return_videos")
 }
 
 model MarketplaceOrderItem {
