@@ -39,6 +39,7 @@ import { ProjectReferencesModule } from './project-references/project-references
 import { VisitorLogsModule } from './visitor-logs/visitor-logs.module';
 import { BillAccountsModule } from './bill-accounts/bill-accounts.module'
 import { ReturnsModule } from './returns/returns.module';
+import { MailModule } from './mail/mail.module';
 
 @Module({
   imports: [
@@ -88,6 +89,7 @@ import { ReturnsModule } from './returns/returns.module';
     VisitorLogsModule,
     BillAccountsModule,
     ReturnsModule,
+    MailModule,
   ],
   controllers: [AppController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

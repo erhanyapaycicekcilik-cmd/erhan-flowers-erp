@@ -177,7 +177,15 @@ const platformOptions = [
   { value: 'AMAZON', label: 'Amazon' },
   { value: 'WEBSITE', label: 'Web Site' },
   { value: 'TICIMAX', label: 'Ticimax' },
+  { value: 'PAZARAMA', label: 'Pazarama' },
+  { value: 'TRENDRUM', label: 'Trendrum' },
+  { value: 'IDEFIX', label: 'İdefix' },
+  { value: 'FLORA_TRENDYOL', label: 'Flora (Trendyol)' },
+  { value: 'FLORA_N11', label: 'Flora (N11)' },
 ];
+
+const marketplacePlatforms = new Set(['PAZARAMA', 'TRENDRUM', 'IDEFIX', 'FLORA_TRENDYOL', 'FLORA_N11']);
+const webPlatforms = new Set(['WEBSITE']);
 
 const statusRank: Record<string, number> = {
   DRAFT: 0,
@@ -283,6 +291,9 @@ export default function OrdersPage() {
     api<CurrentUser>('/auth/me').then(setCurrentUser).catch(() => null);
   }, []);
 
+  const isMarketplacePlatform = marketplacePlatforms.has(appliedFilters.platform);
+  const isWebPlatform = webPlatforms.has(appliedFilters.platform);
+
   const loadOrders = useCallback(async (options: { background?: boolean } = {}) => {
     if (requestInFlight.current) return;
     requestInFlight.current = true;
@@ -291,12 +302,24 @@ export default function OrdersPage() {
     else setLoading(true);
     setMessage('');
     try {
-      const [data, summaryData] = await Promise.all([
-        api<OrderRow[]>(`/integrations/orders?${params}`),
-        api<OrderSummary>(`/integrations/orders/summary?${summaryParams}`),
-      ]);
-      setOrders(data.map((order) => ({ ...order, items: Array.isArray(order.items) ? order.items : [] })));
-      setSummary(summaryData);
+      const usingMarketplace = marketplacePlatforms.has(appliedFilters.platform);
+      const usingWeb = webPlatforms.has(appliedFilters.platform);
+      if (usingMarketplace) {
+        const data = await api<OrderRow[]>(`/integrations/marketplace-orders?${params}`);
+        setOrders(data.map((order) => ({ ...order, items: Array.isArray(order.items) ? order.items : [] })));
+        setSummary(null);
+      } else if (usingWeb) {
+        const data = await api<OrderRow[]>(`/integrations/web-orders?${params}`);
+        setOrders(data.map((order) => ({ ...order, items: Array.isArray(order.items) ? order.items : [] })));
+        setSummary(null);
+      } else {
+        const [data, summaryData] = await Promise.all([
+          api<OrderRow[]>(`/integrations/orders?${params}`),
+          api<OrderSummary>(`/integrations/orders/summary?${summaryParams}`),
+        ]);
+        setOrders(data.map((order) => ({ ...order, items: Array.isArray(order.items) ? order.items : [] })));
+        setSummary(summaryData);
+      }
       setLastUpdatedAt(new Date());
     } catch {
       setMessage('Gerçek sipariş verileri alınamadı.');
@@ -305,7 +328,7 @@ export default function OrdersPage() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [params, summaryParams]);
+  }, [params, summaryParams, appliedFilters.platform]);
 
   useEffect(() => {
     loadOrders();
@@ -949,7 +972,7 @@ function invoiceStatusLabel(status?: string | null) {
 }
 
 function platformLabel(platform: string) {
-  return ({ TRENDYOL: 'Trendyol', HEPSIBURADA: 'Hepsiburada', N11: 'N11', AMAZON: 'Amazon', WEBSITE: 'Web Site', TICIMAX: 'Ticimax', STORE: 'Mağaza', PHONE: 'Telefon', WHATSAPP: 'WhatsApp', INSTAGRAM: 'Instagram' } as Record<string, string>)[platform] ?? (platform || '-');
+  return ({ TRENDYOL: 'Trendyol', HEPSIBURADA: 'Hepsiburada', N11: 'N11', AMAZON: 'Amazon', WEBSITE: 'Web Site', TICIMAX: 'Ticimax', STORE: 'Mağaza', PHONE: 'Telefon', WHATSAPP: 'WhatsApp', INSTAGRAM: 'Instagram', PAZARAMA: 'Pazarama', TRENDRUM: 'Trendrum', IDEFIX: 'İdefix', FLORA_TRENDYOL: 'Flora (Trendyol)', FLORA_N11: 'Flora (N11)' } as Record<string, string>)[platform] ?? (platform || '-');
 }
 
 function customerTypeLabel(value?: string | null) {

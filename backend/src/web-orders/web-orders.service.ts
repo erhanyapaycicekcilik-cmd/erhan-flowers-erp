@@ -1,13 +1,17 @@
 import { Injectable, Logger, NotFoundException, UnauthorizedException } from '@nestjs/common'
 import { createHmac, timingSafeEqual } from 'crypto'
 import { PrismaService } from '../prisma/prisma.service'
+import { MailService } from '../mail/mail.service'
 import { CreateWebOrderDto } from './dto/create-web-order.dto'
 
 @Injectable()
 export class WebOrdersService {
   private readonly logger = new Logger(WebOrdersService.name)
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly mail: MailService,
+  ) {}
 
   async create(dto: CreateWebOrderDto) {
     const subtotal = dto.items.reduce((s, i) => s + i.unitPrice * i.quantity, 0)
@@ -47,6 +51,24 @@ export class WebOrdersService {
       },
       include: { items: true },
     })
+
+    if (dto.customerEmail) {
+      this.mail.sendWebOrderConfirmation({
+        orderNumber: order.orderNumber,
+        customerName: order.customerName,
+        customerEmail: order.customerEmail,
+        grandTotal: Number(order.grandTotal),
+        paymentMethod: order.paymentMethod,
+        items: order.items.map((i) => ({
+          productName: i.productName,
+          quantity: i.quantity,
+          lineTotal: Number(i.lineTotal),
+        })),
+        address: order.address,
+        city: order.city,
+        note: order.note,
+      }).catch(() => null)
+    }
 
     return { success: true, orderNumber: order.orderNumber, id: order.id }
   }
