@@ -158,6 +158,7 @@ export class PublicCatalogService {
     categorySlug?: string;
     search?: string;
     barcode?: string;
+    modelCode?: string;
     page?: number;
     limit?: number;
     sort?: 'price_asc' | 'price_desc' | 'newest' | 'name';
@@ -209,6 +210,14 @@ export class PublicCatalogService {
     // Barkod filtresi — stok/fiyat/status kısıtlaması olmadan
     if (params.barcode?.trim()) {
       where['barcode'] = params.barcode.trim();
+      delete where['status'];
+      delete where['stockQuantity'];
+      delete where['sitePrice'];
+    }
+
+    // Model kodu filtresi — stok/fiyat/status kısıtlaması olmadan
+    if (params.modelCode?.trim()) {
+      where['modelCode'] = params.modelCode.trim();
       delete where['status'];
       delete where['stockQuantity'];
       delete where['sitePrice'];
