@@ -126,8 +126,25 @@ export default function KategoriAtamaPage() {
   const [bulkSub, setBulkSub] = useState('')
   const [lastBarcode, setLastBarcode] = useState<string>('')
   const [manual, setManual] = useState<Set<string>>(new Set())
+  const [savedBarcodes, setSavedBarcodes] = useState<Set<string>>(new Set())
+  const [savingBarcodes, setSavingBarcodes] = useState<Set<string>>(new Set())
   const searchTimeout = useRef<any>(null)
   const rowRefs = useRef<Record<string, HTMLTableRowElement | null>>({})
+
+  const saveOne = useCallback(async (productId: number, barcode: string, k: string, sub: string) => {
+    setSavingBarcodes(prev => new Set(prev).add(barcode))
+    try {
+      await api(`/product-center/variants/${productId}`, {
+        method: 'PATCH',
+        json: {
+          catalogCategory: CATS[k].label,
+          catalogSubCategory: sub || null,
+        },
+      })
+      setSavedBarcodes(prev => new Set(prev).add(barcode))
+    } catch { /* hata görmezden gel, localStorage'da var */ }
+    setSavingBarcodes(prev => { const s = new Set(prev); s.delete(barcode); return s })
+  }, [])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -179,11 +196,16 @@ export default function KategoriAtamaPage() {
     updateState({ ...state, [barcode]: { k, sub: '' } })
     setLastBarcode(barcode); saveLast(barcode)
     const m = new Set(manual); m.add(barcode); setManual(m); saveManual(m)
+    const p = products.find(p => p.barcode === barcode)
+    if (p && k) void saveOne(p.id, barcode, k, '')
   }
   const setSubCat = (barcode: string, sub: string) => {
-    updateState({ ...state, [barcode]: { ...(state[barcode] || { k: '' }), sub } })
+    const newEntry = { ...(state[barcode] || { k: '' }), sub }
+    updateState({ ...state, [barcode]: newEntry })
     setLastBarcode(barcode); saveLast(barcode)
     const m = new Set(manual); m.add(barcode); setManual(m); saveManual(m)
+    const p = products.find(p => p.barcode === barcode)
+    if (p && newEntry.k) void saveOne(p.id, barcode, newEntry.k, sub)
   }
 
   const filtered = products.filter(p => {
@@ -201,6 +223,8 @@ export default function KategoriAtamaPage() {
     const next = { ...state }
     filtered.forEach(p => { next[p.barcode] = { k: bulkKey, sub: bulkSub } })
     updateState(next)
+    // Toplu atamada hepsini arka planda kaydet
+    filtered.forEach(p => { void saveOne(p.id, p.barcode, bulkKey, bulkSub) })
   }
 
   async function sendToERP() {
@@ -325,7 +349,7 @@ export default function KategoriAtamaPage() {
                   return (
                     <tr key={p.id}
                       ref={el => { rowRefs.current[p.barcode] = el }}
-                      className={`border-b transition-colors ${isLast ? 'bg-yellow-50 border-l-[6px] border-l-orange-400' : 'border-gray-100 hover:bg-gray-50'}`}>
+                      className={`border-b transition-colors ${isLast ? 'bg-yellow-50 border-l-[6px] border-l-orange-400' : savedBarcodes.has(p.barcode) ? 'bg-green-50 border-gray-100' : 'border-gray-100 hover:bg-gray-50'}`}>
                       <td className="p-2">
                         <div className="relative inline-block">
                           {img ? (
@@ -365,13 +389,21 @@ export default function KategoriAtamaPage() {
                       <td className="p-2 text-right text-sm font-semibold tabular-nums">{price ? fmt(price) : '—'}</td>
                       <td className="p-2 text-right text-sm text-gray-600 tabular-nums">{p.stockQuantity}</td>
                       <td className="p-2">
-                        <select
-                          className={`w-full border rounded-lg px-2 py-1.5 text-xs ${k ? 'border-green-400 bg-green-50' : 'border-amber-400 bg-amber-50'}`}
-                          value={k}
-                          onChange={e => setCat(p.barcode, e.target.value)}>
-                          <option value="">— Seçin —</option>
-                          {KEYS.map(key => <option key={key} value={key}>{CATS[key].label}</option>)}
-                        </select>
+                        <div className="relative">
+                          <select
+                            className={`w-full border rounded-lg px-2 py-1.5 text-xs ${k ? 'border-green-400 bg-green-50' : 'border-amber-400 bg-amber-50'}`}
+                            value={k}
+                            onChange={e => setCat(p.barcode, e.target.value)}>
+                            <option value="">— Seçin —</option>
+                            {KEYS.map(key => <option key={key} value={key}>{CATS[key].label}</option>)}
+                          </select>
+                          {savingBarcodes.has(p.barcode) && (
+                            <span className="absolute right-6 top-1/2 -translate-y-1/2 text-[10px] text-blue-500">●</span>
+                          )}
+                          {!savingBarcodes.has(p.barcode) && savedBarcodes.has(p.barcode) && (
+                            <span className="absolute right-6 top-1/2 -translate-y-1/2 text-[10px] text-green-600">✓</span>
+                          )}
+                        </div>
                       </td>
                       <td className="p-2">
                         <select
