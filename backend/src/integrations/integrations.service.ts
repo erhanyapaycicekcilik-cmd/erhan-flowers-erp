@@ -586,6 +586,66 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
     `);
   }
 
+  async listMarketplaceOrders(query: Record<string, string>) {
+    const platform = this.text(query.platform).toUpperCase();
+    const q = this.text(query.q);
+    const take = Math.min(Number(query.pageSize ?? 200), 500);
+    const page = Math.max(1, Number(query.page ?? 1));
+    const offset = (page - 1) * take;
+    const startDate = this.text(query.startDate);
+    const endDate = this.text(query.endDate);
+
+    return this.prisma.$queryRaw<Array<Record<string, unknown>>>(Prisma.sql`
+      SELECT
+        mo.id,
+        mo.order_number AS "saleNumber",
+        mo.order_number AS "platformOrderNumber",
+        mo.external_order_id AS "externalOrderId",
+        mo.platform,
+        mo.status,
+        mo.customer_name AS "customerName",
+        mo.total_amount AS "grandTotal",
+        mo.cargo_amount AS "deliveryFee",
+        mo.order_date AS "orderDate",
+        mo.created_at AS "createdAt",
+        mo.cargo_tracking_number AS "cargoTrackingNumber",
+        mo.cargo_provider AS "cargoProvider",
+        COALESCE(
+          jsonb_agg(
+            jsonb_build_object(
+              'id', moi.id,
+              'productName', moi.product_name,
+              'barcode', moi.barcode,
+              'modelCode', moi.sku,
+              'quantity', moi.quantity,
+              'unitPrice', moi.unit_price,
+              'lineTotal', moi.total_price,
+              'imagePath', COALESCE(
+                sc.image_path,
+                (SELECT sci.file_path FROM stock_card_images sci WHERE sci.stock_card_id = sc.id AND sci.is_main = true LIMIT 1),
+                (SELECT sci.file_path FROM stock_card_images sci WHERE sci.stock_card_id = sc.id ORDER BY sci.id LIMIT 1),
+                sc.external_image_url,
+                (SELECT url FROM jsonb_array_elements_text(CASE WHEN jsonb_typeof(tpv.images) = 'array' THEN tpv.images ELSE '[]'::jsonb END) AS url LIMIT 1)
+              )
+            )
+            ORDER BY moi.id
+          ) FILTER (WHERE moi.id IS NOT NULL),
+          '[]'::jsonb
+        ) AS items
+      FROM marketplace_orders mo
+      LEFT JOIN marketplace_order_items moi ON moi.order_id = mo.id
+      LEFT JOIN stock_cards sc ON sc.barcode = moi.barcode OR (moi.barcode IS NULL AND sc.sku = moi.sku)
+      LEFT JOIN trendyol_product_variants tpv ON tpv.barcode = COALESCE(moi.barcode, sc.barcode)
+      WHERE (${platform} = '' OR mo.platform = ${platform})
+        AND (${q} = '' OR mo.order_number ILIKE ${`%${q}%`} OR mo.customer_name ILIKE ${`%${q}%`} OR mo.external_order_id ILIKE ${`%${q}%`})
+        AND (${startDate} = '' OR COALESCE(mo.order_date, mo.created_at)::date >= ${startDate}::date)
+        AND (${endDate} = '' OR COALESCE(mo.order_date, mo.created_at)::date <= ${endDate}::date)
+      GROUP BY mo.id
+      ORDER BY COALESCE(mo.order_date, mo.created_at) DESC
+      LIMIT ${take} OFFSET ${offset}
+    `);
+  }
+
   async operationsSummary() {
     const [summary] = await this.prisma.$queryRaw<Array<Record<string, unknown>>>`
       SELECT

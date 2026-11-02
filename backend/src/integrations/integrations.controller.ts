@@ -112,6 +112,11 @@ export class IntegrationsController {
     return this.integrations.listOrders(query);
   }
 
+  @Get('marketplace-orders')
+  marketplaceOrders(@Query() query: Record<string, string>) {
+    return this.integrations.listMarketplaceOrders(query);
+  }
+
   @Get('operations')
   operations() {
     return this.integrations.operationsSummary();
