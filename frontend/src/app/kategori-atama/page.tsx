@@ -139,9 +139,9 @@ export default function KategoriAtamaPage() {
         const fromStorage = loadState()
         const next: State = {}
         active.forEach(v => {
-          // 1. Öncelik: veritabanındaki katalog kategorisi
-          const dbCatLabel = v.product?.catalogCategory
-          const dbSub = v.product?.catalogSubCategory || ''
+          // 1. Öncelik: variant'ın kendi katalog kategorisi (product bağlantısı olmasa da çalışır)
+          const dbCatLabel = (v as any).catalogCategory || v.product?.catalogCategory
+          const dbSub = (v as any).catalogSubCategory || v.product?.catalogSubCategory || ''
           if (dbCatLabel) {
             const k = KEYS.find(k => CATS[k].label === dbCatLabel) || ''
             if (k) { next[v.barcode] = { k, sub: dbSub }; return }

@@ -927,6 +927,8 @@ model TrendyolProductVariant {
   templateId            Int?                      @map("template_id")
   shopCategoryId        Int?                      @map("shop_category_id")
   shopCategory          ShopCategory?             @relation(fields: [shopCategoryId], references: [id])
+  catalogCategory       String?                   @map("catalog_category")
+  catalogSubCategory    String?                   @map("catalog_sub_category")
   trendyolSalePrice     Decimal                   @default(0) @map("trendyol_sale_price") @db.Decimal(12, 2)
   n11SalePrice          Decimal                   @default(0) @map("n11_sale_price") @db.Decimal(12, 2)
   hepsiburadaSalePrice  Decimal                   @default(0) @map("hepsiburada_sale_price") @db.Decimal(12, 2)
