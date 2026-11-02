@@ -69,6 +69,9 @@ export class OrderSyncService {
     try { await this.runPazaramaSync(); } catch (err) {
       this.logger.error('Pazarama sync hatasi', err instanceof Error ? err.message : String(err));
     }
+    try { await this.runIdefixSync(); } catch (err) {
+      this.logger.error('Idefix sync hatasi', err instanceof Error ? err.message : String(err));
+    }
   }
 
   async runSync(): Promise<{ processed: number; newOrders: number; stockDeductions: number }> {
@@ -1394,6 +1397,104 @@ export class OrderSyncService {
     await this.markMissingAsDelivered('PAZARAMA', allOrders.map((o) => String(o.id ?? o.orderId ?? o.orderNumber ?? o.orderCode ?? '')));
 
     this.logger.log(`Pazarama sync tamamlandi: ${newOrders} yeni siparis.`);
+    return { processed: allOrders.length, newOrders };
+  }
+
+  async runIdefixSync(): Promise<{ processed: number; newOrders: number }> {
+    let apiKey = process.env.IDEFIX_API_KEY ?? '';
+    let supplierId = process.env.IDEFIX_SUPPLIER_ID ?? '';
+
+    if (!apiKey || !supplierId) {
+      try {
+        const rows = await this.prisma.$queryRaw<Array<{ credentialType: string; encryptedValue: string }>>`
+          SELECT cc.credential_type AS "credentialType", cc.encrypted_value AS "encryptedValue"
+          FROM channel_credentials cc
+          JOIN channel_accounts ca ON cc.channel_account_id = ca.id
+          JOIN sales_channels sc ON ca.sales_channel_id = sc.id
+          JOIN companies co ON ca.company_id = co.id
+          WHERE sc.code = 'IDEFIX' AND co.code = 'ERHAN' AND ca.is_active = true AND cc.is_active = true
+        `;
+        const vals: Record<string, string> = {};
+        for (const row of rows) {
+          try { vals[row.credentialType] = this.credentialVault.decrypt(row.encryptedValue); } catch { /* skip */ }
+        }
+        apiKey = vals['API_KEY'] || apiKey;
+        supplierId = vals['SUPPLIER_ID'] || supplierId;
+      } catch { /* skip */ }
+    }
+
+    if (!apiKey || !supplierId) {
+      this.logger.warn('Idefix credentials bulunamadi, sync atlanıyor.');
+      return { processed: 0, newOrders: 0 };
+    }
+
+    const apiBase = 'https://merchantapi.idefix.com/pim/catalog';
+    const token = Buffer.from(`${apiKey}:${supplierId}`).toString('base64');
+    const headers = { 'X-API-KEY': token, Accept: 'application/json', 'Content-Type': 'application/json' };
+    const lookback = Date.now() - this.lookbackDays * 24 * 60 * 60 * 1000;
+
+    const allOrders: Array<Record<string, unknown>> = [];
+    let pageIndex = 0;
+    while (pageIndex < 10) {
+      const url = `${apiBase}/${supplierId}/orders?pageSize=50&pageIndex=${pageIndex}&status=New`;
+      const res = await fetch(url, { headers, signal: AbortSignal.timeout(15000) }).catch(() => null);
+      if (!res || !res.ok) break;
+      const data = await res.json() as { data?: Array<Record<string, unknown>>; items?: Array<Record<string, unknown>> } | Array<Record<string, unknown>>;
+      const items: Array<Record<string, unknown>> = Array.isArray(data) ? data : ((data as any)?.data ?? (data as any)?.items ?? []);
+      if (!Array.isArray(items) || items.length === 0) break;
+      allOrders.push(...items);
+      if (items.length < 50) break;
+      pageIndex++;
+    }
+
+    this.logger.log(`Idefix'ten ${allOrders.length} siparis cekildi.`);
+    let newOrders = 0;
+
+    for (const order of allOrders) {
+      const externalOrderId = String(order.id ?? order.orderId ?? order.orderNumber ?? '');
+      if (!externalOrderId) continue;
+      const rawDate = order.orderDate ?? order.createdAt;
+      const orderDate = rawDate ? new Date(String(rawDate)) : null;
+      if (orderDate && orderDate.getTime() < lookback) continue;
+
+      const existing = await this.prisma.marketplaceOrder.findUnique({
+        where: { platform_externalOrderId: { platform: 'IDEFIX', externalOrderId } },
+      });
+      if (existing) {
+        const newStatus = String(order.status ?? '');
+        if (newStatus && existing.status !== newStatus) {
+          await this.prisma.marketplaceOrder.update({ where: { id: existing.id }, data: { status: newStatus } });
+        }
+        continue;
+      }
+
+      const shipAddr = (order.shippingAddress ?? order.deliveryAddress ?? {}) as Record<string, unknown>;
+      const customerName = String(
+        order.customerName ?? order.buyerName ??
+        shipAddr.fullName ??
+        [shipAddr.firstName, shipAddr.lastName].filter(Boolean).join(' ') ?? ''
+      );
+
+      await this.prisma.marketplaceOrder.create({
+        data: {
+          platform: 'IDEFIX',
+          externalOrderId,
+          orderNumber: String(order.orderNumber ?? externalOrderId),
+          status: String(order.status ?? 'New'),
+          customerName,
+          totalAmount: Number(order.totalAmount ?? order.total ?? 0),
+          cargoAmount: 0,
+          currency: 'TRY',
+          orderDate,
+          rawPayload: order as object,
+        },
+      });
+      newOrders++;
+    }
+
+    await this.markMissingAsDelivered('IDEFIX', allOrders.map((o) => String(o.id ?? o.orderId ?? o.orderNumber ?? '')));
+
+    this.logger.log(`Idefix sync tamamlandi: ${newOrders} yeni siparis.`);
     return { processed: allOrders.length, newOrders };
   }
 }
