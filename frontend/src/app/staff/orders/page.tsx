@@ -212,6 +212,12 @@ export default function StaffOrdersPage() {
   }
 
   function handleStatusChange(id: number, status: string) {
+    if (status === 'DELIVERED' || status === 'COMPLETED' || status === 'CANCELLED') {
+      setOrders(prev => prev.filter(o => o.id !== id));
+      setToastMsg('📦 Sipariş kargoya verildi, listeden kaldırıldı.');
+      setTimeout(() => setToastMsg(''), 4000);
+      return;
+    }
     setOrders(prev => prev.map(o => o.id === id ? { ...o, status } : o));
     if (status === 'READY') {
       setToastMsg('✅ Video yüklendi! Sipariş Kargo Bekleniyor bölümüne taşındı.');
@@ -496,6 +502,7 @@ function OrderCard({ order, onStatusChange, readySection, category }: { order: O
   const [activeIdx, setActiveIdx] = useState(categoryStartIdx);
   const [showDetails, setShowDetails] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [markingDelivered, setMarkingDelivered] = useState(false);
   const [staffNote, setStaffNote] = useState(order.staffNote ?? '');
   const [savingNote, setSavingNote] = useState(false);
   const videoRef = useRef<HTMLInputElement>(null);
@@ -552,6 +559,19 @@ function OrderCard({ order, onStatusChange, readySection, category }: { order: O
     const files = e.target.files;
     if (!files || files.length === 0) return;
     await markReadyWithPhotos(files);
+  }
+
+  async function markDelivered() {
+    if (!confirm('Bu sipariş kargoya verildi olarak işaretlensin mi? Listeden kalkacak.')) return;
+    setMarkingDelivered(true);
+    try {
+      await api(`/sales/${order.id}/status`, { method: 'POST', json: { status: 'DELIVERED', note: 'Kargoya verildi.' } });
+      onStatusChange(order.id, 'DELIVERED');
+    } catch {
+      alert('İşlem başarısız, tekrar deneyin.');
+    } finally {
+      setMarkingDelivered(false);
+    }
   }
 
   async function saveStaffNote() {
@@ -743,13 +763,14 @@ function OrderCard({ order, onStatusChange, readySection, category }: { order: O
           <input ref={videoRef} type="file" accept="video/*" capture="environment" className="hidden" onChange={handlePhoto} />
           {isReady ? (
             <>
-              <div className="flex-1 flex items-center justify-center gap-1 text-xs px-2 py-2 rounded-lg bg-green-100 text-green-700 font-bold">
-                <CheckCircle size={13} /> Kargoya Hazır
-              </div>
+              <button onClick={() => void markDelivered()} disabled={markingDelivered}
+                className="flex-1 flex items-center justify-center gap-1 text-xs px-2 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition disabled:opacity-60 font-bold">
+                <CheckCircle size={13} /> {markingDelivered ? '…' : '✓ Kargoya Verildi'}
+              </button>
               <button onClick={() => videoRef.current?.click()} disabled={uploading}
                 title="Ek video çek"
                 className="flex items-center justify-center gap-1 text-xs px-2 py-2 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-100 transition disabled:opacity-60">
-                <Video size={13} /> {uploading ? '…' : 'Video Ekle'}
+                <Video size={13} /> {uploading ? '…' : 'Video'}
               </button>
             </>
           ) : (
