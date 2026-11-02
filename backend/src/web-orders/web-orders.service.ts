@@ -71,6 +71,7 @@ export class WebOrdersService {
       note: order.note,
     }).catch(() => null)
 
+
     if (dto.customerEmail && order.customerEmail) {
       this.mail.sendWebOrderConfirmation({
         orderNumber: order.orderNumber,
