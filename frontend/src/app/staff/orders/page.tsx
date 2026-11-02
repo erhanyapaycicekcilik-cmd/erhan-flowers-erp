@@ -496,18 +496,67 @@ function OrderCard({ order, onStatusChange, readySection, category }: { order: O
     return idx >= 0 ? idx : 0;
   }, [category, order.items]);
 
-  const [activeIdx, setActiveIdx] = useState(categoryStartIdx);
+  const [activeIdx, setActiveIdx] = useState(0);
   const [showDetails, setShowDetails] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [markingDelivered, setMarkingDelivered] = useState(false);
   const [staffNote, setStaffNote] = useState(order.staffNote ?? '');
   const [savingNote, setSavingNote] = useState(false);
-  const [fallbackImg, setFallbackImg] = useState<string | null>(null);
+  // barcode → resolved image URL (from DB or catalog fallback)
+  const [resolvedImgs, setResolvedImgs] = useState<Record<string, string>>({});
   const videoRef = useRef<HTMLInputElement>(null);
 
-  const itemsWithImg = order.items.filter((i) => i.imagePath);
-  const activeItem = itemsWithImg[activeIdx] ?? order.items[activeIdx] ?? order.items[0];
-  const activeSrc = itemsWithImg.length > 0 ? itemImageSrc(itemsWithImg[activeIdx] ?? itemsWithImg[0]) : null;
+  // Her item için görsel çöz: DB'de varsa kullan, yoksa public catalog'dan barkodla çek
+  useEffect(() => {
+    const barcodes = order.items
+      .filter((i) => !i.imagePath && i.barcode)
+      .map((i) => i.barcode!);
+    const unique = [...new Set(barcodes)];
+    if (!unique.length) return;
+
+    Promise.all(
+      unique.map((bc) =>
+        fetch(`${apiBaseUrl}/public/catalog/products?barcode=${encodeURIComponent(bc)}&limit=1`)
+          .then((r) => r.json())
+          .then((data: { products?: Array<{ mainImage?: string | null }> }) => {
+            const img = data?.products?.[0]?.mainImage;
+            if (!img) return null;
+            const url = img.startsWith('http') ? img : `${apiBaseUrl}/${img.replace(/^\//, '')}`;
+            return [bc, url] as [string, string];
+          })
+          .catch(() => null)
+      )
+    ).then((results) => {
+      const map: Record<string, string> = {};
+      results.forEach((r) => { if (r) map[r[0]] = r[1]; });
+      if (Object.keys(map).length) setResolvedImgs(map);
+    });
+  }, [order.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Tüm item'lar için görsel kaynağı: DB → catalog fallback
+  function resolveItemSrc(item: OrderItem): string | null {
+    if (item.imagePath) return itemImageSrc(item);
+    if (item.barcode && resolvedImgs[item.barcode]) return resolvedImgs[item.barcode];
+    return null;
+  }
+
+  // Görsel olan item'lar (DB veya fallback)
+  const itemsWithSrc = order.items.map((item) => ({ item, src: resolveItemSrc(item) })).filter((x) => x.src);
+
+  // Kategori filtresi varsa o kategorideki item'dan başla
+  const startIdx = useMemo(() => {
+    if (!category || category === 'all' || !itemsWithSrc.length) return 0;
+    const keywords = category === 'agac' ? AGAC_KEYWORDS : category === 'bambu' ? BAMBU_KEYWORDS : category === 'saksi' ? SAKSI_KEYWORDS : [];
+    const idx = itemsWithSrc.findIndex(({ item }) => keywords.some((kw) => (item.productName ?? '').toLowerCase().includes(kw)));
+    return idx >= 0 ? idx : 0;
+  }, [category, itemsWithSrc.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => { setActiveIdx(startIdx); }, [startIdx]);
+
+  const clampedIdx = Math.min(activeIdx, Math.max(0, itemsWithSrc.length - 1));
+  const activeEntry = itemsWithSrc[clampedIdx];
+  const displaySrc = activeEntry?.src ?? null;
+  const activeItem = activeEntry?.item ?? order.items[0];
 
   // Görsel yoksa public catalog'dan barkodla çek
   useEffect(() => {
@@ -663,17 +712,14 @@ function OrderCard({ order, onStatusChange, readySection, category }: { order: O
       </div>
 
       {/* Çoklu ürün galerisi */}
-      {itemsWithImg.length > 1 && (
+      {itemsWithSrc.length > 1 && (
         <div className="flex gap-1 px-2 pt-2 flex-wrap">
-          {itemsWithImg.map((item, i) => {
-            const src = itemImageSrc(item);
-            return src ? (
-              <button key={i} onClick={() => setActiveIdx(i)}
-                className={`w-12 h-12 rounded border-2 overflow-hidden shrink-0 ${i === activeIdx ? 'border-indigo-500' : 'border-transparent'}`}>
-                <img src={src} alt="" className="w-full h-full object-cover" />
-              </button>
-            ) : null;
-          })}
+          {itemsWithSrc.map(({ item, src }, i) => (
+            <button key={i} onClick={() => setActiveIdx(i)}
+              className={`w-12 h-12 rounded border-2 overflow-hidden shrink-0 ${i === clampedIdx ? 'border-indigo-500' : 'border-transparent'}`}>
+              <img src={src!} alt={item.productName ?? ''} className="w-full h-full object-cover" />
+            </button>
+          ))}
         </div>
       )}
 
