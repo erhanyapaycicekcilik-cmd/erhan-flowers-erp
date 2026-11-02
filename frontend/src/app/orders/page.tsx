@@ -316,12 +316,13 @@ export default function OrdersPage() {
         setOrders(data.map((order) => ({ ...order, items: Array.isArray(order.items) ? order.items : [] })));
         setSummary(null);
       } else {
-        const [data, summaryData] = await Promise.all([
+        const [dataResult, summaryResult] = await Promise.allSettled([
           api<OrderRow[]>(`/integrations/orders?${params}`),
           api<OrderSummary>(`/integrations/orders/summary?${summaryParams}`),
         ]);
-        setOrders(data.map((order) => ({ ...order, items: Array.isArray(order.items) ? order.items : [] })));
-        setSummary(summaryData);
+        if (dataResult.status === 'rejected') throw dataResult.reason;
+        setOrders(dataResult.value.map((order) => ({ ...order, items: Array.isArray(order.items) ? order.items : [] })));
+        setSummary(summaryResult.status === 'fulfilled' ? summaryResult.value : null);
       }
       setLastUpdatedAt(new Date());
     } catch {
