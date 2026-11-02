@@ -563,7 +563,7 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
         OR (i.stock_card_id IS NULL AND i.barcode IS NOT NULL AND sc.barcode = i.barcode)
         OR (i.stock_card_id IS NULL AND i.model_code IS NOT NULL AND sc.sku = i.model_code)
       LEFT JOIN trendyol_product_variants tpv ON tpv.barcode = COALESCE(i.barcode, sc.barcode)
-      WHERE s.integration_sync_status <> 'MANUAL'
+      WHERE (s.integration_sync_status IS NULL OR s.integration_sync_status <> 'MANUAL')
         AND (${companyCode} = '' OR co.code = ${companyCode})
         AND (${platform} = '' OR s.channel::text = ${platform})
         AND (${statuses.length} = 0 OR s.status::text IN (${Prisma.join(statuses.length ? statuses : ['__NONE__'])}))
@@ -709,12 +709,12 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
         COUNT(*) FILTER (WHERE status = 'COMPLETED')::int AS completed,
         COUNT(*) FILTER (WHERE integration_sync_status = 'MATCHING_REQUIRED')::int AS "matchingRequired"
       FROM retail_sales
-      WHERE integration_sync_status <> 'MANUAL'
+      WHERE (integration_sync_status IS NULL OR integration_sync_status <> 'MANUAL')
     `;
     const byPlatform = await this.prisma.$queryRaw<Array<Record<string, unknown>>>`
       SELECT channel::text AS platform, COUNT(*)::int AS count
       FROM retail_sales
-      WHERE integration_sync_status <> 'MANUAL'
+      WHERE (integration_sync_status IS NULL OR integration_sync_status <> 'MANUAL')
       GROUP BY channel
       ORDER BY count DESC
     `;
@@ -731,7 +731,7 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
         COALESCE(SUM(s.grand_total) FILTER (WHERE s.created_at::date = CURRENT_DATE AND s.status NOT IN ('CANCELLED')), 0)::float AS "todayRevenue",
         COUNT(*) FILTER (WHERE s.created_at::date = CURRENT_DATE AND s.status NOT IN ('CANCELLED'))::int AS "todayOrders"
       FROM companies co
-      LEFT JOIN retail_sales s ON s.company_id = co.id AND s.integration_sync_status <> 'MANUAL'
+      LEFT JOIN retail_sales s ON s.company_id = co.id AND (s.integration_sync_status IS NULL OR s.integration_sync_status <> 'MANUAL')
       WHERE co.is_active = true
       GROUP BY co.id, co.code, co.name
       ORDER BY co.code
@@ -754,7 +754,7 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
         COUNT(*) FILTER (WHERE status = 'CANCELLED')::int AS cancelled,
         COUNT(*) FILTER (WHERE invoice_status = 'RETURNED')::int AS returned
       FROM retail_sales
-      WHERE integration_sync_status <> 'MANUAL'
+      WHERE (integration_sync_status IS NULL OR integration_sync_status <> 'MANUAL')
         AND channel::text = ${platform}
     `;
     return {
