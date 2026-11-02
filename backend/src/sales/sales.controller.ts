@@ -189,6 +189,11 @@ export class SalesController {
     return this.sales.addPayment(Number(id), body, request.user!.id);
   }
 
+  @Patch(':id/staff-note')
+  updateStaffNote(@Param('id') id: string, @Body() body: { note: string }) {
+    return this.sales.updateStaffNote(Number(id), body.note ?? '');
+  }
+
   @Get(':id/print/address-label')
   addressLabel(@Param('id') id: string, @Query('preview') preview: string | undefined, @Req() request: AuthenticatedRequest) {
     return this.sales.printData(Number(id), 'ADDRESS_LABEL_10X15', request.user!.id, { recordPrint: preview !== '1' });
