@@ -558,21 +558,6 @@ function OrderCard({ order, onStatusChange, readySection, category }: { order: O
   const displaySrc = activeEntry?.src ?? null;
   const activeItem = activeEntry?.item ?? order.items[0];
 
-  // Görsel yoksa public catalog'dan barkodla çek
-  useEffect(() => {
-    if (activeSrc || fallbackImg) return;
-    const barcode = activeItem?.barcode ?? order.items[0]?.barcode;
-    if (!barcode) return;
-    fetch(`${apiBaseUrl}/public/catalog/products?barcode=${encodeURIComponent(barcode)}&limit=1`)
-      .then((r) => r.json())
-      .then((data: { products?: Array<{ mainImage?: string | null }> }) => {
-        const img = data?.products?.[0]?.mainImage;
-        if (img) setFallbackImg(img.startsWith('http') ? img : `${apiBaseUrl}/${img.replace(/^\//, '')}`);
-      })
-      .catch(() => null);
-  }, [activeSrc, fallbackImg, activeItem?.barcode, order.items]);
-
-  const displaySrc = activeSrc ?? fallbackImg;
 
   const trendyolUrl =
     activeItem?.trendyolUrl ??
