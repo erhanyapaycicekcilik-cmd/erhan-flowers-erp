@@ -206,9 +206,10 @@ export class PublicCatalogService {
       }
     }
 
-    // Barkod filtresi
+    // Barkod filtresi — stok/fiyat/status kısıtlaması olmadan
     if (params.barcode?.trim()) {
       where['barcode'] = params.barcode.trim();
+      delete where['status'];
       delete where['stockQuantity'];
       delete where['sitePrice'];
     }
