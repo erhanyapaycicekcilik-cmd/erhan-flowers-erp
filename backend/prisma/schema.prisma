@@ -2395,11 +2395,33 @@ enum WebOrderPaymentMethod {
   ONLINE
 }
 
+model WebCustomer {
+  id           Int        @id @default(autoincrement())
+  email        String     @unique
+  passwordHash String     @map("password_hash")
+  firstName    String     @map("first_name")
+  lastName     String     @map("last_name")
+  phone        String?
+  birthDate    DateTime?  @map("birth_date")
+  city         String?
+  district     String?
+  address      String?
+  postalCode   String?    @map("postal_code")
+  createdAt    DateTime   @default(now()) @map("created_at")
+  updatedAt    DateTime   @updatedAt @map("updated_at")
+  orders       WebOrder[]
+
+  @@index([email])
+  @@map("web_customers")
+}
+
 model WebOrder {
   id            Int                   @id @default(autoincrement())
   orderNumber   String                @unique @map("order_number")
   status        WebOrderStatus        @default(PENDING)
   paymentMethod WebOrderPaymentMethod @default(WHATSAPP) @map("payment_method")
+  customerId    Int?                  @map("customer_id")
+  customer      WebCustomer?          @relation(fields: [customerId], references: [id])
   customerName  String                @map("customer_name")
   customerPhone String                @map("customer_phone")
   customerEmail String?               @map("customer_email")
