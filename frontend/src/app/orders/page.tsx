@@ -325,8 +325,9 @@ export default function OrdersPage() {
         setSummary(summaryResult.status === 'fulfilled' ? summaryResult.value : null);
       }
       setLastUpdatedAt(new Date());
-    } catch {
-      setMessage('Gerçek sipariş verileri alınamadı.');
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      setMessage(`Gerçek sipariş verileri alınamadı. (${errMsg})`);
     } finally {
       requestInFlight.current = false;
       setLoading(false);
