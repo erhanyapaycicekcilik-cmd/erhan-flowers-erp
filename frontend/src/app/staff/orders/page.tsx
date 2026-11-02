@@ -506,26 +506,30 @@ function OrderCard({ order, onStatusChange, readySection, category }: { order: O
   const [resolvedImgs, setResolvedImgs] = useState<Record<string, string>>({});
   const videoRef = useRef<HTMLInputElement>(null);
 
-  // Her item için görsel çöz: DB'de varsa kullan, yoksa public catalog'dan barkodla çek
+  // Her item için görsel çöz: DB'de varsa kullan, yoksa public catalog'dan barkod/modelCode ile çek
   useEffect(() => {
-    const barcodes = order.items
-      .filter((i) => !i.imagePath && i.barcode)
-      .map((i) => i.barcode!);
-    const unique = [...new Set(barcodes)];
+    const toFetch = order.items
+      .filter((i) => !i.imagePath && (i.barcode || i.modelCode))
+      .map((i) => ({ key: i.barcode || i.modelCode!, barcode: i.barcode, modelCode: i.modelCode }));
+    const seen = new Set<string>();
+    const unique = toFetch.filter((x) => { if (seen.has(x.key)) return false; seen.add(x.key); return true; });
     if (!unique.length) return;
 
     Promise.all(
-      unique.map((bc) =>
-        fetch(`${apiBaseUrl}/public/catalog/products?barcode=${encodeURIComponent(bc)}&limit=1`)
+      unique.map(({ key, barcode, modelCode }) => {
+        const param = barcode
+          ? `barcode=${encodeURIComponent(barcode)}`
+          : `modelCode=${encodeURIComponent(modelCode!)}`;
+        return fetch(`${apiBaseUrl}/public/catalog/products?${param}&limit=1`)
           .then((r) => r.json())
           .then((data: { products?: Array<{ mainImage?: string | null }> }) => {
             const img = data?.products?.[0]?.mainImage;
             if (!img) return null;
             const url = img.startsWith('http') ? img : `${apiBaseUrl}/${img.replace(/^\//, '')}`;
-            return [bc, url] as [string, string];
+            return [key, url] as [string, string];
           })
-          .catch(() => null)
-      )
+          .catch(() => null);
+      })
     ).then((results) => {
       const map: Record<string, string> = {};
       results.forEach((r) => { if (r) map[r[0]] = r[1]; });
@@ -533,10 +537,11 @@ function OrderCard({ order, onStatusChange, readySection, category }: { order: O
     });
   }, [order.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Tüm item'lar için görsel kaynağı: DB → catalog fallback
+  // Tüm item'lar için görsel kaynağı: DB → catalog fallback (barkod veya modelCode ile)
   function resolveItemSrc(item: OrderItem): string | null {
     if (item.imagePath) return itemImageSrc(item);
-    if (item.barcode && resolvedImgs[item.barcode]) return resolvedImgs[item.barcode];
+    const key = item.barcode || item.modelCode;
+    if (key && resolvedImgs[key]) return resolvedImgs[key];
     return null;
   }
 
