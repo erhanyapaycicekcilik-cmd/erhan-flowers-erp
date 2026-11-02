@@ -117,4 +117,83 @@ export class MailService {
       this.logger.error(`Mail gönderilemedi: ${order.customerEmail}`, err instanceof Error ? err.message : String(err))
     }
   }
+
+  async sendOwnerOrderNotification(order: {
+    orderNumber: string
+    customerName: string
+    customerPhone: string
+    customerEmail?: string | null
+    grandTotal: number | string
+    paymentMethod: string
+    items: Array<{ productName: string; quantity: number | string; lineTotal: number | string }>
+    address: string
+    district: string
+    city: string
+    note?: string | null
+  }) {
+    const smtpUser = process.env.SMTP_USER ?? ''
+    const notifyEmail = process.env.NOTIFY_EMAIL ?? ''
+    if (!smtpUser || !notifyEmail) return
+
+    const paymentLabel =
+      order.paymentMethod === 'EFT' ? 'EFT / Havale' :
+      order.paymentMethod === 'ONLINE' ? 'Online Ödeme (Kart)' : 'WhatsApp'
+
+    const itemRows = order.items
+      .map((i) => `<tr>
+        <td style="padding:6px 10px;border-bottom:1px solid #eee">${i.productName}</td>
+        <td style="padding:6px 10px;border-bottom:1px solid #eee;text-align:center">${i.quantity}</td>
+        <td style="padding:6px 10px;border-bottom:1px solid #eee;text-align:right">${Number(i.lineTotal).toLocaleString('tr-TR', { style: 'currency', currency: 'TRY' })}</td>
+      </tr>`)
+      .join('')
+
+    const total = Number(order.grandTotal).toLocaleString('tr-TR', { style: 'currency', currency: 'TRY' })
+
+    const html = `<!DOCTYPE html>
+<html lang="tr">
+<head><meta charset="UTF-8"></head>
+<body style="font-family:Arial,sans-serif;background:#f5f5f5;margin:0;padding:0">
+  <div style="max-width:560px;margin:24px auto;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.1)">
+    <div style="background:#1a3a28;padding:20px 28px">
+      <h2 style="margin:0;color:#fff;font-size:18px">🛍️ Yeni Sipariş — ${order.orderNumber}</h2>
+    </div>
+    <div style="padding:24px 28px">
+      <table style="width:100%;border-collapse:collapse;margin-bottom:16px;font-size:14px">
+        <tr><td style="padding:5px 0;color:#666;width:140px">Müşteri</td><td style="font-weight:700">${order.customerName}</td></tr>
+        <tr><td style="padding:5px 0;color:#666">Telefon</td><td><a href="tel:${order.customerPhone}" style="color:#2d7a3e">${order.customerPhone}</a></td></tr>
+        ${order.customerEmail ? `<tr><td style="padding:5px 0;color:#666">E-posta</td><td>${order.customerEmail}</td></tr>` : ''}
+        <tr><td style="padding:5px 0;color:#666">Ödeme</td><td>${paymentLabel}</td></tr>
+        <tr><td style="padding:5px 0;color:#666">Adres</td><td>${order.address}, ${order.district} / ${order.city}</td></tr>
+        ${order.note ? `<tr><td style="padding:5px 0;color:#666">Not</td><td style="color:#b45309">${order.note}</td></tr>` : ''}
+      </table>
+      <table style="width:100%;border-collapse:collapse;margin-bottom:12px">
+        <thead><tr style="background:#f0f0f0">
+          <th style="padding:7px 10px;text-align:left;font-size:12px;color:#555">Ürün</th>
+          <th style="padding:7px 10px;text-align:center;font-size:12px;color:#555">Adet</th>
+          <th style="padding:7px 10px;text-align:right;font-size:12px;color:#555">Tutar</th>
+        </tr></thead>
+        <tbody>${itemRows}</tbody>
+        <tfoot><tr>
+          <td colspan="2" style="padding:10px;text-align:right;font-weight:700">Toplam</td>
+          <td style="padding:10px;text-align:right;font-weight:700;color:#2d7a3e;font-size:15px">${total}</td>
+        </tr></tfoot>
+      </table>
+    </div>
+    <div style="background:#f5f5f5;padding:12px 28px;text-align:center;font-size:12px;color:#999">erhanflowers.com · ERP Panel: erp.erhanflowers.com</div>
+  </div>
+</body>
+</html>`
+
+    try {
+      await this.transporter().sendMail({
+        from: `"Erhan Flowers" <${smtpUser}>`,
+        to: notifyEmail,
+        subject: `🛍️ Yeni sipariş — ${order.orderNumber} (${order.customerName})`,
+        html,
+      })
+      this.logger.log(`Owner bildirim maili gönderildi: ${notifyEmail} (${order.orderNumber})`)
+    } catch (err) {
+      this.logger.error(`Owner bildirim maili gönderilemedi`, err instanceof Error ? err.message : String(err))
+    }
+  }
 }

@@ -53,6 +53,24 @@ export class WebOrdersService {
       include: { items: true },
     })
 
+    this.mail.sendOwnerOrderNotification({
+      orderNumber: order.orderNumber,
+      customerName: order.customerName,
+      customerPhone: order.customerPhone,
+      customerEmail: order.customerEmail,
+      grandTotal: Number(order.grandTotal),
+      paymentMethod: order.paymentMethod,
+      items: order.items.map((i) => ({
+        productName: i.productName,
+        quantity: i.quantity,
+        lineTotal: Number(i.lineTotal),
+      })),
+      address: order.address,
+      district: order.district,
+      city: order.city,
+      note: order.note,
+    }).catch(() => null)
+
     if (dto.customerEmail && order.customerEmail) {
       this.mail.sendWebOrderConfirmation({
         orderNumber: order.orderNumber,
