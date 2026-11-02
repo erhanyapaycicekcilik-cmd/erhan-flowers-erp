@@ -288,6 +288,26 @@ export default function StaffOrdersPage() {
           </div>
         </div>
 
+        {/* Çıktı butonları */}
+        <div className="flex gap-2 flex-wrap">
+          <span className="text-xs font-semibold text-slate-500 self-center">Çıktı Al:</span>
+          <button onClick={() => window.open('/staff/print?cat=agac', '_blank')} className="btn btn-secondary text-sm">
+            <Printer size={14} /> 🌳 Ağaç
+          </button>
+          <button onClick={() => window.open('/staff/print?cat=saksi', '_blank')} className="btn btn-secondary text-sm">
+            <Printer size={14} /> 🪴 Saksı
+          </button>
+          <button onClick={() => window.open('/staff/print?cat=bambu', '_blank')} className="btn btn-secondary text-sm">
+            <Printer size={14} /> 🎋 Bambu
+          </button>
+          <button onClick={() => window.open('/staff/print?cat=seperator', '_blank')} className="btn btn-secondary text-sm">
+            <Printer size={14} /> 🪨 Seperatör
+          </button>
+          <button onClick={() => window.open('/staff/print?cat=all', '_blank')} className="btn btn-secondary text-sm">
+            <Printer size={14} /> Tümü
+          </button>
+        </div>
+
         {/* Video yükleme başarı toast */}
         {toastMsg && (
           <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[60] bg-emerald-600 text-white text-sm font-semibold px-5 py-3 rounded-2xl shadow-2xl flex items-center gap-2 animate-bounce">
