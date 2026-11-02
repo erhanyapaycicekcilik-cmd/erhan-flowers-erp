@@ -75,6 +75,7 @@ function fmtDate(s?: string | null) {
 
 const PLATFORM_LABELS: Record<string, string> = {
   TRENDYOL: 'Trendyol',
+  FLORA_TRENDYOL: '🌸 Flora Trendyol',
   N11: 'N11',
   HEPSIBURADA: 'Hepsiburada',
   WEBSITE: 'Web Sitesi',
@@ -92,20 +93,31 @@ function PrintPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api<OrderRow[]>('/integrations/orders?limit=200&status=CONFIRMED,PREPARING,IN_PRODUCTION')
-      .then((data) => setOrders(Array.isArray(data) ? data : []))
-      .finally(() => setLoading(false));
+    Promise.all([
+      api<OrderRow[]>('/integrations/orders?limit=200&status=CONFIRMED,PREPARING,IN_PRODUCTION'),
+      api<OrderRow[]>('/integrations/web-orders?limit=200&status=CONFIRMED,PREPARING'),
+    ]).then(([erp, web]) => {
+      setOrders([...(Array.isArray(erp) ? erp : []), ...(Array.isArray(web) ? web : [])]);
+    }).finally(() => setLoading(false));
   }, []);
+
+  function matchesPf(o: OrderRow): boolean {
+    if (platformFilter === 'ALL') return true;
+    if (platformFilter === 'FLORA_TRENDYOL') return o.platform === 'TRENDYOL' && o.companyCode === 'FLORA';
+    if (platformFilter === 'TRENDYOL') return o.platform === 'TRENDYOL' && o.companyCode !== 'FLORA';
+    return o.platform === platformFilter;
+  }
 
   const printOrders = useMemo(() => {
     return orders
-      .filter((o) => platformFilter === 'ALL' || o.platform === platformFilter)
+      .filter((o) => matchesPf(o))
       .map((o) => {
         const visibleItems = cat === 'all' ? o.items : filterItemsByCategory(o.items, cat);
         return { ...o, visibleItems };
       })
       .filter((o) => o.visibleItems.length > 0);
-  }, [orders, cat, platformFilter]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orders, cat, platformFilter]); // matchesPf uses platformFilter via closure
 
   const catLabel =
     cat === 'agac' ? '🌳 AĞAÇ' :

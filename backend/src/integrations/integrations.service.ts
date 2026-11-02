@@ -693,6 +693,7 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
       WHERE (${q} = '' OR wo.order_number ILIKE ${`%${q}%`} OR wo.customer_name ILIKE ${`%${q}%`} OR wo.customer_phone ILIKE ${`%${q}%`})
         AND (${startDate} = '' OR wo.created_at::date >= ${startDate}::date)
         AND (${endDate} = '' OR wo.created_at::date <= ${endDate}::date)
+        AND (${this.text(query.status)} = '' OR wo.status::text = ANY(string_to_array(${this.text(query.status)}, ',')))
       GROUP BY wo.id
       ORDER BY wo.created_at DESC
       LIMIT ${take} OFFSET ${offset}

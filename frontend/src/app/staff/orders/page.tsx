@@ -40,10 +40,18 @@ type OrderRow = {
 const PLATFORMS = [
   { key: 'all', label: 'Tümü', printKey: 'all' },
   { key: 'TRENDYOL', label: 'Trendyol', printKey: 'TRENDYOL' },
+  { key: 'FLORA_TRENDYOL', label: '🌸 Flora Trendyol', printKey: 'FLORA_TRENDYOL' },
   { key: 'N11', label: 'N11', printKey: 'N11' },
   { key: 'HEPSIBURADA', label: 'Hepsiburada', printKey: 'HEPSIBURADA' },
   { key: 'WEBSITE', label: '🌐 Web Sitesi', printKey: 'WEBSITE' },
 ];
+
+function matchesPlatform(order: OrderRow, platformKey: string): boolean {
+  if (platformKey === 'all') return true;
+  if (platformKey === 'FLORA_TRENDYOL') return order.platform === 'TRENDYOL' && order.companyCode === 'FLORA';
+  if (platformKey === 'TRENDYOL') return order.platform === 'TRENDYOL' && order.companyCode !== 'FLORA';
+  return order.platform === platformKey;
+}
 
 const STATUS_TABS = [
   { key: 'all', label: 'Tümü', statuses: [] },
@@ -215,8 +223,15 @@ export default function StaffOrdersPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await api<OrderRow[]>('/integrations/orders?limit=200&status=CONFIRMED,PREPARING,IN_PRODUCTION,READY');
-      setOrders(Array.isArray(data) ? data : []);
+      const [erpOrders, webOrders] = await Promise.all([
+        api<OrderRow[]>('/integrations/orders?limit=200&status=CONFIRMED,PREPARING,IN_PRODUCTION,READY'),
+        api<OrderRow[]>('/integrations/web-orders?limit=200&status=CONFIRMED,PREPARING'),
+      ]);
+      const combined = [
+        ...(Array.isArray(erpOrders) ? erpOrders : []),
+        ...(Array.isArray(webOrders) ? webOrders : []),
+      ];
+      setOrders(combined);
     } finally {
       setLoading(false);
     }
@@ -228,7 +243,7 @@ export default function StaffOrdersPage() {
   const readyOrders = orders.filter((o) => o.status === 'READY');
 
   const filtered = activeOrders.filter((o) => {
-    if (platform !== 'all' && o.platform !== platform) return false;
+    if (!matchesPlatform(o, platform)) return false;
     if (statusTab !== 'all') {
       const tab = STATUS_TABS.find(t => t.key === statusTab);
       if (tab && tab.statuses.length > 0 && !tab.statuses.includes(o.status)) return false;
@@ -311,7 +326,7 @@ export default function StaffOrdersPage() {
           <div className="text-xs font-bold text-slate-500 uppercase tracking-wide pt-1">Platform Bazlı Çıktı</div>
           <div className="flex gap-2 flex-wrap">
             {PLATFORMS.filter(p => p.key !== 'all').map(p => {
-              const count = activeOrders.filter(o => o.platform === p.key).length;
+              const count = activeOrders.filter(o => matchesPlatform(o, p.key)).length;
               if (count === 0) return null;
               return (
                 <button key={p.key} onClick={() => window.open(`/staff/print?cat=all&platform=${p.key}`, '_blank')} className="btn btn-secondary text-sm">
