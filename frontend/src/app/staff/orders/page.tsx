@@ -305,36 +305,23 @@ export default function StaffOrdersPage() {
 
         {/* Çıktı butonları */}
         <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-2">
-          <div className="text-xs font-bold text-slate-500 uppercase tracking-wide">Çıktı Al — Kategori</div>
+          <div className="text-xs font-bold text-slate-500 uppercase tracking-wide">Çıktı Al{platform !== 'all' ? ` — ${PLATFORMS.find(p => p.key === platform)?.label}` : ''}</div>
           <div className="flex gap-2 flex-wrap">
-            <button onClick={() => window.open(`/staff/print?cat=agac&platform=${platform === 'all' ? 'all' : platform}`, '_blank')} className="btn btn-secondary text-sm">
+            <button onClick={() => window.open(`/staff/print?cat=agac&platform=${platform}`, '_blank')} className="btn btn-secondary text-sm">
               <Printer size={14} /> 🌳 Ağaç
             </button>
-            <button onClick={() => window.open(`/staff/print?cat=saksi&platform=${platform === 'all' ? 'all' : platform}`, '_blank')} className="btn btn-secondary text-sm">
+            <button onClick={() => window.open(`/staff/print?cat=saksi&platform=${platform}`, '_blank')} className="btn btn-secondary text-sm">
               <Printer size={14} /> 🪴 Saksı
             </button>
-            <button onClick={() => window.open(`/staff/print?cat=bambu&platform=${platform === 'all' ? 'all' : platform}`, '_blank')} className="btn btn-secondary text-sm">
+            <button onClick={() => window.open(`/staff/print?cat=bambu&platform=${platform}`, '_blank')} className="btn btn-secondary text-sm">
               <Printer size={14} /> 🎋 Bambu
             </button>
-            <button onClick={() => window.open(`/staff/print?cat=seperator&platform=${platform === 'all' ? 'all' : platform}`, '_blank')} className="btn btn-secondary text-sm">
+            <button onClick={() => window.open(`/staff/print?cat=seperator&platform=${platform}`, '_blank')} className="btn btn-secondary text-sm">
               <Printer size={14} /> 🪨 Seperatör
             </button>
-            <button onClick={() => window.open(`/staff/print?cat=all&platform=${platform === 'all' ? 'all' : platform}`, '_blank')} className="btn btn-secondary text-sm">
+            <button onClick={() => window.open(`/staff/print?cat=all&platform=${platform}`, '_blank')} className="btn btn-secondary text-sm">
               <Printer size={14} /> Tümü
             </button>
-          </div>
-          <div className="text-xs font-bold text-slate-500 uppercase tracking-wide pt-1">Platform Bazlı Çıktı</div>
-          <div className="flex gap-2 flex-wrap">
-            {PLATFORMS.filter(p => p.key !== 'all').map(p => {
-              const count = activeOrders.filter(o => matchesPlatform(o, p.key)).length;
-              if (count === 0) return null;
-              return (
-                <button key={p.key} onClick={() => window.open(`/staff/print?cat=all&platform=${p.key}`, '_blank')} className="btn btn-secondary text-sm">
-                  <Printer size={14} /> {p.label}
-                  <span className="ml-1 bg-indigo-100 text-indigo-700 text-xs font-black px-1.5 py-0.5 rounded-full">{count}</span>
-                </button>
-              );
-            })}
           </div>
         </div>
 
@@ -373,19 +360,29 @@ export default function StaffOrdersPage() {
           ))}
         </div>
 
-        {/* Platform filtreleri */}
-        <div className="flex gap-2 flex-wrap">
-          {PLATFORMS.map((p) => (
-            <button
-              key={p.key}
-              onClick={() => setPlatform(p.key)}
-              className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition ${
-                platform === p.key ? 'bg-brand text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-              }`}
-            >
-              {p.label}
-            </button>
-          ))}
+        {/* Platform kartları */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          {PLATFORMS.map((p) => {
+            const count = p.key === 'all'
+              ? activeOrders.length
+              : activeOrders.filter(o => matchesPlatform(o, p.key)).length;
+            if (p.key !== 'all' && count === 0) return null;
+            const isActive = platform === p.key;
+            return (
+              <button
+                key={p.key}
+                onClick={() => setPlatform(p.key)}
+                className={`flex items-center justify-between px-4 py-3 rounded-xl border-2 font-bold text-left transition ${
+                  isActive
+                    ? 'border-indigo-500 bg-indigo-50 text-indigo-800'
+                    : 'border-slate-200 bg-white text-slate-700 hover:border-indigo-300 hover:bg-indigo-50'
+                }`}
+              >
+                <span className="text-sm">{p.label}</span>
+                <span className={`text-lg font-black ml-2 ${isActive ? 'text-indigo-600' : 'text-slate-500'}`}>{count}</span>
+              </button>
+            );
+          })}
         </div>
 
         {/* Kategori + Arama */}
