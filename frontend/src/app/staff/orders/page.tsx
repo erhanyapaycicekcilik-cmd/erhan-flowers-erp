@@ -463,30 +463,26 @@ function OrderCard({ order, onStatusChange, readySection }: { order: OrderRow; o
 
   async function markReadyWithPhotos(files: FileList | File[]) {
     setUploading(true);
+    const token = typeof window !== 'undefined'
+      ? (localStorage.getItem(`auth_token_${window.location.hostname}_${window.location.port || 'default'}`) ?? localStorage.getItem('auth_token'))
+      : null;
+
+    // Önce siparişi hemen READY yap — video upload arka planda gitsin
     try {
-      const token = typeof window !== 'undefined'
-        ? (localStorage.getItem(`auth_token_${window.location.hostname}_${window.location.port || 'default'}`) ?? localStorage.getItem('auth_token'))
-        : null;
-      const form = new FormData();
-      Array.from(files).forEach((f) => form.append('files', f));
-      const res = await fetch(`${apiBaseUrl}/sales/${order.id}/proof-photos?photoType=PACKAGE`, {
-        method: 'POST',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-        body: form,
-      });
-      if (res.ok) {
-        if (videoRef.current) videoRef.current.value = '';
-        onStatusChange(order.id, 'READY');
-      } else if (res.status === 413) {
-        alert('Dosya çok büyük. Video 500MB altında olmalı.');
-      } else {
-        alert(`Yükleme başarısız (${res.status}). Tekrar deneyin.`);
-      }
-    } catch {
-      alert('Yükleme başarısız. İnternet bağlantınızı kontrol edin.');
-    } finally {
-      setUploading(false);
-    }
+      await api(`/sales/${order.id}/status`, { method: 'POST', json: { status: 'READY', note: 'Video yükleniyor.' } });
+    } catch { /* devam et */ }
+    if (videoRef.current) videoRef.current.value = '';
+    onStatusChange(order.id, 'READY');
+    setUploading(false);
+
+    // Video upload arka planda
+    const form = new FormData();
+    Array.from(files).forEach((f) => form.append('files', f));
+    fetch(`${apiBaseUrl}/sales/${order.id}/proof-photos?photoType=PACKAGE`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: form,
+    }).catch(() => null);
   }
 
   async function markReadyWithoutPhoto() {

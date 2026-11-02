@@ -51,7 +51,12 @@ erp.erhanflowers.com, erp.florayapaycicek.com {
 
 # Backend API — Güvenli HTTPS
 api.erhanflowers.com, api.florayapaycicek.com {
-    reverse_proxy backend:8001
+    reverse_proxy backend:8001 {
+        transport http {
+            read_timeout 300s
+            write_timeout 300s
+        }
+    }
 
     request_body {
         max_size 500MB
