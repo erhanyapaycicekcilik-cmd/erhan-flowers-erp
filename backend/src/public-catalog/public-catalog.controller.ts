@@ -29,6 +29,7 @@ export class PublicCatalogController {
   listProducts(
     @Query('category') category?: string,
     @Query('q') search?: string,
+    @Query('barcode') barcode?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
     @Query('sort') sort?: 'price_asc' | 'price_desc' | 'newest' | 'name',
@@ -36,6 +37,7 @@ export class PublicCatalogController {
     return this.catalog.listProducts({
       categorySlug: category,
       search,
+      barcode,
       page: page ? Number(page) : 1,
       limit: limit ? Number(limit) : 48,
       sort,

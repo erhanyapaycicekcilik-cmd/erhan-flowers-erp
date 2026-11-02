@@ -157,6 +157,7 @@ export class PublicCatalogService {
   async listProducts(params: {
     categorySlug?: string;
     search?: string;
+    barcode?: string;
     page?: number;
     limit?: number;
     sort?: 'price_asc' | 'price_desc' | 'newest' | 'name';
@@ -203,6 +204,13 @@ export class PublicCatalogService {
         const matchedCat = allCategories.find((c) => slugify(c.name) === params.categorySlug);
         if (matchedCat) where['categoryId'] = matchedCat.id;
       }
+    }
+
+    // Barkod filtresi
+    if (params.barcode?.trim()) {
+      where['barcode'] = params.barcode.trim();
+      delete where['stockQuantity'];
+      delete where['sitePrice'];
     }
 
     // Arama filtresi

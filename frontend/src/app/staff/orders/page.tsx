@@ -505,11 +505,28 @@ function OrderCard({ order, onStatusChange, readySection, category }: { order: O
   const [markingDelivered, setMarkingDelivered] = useState(false);
   const [staffNote, setStaffNote] = useState(order.staffNote ?? '');
   const [savingNote, setSavingNote] = useState(false);
+  const [fallbackImg, setFallbackImg] = useState<string | null>(null);
   const videoRef = useRef<HTMLInputElement>(null);
 
   const itemsWithImg = order.items.filter((i) => i.imagePath);
   const activeItem = itemsWithImg[activeIdx] ?? order.items[activeIdx] ?? order.items[0];
   const activeSrc = itemsWithImg.length > 0 ? itemImageSrc(itemsWithImg[activeIdx] ?? itemsWithImg[0]) : null;
+
+  // Görsel yoksa public catalog'dan barkodla çek
+  useEffect(() => {
+    if (activeSrc || fallbackImg) return;
+    const barcode = activeItem?.barcode ?? order.items[0]?.barcode;
+    if (!barcode) return;
+    fetch(`${apiBaseUrl}/public/catalog/products?barcode=${encodeURIComponent(barcode)}&limit=1`)
+      .then((r) => r.json())
+      .then((data: { products?: Array<{ mainImage?: string | null }> }) => {
+        const img = data?.products?.[0]?.mainImage;
+        if (img) setFallbackImg(img.startsWith('http') ? img : `${apiBaseUrl}/${img.replace(/^\//, '')}`);
+      })
+      .catch(() => null);
+  }, [activeSrc, fallbackImg, activeItem?.barcode, order.items]);
+
+  const displaySrc = activeSrc ?? fallbackImg;
 
   const trendyolUrl =
     activeItem?.trendyolUrl ??
@@ -619,8 +636,8 @@ function OrderCard({ order, onStatusChange, readySection, category }: { order: O
 
       {/* Ana görsel */}
       <div className="relative bg-slate-100" style={{ aspectRatio: '1/1' }}>
-        {activeSrc ? (
-          <img src={activeSrc} alt="" className="w-full h-full object-cover" />
+        {displaySrc ? (
+          <img src={displaySrc} alt="" className="w-full h-full object-cover" />
         ) : (
           <div className="w-full h-full flex items-center justify-center text-slate-300">
             <Package size={56} />
