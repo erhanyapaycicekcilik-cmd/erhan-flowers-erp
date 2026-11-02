@@ -127,7 +127,7 @@ export class MailService {
     paymentMethod: string
     items: Array<{ productName: string; quantity: number | string; lineTotal: number | string }>
     address: string
-    district: string
+    district: string | null
     city: string
     note?: string | null
   }) {
