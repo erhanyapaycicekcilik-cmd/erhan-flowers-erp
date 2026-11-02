@@ -251,8 +251,10 @@ export default function OrdersPage() {
   const tab = tabs.find((item) => item.key === activeTab) ?? tabs[0];
   const tabOrders = useMemo(() => {
     if (activeTab === 'returned') return orders.filter((order) => order.invoiceStatus === 'RETURNED');
-    if (!tab.statuses.length) return activeTab === 'all' ? orders : [];
-    return orders.filter((order) => tab.statuses.includes(order.status));
+    // Diğer tüm tab'larda iade edilenler gösterilmez
+    const nonReturned = orders.filter((order) => order.invoiceStatus !== 'RETURNED');
+    if (!tab.statuses.length) return activeTab === 'all' ? nonReturned : [];
+    return nonReturned.filter((order) => tab.statuses.includes(order.status));
   }, [activeTab, orders, tab.statuses]);
 
   const pagedOrders = useMemo(() => {
@@ -282,9 +284,10 @@ export default function OrdersPage() {
       }[key];
       if (typeof liveCount === 'number') return liveCount;
     }
-    if (key === 'all') return orders.length;
+    const nonReturned = orders.filter((order) => order.invoiceStatus !== 'RETURNED');
+    if (key === 'all') return nonReturned.length;
     if (key === 'returned') return orders.filter((order) => order.invoiceStatus === 'RETURNED').length;
-    return statuses.length ? countByStatuses(orders, statuses) : 0;
+    return statuses.length ? countByStatuses(nonReturned, statuses) : 0;
   }, [orders, summary]);
 
   useEffect(() => {
