@@ -54,7 +54,13 @@ export default function OrderPrintPreviewPage() {
       return;
     }
     setError('');
-    Promise.all(orderIds.map((orderId) => api<SalePrintData>(`/sales/${orderId}/print/${endpoint}?preview=1`)))
+    Promise.all(
+      orderIds.map((orderId) =>
+        api<SalePrintData>(`/sales/${orderId}/print/${endpoint}?preview=1`).catch(() =>
+          api<SalePrintData>(`/integrations/web-orders/${orderId}/print`),
+        ),
+      ),
+    )
       .then((result) => {
         setPages(result);
         setError('');
@@ -86,7 +92,7 @@ export default function OrderPrintPreviewPage() {
         const id = Number(sale.id);
         if (!id || printedIds.includes(id)) continue;
         try {
-          await api<SalePrintData>(`/sales/${id}/print/${endpoint}`);
+          await api<SalePrintData>(`/sales/${id}/print/${endpoint}`).catch(() => null);
           if (printType === 'delivery' && canPromoteAfterPrint(text(sale.status))) {
             await api(`/sales/${id}/status`, { method: 'POST', json: { status: 'PREPARING', note: 'A5 sipariş çıktısı yazdırıldı.' } }).catch(() => null);
             await syncTrendyolPackageStatus(sale).catch(() => null);
