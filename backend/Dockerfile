@@ -6,7 +6,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY package*.json ./
-RUN npm ci
+RUN npm install
 
 ARG CACHEBUST=1
 COPY . .
@@ -23,7 +23,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY package*.json ./
-RUN npm ci
+RUN npm install
 # prisma migrate deploy calisma anindaki entrypoint'te calisir, bu yuzden
 # "prisma" CLI'i (devDependency) burada da tutuyoruz - --omit=dev kullanmiyoruz.
 
