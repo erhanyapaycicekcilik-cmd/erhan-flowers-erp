@@ -52,7 +52,7 @@ export class WebOrdersService {
       include: { items: true },
     })
 
-    if (dto.customerEmail) {
+    if (dto.customerEmail && order.customerEmail) {
       this.mail.sendWebOrderConfirmation({
         orderNumber: order.orderNumber,
         customerName: order.customerName,
