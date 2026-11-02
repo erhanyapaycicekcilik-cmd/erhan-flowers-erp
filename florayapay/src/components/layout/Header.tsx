@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import Image from 'next/image'
 import { useState, useRef, useEffect } from 'react'
-import { ShoppingCart, Menu, X, Search } from 'lucide-react'
+import { ShoppingCart, Menu, X, Search, User } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useCart } from '@/hooks/useCart'
 
@@ -113,6 +113,9 @@ export function Header() {
           >
             <Search size={20} />
           </button>
+          <Link href="/hesabim" aria-label="Hesabım" className="p-1 text-[#0D1510] hover:text-[#5C7A62] transition-colors">
+            <User size={20} />
+          </Link>
           <Link
             href="/sepet"
             aria-label={`Sepet, ${itemCount} ürün`}

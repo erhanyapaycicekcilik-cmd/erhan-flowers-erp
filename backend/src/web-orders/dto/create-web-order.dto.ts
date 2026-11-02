@@ -23,4 +23,5 @@ export class CreateWebOrderDto {
   vergiNo?: string
   vergiDairesi?: string
   items!: CreateWebOrderItemDto[]
+  customerId?: number
 }

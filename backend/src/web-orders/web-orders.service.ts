@@ -37,6 +37,7 @@ export class WebOrdersService {
         taxOffice: dto.faturaKurumsal ? dto.vergiDairesi?.trim() || null : null,
         subtotal,
         grandTotal,
+        ...(dto.customerId ? { customerId: dto.customerId } : {}),
         items: {
           create: dto.items.map((i) => ({
             productId: i.productId,

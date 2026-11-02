@@ -67,6 +67,75 @@ export default function SiparisPage() {
   const [loading, setLoading] = useState(false)
   const [errors, setErrors] = useState<Partial<typeof form>>({})
 
+  // Üyelik
+  const [musteriOturumu, setMusteriOturumu] = useState<{ id: number; firstName: string; lastName: string; email: string; token: string } | null>(null)
+  const [uyeGirisAc, setUyeGirisAc] = useState(false)
+  const [uyeKayitAc, setUyeKayitAc] = useState(false)
+  const [uyeForm, setUyeForm] = useState({ email: '', sifre: '', ad: '', soyad: '', telefon: '', dogumTarihi: '' })
+  const [uyeHata, setUyeHata] = useState('')
+  const [uyeLoading, setUyeLoading] = useState(false)
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('wc_session')
+      if (saved) {
+        const s = JSON.parse(saved)
+        setMusteriOturumu(s)
+        setForm(f => ({ ...f, ad: s.firstName, soyad: s.lastName, email: s.email }))
+      }
+    } catch {}
+  }, [])
+
+  async function uyeGiris() {
+    setUyeLoading(true); setUyeHata('')
+    try {
+      const r = await fetch('/api/web-customers/login', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: uyeForm.email, password: uyeForm.sifre }),
+      })
+      const d = await r.json()
+      if (!r.ok) { setUyeHata(d.message || 'Giriş başarısız'); return }
+      const s = { ...d.customer, token: d.token }
+      localStorage.setItem('wc_session', JSON.stringify(s))
+      setMusteriOturumu(s)
+      setForm(f => ({ ...f, ad: d.customer.firstName, soyad: d.customer.lastName, email: d.customer.email,
+        telefon: d.customer.phone || f.telefon, sehir: d.customer.city || f.sehir,
+        ilce: d.customer.district || f.ilce, adres: d.customer.address || f.adres,
+        postaKodu: d.customer.postalCode || f.postaKodu }))
+      setUyeGirisAc(false)
+    } catch { setUyeHata('Bağlantı hatası') }
+    finally { setUyeLoading(false) }
+  }
+
+  async function uyeKayit() {
+    setUyeLoading(true); setUyeHata('')
+    try {
+      const r = await fetch('/api/web-customers/register', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: uyeForm.email, password: uyeForm.sifre,
+          firstName: uyeForm.ad || form.ad, lastName: uyeForm.soyad || form.soyad,
+          phone: uyeForm.telefon || form.telefon,
+          birthDate: uyeForm.dogumTarihi || undefined,
+          city: form.sehir || undefined, district: form.ilce || undefined,
+          address: form.adres || undefined, postalCode: form.postaKodu || undefined,
+        }),
+      })
+      const d = await r.json()
+      if (!r.ok) { setUyeHata(d.message || 'Kayıt başarısız'); return }
+      const s = { ...d.customer, token: d.token }
+      localStorage.setItem('wc_session', JSON.stringify(s))
+      setMusteriOturumu(s)
+      setUyeKayitAc(false)
+    } catch { setUyeHata('Bağlantı hatası') }
+    finally { setUyeLoading(false) }
+  }
+
+  function uyeCikis() {
+    localStorage.removeItem('wc_session')
+    setMusteriOturumu(null)
+  }
+
   // Promo kod
   const [promoInput, setPromoInput] = useState('')
   const [promoLoading, setPromoLoading] = useState(false)
@@ -203,6 +272,7 @@ export default function SiparisPage() {
           promoCode: promoApplied?.code || undefined,
           promoDiscount: promoIndirimTutar || undefined,
           totalAmount: genelToplam,
+          customerId: musteriOturumu?.id || undefined,
         }),
       })
 
@@ -297,6 +367,81 @@ export default function SiparisPage() {
 
               {/* Sol: form alanları */}
               <div className="lg:col-span-2 space-y-6">
+
+                {/* Üyelik paneli */}
+                <div className="bg-white rounded-2xl border border-[#E0DDD4] p-6">
+                  {musteriOturumu ? (
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-semibold text-[#0D1510]">👤 {musteriOturumu.firstName} {musteriOturumu.lastName}</p>
+                        <p className="text-sm text-[#8C8A82]">{musteriOturumu.email} — bilgileriniz otomatik dolduruldu</p>
+                      </div>
+                      <button type="button" onClick={uyeCikis} className="text-xs text-[#8C8A82] underline hover:text-red-500">Çıkış</button>
+                    </div>
+                  ) : (
+                    <div>
+                      <p className="text-sm text-[#0D1510] font-semibold mb-1">Üye misiniz?</p>
+                      <p className="text-xs text-[#8C8A82] mb-3">Giriş yaparak adres bilgileriniz otomatik dolsun, siparişlerinizi takip edin.</p>
+                      <div className="flex gap-3 flex-wrap">
+                        <button type="button" onClick={() => { setUyeGirisAc(true); setUyeKayitAc(false); setUyeHata('') }}
+                          className="px-4 py-2 text-sm font-semibold border border-[#0D1510] rounded-xl hover:bg-[#0D1510] hover:text-white transition-colors">
+                          Giriş Yap
+                        </button>
+                        <button type="button" onClick={() => { setUyeKayitAc(true); setUyeGirisAc(false); setUyeHata('') }}
+                          className="px-4 py-2 text-sm font-semibold bg-[#0D1510] text-white rounded-xl hover:bg-[#1E3A28] transition-colors">
+                          Üye Ol
+                        </button>
+                      </div>
+                      {uyeGirisAc && (
+                        <div className="mt-4 space-y-3">
+                          {uyeHata && <p className="text-sm text-red-600">{uyeHata}</p>}
+                          <input type="email" placeholder="E-posta" value={uyeForm.email}
+                            onChange={e => setUyeForm(f => ({ ...f, email: e.target.value }))}
+                            className="w-full border border-[#D4D0C7] rounded-xl px-4 py-2.5 text-sm" />
+                          <input type="password" placeholder="Şifre" value={uyeForm.sifre}
+                            onChange={e => setUyeForm(f => ({ ...f, sifre: e.target.value }))}
+                            className="w-full border border-[#D4D0C7] rounded-xl px-4 py-2.5 text-sm" />
+                          <button type="button" onClick={uyeGiris} disabled={uyeLoading}
+                            className="w-full py-2.5 bg-[#0D1510] text-white rounded-xl text-sm font-semibold disabled:opacity-50">
+                            {uyeLoading ? 'Giriş yapılıyor...' : 'Giriş Yap'}
+                          </button>
+                        </div>
+                      )}
+                      {uyeKayitAc && (
+                        <div className="mt-4 space-y-3">
+                          {uyeHata && <p className="text-sm text-red-600">{uyeHata}</p>}
+                          <div className="grid grid-cols-2 gap-3">
+                            <input placeholder="Ad" value={uyeForm.ad}
+                              onChange={e => setUyeForm(f => ({ ...f, ad: e.target.value }))}
+                              className="border border-[#D4D0C7] rounded-xl px-4 py-2.5 text-sm" />
+                            <input placeholder="Soyad" value={uyeForm.soyad}
+                              onChange={e => setUyeForm(f => ({ ...f, soyad: e.target.value }))}
+                              className="border border-[#D4D0C7] rounded-xl px-4 py-2.5 text-sm" />
+                          </div>
+                          <input type="email" placeholder="E-posta *" value={uyeForm.email}
+                            onChange={e => setUyeForm(f => ({ ...f, email: e.target.value }))}
+                            className="w-full border border-[#D4D0C7] rounded-xl px-4 py-2.5 text-sm" />
+                          <input type="password" placeholder="Şifre *" value={uyeForm.sifre}
+                            onChange={e => setUyeForm(f => ({ ...f, sifre: e.target.value }))}
+                            className="w-full border border-[#D4D0C7] rounded-xl px-4 py-2.5 text-sm" />
+                          <input type="tel" placeholder="Telefon" value={uyeForm.telefon}
+                            onChange={e => setUyeForm(f => ({ ...f, telefon: e.target.value }))}
+                            className="w-full border border-[#D4D0C7] rounded-xl px-4 py-2.5 text-sm" />
+                          <div>
+                            <label className="text-xs text-[#8C8A82] mb-1 block">Doğum Tarihi (isteğe bağlı — özel gün mesajları için)</label>
+                            <input type="date" value={uyeForm.dogumTarihi}
+                              onChange={e => setUyeForm(f => ({ ...f, dogumTarihi: e.target.value }))}
+                              className="w-full border border-[#D4D0C7] rounded-xl px-4 py-2.5 text-sm" />
+                          </div>
+                          <button type="button" onClick={uyeKayit} disabled={uyeLoading}
+                            className="w-full py-2.5 bg-[#0D1510] text-white rounded-xl text-sm font-semibold disabled:opacity-50">
+                            {uyeLoading ? 'Kaydediliyor...' : 'Üye Ol'}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
 
                 {/* Kişisel bilgiler */}
                 <div className="bg-white rounded-2xl border border-[#E0DDD4] p-6">
