@@ -239,7 +239,23 @@ export default function ProductCostDetailPage() {
   const [syncingImages, setSyncingImages] = useState(false);
   const [productDescription, setProductDescription] = useState('');
   const [shopCategoryId, setShopCategoryId] = useState('');
+  const [catalogCategory, setCatalogCategory] = useState('');
+  const [catalogSubCategory, setCatalogSubCategory] = useState('');
   const [categories, setCategories] = useState<{ id: number; name: string; children?: { id: number; name: string }[] }[]>([]);
+
+  const CATS: Record<string, { label: string; subs: string[] }> = {
+    Agaclar:        { label: 'Ağaçlar',                   subs: ['Yeşil Ağaçlar', 'Hazır Ağaçlar', 'Renkli Ağaçlar', 'Bambu Ağaçlar', 'Palmiye ve Areka Ağaçlar', 'Saksısız Ağaçlar'] },
+    Bambu:          { label: 'Bambu',                     subs: ['Tekli Bambu', 'Plastik Separatör', 'MDF Separatör', 'Fiber Separatör'] },
+    YapayKursekler: { label: 'Yapay Çiçekler',            subs: ['Renkli Çiçekler', 'Yeşil Çiçekler'] },
+    Buketler:       { label: 'Buketler',                  subs: [] },
+    DikeyBahce:     { label: 'Dikey Bahçeler',            subs: ['Paneller', 'Kapı Önü Dekorlar', 'Tavan Dekorları'] },
+    Sarmasiklar:    { label: 'Sarmaşıklar',               subs: ['Yeşil Sarmaşıklar', 'Renkli Sarmaşıklar'] },
+    BonsaiZeytin:   { label: 'Bonsai ve Zeytin Ağaçları', subs: ['Bonsai', 'Zeytin Ağacı'] },
+    SaksiAranjman:  { label: 'Saksı Aranjmanları',        subs: [] },
+    YapayBitkiler:  { label: 'Yapay Bitkiler',            subs: ['Yeşil Bitkiler', 'Renkli Bitkiler', 'Yapraklar'] },
+    Saksilar:       { label: 'Saksılar',                  subs: ['Metal Saksılar', 'Plastik Saksılar', 'MDF Saksılar', 'Fiber Saksılar', 'Ahşap Saksılar', 'Beton Saksılar', 'Yanmaz Saksılar'] },
+  };
+  const CATS_KEYS = Object.keys(CATS);
   const [savingProductInfo, setSavingProductInfo] = useState(false);
   const [activating, setActivating] = useState(false);
   const [variantStatus, setVariantStatus] = useState<'ACTIVE' | 'PASSIVE'>('ACTIVE');
@@ -282,6 +298,8 @@ export default function ProductCostDetailPage() {
         if (pcVariant) {
           setProductDescription(pcVariant.productDescription ?? '');
           setShopCategoryId(pcVariant.shopCategoryId ? String(pcVariant.shopCategoryId) : '');
+          setCatalogCategory((pcVariant as any).catalogCategory ?? '');
+          setCatalogSubCategory((pcVariant as any).catalogSubCategory ?? '');
         }
         setCategories(Array.isArray(cats) ? cats : []);
         const savedMaterials = data.costDraft.items
@@ -1012,6 +1030,8 @@ export default function ProductCostDetailPage() {
         json: {
           productDescription,
           shopCategoryId: shopCategoryId ? Number(shopCategoryId) : null,
+          catalogCategory: catalogCategory || null,
+          catalogSubCategory: catalogSubCategory || null,
         },
       });
       setMessage('Ürün bilgileri kaydedildi.');
@@ -1442,6 +1462,40 @@ export default function ProductCostDetailPage() {
                   placeholder="Ürün açıklaması..."
                 />
               </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Katalog Kategorisi</label>
+                <select
+                  className="mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-base outline-none focus:ring-2 focus:ring-brand"
+                  value={CATS_KEYS.find((k) => CATS[k].label === catalogCategory) ?? ''}
+                  onChange={(e) => {
+                    setCatalogCategory(e.target.value ? CATS[e.target.value].label : '');
+                    setCatalogSubCategory('');
+                  }}
+                >
+                  <option value="">— Seçin —</option>
+                  {CATS_KEYS.map((k) => (
+                    <option key={k} value={k}>{CATS[k].label}</option>
+                  ))}
+                </select>
+              </div>
+              {(() => {
+                const catKey = CATS_KEYS.find((k) => CATS[k].label === catalogCategory);
+                const subs = catKey ? CATS[catKey].subs : [];
+                if (!subs.length) return null;
+                return (
+                  <div>
+                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Alt Kategori</label>
+                    <select
+                      className="mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-base outline-none focus:ring-2 focus:ring-brand"
+                      value={catalogSubCategory}
+                      onChange={(e) => setCatalogSubCategory(e.target.value)}
+                    >
+                      <option value="">— Seçin —</option>
+                      {subs.map((s) => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </div>
+                );
+              })()}
               <div>
                 <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Site Kategorisi</label>
                 <select
