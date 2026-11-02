@@ -73,9 +73,21 @@ function fmtDate(s?: string | null) {
   return new Date(s).toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit', year: '2-digit' });
 }
 
+const PLATFORM_LABELS: Record<string, string> = {
+  TRENDYOL: 'Trendyol',
+  N11: 'N11',
+  HEPSIBURADA: 'Hepsiburada',
+  WEBSITE: 'Web Sitesi',
+  TICIMAX: 'Ticimax',
+  PAZARAMA: 'Pazarama',
+  TRENDRUM: 'Trendrum',
+  IDEFIX: 'İdefix',
+};
+
 function PrintPage() {
   const params = useSearchParams();
   const cat = params.get('cat') ?? 'all'; // agac | saksi | bambu | seperator | all
+  const platformFilter = (params.get('platform') ?? 'all').toUpperCase(); // ALL | TRENDYOL | N11 | ...
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -87,18 +99,22 @@ function PrintPage() {
 
   const printOrders = useMemo(() => {
     return orders
+      .filter((o) => platformFilter === 'ALL' || o.platform === platformFilter)
       .map((o) => {
         const visibleItems = cat === 'all' ? o.items : filterItemsByCategory(o.items, cat);
         return { ...o, visibleItems };
       })
       .filter((o) => o.visibleItems.length > 0);
-  }, [orders, cat]);
+  }, [orders, cat, platformFilter]);
 
   const catLabel =
     cat === 'agac' ? '🌳 AĞAÇ' :
     cat === 'bambu' ? '🎋 BAMBU' :
     cat === 'saksi' ? '🪴 SAKSI' :
-    cat === 'seperator' ? '🪨 SEPERATÖR' : 'TÜM SİPARİŞLER';
+    cat === 'seperator' ? '🪨 SEPERATÖR' : 'TÜM KATEGORİLER';
+
+  const platformLabel = platformFilter === 'ALL' ? 'Tüm Platformlar' : (PLATFORM_LABELS[platformFilter] ?? platformFilter);
+  const fullLabel = platformFilter === 'ALL' ? catLabel : `${platformLabel} · ${catLabel}`;
 
   useEffect(() => {
     if (!loading && printOrders.length > 0) {
@@ -136,7 +152,7 @@ function PrintPage() {
       `}</style>
 
       <div className="no-print" style={{ padding: '12px', background: '#f5f5f5', marginBottom: 12, display: 'flex', gap: 8, alignItems: 'center' }}>
-        <strong>Çıktı Önizleme:</strong> {catLabel} — {printOrders.length} sipariş
+        <strong>Çıktı Önizleme:</strong> {fullLabel} — {printOrders.length} sipariş
         <button onClick={() => window.print()} style={{ marginLeft: 'auto', padding: '6px 16px', background: '#1a56db', color: 'white', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 'bold' }}>
           🖨️ Yazdır
         </button>
@@ -146,7 +162,7 @@ function PrintPage() {
       </div>
 
       <div className="header">
-        {catLabel} — {new Date().toLocaleDateString('tr-TR')} — {printOrders.length} sipariş
+        {fullLabel} — {new Date().toLocaleDateString('tr-TR')} — {printOrders.length} sipariş
       </div>
 
       <div className="grid">

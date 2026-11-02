@@ -38,11 +38,11 @@ type OrderRow = {
 };
 
 const PLATFORMS = [
-  { key: 'all', label: 'Tümü' },
-  { key: 'TRENDYOL', label: 'Trendyol' },
-  { key: 'N11', label: 'N11' },
-  { key: 'HEPSIBURADA', label: 'Hepsiburada' },
-  { key: 'WEBSITE', label: '🌐 Web Sitesi' },
+  { key: 'all', label: 'Tümü', printKey: 'all' },
+  { key: 'TRENDYOL', label: 'Trendyol', printKey: 'TRENDYOL' },
+  { key: 'N11', label: 'N11', printKey: 'N11' },
+  { key: 'HEPSIBURADA', label: 'Hepsiburada', printKey: 'HEPSIBURADA' },
+  { key: 'WEBSITE', label: '🌐 Web Sitesi', printKey: 'WEBSITE' },
 ];
 
 const STATUS_TABS = [
@@ -289,23 +289,38 @@ export default function StaffOrdersPage() {
         </div>
 
         {/* Çıktı butonları */}
-        <div className="flex gap-2 flex-wrap">
-          <span className="text-xs font-semibold text-slate-500 self-center">Çıktı Al:</span>
-          <button onClick={() => window.open('/staff/print?cat=agac', '_blank')} className="btn btn-secondary text-sm">
-            <Printer size={14} /> 🌳 Ağaç
-          </button>
-          <button onClick={() => window.open('/staff/print?cat=saksi', '_blank')} className="btn btn-secondary text-sm">
-            <Printer size={14} /> 🪴 Saksı
-          </button>
-          <button onClick={() => window.open('/staff/print?cat=bambu', '_blank')} className="btn btn-secondary text-sm">
-            <Printer size={14} /> 🎋 Bambu
-          </button>
-          <button onClick={() => window.open('/staff/print?cat=seperator', '_blank')} className="btn btn-secondary text-sm">
-            <Printer size={14} /> 🪨 Seperatör
-          </button>
-          <button onClick={() => window.open('/staff/print?cat=all', '_blank')} className="btn btn-secondary text-sm">
-            <Printer size={14} /> Tümü
-          </button>
+        <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-2">
+          <div className="text-xs font-bold text-slate-500 uppercase tracking-wide">Çıktı Al — Kategori</div>
+          <div className="flex gap-2 flex-wrap">
+            <button onClick={() => window.open(`/staff/print?cat=agac&platform=${platform === 'all' ? 'all' : platform}`, '_blank')} className="btn btn-secondary text-sm">
+              <Printer size={14} /> 🌳 Ağaç
+            </button>
+            <button onClick={() => window.open(`/staff/print?cat=saksi&platform=${platform === 'all' ? 'all' : platform}`, '_blank')} className="btn btn-secondary text-sm">
+              <Printer size={14} /> 🪴 Saksı
+            </button>
+            <button onClick={() => window.open(`/staff/print?cat=bambu&platform=${platform === 'all' ? 'all' : platform}`, '_blank')} className="btn btn-secondary text-sm">
+              <Printer size={14} /> 🎋 Bambu
+            </button>
+            <button onClick={() => window.open(`/staff/print?cat=seperator&platform=${platform === 'all' ? 'all' : platform}`, '_blank')} className="btn btn-secondary text-sm">
+              <Printer size={14} /> 🪨 Seperatör
+            </button>
+            <button onClick={() => window.open(`/staff/print?cat=all&platform=${platform === 'all' ? 'all' : platform}`, '_blank')} className="btn btn-secondary text-sm">
+              <Printer size={14} /> Tümü
+            </button>
+          </div>
+          <div className="text-xs font-bold text-slate-500 uppercase tracking-wide pt-1">Platform Bazlı Çıktı</div>
+          <div className="flex gap-2 flex-wrap">
+            {PLATFORMS.filter(p => p.key !== 'all').map(p => {
+              const count = activeOrders.filter(o => o.platform === p.key).length;
+              if (count === 0) return null;
+              return (
+                <button key={p.key} onClick={() => window.open(`/staff/print?cat=all&platform=${p.key}`, '_blank')} className="btn btn-secondary text-sm">
+                  <Printer size={14} /> {p.label}
+                  <span className="ml-1 bg-indigo-100 text-indigo-700 text-xs font-black px-1.5 py-0.5 rounded-full">{count}</span>
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         {/* Video yükleme başarı toast */}
