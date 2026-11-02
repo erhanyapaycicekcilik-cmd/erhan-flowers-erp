@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { RefreshCw, Package, Clock, ExternalLink, Video, Printer, ChevronDown, ChevronUp, Phone, MapPin, CheckCircle } from 'lucide-react';
 import { AdminShell } from '@/components/AdminShell';
 import { api, apiFileUrl, apiBaseUrl } from '@/lib/api';
@@ -368,7 +368,7 @@ export default function StaffOrdersPage() {
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {filtered.map((order) => (
-              <OrderCard key={order.id} order={order} onStatusChange={handleStatusChange} />
+              <OrderCard key={order.id} order={order} onStatusChange={handleStatusChange} category={category} />
             ))}
             {!filtered.length && (
               <div className="col-span-full text-center text-slate-400 py-12">Sipariş bulunamadı</div>
@@ -390,7 +390,7 @@ export default function StaffOrdersPage() {
             </div>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {filteredReady.map((order) => (
-                <OrderCard key={order.id} order={order} onStatusChange={handleStatusChange} readySection />
+                <OrderCard key={order.id} order={order} onStatusChange={handleStatusChange} readySection category={category} />
               ))}
             </div>
           </section>
@@ -428,11 +428,22 @@ function itemImageSrc(item: OrderItem): string | null {
   return item.imagePath.startsWith('http') ? item.imagePath : apiFileUrl(item.imagePath);
 }
 
-function OrderCard({ order, onStatusChange, readySection }: { order: OrderRow; onStatusChange: (id: number, status: string) => void; readySection?: boolean }) {
+function OrderCard({ order, onStatusChange, readySection, category }: { order: OrderRow; onStatusChange: (id: number, status: string) => void; readySection?: boolean; category?: string }) {
   const countdown = useCountdown(order.deliveryDueAt, order.status);
   const isLate = countdown?.isLate ?? false;
   const isUrgent = countdown?.isUrgent ?? false;
-  const [activeIdx, setActiveIdx] = useState(0);
+
+  // Seçili kategoriye uyan ürünün index'ini bul
+  const categoryStartIdx = useMemo(() => {
+    if (!category || category === 'all') return 0;
+    const keywords = category === 'agac' ? AGAC_KEYWORDS : category === 'bambu' ? BAMBU_KEYWORDS : category === 'saksi' ? SAKSI_KEYWORDS : [];
+    if (!keywords.length) return 0;
+    const items = order.items.filter((i) => i.imagePath);
+    const idx = items.findIndex((i) => keywords.some((kw) => (i.productName ?? '').toLowerCase().includes(kw)));
+    return idx >= 0 ? idx : 0;
+  }, [category, order.items]);
+
+  const [activeIdx, setActiveIdx] = useState(categoryStartIdx);
   const [showDetails, setShowDetails] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [staffNote, setStaffNote] = useState(order.staffNote ?? '');
