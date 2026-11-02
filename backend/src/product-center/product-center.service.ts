@@ -1216,6 +1216,8 @@ export class ProductCenterService {
     if (body.barcode !== undefined) variantData.barcode = body.barcode
     if (body.shopCategoryId !== undefined) variantData.shopCategoryId = body.shopCategoryId
     if (body.videoUrl !== undefined) variantData.videoUrl = body.videoUrl
+    if (body.catalogCategory !== undefined) variantData.catalogCategory = body.catalogCategory
+    if (body.catalogSubCategory !== undefined) variantData.catalogSubCategory = body.catalogSubCategory
 
     const variantSelect = { id: true, productId: true, productName: true, barcode: true, currentModelCode: true,
                 supplierStockCode: true, productDescription: true, images: true, shopCategoryId: true,
@@ -1400,6 +1402,8 @@ Sadece 3 satır ürün adı yaz, başka hiçbir şey yazma.`;
         trendyolSalePrice: true,
         stockQuantity: true,
         status: true,
+        catalogCategory: true,
+        catalogSubCategory: true,
         productCostDraft: { select: { salePrice: true, marketplaceSalePrice: true } },
         product: {
           select: {
