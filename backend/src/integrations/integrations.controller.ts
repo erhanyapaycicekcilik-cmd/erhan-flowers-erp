@@ -122,6 +122,11 @@ export class IntegrationsController {
     return this.integrations.listWebOrders(query);
   }
 
+  @Get('web-orders/:id/print')
+  webOrderPrint(@Param('id') id: string) {
+    return this.integrations.webOrderPrintData(Number(id));
+  }
+
   @Get('operations')
   operations() {
     return this.integrations.operationsSummary();

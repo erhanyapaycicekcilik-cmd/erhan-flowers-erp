@@ -699,6 +699,53 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
     `);
   }
 
+  async webOrderPrintData(id: number) {
+    const rows = await this.prisma.$queryRaw<Array<Record<string, unknown>>>(Prisma.sql`
+      SELECT
+        wo.id,
+        wo.order_number AS "saleNumber",
+        wo.status::text AS status,
+        wo.customer_name AS "customerName",
+        wo.customer_phone AS "customerPhone",
+        wo.city,
+        wo.district,
+        wo.address AS "fullAddress",
+        wo.grand_total AS "grandTotal",
+        wo.note AS "customerNote",
+        wo.created_at AS "createdAt",
+        wo.payment_method AS "paymentMethod",
+        COALESCE(
+          jsonb_agg(
+            jsonb_build_object(
+              'id', woi.id,
+              'productNameSnapshot', woi.product_name,
+              'quantity', woi.quantity,
+              'unitPrice', woi.unit_price,
+              'lineTotal', woi.line_total,
+              'imagePath', woi.product_image
+            )
+            ORDER BY woi.id
+          ) FILTER (WHERE woi.id IS NOT NULL),
+          '[]'::jsonb
+        ) AS items
+      FROM web_orders wo
+      LEFT JOIN web_order_items woi ON woi.order_id = wo.id
+      WHERE wo.id = ${id}
+      GROUP BY wo.id
+    `);
+    if (!rows.length) throw new Error('Web sipariş bulunamadı.');
+    const wo = rows[0];
+    return {
+      company: {
+        name: 'Erhan Flowers',
+        website: 'www.erhanflowers.com',
+        phone: '0544 654 62 20',
+        address: 'Sarılar Mahallesi Cumhuriyet Caddesi No: 52, Manavgat / Antalya',
+      },
+      sale: { ...wo, channel: 'WEB', source: 'WEB' },
+    };
+  }
+
   async operationsSummary() {
     const [summary] = await this.prisma.$queryRaw<Array<Record<string, unknown>>>`
       SELECT
