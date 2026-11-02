@@ -33,6 +33,7 @@ type OrderRow = {
   cargoProvider?: string | null;
   companyCode?: string | null;
   companyName?: string | null;
+  staffNote?: string | null;
   items: OrderItem[];
 };
 
@@ -294,25 +295,11 @@ export default function StaffOrdersPage() {
           </div>
         )}
 
-        {/* Bugün/Yarın acil uyarı banner */}
+        {/* Bugün/Yarın acil uyarı — kompakt */}
         {urgentToday.length > 0 && (
-          <div className="rounded-xl border-2 border-red-400 bg-red-50 px-4 py-3 flex items-start gap-3 animate-pulse">
-            <span className="text-3xl mt-0.5">🚨</span>
-            <div className="flex-1">
-              <div className="font-black text-red-800 text-base">{urgentToday.length} sipariş bugün veya yarın 12:00'a kadar çıkmalı!</div>
-              <div className="text-sm text-red-700 mt-1 space-y-0.5">
-                {urgentToday.map((o) => (
-                  <div key={o.id} className="font-mono">
-                    • {o.saleNumber} — {o.customerName}
-                    {o.deliveryDueAt && (
-                      <span className="ml-1 text-red-600 font-bold">
-                        (Son: {new Date(o.deliveryDueAt).toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })})
-                      </span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
+          <div className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 flex items-center gap-2 text-xs text-red-700 font-semibold">
+            <span>🚨</span>
+            <span>{urgentToday.length} sipariş bugün/yarın çıkmalı — kartlarda &quot;ACİL&quot; yazıyor</span>
           </div>
         )}
 
@@ -448,6 +435,8 @@ function OrderCard({ order, onStatusChange, readySection }: { order: OrderRow; o
   const [activeIdx, setActiveIdx] = useState(0);
   const [showDetails, setShowDetails] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [staffNote, setStaffNote] = useState(order.staffNote ?? '');
+  const [savingNote, setSavingNote] = useState(false);
   const videoRef = useRef<HTMLInputElement>(null);
 
   const itemsWithImg = order.items.filter((i) => i.imagePath);
@@ -502,6 +491,16 @@ function OrderCard({ order, onStatusChange, readySection }: { order: OrderRow; o
     const files = e.target.files;
     if (!files || files.length === 0) return;
     await markReadyWithPhotos(files);
+  }
+
+  async function saveStaffNote() {
+    if (savingNote) return;
+    setSavingNote(true);
+    try {
+      await api(`/sales/${order.id}/staff-note`, { method: 'PATCH', json: { note: staffNote } });
+    } catch { /* ignore */ } finally {
+      setSavingNote(false);
+    }
   }
 
   function handlePrint() {
@@ -657,6 +656,18 @@ function OrderCard({ order, onStatusChange, readySection }: { order: OrderRow; o
                 <div key={i} className="text-slate-400">Barkod: {item.barcode}</div>
               ) : null
             ))}
+            {/* Personel notu */}
+            <div className="pt-1">
+              <textarea
+                value={staffNote}
+                onChange={(e) => setStaffNote(e.target.value)}
+                onBlur={() => void saveStaffNote()}
+                placeholder="Personel notu ekle..."
+                rows={2}
+                className="w-full text-xs rounded border border-slate-300 p-2 resize-none focus:outline-none focus:border-indigo-400"
+              />
+              {savingNote && <span className="text-[10px] text-slate-400">Kaydediliyor...</span>}
+            </div>
           </div>
         )}
 

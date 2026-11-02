@@ -857,6 +857,11 @@ export class SalesService {
     });
   }
 
+  async updateStaffNote(id: number, note: string) {
+    await this.prisma.$executeRaw`UPDATE retail_sales SET staff_note = ${note}, updated_at = NOW() WHERE id = ${id}`;
+    return { ok: true };
+  }
+
   async addPayment(saleId: number, payload: unknown, userId: number) {
     return this.prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM retail_sales WHERE id = ${saleId} FOR UPDATE`;
