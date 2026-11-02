@@ -516,7 +516,7 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
         s.order_date AS "orderDate", s.delivery_due_at AS "deliveryDueAt", s.created_at AS "createdAt",
         s.cargo_provider AS "cargoProvider", s.cargo_tracking_number AS "cargoTrackingNumber",
         s.grand_total AS "grandTotal", s.subtotal, s.delivery_fee AS "deliveryFee", s.invoice_status AS "invoiceStatus",
-        s.invoice_note AS "invoiceNote", s.cancelled_at AS "cancelledAt", s.internal_note AS "internalNote", s.staff_note AS "staffNote",
+        s.invoice_note AS "invoiceNote", s.cancelled_at AS "cancelledAt", s.internal_note AS "internalNote",
         co.code AS "companyCode", co.name AS "companyName",
         c.display_name AS "customerName", c.phone, c.customer_type AS "customerType",
         a.city, a.district, a.full_address AS "fullAddress",
