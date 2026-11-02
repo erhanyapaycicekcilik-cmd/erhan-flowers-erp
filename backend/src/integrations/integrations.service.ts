@@ -646,6 +646,59 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
     `);
   }
 
+  async listWebOrders(query: Record<string, string>) {
+    const q = this.text(query.q);
+    const take = Math.min(Number(query.pageSize ?? 200), 500);
+    const page = Math.max(1, Number(query.page ?? 1));
+    const offset = (page - 1) * take;
+    const startDate = this.text(query.startDate);
+    const endDate = this.text(query.endDate);
+
+    return this.prisma.$queryRaw<Array<Record<string, unknown>>>(Prisma.sql`
+      SELECT
+        wo.id,
+        wo.order_number AS "saleNumber",
+        wo.order_number AS "platformOrderNumber",
+        wo.order_number AS "externalOrderId",
+        'WEBSITE' AS platform,
+        wo.status::text AS status,
+        wo.customer_name AS "customerName",
+        wo.customer_phone AS phone,
+        wo.city,
+        wo.district,
+        wo.address AS "fullAddress",
+        wo.grand_total AS "grandTotal",
+        wo.subtotal,
+        wo.payment_method AS "paymentMethod",
+        wo.paid_at AS "paidAt",
+        wo.note AS "internalNote",
+        wo.created_at AS "orderDate",
+        wo.created_at AS "createdAt",
+        COALESCE(
+          jsonb_agg(
+            jsonb_build_object(
+              'id', woi.id,
+              'productName', woi.product_name,
+              'quantity', woi.quantity,
+              'unitPrice', woi.unit_price,
+              'lineTotal', woi.line_total,
+              'imagePath', woi.product_image
+            )
+            ORDER BY woi.id
+          ) FILTER (WHERE woi.id IS NOT NULL),
+          '[]'::jsonb
+        ) AS items
+      FROM web_orders wo
+      LEFT JOIN web_order_items woi ON woi.order_id = wo.id
+      WHERE (${q} = '' OR wo.order_number ILIKE ${`%${q}%`} OR wo.customer_name ILIKE ${`%${q}%`} OR wo.customer_phone ILIKE ${`%${q}%`})
+        AND (${startDate} = '' OR wo.created_at::date >= ${startDate}::date)
+        AND (${endDate} = '' OR wo.created_at::date <= ${endDate}::date)
+      GROUP BY wo.id
+      ORDER BY wo.created_at DESC
+      LIMIT ${take} OFFSET ${offset}
+    `);
+  }
+
   async operationsSummary() {
     const [summary] = await this.prisma.$queryRaw<Array<Record<string, unknown>>>`
       SELECT

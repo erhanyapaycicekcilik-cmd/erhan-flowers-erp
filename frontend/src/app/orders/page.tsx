@@ -185,6 +185,7 @@ const platformOptions = [
 ];
 
 const marketplacePlatforms = new Set(['PAZARAMA', 'TRENDRUM', 'IDEFIX', 'FLORA_TRENDYOL', 'FLORA_N11']);
+const webPlatforms = new Set(['WEBSITE']);
 
 const statusRank: Record<string, number> = {
   DRAFT: 0,
@@ -291,6 +292,7 @@ export default function OrdersPage() {
   }, []);
 
   const isMarketplacePlatform = marketplacePlatforms.has(appliedFilters.platform);
+  const isWebPlatform = webPlatforms.has(appliedFilters.platform);
 
   const loadOrders = useCallback(async (options: { background?: boolean } = {}) => {
     if (requestInFlight.current) return;
@@ -301,8 +303,13 @@ export default function OrdersPage() {
     setMessage('');
     try {
       const usingMarketplace = marketplacePlatforms.has(appliedFilters.platform);
+      const usingWeb = webPlatforms.has(appliedFilters.platform);
       if (usingMarketplace) {
         const data = await api<OrderRow[]>(`/integrations/marketplace-orders?${params}`);
+        setOrders(data.map((order) => ({ ...order, items: Array.isArray(order.items) ? order.items : [] })));
+        setSummary(null);
+      } else if (usingWeb) {
+        const data = await api<OrderRow[]>(`/integrations/web-orders?${params}`);
         setOrders(data.map((order) => ({ ...order, items: Array.isArray(order.items) ? order.items : [] })));
         setSummary(null);
       } else {
