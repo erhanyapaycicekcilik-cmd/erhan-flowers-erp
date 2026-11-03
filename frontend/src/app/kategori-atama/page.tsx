@@ -234,27 +234,25 @@ export default function KategoriAtamaPage() {
     const toSend = products.filter(p => state[p.barcode]?.k)
     if (!toSend.length) { setSendMsg('Gönderilecek ürün yok'); return }
     setSending(true)
-    let ok = 0, err = 0
-    for (let i = 0; i < toSend.length; i++) {
-      const p = toSend[i]
-      setSendMsg(`Gönderiliyor... ${i + 1}/${toSend.length}`)
-      try {
-        await api(`/product-center/variants/${p.id}`, {
-          method: 'PATCH',
-          json: {
-            catalogCategory: CATS[state[p.barcode].k].label,
-            catalogSubCategory: state[p.barcode].sub || null,
-          },
-        })
-        ok++
-      } catch { err++ }
-    }
-    if (err > 0) {
-      setSendMsg(`⚠️ ${ok} kaydedildi, ${err} HATA — oturumunuz dolmuş olabilir, sayfayı yenileyip tekrar deneyin`)
-    } else {
-      setSendMsg(`✅ ${ok} ürün veritabanına kaydedildi`)
-      // DB'den tekrar yükle — gerçekten kaydedildiğini doğrula
-      await load()
+    setSendMsg(`Gönderiliyor... (${toSend.length} ürün)`)
+    try {
+      const items = toSend.map(p => ({
+        id: p.id,
+        catalogCategory: CATS[state[p.barcode].k].label,
+        catalogSubCategory: state[p.barcode].sub || null,
+      }))
+      const result = await api<{ updated: number; errors: number }>('/product-center/variants/bulk-category', {
+        method: 'POST',
+        json: { items },
+      })
+      if (result.errors > 0) {
+        setSendMsg(`⚠️ ${result.updated} kaydedildi, ${result.errors} hata`)
+      } else {
+        setSendMsg(`✅ ${result.updated} ürün veritabanına kaydedildi`)
+        await load()
+      }
+    } catch (e) {
+      setSendMsg(`⚠️ Bağlantı hatası — sayfayı yenileyip tekrar deneyin`)
     }
     setSending(false)
   }
