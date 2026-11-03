@@ -543,7 +543,6 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
                 sc.external_image_url,
                 i.external_image_url,
                 (SELECT img->>'url' FROM jsonb_array_elements(CASE WHEN jsonb_typeof(tpv.images) = 'array' THEN tpv.images ELSE '[]'::jsonb END) AS img WHERE img->>'url' IS NOT NULL AND img->>'url' <> '' LIMIT 1),
-                (SELECT p.image_url FROM products p WHERE ((i.barcode IS NOT NULL AND p.barcode = i.barcode) OR (i.model_code IS NOT NULL AND p.model_code = i.model_code)) AND p.image_url IS NOT NULL AND p.image_url <> '' LIMIT 1),
                 (SELECT url FROM products p, jsonb_array_elements_text(CASE WHEN jsonb_typeof(p.image_urls) = 'array' THEN p.image_urls ELSE '[]'::jsonb END) AS url WHERE ((i.barcode IS NOT NULL AND p.barcode = i.barcode) OR (i.model_code IS NOT NULL AND p.model_code = i.model_code)) LIMIT 1)
               ),
               'color', sc.color,
