@@ -2330,6 +2330,7 @@ model MarketplaceOrderItem {
   discountAmount Decimal           @default(0) @map("discount_amount") @db.Decimal(14, 2)
   totalPrice     Decimal           @map("total_price") @db.Decimal(14, 2)
   stockCardId    Int?              @map("stock_card_id")
+  productImageUrl String?          @map("product_image_url")
   createdAt      DateTime          @default(now()) @map("created_at")
   order          MarketplaceOrder  @relation(fields: [orderId], references: [id], onDelete: Cascade)
   stockCard      StockCard?        @relation(fields: [stockCardId], references: [id])

@@ -621,6 +621,7 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
               'unitPrice', moi.unit_price,
               'lineTotal', moi.total_price,
               'imagePath', COALESCE(
+                moi.product_image_url,
                 sc.image_path,
                 (SELECT sci.file_path FROM stock_card_images sci WHERE sci.stock_card_id = sc.id AND sci.is_main = true LIMIT 1),
                 (SELECT sci.file_path FROM stock_card_images sci WHERE sci.stock_card_id = sc.id ORDER BY sci.id LIMIT 1),

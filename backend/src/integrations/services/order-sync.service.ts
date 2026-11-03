@@ -14,6 +14,9 @@ interface TrendyolOrderLine {
   quantity?: unknown;
   price?: unknown;
   amount?: unknown;
+  images?: Array<{ url?: string } | string>;
+  productImage?: unknown;
+  imageUrl?: unknown;
 }
 
 interface TrendyolOrder {
@@ -182,6 +185,12 @@ export class OrderSyncService {
           }
         }
 
+        const lineImages = Array.isArray(line.images) ? line.images : [];
+        const lineImageUrl = (lineImages[0] && typeof lineImages[0] === 'object' && 'url' in lineImages[0] ? String((lineImages[0] as { url?: string }).url ?? '') : '') ||
+          (lineImages[0] && typeof lineImages[0] === 'string' ? lineImages[0] : '') ||
+          (line.productImage ? String(line.productImage) : '') ||
+          (line.imageUrl ? String(line.imageUrl) : '') || null;
+
         await this.prisma.marketplaceOrderItem.create({
           data: {
             orderId: savedOrder.id,
@@ -192,6 +201,7 @@ export class OrderSyncService {
             unitPrice,
             totalPrice: qty * unitPrice,
             stockCardId: stockCard?.id ?? null,
+            productImageUrl: lineImageUrl || null,
           },
         });
 
@@ -486,8 +496,12 @@ export class OrderSyncService {
           if (mapping.length > 0) stockCard = await this.prisma.stockCard.findFirst({ where: { id: mapping[0].stock_card_id, status: 'ACTIVE' }, select: { id: true, stockQuantity: true, unit: true } });
         }
 
+        const n11ImageUrl = (line as Record<string, unknown>).productImage ? String((line as Record<string, unknown>).productImage) :
+          ((line as Record<string, unknown>).imageUrl ? String((line as Record<string, unknown>).imageUrl) :
+          ((line as Record<string, unknown>).thumbnailUrl ? String((line as Record<string, unknown>).thumbnailUrl) : null));
+
         await this.prisma.marketplaceOrderItem.create({
-          data: { orderId: savedOrder.id, productName: String(line.productName ?? 'Bilinmeyen Urun'), sku, barcode, quantity: qty, unitPrice, totalPrice: qty * unitPrice, stockCardId: stockCard?.id ?? null },
+          data: { orderId: savedOrder.id, productName: String(line.productName ?? 'Bilinmeyen Urun'), sku, barcode, quantity: qty, unitPrice, totalPrice: qty * unitPrice, stockCardId: stockCard?.id ?? null, productImageUrl: n11ImageUrl },
         });
 
         if (stockCard) {
@@ -612,8 +626,12 @@ export class OrderSyncService {
           if (mapping.length > 0) stockCard = await this.prisma.stockCard.findFirst({ where: { id: mapping[0].stock_card_id, status: 'ACTIVE' }, select: { id: true, stockQuantity: true, unit: true } });
         }
 
+        const hbImageUrl = (line as Record<string, unknown>).imageUrl ? String((line as Record<string, unknown>).imageUrl) :
+          ((line as Record<string, unknown>).productImageUrl ? String((line as Record<string, unknown>).productImageUrl) :
+          ((line as Record<string, unknown>).productImage ? String((line as Record<string, unknown>).productImage) : null));
+
         await this.prisma.marketplaceOrderItem.create({
-          data: { orderId: savedOrder.id, productName: String(line.productName ?? line.name ?? 'Bilinmeyen Urun'), sku, barcode, quantity: qty, unitPrice, totalPrice: qty * unitPrice, stockCardId: stockCard?.id ?? null },
+          data: { orderId: savedOrder.id, productName: String(line.productName ?? line.name ?? 'Bilinmeyen Urun'), sku, barcode, quantity: qty, unitPrice, totalPrice: qty * unitPrice, stockCardId: stockCard?.id ?? null, productImageUrl: hbImageUrl },
         });
 
         if (stockCard) {
@@ -1092,10 +1110,26 @@ export class OrderSyncService {
         const barcode = line.barcode ? String(line.barcode) : null;
         const sku = line.merchantSku ? String(line.merchantSku) : null;
         const qty = Number(line.quantity ?? 1);
+        const unitPrice = Number((line as Record<string, unknown>).price ?? (line as Record<string, unknown>).amount ?? 0);
+        const floraLineImages = Array.isArray(line.images) ? line.images : [];
+        const floraLineImageUrl = (floraLineImages[0] && typeof floraLineImages[0] === 'object' && 'url' in floraLineImages[0] ? String((floraLineImages[0] as { url?: string }).url ?? '') : '') ||
+          (floraLineImages[0] && typeof floraLineImages[0] === 'string' ? floraLineImages[0] : '') ||
+          (line.productImage ? String(line.productImage) : '') ||
+          (line.imageUrl ? String(line.imageUrl) : '') || null;
 
         let stockCard: { id: number; stockQuantity: unknown; unit: string } | null = null;
         if (barcode) stockCard = await this.prisma.stockCard.findFirst({ where: { barcode, status: 'ACTIVE' }, select: { id: true, stockQuantity: true, unit: true } });
         if (!stockCard && sku) stockCard = await this.prisma.stockCard.findFirst({ where: { sku, status: 'ACTIVE' }, select: { id: true, stockQuantity: true, unit: true } });
+
+        await this.prisma.marketplaceOrderItem.create({
+          data: {
+            orderId: savedFloraOrder.id,
+            productName: String((line as Record<string, unknown>).productName ?? (line as Record<string, unknown>).name ?? 'Bilinmeyen Urun'),
+            sku, barcode, quantity: qty, unitPrice, totalPrice: qty * unitPrice,
+            stockCardId: stockCard?.id ?? null,
+            productImageUrl: floraLineImageUrl,
+          },
+        }).catch(() => { /* item zaten varsa atla */ });
 
         const components = sku ? await this.prisma.$queryRaw<Array<{ stock_card_id: number; quantity: number }>>`
           SELECT stock_card_id, quantity FROM marketplace_sku_components
