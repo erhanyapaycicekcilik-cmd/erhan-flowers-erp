@@ -292,54 +292,22 @@ export class PublicCatalogService {
     return Math.round(trendyolPrice * (1 - commission / 100));
   }
 
-  // Trendyol ürünlerinden sitePrice toplu doldur — sitePrice=0 olanları günceller
-  // Kural: sitePrice = trendyolSalePrice - komisyon (pazaryeri komisyonu olmadan)
+  // Trendyol ürünlerinden sitePrice toplu doldur
+  // Kural: sitePrice = market_price * 0.80 (sabit %20 altı, maliyet gerektirmez)
   async bulkSyncSitePriceFromTrendyol(): Promise<{ updated: number; skipped: number }> {
-    // Tüm aktif ürünlerin site fiyatını Trendyol fiyatından hesapla (market_price * 0.80)
     const products = await this.prisma.product.findMany({
       where: { status: 'ACTIVE' },
-      select: {
-        id: true,
-        marketPrice: true,
-        listPrice: true,
-        productCenterVariant: {
-          select: { trendyolSalePrice: true, commissionPercent: true, status: true },
-        },
-      },
+      select: { id: true, marketPrice: true, shopPrice: true },
     });
 
     let updated = 0;
     let skipped = 0;
 
     for (const product of products) {
-      const variant = product.productCenterVariant;
-
-      let trendyolPrice = 0;
-      let commission = 20;
-
-      if (variant && variant.status === 'ACTIVE') {
-        trendyolPrice = Number(variant.trendyolSalePrice ?? 0);
-        commission = Number(variant.commissionPercent ?? 20);
-      }
-
-      // Varyant bağlantısı yoksa marketPrice veya listPrice'dan fiyat al (yüklenen ürünler için)
-      if (trendyolPrice <= 0) {
-        trendyolPrice = Number(product.marketPrice ?? 0) || Number(product.listPrice ?? 0);
-      }
-
+      const trendyolPrice = Number(product.marketPrice ?? 0) || Number(product.shopPrice ?? 0);
       if (trendyolPrice <= 0) { skipped++; continue; }
-
-      const sitePrice = this.calcSitePrice(trendyolPrice, commission);
-
-      await this.prisma.product.update({
-        where: { id: product.id },
-        data: {
-          sitePrice,
-          shopPrice: sitePrice,
-          listPrice: trendyolPrice, // pazaryeri fiyatı üstü çizili "eski fiyat" olarak gösterilebilir
-          marketPrice: trendyolPrice,
-        },
-      });
+      const sitePrice = Math.round(trendyolPrice * 0.80);
+      await this.prisma.product.update({ where: { id: product.id }, data: { sitePrice } });
       updated++;
     }
 
