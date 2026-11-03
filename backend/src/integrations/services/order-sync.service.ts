@@ -651,7 +651,7 @@ export class OrderSyncService {
 
   private async markMissingAsDelivered(platform: string, fetchedIds: string[]): Promise<void> {
     if (fetchedIds.length === 0) return;
-    // OUT_FOR_DELIVERY → DELIVERED (teslim edilmiş)
+    // retail_sales: OUT_FOR_DELIVERY → DELIVERED
     const transitSales = await this.prisma.$queryRaw<Array<{ id: number; external_order_id: string }>>`
       SELECT id, external_order_id FROM retail_sales
       WHERE channel = ${platform}::"RetailSaleChannel"
@@ -666,8 +666,7 @@ export class OrderSyncService {
         this.logger.log(`[${platform}] Siparis #${sale.id} (${sale.external_order_id}) API'de gorünmuyor → DELIVERED olarak isaratlendi.`);
       }
     }
-    // CONFIRMED / PREPARING → CANCELLED (platform tarafında iptal/kaybolmuş eski siparişler)
-    // Sadece 2 günden eski siparişleri kontrol et (yeni siparişlerin eklenmesine zaman tanı)
+    // retail_sales: CONFIRMED / PREPARING → CANCELLED (2 günden eski)
     const staleSales = await this.prisma.$queryRaw<Array<{ id: number; external_order_id: string }>>`
       SELECT id, external_order_id FROM retail_sales
       WHERE channel = ${platform}::"RetailSaleChannel"
@@ -681,6 +680,22 @@ export class OrderSyncService {
           UPDATE retail_sales SET status = 'CANCELLED'::"RetailSaleStatus", updated_at = NOW() WHERE id = ${sale.id}
         `;
         this.logger.log(`[${platform}] Eski siparis #${sale.id} (${sale.external_order_id}) API'de yok → CANCELLED olarak isaratlendi.`);
+      }
+    }
+    // marketplace_orders: 2 günden eski ve API'de görünmeyenleri DELIVERED yap
+    const staleOrders = await this.prisma.$queryRaw<Array<{ id: number; external_order_id: string }>>`
+      SELECT id, external_order_id FROM marketplace_orders
+      WHERE platform = ${platform}
+        AND status NOT IN ('Delivered', 'DELIVERED', 'Cancelled', 'CANCELLED', 'Returned', 'RETURNED')
+        AND external_order_id IS NOT NULL
+        AND created_at < NOW() - INTERVAL '2 days'
+    `;
+    for (const order of staleOrders) {
+      if (!fetchedIds.includes(order.external_order_id)) {
+        await this.prisma.$executeRaw`
+          UPDATE marketplace_orders SET status = 'Delivered', updated_at = NOW() WHERE id = ${order.id}
+        `;
+        this.logger.log(`[${platform}] Marketplace siparis #${order.id} (${order.external_order_id}) API'de yok → Delivered olarak isaratlendi.`);
       }
     }
   }
