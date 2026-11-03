@@ -142,7 +142,10 @@ export default function KategoriAtamaPage() {
         },
       })
       setSavedBarcodes(prev => new Set(prev).add(barcode))
-    } catch { /* hata görmezden gel, localStorage'da var */ }
+    } catch {
+      // Hata olursa kayıt göstergesi kırmızı yansıtsın — localStorage'da var ama DB'de değil
+      setSendMsg('⚠️ Kayıt hatası — oturumunuz dolmuş olabilir. ERP\'ye Gönder butonunu kullanın.')
+    }
     setSavingBarcodes(prev => { const s = new Set(prev); s.delete(barcode); return s })
   }, [])
 
@@ -230,9 +233,11 @@ export default function KategoriAtamaPage() {
   async function sendToERP() {
     const toSend = products.filter(p => state[p.barcode]?.k)
     if (!toSend.length) { setSendMsg('Gönderilecek ürün yok'); return }
-    setSending(true); setSendMsg('Gönderiliyor...')
+    setSending(true)
     let ok = 0, err = 0
-    for (const p of toSend) {
+    for (let i = 0; i < toSend.length; i++) {
+      const p = toSend[i]
+      setSendMsg(`Gönderiliyor... ${i + 1}/${toSend.length}`)
       try {
         await api(`/product-center/variants/${p.id}`, {
           method: 'PATCH',
@@ -244,7 +249,13 @@ export default function KategoriAtamaPage() {
         ok++
       } catch { err++ }
     }
-    setSendMsg(`✅ ${ok} ürün güncellendi${err ? ` · ${err} hata` : ''}`)
+    if (err > 0) {
+      setSendMsg(`⚠️ ${ok} kaydedildi, ${err} HATA — oturumunuz dolmuş olabilir, sayfayı yenileyip tekrar deneyin`)
+    } else {
+      setSendMsg(`✅ ${ok} ürün veritabanına kaydedildi`)
+      // DB'den tekrar yükle — gerçekten kaydedildiğini doğrula
+      await load()
+    }
     setSending(false)
   }
 
