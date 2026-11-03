@@ -142,7 +142,10 @@ export default function KategoriAtamaPage() {
         },
       })
       setSavedBarcodes(prev => new Set(prev).add(barcode))
-    } catch { /* hata görmezden gel, localStorage'da var */ }
+    } catch {
+      // Hata olursa kayıt göstergesi kırmızı yansıtsın — localStorage'da var ama DB'de değil
+      setSendMsg('⚠️ Kayıt hatası — oturumunuz dolmuş olabilir. ERP\'ye Gönder butonunu kullanın.')
+    }
     setSavingBarcodes(prev => { const s = new Set(prev); s.delete(barcode); return s })
   }, [])
 

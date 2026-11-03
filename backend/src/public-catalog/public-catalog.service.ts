@@ -268,7 +268,7 @@ export class PublicCatalogService {
       const candidates = [segment, segment.replace(/-/g, '.')];
       for (const modelCode of candidates) {
         const product = await this.prisma.product.findFirst({
-          where: { modelCode, status: 'ACTIVE', sitePrice: { gt: 0 } },
+          where: { modelCode, status: 'ACTIVE' },
           select: SAFE_SELECT,
         });
         if (product) return this.toPublicProduct(product);
@@ -279,7 +279,7 @@ export class PublicCatalogService {
 
   async getProductById(id: number) {
     const product = await this.prisma.product.findFirst({
-      where: { id, status: 'ACTIVE', sitePrice: { gt: 0 } },
+      where: { id, status: 'ACTIVE' },
       select: SAFE_SELECT,
     });
     return product ? this.toPublicProduct(product) : null;
