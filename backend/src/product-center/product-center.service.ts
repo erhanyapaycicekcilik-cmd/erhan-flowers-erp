@@ -1249,6 +1249,28 @@ export class ProductCenterService {
     return variant
   }
 
+  async bulkUpdateCategory(items: { id: number; catalogCategory: string; catalogSubCategory?: string | null }[]): Promise<{ updated: number; errors: number }> {
+    let updated = 0, errors = 0;
+    for (const item of items) {
+      try {
+        const variant = await this.prisma.trendyolProductVariant.update({
+          where: { id: item.id },
+          data: { catalogCategory: item.catalogCategory, catalogSubCategory: item.catalogSubCategory ?? null },
+          select: { id: true, productId: true },
+        });
+        if (variant.productId) {
+          await this.prisma.product.update({
+            where: { id: variant.productId },
+            data: { catalogCategory: item.catalogCategory, catalogSubCategory: item.catalogSubCategory ?? null },
+          }).catch(() => undefined);
+        }
+        updated++;
+      } catch { errors++; }
+    }
+    void revalidateSite();
+    return { updated, errors };
+  }
+
   // Türkçe kategori adından kısa kod türetir: "Yeşil Ağaçlar" → "YA", "Benjamin" → "BEN"
   private shopCategoryCode(name: string): string {
     const norm = name.toUpperCase()

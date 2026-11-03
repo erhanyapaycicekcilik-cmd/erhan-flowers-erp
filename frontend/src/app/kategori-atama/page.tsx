@@ -230,21 +230,27 @@ export default function KategoriAtamaPage() {
   async function sendToERP() {
     const toSend = products.filter(p => state[p.barcode]?.k)
     if (!toSend.length) { setSendMsg('Gönderilecek ürün yok'); return }
-    setSending(true); setSendMsg('Gönderiliyor...')
-    let ok = 0, err = 0
-    for (const p of toSend) {
-      try {
-        await api(`/product-center/variants/${p.id}`, {
-          method: 'PATCH',
-          json: {
-            catalogCategory: CATS[state[p.barcode].k].label,
-            catalogSubCategory: state[p.barcode].sub || null,
-          },
-        })
-        ok++
-      } catch { err++ }
+    setSending(true)
+    setSendMsg(`Gönderiliyor... (${toSend.length} ürün)`)
+    try {
+      const items = toSend.map(p => ({
+        id: p.id,
+        catalogCategory: CATS[state[p.barcode].k].label,
+        catalogSubCategory: state[p.barcode].sub || null,
+      }))
+      const result = await api<{ updated: number; errors: number }>('/product-center/variants/bulk-category', {
+        method: 'POST',
+        json: { items },
+      })
+      if (result.errors > 0) {
+        setSendMsg(`⚠️ ${result.updated} kaydedildi, ${result.errors} hata`)
+      } else {
+        setSendMsg(`✅ ${result.updated} ürün veritabanına kaydedildi`)
+        await load()
+      }
+    } catch (e) {
+      setSendMsg(`⚠️ Bağlantı hatası — sayfayı yenileyip tekrar deneyin`)
     }
-    setSendMsg(`✅ ${ok} ürün güncellendi${err ? ` · ${err} hata` : ''}`)
     setSending(false)
   }
 

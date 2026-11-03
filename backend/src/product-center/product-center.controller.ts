@@ -107,6 +107,11 @@ export class ProductCenterController {
     return this.productCenter.listVariantsForEdit(search);
   }
 
+  @Post('variants/bulk-category')
+  bulkUpdateCategory(@Body() body: { items: { id: number; catalogCategory: string; catalogSubCategory?: string | null }[] }) {
+    return this.productCenter.bulkUpdateCategory(body.items);
+  }
+
   @Patch('variants/:id')
   editVariant(@Param('id') id: string, @Body() body: any) {
     return this.productCenter.editVariant(Number(id), body);
