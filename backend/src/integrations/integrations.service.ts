@@ -630,7 +630,13 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
                 (SELECT url FROM products p, jsonb_array_elements_text(CASE WHEN jsonb_typeof(p.image_urls) = 'array' THEN p.image_urls ELSE '[]'::jsonb END) AS url WHERE ((moi.barcode IS NOT NULL AND p.barcode = moi.barcode) OR (moi.sku IS NOT NULL AND p.model_code = moi.sku) OR (moi.sku IS NOT NULL AND p.model_code = REGEXP_REPLACE(moi.sku, '^FL-', ''))) AND url IS NOT NULL AND url <> '' LIMIT 1),
                 (SELECT sc2.image_path FROM stock_cards sc2 WHERE (sc2.barcode = moi.barcode OR sc2.sku = moi.sku OR (moi.sku IS NOT NULL AND sc2.sku = REGEXP_REPLACE(moi.sku, '^FL-', ''))) AND sc2.image_path IS NOT NULL AND sc2.image_path <> '' LIMIT 1),
                 (SELECT sci2.file_path FROM stock_cards sc2, stock_card_images sci2 WHERE (sc2.barcode = moi.barcode OR sc2.sku = moi.sku OR (moi.sku IS NOT NULL AND sc2.sku = REGEXP_REPLACE(moi.sku, '^FL-', ''))) AND sci2.stock_card_id = sc2.id ORDER BY sci2.is_main DESC, sci2.id LIMIT 1),
-                (SELECT line_item->>'productImage' FROM jsonb_array_elements(CASE WHEN jsonb_typeof(mo.raw_payload->'lines') = 'array' THEN mo.raw_payload->'lines' ELSE '[]'::jsonb END) AS line_item WHERE (moi.barcode IS NOT NULL AND line_item->>'barcode' = moi.barcode OR moi.sku IS NOT NULL AND line_item->>'merchantSku' = moi.sku) AND line_item->>'productImage' IS NOT NULL AND line_item->>'productImage' <> '' LIMIT 1)
+                (SELECT COALESCE(
+                  line_item->>'productImage',
+                  line_item->>'imageUrl',
+                  line_item->>'productImageUrl',
+                  line_item->>'thumbnailUrl',
+                  line_item->'images'->0->>'url'
+                ) FROM jsonb_array_elements(CASE WHEN jsonb_typeof(mo.raw_payload->'lines') = 'array' THEN mo.raw_payload->'lines' ELSE (CASE WHEN jsonb_typeof(mo.raw_payload->'orderItems') = 'array' THEN mo.raw_payload->'orderItems' ELSE '[]'::jsonb END) END) AS line_item WHERE (moi.barcode IS NOT NULL AND (line_item->>'barcode' = moi.barcode OR line_item->>'productCode' = moi.barcode) OR moi.sku IS NOT NULL AND (line_item->>'merchantSku' = moi.sku OR line_item->>'stockCode' = moi.sku OR line_item->>'productSellerCode' = moi.sku)) AND COALESCE(line_item->>'productImage', line_item->>'imageUrl', line_item->>'productImageUrl', line_item->>'thumbnailUrl', line_item->'images'->0->>'url') IS NOT NULL AND COALESCE(line_item->>'productImage', line_item->>'imageUrl', line_item->>'productImageUrl', line_item->>'thumbnailUrl', line_item->'images'->0->>'url') <> '' LIMIT 1)
               )
             )
             ORDER BY moi.id
