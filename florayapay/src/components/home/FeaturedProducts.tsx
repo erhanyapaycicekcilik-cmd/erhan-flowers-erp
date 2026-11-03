@@ -34,13 +34,13 @@ export async function FeaturedProducts() {
           {products.map((product) => (
             <li key={product.id}>
               <article className="group bg-white rounded-2xl border border-[#E8E4DA] overflow-hidden hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200">
-                <Link href={`/urun/${product.slug}`} className="block relative aspect-square bg-gray-50 overflow-hidden">
+                <Link href={`/urun/${product.slug}`} className="block relative aspect-[3/4] bg-white overflow-hidden">
                   <Image
                     src={getImageUrl(product.mainImage)}
                     alt={product.name}
                     fill
                     sizes="(max-width: 640px) 50vw, 25vw"
-                    className="object-cover group-hover:scale-105 transition-transform duration-500"
+                    className="object-contain group-hover:scale-105 transition-transform duration-500 p-2"
                   />
                 </Link>
                 <div className="p-3">

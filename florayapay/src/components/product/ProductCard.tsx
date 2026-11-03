@@ -27,16 +27,16 @@ export function ProductCard({ product }: { product: Product }) {
   return (
     <article className="group bg-white rounded-2xl border border-[#E0DDD4] overflow-hidden hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200">
       {/* Görsel */}
-      <Link href={`/urun/${product.slug}`} className="block relative aspect-square bg-[#F4F2EC]">
+      <Link href={`/urun/${product.slug}`} className="block relative aspect-[3/4] bg-white">
         {product.image ? (
           <Image
             src={product.image}
             alt={product.name}
             fill
             sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
-            quality={60}
+            quality={75}
             loading="lazy"
-            className="object-cover group-hover:scale-105 transition-transform duration-300"
+            className="object-contain group-hover:scale-105 transition-transform duration-300 p-2"
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center text-5xl text-[#C4C0B8]">
