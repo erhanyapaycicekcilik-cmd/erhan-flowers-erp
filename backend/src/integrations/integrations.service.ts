@@ -626,8 +626,10 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
                 (SELECT sci.file_path FROM stock_card_images sci WHERE sci.stock_card_id = sc.id ORDER BY sci.id LIMIT 1),
                 sc.external_image_url,
                 (SELECT img->>'url' FROM jsonb_array_elements(CASE WHEN jsonb_typeof(tpv.images) = 'array' THEN tpv.images ELSE '[]'::jsonb END) AS img WHERE img->>'url' IS NOT NULL AND img->>'url' <> '' LIMIT 1),
-                (SELECT p.image_url FROM products p WHERE ((moi.barcode IS NOT NULL AND p.barcode = moi.barcode) OR (moi.sku IS NOT NULL AND p.model_code = moi.sku)) AND p.image_url IS NOT NULL AND p.image_url <> '' LIMIT 1),
-                (SELECT url FROM products p, jsonb_array_elements_text(CASE WHEN jsonb_typeof(p.image_urls) = 'array' THEN p.image_urls ELSE '[]'::jsonb END) AS url WHERE ((moi.barcode IS NOT NULL AND p.barcode = moi.barcode) OR (moi.sku IS NOT NULL AND p.model_code = moi.sku)) AND url IS NOT NULL AND url <> '' LIMIT 1)
+                (SELECT p.image_url FROM products p WHERE ((moi.barcode IS NOT NULL AND p.barcode = moi.barcode) OR (moi.sku IS NOT NULL AND p.model_code = moi.sku) OR (moi.sku IS NOT NULL AND p.model_code = REGEXP_REPLACE(moi.sku, '^FL-', ''))) AND p.image_url IS NOT NULL AND p.image_url <> '' LIMIT 1),
+                (SELECT url FROM products p, jsonb_array_elements_text(CASE WHEN jsonb_typeof(p.image_urls) = 'array' THEN p.image_urls ELSE '[]'::jsonb END) AS url WHERE ((moi.barcode IS NOT NULL AND p.barcode = moi.barcode) OR (moi.sku IS NOT NULL AND p.model_code = moi.sku) OR (moi.sku IS NOT NULL AND p.model_code = REGEXP_REPLACE(moi.sku, '^FL-', ''))) AND url IS NOT NULL AND url <> '' LIMIT 1),
+                (SELECT sc2.image_path FROM stock_cards sc2 WHERE (sc2.barcode = moi.barcode OR sc2.sku = moi.sku OR (moi.sku IS NOT NULL AND sc2.sku = REGEXP_REPLACE(moi.sku, '^FL-', ''))) AND sc2.image_path IS NOT NULL AND sc2.image_path <> '' LIMIT 1),
+                (SELECT sci2.file_path FROM stock_cards sc2, stock_card_images sci2 WHERE (sc2.barcode = moi.barcode OR sc2.sku = moi.sku OR (moi.sku IS NOT NULL AND sc2.sku = REGEXP_REPLACE(moi.sku, '^FL-', ''))) AND sci2.stock_card_id = sc2.id ORDER BY sci2.is_main DESC, sci2.id LIMIT 1)
               )
             )
             ORDER BY moi.id
@@ -636,7 +638,7 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
         ) AS items
       FROM marketplace_orders mo
       LEFT JOIN marketplace_order_items moi ON moi.order_id = mo.id
-      LEFT JOIN stock_cards sc ON sc.barcode = moi.barcode OR (moi.barcode IS NULL AND sc.sku = moi.sku)
+      LEFT JOIN stock_cards sc ON sc.barcode = moi.barcode OR (moi.barcode IS NULL AND sc.sku = moi.sku) OR (moi.barcode IS NULL AND moi.sku IS NOT NULL AND sc.sku = REGEXP_REPLACE(moi.sku, '^FL-', ''))
       LEFT JOIN trendyol_product_variants tpv ON tpv.barcode = COALESCE(moi.barcode, sc.barcode)
       WHERE (${platform} = '' OR mo.platform = ${platform})
         AND (${q} = '' OR mo.order_number ILIKE ${`%${q}%`} OR mo.customer_name ILIKE ${`%${q}%`} OR mo.external_order_id ILIKE ${`%${q}%`})
