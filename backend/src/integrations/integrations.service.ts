@@ -625,7 +625,9 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
                 (SELECT sci.file_path FROM stock_card_images sci WHERE sci.stock_card_id = sc.id AND sci.is_main = true LIMIT 1),
                 (SELECT sci.file_path FROM stock_card_images sci WHERE sci.stock_card_id = sc.id ORDER BY sci.id LIMIT 1),
                 sc.external_image_url,
-                (SELECT img->>'url' FROM jsonb_array_elements(CASE WHEN jsonb_typeof(tpv.images) = 'array' THEN tpv.images ELSE '[]'::jsonb END) AS img WHERE img->>'url' IS NOT NULL AND img->>'url' <> '' LIMIT 1)
+                (SELECT img->>'url' FROM jsonb_array_elements(CASE WHEN jsonb_typeof(tpv.images) = 'array' THEN tpv.images ELSE '[]'::jsonb END) AS img WHERE img->>'url' IS NOT NULL AND img->>'url' <> '' LIMIT 1),
+                (SELECT p.image_url FROM products p WHERE ((moi.barcode IS NOT NULL AND p.barcode = moi.barcode) OR (moi.sku IS NOT NULL AND p.model_code = moi.sku)) AND p.image_url IS NOT NULL AND p.image_url <> '' LIMIT 1),
+                (SELECT url FROM products p, jsonb_array_elements_text(CASE WHEN jsonb_typeof(p.image_urls) = 'array' THEN p.image_urls ELSE '[]'::jsonb END) AS url WHERE ((moi.barcode IS NOT NULL AND p.barcode = moi.barcode) OR (moi.sku IS NOT NULL AND p.model_code = moi.sku)) AND url IS NOT NULL AND url <> '' LIMIT 1)
               )
             )
             ORDER BY moi.id
