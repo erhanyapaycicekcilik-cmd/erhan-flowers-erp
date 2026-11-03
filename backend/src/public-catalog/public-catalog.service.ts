@@ -24,6 +24,8 @@ const SAFE_SELECT = {
   warrantyMonths: true,
   stockQuantity: true,
   status: true,
+  catalogCategory: true,
+  catalogSubCategory: true,
   category: {
     select: { id: true, name: true },
   },
@@ -132,26 +134,38 @@ export class PublicCatalogService {
   }
 
   async listCategories() {
-    const categories = await this.prisma.category.findMany({
-      where: {
-        products: {
-          some: { status: 'ACTIVE', stockQuantity: { gt: 0 }, sitePrice: { gt: 0 } },
-        },
-      },
-      select: {
-        id: true,
-        name: true,
-        _count: { select: { products: { where: { status: 'ACTIVE', stockQuantity: { gt: 0 }, sitePrice: { gt: 0 } } } } },
-      },
-      orderBy: { name: 'asc' },
+    // catalogCategory alanına göre dinamik kategori listesi
+    const products = await this.prisma.product.findMany({
+      where: { status: 'ACTIVE', stockQuantity: { gt: 0 }, sitePrice: { gt: 0 }, catalogCategory: { not: null } },
+      select: { catalogCategory: true },
     });
 
-    return categories.map((cat) => ({
-      id: cat.id,
-      name: cat.name,
-      slug: slugify(cat.name),
-      count: cat._count.products,
-    }));
+    const counts = new Map<string, number>();
+    for (const p of products) {
+      if (p.catalogCategory) {
+        counts.set(p.catalogCategory, (counts.get(p.catalogCategory) ?? 0) + 1);
+      }
+    }
+
+    // Kategori sırası — kullanıcının atama sayfasındaki sırayla aynı
+    const CAT_ORDER = ['Ağaçlar', 'Bambu', 'Yapay Çiçekler', 'Buketler', 'Dikey Bahçeler', 'Sarmaşıklar', 'Bonsai ve Zeytin Ağaçları', 'Saksı Aranjmanları', 'Yapay Bitkiler', 'Saksılar'];
+
+    return Array.from(counts.entries())
+      .filter(([, count]) => count > 0)
+      .sort(([a], [b]) => {
+        const ia = CAT_ORDER.indexOf(a);
+        const ib = CAT_ORDER.indexOf(b);
+        if (ia === -1 && ib === -1) return a.localeCompare(b, 'tr');
+        if (ia === -1) return 1;
+        if (ib === -1) return -1;
+        return ia - ib;
+      })
+      .map(([name, count], idx) => ({
+        id: idx + 1,
+        name,
+        slug: slugify(name),
+        count,
+      }));
   }
 
   async listProducts(params: {
@@ -173,37 +187,13 @@ export class PublicCatalogService {
       sitePrice: { gt: 0 }, // Sadece site fiyatı tanımlanmış ürünler
     };
 
-    // Kategori filtresi — bir site slug'ı birden fazla ERP kategorisini kapsayabilir
+    // catalogCategory alanına göre filtrele
     if (params.categorySlug) {
-      const allCategories = await this.prisma.category.findMany({ select: { id: true, name: true } });
-
-      // Site slug → ERP kategori adları eşleştirme tablosu
-      const SLUG_CATEGORY_MAP: Record<string, string[]> = {
-        'yapay-agac':    ['Yapay Ağaç', 'Zeytin Ağacı', 'Bonsai'],
-        'demet-cicek':   ['Demet Çiçek', 'Buket'],
-        'aranjman':      ['Aranjman'],
-        'bambu':         ['Bambu'],
-        'yapay-bitki':   ['Yapay Bitki', 'Mini Saksılı Bitki'],
-        'sarmasik':      ['Yapay Sarmaşık'],
-        'dikey-bahce':   ['Dikey Bahçe'],
-        'saksilar':      ['Saksı & Vazo'],
-      };
-
-      const targetNames = SLUG_CATEGORY_MAP[params.categorySlug];
-      if (targetNames) {
-        // Eşleştirme tablosundaki adlara göre bul (büyük/küçük harf duyarsız)
-        const matchedIds = allCategories
-          .filter((c) => targetNames.some((n) => n.toLocaleLowerCase('tr-TR') === c.name.toLocaleLowerCase('tr-TR')))
-          .map((c) => c.id);
-        if (matchedIds.length === 1) {
-          where['categoryId'] = matchedIds[0];
-        } else if (matchedIds.length > 1) {
-          where['categoryId'] = { in: matchedIds };
-        }
-      } else {
-        // Tabloda yoksa eski slug-based tek eşleştirme ile dene
-        const matchedCat = allCategories.find((c) => slugify(c.name) === params.categorySlug);
-        if (matchedCat) where['categoryId'] = matchedCat.id;
+      // slug'dan katalog kategori adını bul
+      const CAT_NAMES = ['Ağaçlar', 'Bambu', 'Yapay Çiçekler', 'Buketler', 'Dikey Bahçeler', 'Sarmaşıklar', 'Bonsai ve Zeytin Ağaçları', 'Saksı Aranjmanları', 'Yapay Bitkiler', 'Saksılar'];
+      const matched = CAT_NAMES.find((n) => slugify(n) === params.categorySlug);
+      if (matched) {
+        where['catalogCategory'] = matched;
       }
     }
 
@@ -469,17 +459,21 @@ export class PublicCatalogService {
     vatRate: number;
     warrantyMonths: number;
     stockQuantity: number;
+    catalogCategory?: string | null;
+    catalogSubCategory?: string | null;
     category: { id: number; name: string } | null;
   }) {
     const images = this.parseImageUrls(product.imageUrls);
+    // catalogCategory öncelikli; yoksa eski category tablosu
+    const catName = product.catalogCategory ?? product.category?.name ?? null;
 
     return {
       id: product.id,
       name: product.productName,
       slug: productSlug(product.productName, product.modelCode),
       modelCode: product.modelCode,
-      category: product.category?.name ?? null,
-      categorySlug: product.category ? slugify(product.category.name) : null,
+      category: catName,
+      categorySlug: catName ? slugify(catName) : null,
       sitePrice: product.sitePrice,
       // listPrice > sitePrice ise üstü çizili "önceki fiyat" olarak göster
       originalPrice: product.listPrice > product.sitePrice ? product.listPrice : null,
