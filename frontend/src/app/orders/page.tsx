@@ -42,6 +42,7 @@ import {
   RefreshCw,
   Search,
   Tag,
+  X,
 } from 'lucide-react';
 import { AdminShell } from '@/components/AdminShell';
 import { api, apiFileUrl } from '@/lib/api';
@@ -657,7 +658,7 @@ export default function OrdersPage() {
                     <MenuButton disabled>Üretim Görevi Oluştur</MenuButton>
                     <MenuButton onClick={() => exportExcel()} disabled={!tabOrders.length}>Excel'e Aktar</MenuButton>
                     <MenuButton disabled>Askıya Al</MenuButton>
-                    <MenuButton disabled>İptal Et</MenuButton>
+                    <MenuButton onClick={() => { if (confirm(`${selected.length} sipariş iptal edilecek. Emin misiniz?`)) bulkStatus('CANCELLED', 'Toplu iptal edildi.'); }} disabled={!selected.length || busyAction === 'bulk:CANCELLED'}>İptal Et</MenuButton>
                   </div>
                 )}
               </div>
@@ -690,6 +691,7 @@ export default function OrdersPage() {
                 onCargoLabel={() => openCargoLabel(order.id)}
                 onProcessing={() => updateStatus(order.id, 'PREPARING', 'İşleme alındı.')}
                 onReady={() => updateStatus(order.id, 'READY', 'Kargoya hazır yapıldı.')}
+                onCancel={() => { if (confirm('Bu sipariş iptal edilecek. Emin misiniz?')) updateStatus(order.id, 'CANCELLED', 'İptal edildi.'); }}
               />
             ))}
             {!loading && !pagedOrders.length && !message && <div className="p-10 text-center text-sm text-slate-500">Henüz aktarılmış gerçek sipariş bulunmuyor.</div>}
@@ -725,6 +727,7 @@ function OrderCard({
   onCargoLabel,
   onProcessing,
   onReady,
+  onCancel,
 }: {
   order: OrderRow;
   isOwner: boolean;
@@ -736,6 +739,7 @@ function OrderCard({
   onCargoLabel: () => void;
   onProcessing: () => void;
   onReady: () => void;
+  onCancel: () => void;
 }) {
   const items = Array.isArray(order.items) ? order.items : [];
   const countdown = useCountdown(order.deliveryDueAt, order.status);
@@ -822,6 +826,9 @@ function OrderCard({
           <button className="btn btn-primary min-h-9 px-3 text-xs" type="button" onClick={onProcessing} disabled={!canMoveTo(order.status, 'PREPARING') || busyAction === `${order.id}:PREPARING`}><FileText size={15} /> İşleme Al</button>
           <button className="btn btn-secondary min-h-9 px-3 text-xs" type="button" onClick={onReady} disabled={!canMoveTo(order.status, 'READY') || busyAction === `${order.id}:READY`}><PackageCheck size={15} /> Hazır Yap</button>
           <Link href={`/urun-hazirla/${order.id}`} className="btn btn-secondary min-h-9 px-3 text-xs flex items-center gap-1"><Camera size={15} /> Fotoğraf Yükle</Link>
+          {order.status !== 'CANCELLED' && order.status !== 'DELIVERED' && order.status !== 'COMPLETED' && (
+            <button className="btn btn-danger min-h-9 px-3 text-xs" type="button" onClick={onCancel} disabled={busyAction === `${order.id}:CANCELLED`}><X size={15} /> İptal Et</button>
+          )}
         </div>
       </Cell>
       </div>
