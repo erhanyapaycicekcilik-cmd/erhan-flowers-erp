@@ -295,9 +295,9 @@ export class PublicCatalogService {
   // Trendyol ürünlerinden sitePrice toplu doldur — sitePrice=0 olanları günceller
   // Kural: sitePrice = trendyolSalePrice - komisyon (pazaryeri komisyonu olmadan)
   async bulkSyncSitePriceFromTrendyol(): Promise<{ updated: number; skipped: number }> {
-    // sitePrice=0 olan ürünleri bul, Trendyol varyantı varsa fiyatını al
+    // Tüm aktif ürünlerin site fiyatını Trendyol fiyatından hesapla (market_price * 0.80)
     const products = await this.prisma.product.findMany({
-      where: { status: 'ACTIVE', sitePrice: 0 },
+      where: { status: 'ACTIVE' },
       select: {
         id: true,
         marketPrice: true,
