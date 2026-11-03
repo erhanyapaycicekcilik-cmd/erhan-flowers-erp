@@ -74,7 +74,9 @@ export class ProductsController {
 
   @Post('broadcast-all')
   broadcastAll() {
-    return this.products.broadcastAll();
+    // Run in background to avoid gateway timeout on large catalogs
+    this.products.broadcastAll().catch(() => {});
+    return { started: true, message: 'Toplu yayın arka planda başlatıldı' };
   }
 
   @Post('send-to-pazarama')

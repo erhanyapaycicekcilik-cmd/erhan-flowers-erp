@@ -134,26 +134,16 @@ export class TrendyolProductSyncService {
             select: { id: true, sitePrice: true },
           });
 
-          // Site fiyatı = Trendyol fiyatı - %20 (www.erhanflowers.com sadece site fiyatı bu kadar düşük)
-          const sitePrice = Math.round(salePrice * 0.80);
-
           if (existing) {
-            const updateData: Record<string, unknown> = {
-              stockQuantity: stock,
-              imageUrls: images,
-              listPrice,
-              marketPrice: salePrice,
-              shopPrice: salePrice,
-              sitePrice: sitePrice > 0 ? sitePrice : salePrice,
-            };
-
+            // Fiyat alanlarına DOKUNMA — sadece stok ve görseli güncelle
             await this.prisma.product.update({
               where: { id: existing.id },
-              data: updateData as any,
+              data: { stockQuantity: stock, imageUrls: images } as any,
             });
             updated++;
           } else {
-            // Yeni ürün ekle
+            // Yeni ürün — fiyatı Trendyol'dan al (ilk kez ekleniyor)
+            const sitePrice = Math.round(salePrice * 0.80);
             await this.prisma.product.create({
               data: {
                 productName: p.title || 'İsimsiz Ürün',
