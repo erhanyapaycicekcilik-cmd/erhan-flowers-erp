@@ -1857,8 +1857,8 @@ export default function ProductsPage() {
               setBroadcastingAll(true);
               setBroadcastResult(null);
               try {
-                const result = await api<{ total: number; sent: number; skipped: number; errors: number; platformErrors?: number }>('/products/broadcast-all', { method: 'POST' });
-                setBroadcastResult(result);
+                const result = await api<{ started?: boolean; total?: number; sent?: number; skipped?: number; errors?: number; platformErrors?: number }>('/products/broadcast-all', { method: 'POST' });
+                setBroadcastResult(result.started ? { total: 0, sent: 0, skipped: 0, errors: 0, message: 'Toplu yayın arka planda başlatıldı. 3-5 dakika içinde tamamlanır.' } as any : result);
               } catch {
                 alert('Toplu yayın sırasında hata oluştu.');
               } finally {
@@ -2047,7 +2047,7 @@ export default function ProductsPage() {
       )}
       {broadcastResult && (
         <div className="mb-4 rounded-md bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-800">
-          Toplu yayın tamamlandı — Toplam: {broadcastResult.total} | Gönderildi: {broadcastResult.sent} | Atlandı: {broadcastResult.skipped} | Hata: {broadcastResult.errors}{broadcastResult.platformErrors != null && broadcastResult.platformErrors !== broadcastResult.errors ? ` (platform hatası: ${broadcastResult.platformErrors})` : ''}
+          {(broadcastResult as any).message ?? `Toplu yayın tamamlandı — Toplam: ${broadcastResult.total} | Gönderildi: ${broadcastResult.sent} | Atlandı: ${broadcastResult.skipped} | Hata: ${broadcastResult.errors}${broadcastResult.platformErrors != null && broadcastResult.platformErrors !== broadcastResult.errors ? ` (platform hatası: ${broadcastResult.platformErrors})` : ''}`}
           <button className="ml-3 text-blue-500 hover:underline" onClick={() => setBroadcastResult(null)}>×</button>
         </div>
       )}
