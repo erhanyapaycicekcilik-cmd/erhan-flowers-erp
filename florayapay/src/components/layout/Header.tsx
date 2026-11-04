@@ -48,11 +48,16 @@ function AnnouncementBar() {
 }
 
 const navLinks = [
-  { href: '/urunler', label: 'Tüm Ürünler' },
-  { href: '/urunler?kategori=yapay-agac', label: 'Yapay Ağaçlar' },
-  { href: '/urunler?kategori=bambu', label: 'Bambu' },
-  { href: '/urunler?kategori=cicekler', label: 'Çiçekler' },
-  { href: '/urunler?kategori=dekorasyon', label: 'Dekorasyon' },
+  { href: '/urunler', label: 'Tüm Ürünler', emoji: '🌿' },
+  { href: '/urunler?kategori=agaclar', label: 'Ağaçlar', emoji: '🌳' },
+  { href: '/urunler?kategori=bambu', label: 'Bambu', emoji: '🎋' },
+  { href: '/urunler?kategori=yapay-cicekler', label: 'Çiçekler', emoji: '🌸' },
+  { href: '/urunler?kategori=buketler', label: 'Buketler', emoji: '💐' },
+  { href: '/urunler?kategori=dikey-bahceler', label: 'Dikey Bahçe', emoji: '🪴' },
+  { href: '/urunler?kategori=sarmasiklar', label: 'Sarmaşıklar', emoji: '🌿' },
+  { href: '/urunler?kategori=bonsai-ve-zeytin-agaclari', label: 'Bonsai & Zeytin', emoji: '🫒' },
+  { href: '/urunler?kategori=yapay-bitkiler', label: 'Yapay Bitkiler', emoji: '🌱' },
+  { href: '/urunler?kategori=saksilar', label: 'Saksılar', emoji: '🪣' },
 ]
 
 const extraLinks = [
@@ -168,39 +173,56 @@ export function Header() {
         </div>
       )}
 
-      {/* Navigasyon — masaüstü */}
-      <nav className="hidden md:flex justify-center border-t border-[#D6D2C4]" aria-label="Ana navigasyon">
-        <ul className="flex flex-wrap justify-center">
-          {navLinks.map((link) => (
-            <li key={link.href}>
-              <Link href={link.href} className="block px-4 py-2.5 text-[11px] tracking-[0.12em] uppercase font-medium text-[#3A3A34] hover:text-[#1E3A28] hover:bg-[#EAE6DC] transition-colors">
-                {link.label}
-              </Link>
-            </li>
-          ))}
-          <li className="border-l border-[#D6D2C4] mx-1" />
-          {extraLinks.map((link) => (
-            <li key={link.href}>
-              <Link href={link.href} className="block px-4 py-2.5 text-[11px] tracking-[0.12em] uppercase font-medium text-[#5C7A62] hover:text-[#1E3A28] hover:bg-[#EAE6DC] transition-colors">
-                {link.label}
-              </Link>
-            </li>
-          ))}
-        </ul>
-      </nav>
-
-      {/* Mobil menü */}
-      {mobileOpen && (
-        <nav className="md:hidden border-t border-[#D6D2C4] bg-[#F4F2EC]" aria-label="Mobil navigasyon">
-          <ul className="py-2">
-            {[...navLinks, ...extraLinks].map((link) => (
+      {/* Kategori navigasyonu — masaüstü */}
+      <nav className="hidden md:block bg-[#1E3A28] border-t border-[#2A4F38]" aria-label="Kategori navigasyonu">
+        <div className="max-w-screen-2xl mx-auto px-4 overflow-x-auto">
+          <ul className="flex min-w-max">
+            {navLinks.map((link) => (
               <li key={link.href}>
-                <Link href={link.href} onClick={() => setMobileOpen(false)} className="block px-6 py-3 text-sm text-[#0D1510] hover:bg-[#EAE6DC] tracking-wide">
+                <Link href={link.href} className="flex items-center gap-1.5 px-4 py-3 text-[12px] font-semibold text-[#C8DEC8] hover:text-white hover:bg-[#2A4F38] transition-colors whitespace-nowrap">
+                  <span>{link.emoji}</span>
+                  <span>{link.label}</span>
+                </Link>
+              </li>
+            ))}
+            <li className="flex-1" />
+            {extraLinks.map((link) => (
+              <li key={link.href}>
+                <Link href={link.href} className="block px-3 py-3 text-[11px] font-medium text-[#8CAD8C] hover:text-white hover:bg-[#2A4F38] transition-colors whitespace-nowrap">
                   {link.label}
                 </Link>
               </li>
             ))}
           </ul>
+        </div>
+      </nav>
+
+      {/* Mobil menü */}
+      {mobileOpen && (
+        <nav className="md:hidden border-t border-[#D6D2C4] bg-[#F4F2EC]" aria-label="Mobil navigasyon">
+          <div className="py-2">
+            <p className="px-6 pt-2 pb-1 text-[10px] uppercase tracking-widest text-[#8C8A82] font-semibold">Kategoriler</p>
+            <ul>
+              {navLinks.map((link) => (
+                <li key={link.href}>
+                  <Link href={link.href} onClick={() => setMobileOpen(false)} className="flex items-center gap-3 px-6 py-3 text-sm font-medium text-[#0D1510] hover:bg-[#EAE6DC]">
+                    <span className="text-base">{link.emoji}</span>
+                    <span>{link.label}</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+            <p className="px-6 pt-3 pb-1 text-[10px] uppercase tracking-widest text-[#8C8A82] font-semibold border-t border-[#D6D2C4] mt-2">Daha Fazlası</p>
+            <ul>
+              {extraLinks.map((link) => (
+                <li key={link.href}>
+                  <Link href={link.href} onClick={() => setMobileOpen(false)} className="block px-6 py-3 text-sm text-[#5C7A62] hover:bg-[#EAE6DC]">
+                    {link.label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
         </nav>
       )}
     </header>
