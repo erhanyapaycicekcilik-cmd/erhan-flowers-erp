@@ -77,6 +77,21 @@ export const metadata: Metadata = {
   creator: 'Erhan Flowers',
   publisher: 'Erhan Flowers',
   category: 'E-Ticaret / Ev Dekorasyonu',
+
+  manifest: '/manifest.json',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'Erhan Flowers',
+  },
+  other: {
+    'mobile-web-app-capable': 'yes',
+    'apple-mobile-web-app-capable': 'yes',
+    'apple-mobile-web-app-status-bar-style': 'black-translucent',
+    'apple-mobile-web-app-title': 'Erhan Flowers',
+    'msapplication-TileColor': '#1E3A28',
+    'msapplication-tap-highlight': 'no',
+  },
 }
 
 export const viewport: Viewport = {
@@ -107,6 +122,9 @@ export default function RootLayout({
           rel="stylesheet"
           href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=DM+Sans:wght@400;500;600&display=swap"
         />
+
+        {/* PWA — Apple touch icon */}
+        <link rel="apple-touch-icon" href="/logo.png" />
 
         {/* JSON-LD Structured Data */}
         <JsonLd data={organizationSchema} />
