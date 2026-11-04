@@ -290,18 +290,27 @@ export class PublicCatalogService {
   }
 
   // Trendyol ürünlerinden sitePrice toplu doldur
-  // Kural: sitePrice = market_price * 0.80 (sabit %20 altı, maliyet gerektirmez)
+  // Kural: sitePrice = trendyol_fiyatı * 0.80 (sabit %20 altı, maliyet gerektirmez)
+  // Önce Product.marketPrice/shopPrice, yoksa bağlı TrendyolProductVariant.salePrice kullanılır
   async bulkSyncSitePriceFromTrendyol(): Promise<{ updated: number; skipped: number }> {
     const products = await this.prisma.product.findMany({
       where: { status: 'ACTIVE' },
-      select: { id: true, marketPrice: true, shopPrice: true },
+      select: {
+        id: true,
+        marketPrice: true,
+        shopPrice: true,
+        productCenterVariant: { select: { salePrice: true } },
+      },
     });
 
     let updated = 0;
     let skipped = 0;
 
     for (const product of products) {
-      const trendyolPrice = Number(product.marketPrice ?? 0) || Number(product.shopPrice ?? 0);
+      let trendyolPrice = Number(product.marketPrice ?? 0) || Number(product.shopPrice ?? 0);
+      if (trendyolPrice <= 0 && product.productCenterVariant) {
+        trendyolPrice = Number(product.productCenterVariant.salePrice ?? 0);
+      }
       if (trendyolPrice <= 0) { skipped++; continue; }
       const sitePrice = Math.round(trendyolPrice * 0.80);
       await this.prisma.product.update({ where: { id: product.id }, data: { sitePrice } });
