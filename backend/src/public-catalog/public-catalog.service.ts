@@ -295,21 +295,28 @@ export class PublicCatalogService {
   async bulkSyncSitePriceFromTrendyol(): Promise<{ updated: number; skipped: number }> {
     const products = await this.prisma.product.findMany({
       where: { status: 'ACTIVE' },
-      select: {
-        id: true,
-        marketPrice: true,
-        shopPrice: true,
-        productCenterVariant: { select: { salePrice: true } },
-      },
+      select: { id: true, marketPrice: true, shopPrice: true },
     });
+
+    // Variant fiyatlarını tek seferde çek (productId → salePrice)
+    const variants = await this.prisma.trendyolProductVariant.findMany({
+      where: { productId: { not: null } },
+      select: { productId: true, salePrice: true },
+    });
+    const variantPriceMap = new Map<number, number>();
+    for (const v of variants) {
+      if (v.productId && !variantPriceMap.has(v.productId)) {
+        variantPriceMap.set(v.productId, Number(v.salePrice ?? 0));
+      }
+    }
 
     let updated = 0;
     let skipped = 0;
 
     for (const product of products) {
       let trendyolPrice = Number(product.marketPrice ?? 0) || Number(product.shopPrice ?? 0);
-      if (trendyolPrice <= 0 && product.productCenterVariant) {
-        trendyolPrice = Number(product.productCenterVariant.salePrice ?? 0);
+      if (trendyolPrice <= 0) {
+        trendyolPrice = variantPriceMap.get(product.id) ?? 0;
       }
       if (trendyolPrice <= 0) { skipped++; continue; }
       const sitePrice = Math.round(trendyolPrice * 0.80);
