@@ -301,12 +301,12 @@ export class PublicCatalogService {
     // Variant fiyatlarını tek seferde çek (productId → salePrice)
     const variants = await this.prisma.trendyolProductVariant.findMany({
       where: { productId: { not: null } },
-      select: { productId: true, salePrice: true },
+      select: { productId: true, trendyolSalePrice: true },
     });
     const variantPriceMap = new Map<number, number>();
     for (const v of variants) {
       if (v.productId && !variantPriceMap.has(v.productId)) {
-        variantPriceMap.set(v.productId, Number(v.salePrice ?? 0));
+        variantPriceMap.set(v.productId, Number(v.trendyolSalePrice ?? 0));
       }
     }
 
