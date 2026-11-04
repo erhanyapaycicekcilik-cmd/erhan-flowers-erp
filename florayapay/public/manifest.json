@@ -1,0 +1,27 @@
+{
+  "name": "Erhan Flowers",
+  "short_name": "Erhan Flowers",
+  "description": "Kaliteli yapay çiçek ve bitki dekorasyonları",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F4F2EC",
+  "theme_color": "#1E3A28",
+  "orientation": "portrait",
+  "lang": "tr",
+  "icons": [
+    {
+      "src": "/logo.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["shopping"],
+  "screenshots": []
+}
