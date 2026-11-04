@@ -388,8 +388,8 @@ export class ProductsService {
   }): Promise<void> {
     if (!product.barcode && !product.modelCode && !product.trendyolBarcode) return;
 
-    // Platform fiyatı = marketPrice (site fiyatıyla aynı)
-    const salePrice = Math.round(Number(product.marketPrice ?? product.sitePrice ?? product.shopPrice ?? 0));
+    // Platform fiyatı = marketPrice veya shopPrice — sitePrice ASLA kullanılmaz (farklı fiyat kanalı)
+    const salePrice = Math.round(Number(product.marketPrice ?? product.shopPrice ?? 0));
     const stockQuantity = Number(product.stockQuantity ?? 0);
     if (!salePrice) return;
     // listPrice her zaman salePrice'dan büyük olmalı (platform kuralı)
