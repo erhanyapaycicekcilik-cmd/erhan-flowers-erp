@@ -135,13 +135,20 @@ export class PublicCatalogService {
 
   async listCategories() {
     // catalogCategory alanına göre dinamik kategori listesi
-    const products = await this.prisma.product.findMany({
-      where: { status: 'ACTIVE', stockQuantity: { gt: 0 }, sitePrice: { gt: 0 }, catalogCategory: { not: null } },
-      select: { catalogCategory: true },
-    });
+    // Hem Product hem TrendyolProductVariant tablosundan say (Product.productId null olabilir)
+    const [products, variants] = await Promise.all([
+      this.prisma.product.findMany({
+        where: { status: 'ACTIVE', sitePrice: { gt: 0 }, catalogCategory: { not: null } },
+        select: { catalogCategory: true },
+      }),
+      this.prisma.trendyolProductVariant.findMany({
+        where: { catalogCategory: { not: null }, productId: null },
+        select: { catalogCategory: true },
+      }),
+    ]);
 
     const counts = new Map<string, number>();
-    for (const p of products) {
+    for (const p of [...products, ...variants]) {
       if (p.catalogCategory) {
         counts.set(p.catalogCategory, (counts.get(p.catalogCategory) ?? 0) + 1);
       }
