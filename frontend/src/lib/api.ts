@@ -104,7 +104,7 @@ export function clearAuthToken() {
   localStorage.removeItem('auth_token');
 }
 
-function getStoredToken() {
+export function getStoredToken() {
   if (typeof window === 'undefined') return null;
   return localStorage.getItem(authStorageKey()) ?? localStorage.getItem('auth_token');
 }
