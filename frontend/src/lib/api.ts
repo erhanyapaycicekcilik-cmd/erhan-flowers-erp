@@ -5,9 +5,9 @@ function resolveApiBaseUrl() {
 
   const host = window.location.hostname;
 
-  // florayapaycicek.com production — env ayarına bakmadan her zaman api subdomain'i kullan
+  // florayapaycicek.com production — yeni domain'e dogrudan baglan (redirect POST->GET sorunu onlenir)
   if (host === 'erp.florayapaycicek.com' || host === 'florayapaycicek.com' || host === 'www.florayapaycicek.com') {
-    return 'https://api.florayapaycicek.com';
+    return 'https://api.erhanflowers.com';
   }
 
   if ((host === 'localhost' || host === '127.0.0.1') && /^310\d$/.test(window.location.port)) {
