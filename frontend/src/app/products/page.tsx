@@ -1862,7 +1862,7 @@ export default function ProductsPage() {
               try {
                 const fd = new FormData();
                 fd.append('file', file);
-                const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001'}/products/import-trendyol-excel`, { method: 'POST', body: fd, credentials: 'include' });
+                const res = await fetch(`${apiBaseUrl}/products/import-trendyol-excel`, { method: 'POST', body: fd, credentials: 'include' });
                 if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error((err as any).message || `HTTP ${res.status}`); }
                 const result = await res.json();
                 setTrendyolImportResult({ created: result.created ?? 0, updated: result.updated ?? 0, skipped: result.skipped ?? 0, errors: result.errors ?? [] });
