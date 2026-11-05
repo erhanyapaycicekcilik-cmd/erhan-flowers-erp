@@ -362,6 +362,8 @@ const productImageAutomationDisabled = true;
 export default function ProductsPage() {
   const [entries, setEntries] = useState<Entry[]>([]);
   const [importingExcel, setImportingExcel] = useState(false);
+  const [importingTrendyol, setImportingTrendyol] = useState(false);
+  const [trendyolImportResult, setTrendyolImportResult] = useState<{ created: number; updated: number; skipped: number; errors: string[] } | null>(null);
   const [broadcastingAll, setBroadcastingAll] = useState(false);
   const [broadcastResult, setBroadcastResult] = useState<{ total: number; sent: number; skipped: number; errors: number; platformErrors?: number } | null>(null);
   const [broadcastingImages, setBroadcastingImages] = useState(false);
@@ -1849,6 +1851,24 @@ export default function ProductsPage() {
             {recalculating ? <RefreshCw size={17} className="animate-spin" /> : <Send size={17} />}
             {recalculating ? 'Hesaplanıyor...' : 'Pazaryeri Fiyatlarını Hesapla'}
           </button>
+          <label className={`btn btn-primary${importingTrendyol ? ' opacity-50 pointer-events-none' : ''}`} style={{ cursor: 'pointer' }}>
+            {importingTrendyol ? <><RefreshCw size={17} className="animate-spin" /> Trendyol Excel Aktarılıyor...</> : <><Upload size={17} /> Trendyol Excel'den Aktar (-%20 Fiyat)</>}
+            <input type="file" accept=".xlsx,.xls" className="hidden" disabled={importingTrendyol} onChange={async (e) => {
+              const file = e.target.files?.[0];
+              if (!file) return;
+              if (!confirm(`"${file.name}" dosyasındaki ürünler Trendyol fiyatının %20 altında sitePrice ile ERP'ye aktarılacak. Devam?`)) { e.target.value = ''; return; }
+              setImportingTrendyol(true);
+              setTrendyolImportResult(null);
+              try {
+                const fd = new FormData();
+                fd.append('file', file);
+                const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001'}/products/import-trendyol-excel`, { method: 'POST', body: fd, credentials: 'include' });
+                const result = await res.json();
+                setTrendyolImportResult(result);
+                if (result.created > 0 || result.updated > 0) loadProducts();
+              } catch { alert('Aktarım sırasında hata oluştu.'); } finally { setImportingTrendyol(false); e.target.value = ''; }
+            }} />
+          </label>
           <button
             className="btn btn-secondary"
             disabled={broadcastingAll}
@@ -2043,6 +2063,13 @@ export default function ProductsPage() {
         <div className="mb-4 rounded-md bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800">
           Maliyet taslağı oluşturma tamamlandı — Kontrol edilen: {backfillResult.checked} | Oluşturulan: {backfillResult.created} | Atlandı: {backfillResult.skipped}
           <button className="ml-3 text-amber-500 hover:underline" onClick={() => setBackfillResult(null)}>×</button>
+        </div>
+      )}
+      {trendyolImportResult && (
+        <div className="mb-4 rounded-md bg-green-50 px-3 py-2 text-sm font-semibold text-green-800">
+          Trendyol aktarımı tamamlandı — Yeni: {trendyolImportResult.created} | Güncellendi: {trendyolImportResult.updated} | Atlandı: {trendyolImportResult.skipped} | Hata: {trendyolImportResult.errors.length}
+          {trendyolImportResult.errors.length > 0 && <div className="mt-1 text-xs font-normal text-red-600">{trendyolImportResult.errors.slice(0, 5).join(' | ')}</div>}
+          <button className="ml-3 text-green-500 hover:underline" onClick={() => setTrendyolImportResult(null)}>×</button>
         </div>
       )}
       {broadcastResult && (

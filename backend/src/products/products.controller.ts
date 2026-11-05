@@ -142,6 +142,14 @@ export class ProductsController {
     return this.products.parseExcelPreview(file.buffer);
   }
 
+  @Post('import-trendyol-excel')
+  @UseGuards(OwnerGuard)
+  @UseInterceptors(FileInterceptor('file'))
+  async importTrendyolExcel(@UploadedFile() file: Express.Multer.File) {
+    if (!file) throw new Error('Dosya yüklenmedi');
+    return this.products.importTrendyolExcel(file.buffer);
+  }
+
   @Post('import-from-excel-with-categories')
   @UseInterceptors(FileInterceptor('file'))
   async importFromExcelWithCategories(
