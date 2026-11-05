@@ -1422,7 +1422,7 @@ export class ProductsService {
           await this.prisma.product.upsert({
             where: { modelCode: resolvedModelCode },
             create: createData,
-            update: updateData,
+            update: updateData as any,
           });
           created++;
         }
