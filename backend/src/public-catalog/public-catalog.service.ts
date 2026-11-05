@@ -230,7 +230,7 @@ export class PublicCatalogService {
         select: { catalogSubCategory: true },
         distinct: ['catalogSubCategory'],
       });
-      matchedSubCategory = allSubs.find((p) => p.catalogSubCategory && slugify(p.catalogSubCategory) === params.subCategorySlug)?.catalogSubCategory;
+      matchedSubCategory = allSubs.find((p) => p.catalogSubCategory && slugify(p.catalogSubCategory) === params.subCategorySlug)?.catalogSubCategory ?? undefined;
     }
 
     // ── 1. Product tablosu ──────────────────────────────────────────────────
