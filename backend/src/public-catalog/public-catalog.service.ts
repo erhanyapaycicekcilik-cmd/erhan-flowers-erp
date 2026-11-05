@@ -138,7 +138,7 @@ export class PublicCatalogService {
     // Hem Product hem TrendyolProductVariant tablosundan say (Product.productId null olabilir)
     const [products, variants] = await Promise.all([
       this.prisma.product.findMany({
-        where: { status: 'ACTIVE', sitePrice: { gt: 0 }, catalogCategory: { not: null } },
+        where: { status: 'ACTIVE', catalogCategory: { not: null } },
         select: { catalogCategory: true },
       }),
       this.prisma.trendyolProductVariant.findMany({
@@ -181,7 +181,7 @@ export class PublicCatalogService {
     if (!matched) return [];
 
     const products = await this.prisma.product.findMany({
-      where: { status: 'ACTIVE', sitePrice: { gt: 0 }, catalogCategory: matched, catalogSubCategory: { not: null } },
+      where: { status: 'ACTIVE', catalogCategory: matched, catalogSubCategory: { not: null } },
       select: { catalogSubCategory: true },
     });
 
@@ -212,7 +212,8 @@ export class PublicCatalogService {
     const where: Record<string, unknown> = {
       status: 'ACTIVE',
       stockQuantity: { gt: 0 },
-      sitePrice: { gt: 0 }, // Sadece site fiyatı tanımlanmış ürünler
+      // sitePrice=0 olsa da marketPrice/shopPrice varsa göster
+      OR: [{ sitePrice: { gt: 0 } }, { marketPrice: { gt: 0 } }, { shopPrice: { gt: 0 } }],
     };
 
     // catalogCategory alanına göre filtrele
@@ -223,7 +224,7 @@ export class PublicCatalogService {
     }
     if (params.subCategorySlug) {
       const allProducts = await this.prisma.product.findMany({
-        where: { status: 'ACTIVE', sitePrice: { gt: 0 }, catalogSubCategory: { not: null } },
+        where: { status: 'ACTIVE', catalogSubCategory: { not: null } },
         select: { catalogSubCategory: true },
         distinct: ['catalogSubCategory'],
       });
@@ -236,7 +237,7 @@ export class PublicCatalogService {
       where['barcode'] = params.barcode.trim();
       delete where['status'];
       delete where['stockQuantity'];
-      delete where['sitePrice'];
+      delete where['OR'];
     }
 
     // Model kodu filtresi — stok/fiyat/status kısıtlaması olmadan
@@ -244,7 +245,7 @@ export class PublicCatalogService {
       where['modelCode'] = params.modelCode.trim();
       delete where['status'];
       delete where['stockQuantity'];
-      delete where['sitePrice'];
+      delete where['OR'];
     }
 
     // Arama filtresi
@@ -281,14 +282,9 @@ export class PublicCatalogService {
   }
 
   async getProductBySlug(slug: string) {
-    // Slug = slugify(name)-slugify(modelCode)
-    // modelCode formatları: ERH.180.YPY.A (noktalı) veya YC-1019 (tireli)
-    // Noktalı modelCode slug'da tire olur (ERH.180 → erh-180), tireli modelCode aynen tire kalır
-    // Her iki formatı da dene: tire olarak ve tire→nokta dönüşümüyle
     const parts = slug.split('-');
     for (let take = 1; take <= 6; take++) {
       const segment = parts.slice(-take).join('-').toUpperCase();
-      // Olası modelCode varyantları: tire ile, nokta ile
       const candidates = [segment, segment.replace(/-/g, '.')];
       for (const modelCode of candidates) {
         const product = await this.prisma.product.findFirst({
@@ -309,23 +305,18 @@ export class PublicCatalogService {
     return product ? this.toPublicProduct(product) : null;
   }
 
-  // Trendyol fiyatından komisyon düşülerek site fiyatı hesapla
   private calcSitePrice(trendyolPrice: number, commissionPercent: number): number {
     if (trendyolPrice <= 0) return 0;
     const commission = Math.max(0, Math.min(commissionPercent, 100));
     return Math.round(trendyolPrice * (1 - commission / 100));
   }
 
-  // Trendyol ürünlerinden sitePrice toplu doldur
-  // Kural: sitePrice = trendyol_fiyatı * 0.80 (sabit %20 altı, maliyet gerektirmez)
-  // Önce Product.marketPrice/shopPrice, yoksa bağlı TrendyolProductVariant.salePrice kullanılır
   async bulkSyncSitePriceFromTrendyol(): Promise<{ updated: number; skipped: number }> {
     const products = await this.prisma.product.findMany({
       where: { status: 'ACTIVE' },
       select: { id: true, marketPrice: true, shopPrice: true },
     });
 
-    // Variant fiyatlarını tek seferde çek (productId → salePrice)
     const variants = await this.prisma.trendyolProductVariant.findMany({
       where: { productId: { not: null } },
       select: { productId: true, trendyolSalePrice: true },
@@ -354,7 +345,6 @@ export class PublicCatalogService {
     return { updated, skipped };
   }
 
-  // Onaylı maliyetlerden sitePrice toplu doldur — tüm ürünlerde çalışır
   async bulkSyncSitePriceFromApprovedCosts(): Promise<{ updated: number; skipped: number; details: string[] }> {
     const products = await this.prisma.product.findMany({
       where: { status: 'ACTIVE' },
@@ -384,13 +374,11 @@ export class PublicCatalogService {
       const trendyolPrice = Number(variant?.trendyolSalePrice ?? 0);
       const commission = Number((variant as any)?.commissionPercent ?? 20);
 
-      // Fiyat önceliği: onaylı maliyet sale price → trendyolSalePrice, her ikisi de komisyonsuz
       const approvedPrice = draft?.status === 'APPROVED' ? Number(draft.salePrice ?? 0) : 0;
       const basePrice = approvedPrice > 0 ? approvedPrice : trendyolPrice;
 
       if (basePrice <= 0) { skipped++; continue; }
 
-      // sitePrice = pazaryeri fiyatı - komisyon
       const newPrice = this.calcSitePrice(basePrice, commission);
 
       if (newPrice <= 0) { skipped++; continue; }
@@ -412,7 +400,6 @@ export class PublicCatalogService {
     return { updated, skipped, details };
   }
 
-  // Dükkan barkod okutma — sadece shopPrice döner, diğer fiyat bilgileri YOK
   async getShopPrice(barcode: string) {
     const product = await this.prisma.product.findFirst({
       where: { barcode, status: 'ACTIVE' },
@@ -428,10 +415,7 @@ export class PublicCatalogService {
     };
   }
 
-  // Ürün adına göre otomatik kategori ataması.
-  // Öncelik sırası önemli: "Bambu Ağacı" → Bambu (ağaç değil).
   async recategorizeByName(): Promise<{ updated: number; skipped: number; details: string[] }> {
-    // Anahtar kelime → kategori adı (DB'deki tam ad ile eşleşmeli)
     const RULES: Array<{ keywords: string[]; categoryName: string }> = [
       { keywords: ['bambu'],                                                                                                                                     categoryName: 'Bambu' },
       { keywords: ['dikey bahçe', 'dikey bahce', 'yosun duvar', 'panel', 'duvar kaplama', 'yapay çit', 'yapay cit'],                                           categoryName: 'Dikey Bahçe' },
@@ -514,8 +498,8 @@ export class PublicCatalogService {
     category: { id: number; name: string } | null;
   }) {
     const images = this.parseImageUrls(product.imageUrls);
-    // catalogCategory öncelikli; yoksa eski category tablosu
     const catName = product.catalogCategory ?? product.category?.name ?? null;
+    const price = product.sitePrice || product.marketPrice || product.shopPrice;
 
     return {
       id: product.id,
@@ -524,9 +508,8 @@ export class PublicCatalogService {
       modelCode: product.modelCode,
       category: catName,
       categorySlug: catName ? slugify(catName) : null,
-      sitePrice: product.sitePrice,
-      // listPrice > sitePrice ise üstü çizili "önceki fiyat" olarak göster
-      originalPrice: product.listPrice > product.sitePrice ? product.listPrice : null,
+      sitePrice: price,
+      originalPrice: product.listPrice > price ? product.listPrice : null,
       brand: product.brand,
       description: product.description,
       colorVariant: product.colorVariant,
