@@ -18,6 +18,8 @@ import {
   Instagram,
   Facebook,
   Tag,
+  ShoppingBag,
+  ExternalLink,
 } from 'lucide-react';
 import { AdminShell } from '@/components/AdminShell';
 import { api } from '@/lib/api';
@@ -38,6 +40,7 @@ const TABS = [
   { id: 'banner', label: 'Banner & Duyuru', icon: Megaphone },
   { id: 'payment', label: 'Ödeme Ayarları', icon: CreditCard },
   { id: 'prices', label: 'Ürün Fiyatları', icon: Tag },
+  { id: 'orders', label: 'Site Siparişleri', icon: ShoppingBag },
 ] as const;
 
 type TabId = (typeof TABS)[number]['id'];
@@ -55,6 +58,39 @@ export default function SiteAdminPage() {
   const [savingPrices, setSavingPrices] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState('');
+
+  type WebOrder = {
+    id: number;
+    orderNumber: string;
+    customerName: string;
+    customerPhone: string;
+    totalAmount: number;
+    status: string;
+    createdAt: string;
+    items: { productName: string; quantity: number; unitPrice: number }[];
+  };
+  const [orders, setOrders] = useState<WebOrder[]>([]);
+  const [orderFilter, setOrderFilter] = useState('ALL');
+  const [updatingOrder, setUpdatingOrder] = useState<number | null>(null);
+
+  const loadOrders = useCallback(async () => {
+    const data = await api<WebOrder[]>('/web-orders?limit=100');
+    setOrders(Array.isArray(data) ? data : (data as any)?.orders ?? []);
+  }, []);
+
+  useEffect(() => {
+    if (tab === 'orders') loadOrders().catch(() => {});
+  }, [tab, loadOrders]);
+
+  async function updateOrderStatus(id: number, status: string) {
+    setUpdatingOrder(id);
+    try {
+      await api(`/web-orders/${id}/status`, { method: 'PATCH', json: { status } });
+      await loadOrders();
+    } finally {
+      setUpdatingOrder(null);
+    }
+  }
 
   const loadSettings = useCallback(async () => {
     const data = await api<Settings>('/site-settings');
@@ -402,6 +438,93 @@ export default function SiteAdminPage() {
                 <p className="py-8 text-center text-sm text-slate-400">Ürün bulunamadı.</p>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Site Siparişleri */}
+      {tab === 'orders' && (
+        <div className="mt-5 space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex gap-2">
+              {['ALL', 'PENDING', 'CONFIRMED', 'PREPARING', 'SHIPPED', 'DELIVERED', 'CANCELLED'].map((s) => (
+                <button
+                  key={s}
+                  onClick={() => setOrderFilter(s)}
+                  className={`rounded-full px-3 py-1 text-xs font-semibold transition ${
+                    orderFilter === s ? 'bg-brand text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  {s === 'ALL' ? 'Tümü' : s === 'PENDING' ? 'Bekliyor' : s === 'CONFIRMED' ? 'Onaylandı' : s === 'PREPARING' ? 'Hazırlanıyor' : s === 'SHIPPED' ? 'Kargoda' : s === 'DELIVERED' ? 'Teslim' : 'İptal'}
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <button className="btn btn-secondary gap-2 text-xs" onClick={() => loadOrders()}>
+                <RefreshCw size={13} />
+                Yenile
+              </button>
+              <a href="https://www.erhanflowers.com/admin/siparisler" target="_blank" rel="noreferrer"
+                className="btn btn-secondary gap-2 text-xs">
+                <ExternalLink size={13} />
+                Florayapay Admin
+              </a>
+            </div>
+          </div>
+
+          <div className="panel overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-line text-left text-xs font-semibold text-slate-500">
+                  <th className="pb-2 pr-4">Sipariş No</th>
+                  <th className="pb-2 pr-4">Müşteri</th>
+                  <th className="pb-2 pr-4">Ürünler</th>
+                  <th className="pb-2 pr-4 text-right">Tutar</th>
+                  <th className="pb-2 pr-4">Durum</th>
+                  <th className="pb-2">Tarih</th>
+                </tr>
+              </thead>
+              <tbody>
+                {orders
+                  .filter((o) => orderFilter === 'ALL' || o.status === orderFilter)
+                  .map((o) => (
+                    <tr key={o.id} className="border-b border-line/50 hover:bg-slate-50">
+                      <td className="py-2 pr-4 font-mono text-xs font-semibold text-brand">{o.orderNumber}</td>
+                      <td className="py-2 pr-4">
+                        <div className="font-medium">{o.customerName}</div>
+                        <div className="text-xs text-slate-400">{o.customerPhone}</div>
+                      </td>
+                      <td className="py-2 pr-4 text-xs text-slate-500">
+                        {o.items?.map((it) => `${it.productName} ×${it.quantity}`).join(', ')}
+                      </td>
+                      <td className="py-2 pr-4 text-right font-mono font-semibold">
+                        {Number(o.totalAmount).toLocaleString('tr-TR')} ₺
+                      </td>
+                      <td className="py-2 pr-4">
+                        <select
+                          className="rounded border border-line px-2 py-1 text-xs"
+                          value={o.status}
+                          disabled={updatingOrder === o.id}
+                          onChange={(e) => updateOrderStatus(o.id, e.target.value)}
+                        >
+                          <option value="PENDING">Bekliyor</option>
+                          <option value="CONFIRMED">Onaylandı</option>
+                          <option value="PREPARING">Hazırlanıyor</option>
+                          <option value="SHIPPED">Kargoda</option>
+                          <option value="DELIVERED">Teslim Edildi</option>
+                          <option value="CANCELLED">İptal</option>
+                        </select>
+                      </td>
+                      <td className="py-2 text-xs text-slate-400">
+                        {new Date(o.createdAt).toLocaleDateString('tr-TR')}
+                      </td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+            {orders.filter((o) => orderFilter === 'ALL' || o.status === orderFilter).length === 0 && (
+              <p className="py-8 text-center text-sm text-slate-400">Sipariş bulunamadı.</p>
+            )}
           </div>
         </div>
       )}
