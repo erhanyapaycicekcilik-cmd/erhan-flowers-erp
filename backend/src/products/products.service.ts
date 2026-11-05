@@ -1413,16 +1413,28 @@ export class ProductsService {
     let created = 0, updated = 0, skipped = 0;
     const errors: string[] = [];
 
-    // Kategori adı → ID cache
+    // Trendyol kategori adı → ERP kategori adı eşleştirmesi
+    const TRENDYOL_CATEGORY_MAP: Record<string, string> = {
+      'Yapay & Kuru Çiçek': 'Çiçekler',
+      'Bambu & Meşale': 'Bambu Tekli',
+      'Saksı': 'Saksılar',
+      'Duvar & Cephe Kaplama': 'Dikey Bahçe',
+      'Paravan ve Seperatör': 'Dikey Bahçe',
+      'Çitler': 'Dikey Bahçe',
+      'Konsept Hediyelik': 'Çiçekler',
+    };
+
+    // ERP kategori adı → ID cache
     const categoryCache = new Map<string, number>();
-    const getOrCreateCategory = async (name: string): Promise<number> => {
-      if (categoryCache.has(name)) return categoryCache.get(name)!;
-      let cat = await this.prisma.category.findFirst({ where: { name } });
+    const getCategoryId = async (trendyolCategoryName: string): Promise<number | null> => {
+      const erpName = TRENDYOL_CATEGORY_MAP[trendyolCategoryName] ?? trendyolCategoryName;
+      if (categoryCache.has(erpName)) return categoryCache.get(erpName)!;
+      const cat = await this.prisma.category.findFirst({ where: { name: erpName } });
       if (!cat) {
-        cat = await this.prisma.category.create({ data: { name, slug: name.toLowerCase().replace(/[^a-z0-9ğüşıöçĞÜŞİÖÇ]/gi, '-').replace(/-+/g, '-') } });
-        this.logger.log(`Yeni kategori oluşturuldu: ${name}`);
+        this.logger.warn(`ERP'de kategori bulunamadı: ${erpName} (Trendyol: ${trendyolCategoryName})`);
+        return null;
       }
-      categoryCache.set(name, cat.id);
+      categoryCache.set(erpName, cat.id);
       return cat.id;
     };
 
@@ -1452,7 +1464,8 @@ export class ProductsService {
       const sitePrice = trendyolPrice > 0 ? Math.round(trendyolPrice * 0.80) : 0;
 
       try {
-        const categoryId = await getOrCreateCategory(categoryName);
+        const categoryId = await getCategoryId(categoryName);
+        if (!categoryId) { errors.push(`Satır ${i + 1}: Kategori bulunamadı — ${categoryName}`); skipped++; continue; }
         const existing = barcode
           ? await this.prisma.product.findFirst({ where: { barcode }, select: { id: true } })
           : modelCode
