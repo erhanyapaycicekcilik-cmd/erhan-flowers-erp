@@ -180,13 +180,19 @@ export class PublicCatalogService {
     const matched = CAT_NAMES.find((n) => slugify(n) === categorySlug);
     if (!matched) return [];
 
-    const products = await this.prisma.product.findMany({
-      where: { status: 'ACTIVE', catalogCategory: matched, catalogSubCategory: { not: null } },
-      select: { catalogSubCategory: true },
-    });
+    const [products, variants] = await Promise.all([
+      this.prisma.product.findMany({
+        where: { status: 'ACTIVE', catalogCategory: matched, catalogSubCategory: { not: null } },
+        select: { catalogSubCategory: true },
+      }),
+      this.prisma.trendyolProductVariant.findMany({
+        where: { productId: null, catalogCategory: matched, catalogSubCategory: { not: null } },
+        select: { catalogSubCategory: true },
+      }),
+    ]);
 
     const counts = new Map<string, number>();
-    for (const p of products) {
+    for (const p of [...products, ...variants]) {
       if (p.catalogSubCategory) counts.set(p.catalogSubCategory, (counts.get(p.catalogSubCategory) ?? 0) + 1);
     }
 
@@ -209,49 +215,48 @@ export class PublicCatalogService {
     const limit = Math.min(2000, Math.max(1, params.limit ?? 48));
     const skip = (page - 1) * limit;
 
-    const where: Record<string, unknown> = {
-      status: 'ACTIVE',
-      stockQuantity: { gt: 0 },
-      // sitePrice=0 olsa da marketPrice/shopPrice varsa göster
-      OR: [{ sitePrice: { gt: 0 } }, { marketPrice: { gt: 0 } }, { shopPrice: { gt: 0 } }],
-    };
+    const CAT_NAMES = ['Ağaçlar', 'Bambu', 'Yapay Çiçekler', 'Buketler', 'Dikey Bahçeler', 'Sarmaşıklar', 'Bonsai ve Zeytin Ağaçları', 'Saksı Aranjmanları', 'Yapay Bitkiler', 'Saksılar'];
 
-    // catalogCategory alanına göre filtrele
+    // Kategori/alt kategori slug'ı gerçek isime çevir
+    let matchedCategory: string | undefined;
+    let matchedSubCategory: string | undefined;
+
     if (params.categorySlug) {
-      const CAT_NAMES = ['Ağaçlar', 'Bambu', 'Yapay Çiçekler', 'Buketler', 'Dikey Bahçeler', 'Sarmaşıklar', 'Bonsai ve Zeytin Ağaçları', 'Saksı Aranjmanları', 'Yapay Bitkiler', 'Saksılar'];
-      const matched = CAT_NAMES.find((n) => slugify(n) === params.categorySlug);
-      if (matched) where['catalogCategory'] = matched;
+      matchedCategory = CAT_NAMES.find((n) => slugify(n) === params.categorySlug);
     }
     if (params.subCategorySlug) {
-      const allProducts = await this.prisma.product.findMany({
+      const allSubs = await this.prisma.product.findMany({
         where: { status: 'ACTIVE', catalogSubCategory: { not: null } },
         select: { catalogSubCategory: true },
         distinct: ['catalogSubCategory'],
       });
-      const matchedSub = allProducts.find((p) => p.catalogSubCategory && slugify(p.catalogSubCategory) === params.subCategorySlug)?.catalogSubCategory;
-      if (matchedSub) where['catalogSubCategory'] = matchedSub;
+      matchedSubCategory = allSubs.find((p) => p.catalogSubCategory && slugify(p.catalogSubCategory) === params.subCategorySlug)?.catalogSubCategory;
     }
 
-    // Barkod filtresi — stok/fiyat/status kısıtlaması olmadan
+    // ── 1. Product tablosu ──────────────────────────────────────────────────
+    const productWhere: Record<string, unknown> = {
+      status: 'ACTIVE',
+      stockQuantity: { gt: 0 },
+      OR: [{ sitePrice: { gt: 0 } }, { marketPrice: { gt: 0 } }, { shopPrice: { gt: 0 } }],
+    };
+    if (matchedCategory) productWhere['catalogCategory'] = matchedCategory;
+    if (matchedSubCategory) productWhere['catalogSubCategory'] = matchedSubCategory;
+
     if (params.barcode?.trim()) {
-      where['barcode'] = params.barcode.trim();
-      delete where['status'];
-      delete where['stockQuantity'];
-      delete where['OR'];
+      productWhere['barcode'] = params.barcode.trim();
+      delete productWhere['status'];
+      delete productWhere['stockQuantity'];
+      delete productWhere['OR'];
     }
-
-    // Model kodu filtresi — stok/fiyat/status kısıtlaması olmadan
     if (params.modelCode?.trim()) {
-      where['modelCode'] = params.modelCode.trim();
-      delete where['status'];
-      delete where['stockQuantity'];
-      delete where['OR'];
+      productWhere['modelCode'] = params.modelCode.trim();
+      delete productWhere['status'];
+      delete productWhere['stockQuantity'];
+      delete productWhere['OR'];
     }
-
-    // Arama filtresi
     if (params.search?.trim()) {
       const term = params.search.trim();
-      where['OR'] = [
+      productWhere['OR'] = [
         { productName: { contains: term, mode: 'insensitive' } },
         { modelCode: { contains: term, mode: 'insensitive' } },
         { description: { contains: term, mode: 'insensitive' } },
@@ -263,15 +268,66 @@ export class PublicCatalogService {
       params.sort === 'price_asc'  ? { sitePrice: 'asc' }  :
       params.sort === 'price_desc' ? { sitePrice: 'desc' } :
       params.sort === 'name'       ? { productName: 'asc' } :
-                                     { id: 'desc' }; // newest
+                                     { id: 'desc' };
 
-    const [total, products] = await Promise.all([
-      this.prisma.product.count({ where: where as any }),
-      this.prisma.product.findMany({ where: where as any, select: SAFE_SELECT, orderBy: orderBy as any, skip, take: limit }),
+    // ── 2. TrendyolProductVariant tablosu (productId: null olanlar) ─────────
+    // Bunlar Product'a bağlanmamış ama kategorize edilmiş Trendyol ürünleri
+    const variantWhere: Record<string, unknown> = {
+      productId: null,
+      catalogCategory: { not: null },
+      stockQuantity: { gt: 0 },
+      trendyolSalePrice: { gt: 0 },
+    };
+    if (matchedCategory) variantWhere['catalogCategory'] = matchedCategory;
+    if (matchedSubCategory) variantWhere['catalogSubCategory'] = matchedSubCategory;
+    if (params.barcode?.trim()) {
+      variantWhere['barcode'] = params.barcode.trim();
+      delete variantWhere['stockQuantity'];
+      delete variantWhere['trendyolSalePrice'];
+    }
+    if (params.search?.trim()) {
+      const term = params.search.trim();
+      variantWhere['productName'] = { contains: term, mode: 'insensitive' };
+    }
+
+    const [productCount, productRows, variantRows] = await Promise.all([
+      this.prisma.product.count({ where: productWhere as any }),
+      this.prisma.product.findMany({ where: productWhere as any, select: SAFE_SELECT, orderBy: orderBy as any, skip, take: limit }),
+      // Varyantları sadece barcode/modelCode/search filtresi olmadığında getir (tam liste için)
+      (!params.barcode && !params.modelCode)
+        ? this.prisma.trendyolProductVariant.findMany({
+            where: variantWhere as any,
+            select: {
+              id: true,
+              productName: true,
+              currentModelCode: true,
+              barcode: true,
+              trendyolSalePrice: true,
+              stockQuantity: true,
+              catalogCategory: true,
+              catalogSubCategory: true,
+              images: true,
+              brand: true,
+              productDescription: true,
+              productColor: true,
+            },
+            orderBy: { id: 'desc' },
+          })
+        : Promise.resolve([]),
     ]);
 
+    const variantProducts = variantRows.map((v) => this.variantToPublicProduct(v));
+    const allProducts = [...productRows.map((p) => this.toPublicProduct(p)), ...variantProducts];
+
+    // Sort birleşik listeye uygula
+    if (params.sort === 'price_asc')  allProducts.sort((a, b) => a.sitePrice - b.sitePrice);
+    if (params.sort === 'price_desc') allProducts.sort((a, b) => b.sitePrice - a.sitePrice);
+    if (params.sort === 'name')       allProducts.sort((a, b) => a.name.localeCompare(b.name, 'tr'));
+
+    const total = productCount + variantRows.length;
+
     return {
-      products: products.map((p) => this.toPublicProduct(p)),
+      products: allProducts,
       pagination: {
         total,
         page,
@@ -303,6 +359,47 @@ export class PublicCatalogService {
       select: SAFE_SELECT,
     });
     return product ? this.toPublicProduct(product) : null;
+  }
+
+  private variantToPublicProduct(v: {
+    id: number;
+    productName: string;
+    currentModelCode: string | null;
+    barcode: string;
+    trendyolSalePrice: any;
+    stockQuantity: number;
+    catalogCategory: string | null;
+    catalogSubCategory: string | null;
+    images: unknown;
+    brand: string | null;
+    productDescription: string | null;
+    productColor: string | null;
+  }) {
+    const modelCode = v.currentModelCode || v.barcode;
+    const catName = v.catalogCategory;
+    const price = Number(v.trendyolSalePrice) || 0;
+    const images = this.parseImageUrls(v.images);
+
+    return {
+      id: v.id * -1, // negatif id — variant'ı Product'tan ayırt etmek için
+      name: v.productName,
+      slug: productSlug(v.productName, modelCode),
+      modelCode,
+      category: catName,
+      categorySlug: catName ? slugify(catName) : null,
+      sitePrice: price,
+      originalPrice: null as number | null,
+      brand: v.brand ?? '',
+      description: v.productDescription,
+      colorVariant: v.productColor,
+      material: null as string | null,
+      origin: 'TR',
+      vatRate: 20,
+      warrantyMonths: 0,
+      inStock: v.stockQuantity > 0,
+      images,
+      mainImage: images[0] ?? null,
+    };
   }
 
   private calcSitePrice(trendyolPrice: number, commissionPercent: number): number {
