@@ -1404,6 +1404,106 @@ export class ProductsService {
     return { rows };
   }
 
+  /** Trendyol ürün Excel'ini otomatik kategori + %20 indirimli sitePrice ile aktarır */
+  async importTrendyolExcel(buffer: Buffer): Promise<{ created: number; updated: number; skipped: number; errors: string[] }> {
+    const wb = XLSX.read(buffer, { type: 'buffer' });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const raw = XLSX.utils.sheet_to_json<Record<string, string | number>>(ws);
+
+    let created = 0, updated = 0, skipped = 0;
+    const errors: string[] = [];
+
+    // Kategori adı → ID cache
+    const categoryCache = new Map<string, number>();
+    const getOrCreateCategory = async (name: string): Promise<number> => {
+      if (categoryCache.has(name)) return categoryCache.get(name)!;
+      let cat = await this.prisma.category.findFirst({ where: { name } });
+      if (!cat) {
+        cat = await this.prisma.category.create({ data: { name, slug: name.toLowerCase().replace(/[^a-z0-9ğüşıöçĞÜŞİÖÇ]/gi, '-').replace(/-+/g, '-') } });
+        this.logger.log(`Yeni kategori oluşturuldu: ${name}`);
+      }
+      categoryCache.set(name, cat.id);
+      return cat.id;
+    };
+
+    for (let i = 0; i < raw.length; i++) {
+      const row = raw[i];
+      const productName = String(row['Ürün Adı'] ?? '').trim();
+      const barcode = String(row['Barkod'] ?? '').trim() || null;
+      const modelCode = String(row['Model Kodu'] ?? '').trim() || null;
+      const categoryName = String(row['Kategori İsmi'] ?? 'Genel').trim();
+      const description = String(row['Ürün Açıklaması'] ?? '').replace(/;/g, '\n').trim() || null;
+      const colorVariant = String(row['Ürün Rengi'] ?? '').trim() || null;
+      const trendyolPrice = Number(String(row['Trendyolda Satılacak Fiyat (KDV Dahil)'] ?? '0').replace(',', '.')) || 0;
+      const marketPrice = Number(String(row['Piyasa Satış Fiyatı (KDV Dahil)'] ?? '0').replace(',', '.')) || 0;
+      const stock = Math.round(Number(row['Ürün Stok Adedi'] ?? 0)) || 0;
+      const vatRate = Math.round(Number(row['KDV Oranı'] ?? 20)) || 20;
+      const desi = Number(row['Desi'] ?? 0) || 0;
+
+      // Görseller
+      const imageUrls: string[] = [];
+      for (let g = 1; g <= 8; g++) {
+        const url = String(row[`Görsel ${g}`] ?? '').trim();
+        if (url.startsWith('http')) imageUrls.push(url);
+      }
+
+      if (!productName && !barcode && !modelCode) { skipped++; continue; }
+
+      const sitePrice = trendyolPrice > 0 ? Math.round(trendyolPrice * 0.80) : 0;
+
+      try {
+        const categoryId = await getOrCreateCategory(categoryName);
+        const existing = barcode
+          ? await this.prisma.product.findFirst({ where: { barcode }, select: { id: true } })
+          : modelCode
+          ? await this.prisma.product.findFirst({ where: { modelCode }, select: { id: true } })
+          : null;
+
+        const data: Record<string, unknown> = {
+          categoryId,
+          ...(productName && { productName }),
+          ...(description && { description }),
+          ...(colorVariant && { colorVariant }),
+          ...(trendyolPrice > 0 && { marketPrice, sitePrice, listPrice: trendyolPrice }),
+          ...(stock > 0 && { stockQuantity: stock }),
+          ...(vatRate && { vatRate }),
+          ...(desi > 0 && { desi }),
+          ...(imageUrls.length > 0 && { imageUrls }),
+        };
+
+        if (existing) {
+          await this.prisma.product.update({ where: { id: existing.id }, data });
+          updated++;
+        } else {
+          await this.prisma.product.create({
+            data: {
+              productName: productName || (barcode ?? modelCode ?? `Ürün-${i}`),
+              ...(barcode && { barcode }),
+              modelCode: modelCode || barcode || `URUN-${i}`,
+              categoryId,
+              marketPrice,
+              sitePrice,
+              listPrice: trendyolPrice,
+              stockQuantity: stock,
+              vatRate,
+              ...(desi > 0 && { desi }),
+              ...(description && { description }),
+              ...(colorVariant && { colorVariant }),
+              ...(imageUrls.length > 0 && { imageUrls }),
+              status: 'ACTIVE',
+            },
+          });
+          created++;
+        }
+      } catch (err) {
+        errors.push(`Satır ${i + 1} (${modelCode ?? barcode}): ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+
+    this.logger.log(`Trendyol Excel aktarımı: ${created} yeni, ${updated} güncellendi, ${skipped} atlandı, ${errors.length} hata`);
+    return { created, updated, skipped, errors };
+  }
+
   /** Excel satırlarını kategori atamasıyla ERP'ye aktarır */
   async importFromExcelWithCategories(
     buffer: Buffer,
