@@ -143,7 +143,6 @@ export class ProductsController {
   }
 
   @Post('import-trendyol-excel')
-  @UseGuards(OwnerGuard)
   @UseInterceptors(FileInterceptor('file'))
   async importTrendyolExcel(@UploadedFile() file: Express.Multer.File) {
     if (!file) throw new Error('Dosya yüklenmedi');
