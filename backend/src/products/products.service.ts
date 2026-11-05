@@ -1328,13 +1328,13 @@ export class ProductsService {
 
     // Trendyol kategori adı → ERP kategori adı eşleştirmesi
     const TRENDYOL_CATEGORY_MAP: Record<string, string> = {
-      'Yapay & Kuru Çiçek': 'Çiçekler',
-      'Bambu & Meşale': 'Bambu Tekli',
-      'Saksı': 'Saksılar',
+      'Yapay & Kuru Çiçek': 'Demet Çiçek',
+      'Bambu & Meşale': 'Bambu',
+      'Saksı': 'Saksı & Vazo',
       'Duvar & Cephe Kaplama': 'Dikey Bahçe',
       'Paravan ve Seperatör': 'Dikey Bahçe',
       'Çitler': 'Dikey Bahçe',
-      'Konsept Hediyelik': 'Çiçekler',
+      'Konsept Hediyelik': 'Demet Çiçek',
     };
 
     // ERP kategori adı → ID cache
