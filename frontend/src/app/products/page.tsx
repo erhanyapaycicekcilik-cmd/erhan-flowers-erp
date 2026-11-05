@@ -1867,7 +1867,7 @@ export default function ProductsPage() {
                 if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error((err as any).message || `HTTP ${res.status}`); }
                 const result = await res.json();
                 setTrendyolImportResult({ created: result.created ?? 0, updated: result.updated ?? 0, skipped: result.skipped ?? 0, errors: result.errors ?? [] });
-                if ((result.created ?? 0) > 0 || (result.updated ?? 0) > 0) loadProducts();
+                if ((result.created ?? 0) > 0 || (result.updated ?? 0) > 0) load();
               } catch (err) { alert('Aktarım sırasında hata oluştu: ' + (err instanceof Error ? err.message : String(err))); } finally { setImportingTrendyol(false); e.target.value = ''; }
             }} />
           </label>
