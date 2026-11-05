@@ -4,7 +4,7 @@ import Image from 'next/image'
 import { Header } from '@/components/layout/Header'
 import { Footer } from '@/components/layout/Footer'
 import { AddToCartButton } from '@/components/product/AddToCartButton'
-import { getCategories, getProducts, getImageUrl } from '@/lib/api/catalog'
+import { getCategories, getSubCategories, getProducts, getImageUrl } from '@/lib/api/catalog'
 import { formatPrice } from '@/lib/utils/format'
 import { JsonLd } from '@/components/seo/JsonLd'
 import { breadcrumbSchema } from '@/lib/seo/schemas'
@@ -12,6 +12,7 @@ import { breadcrumbSchema } from '@/lib/seo/schemas'
 interface PageProps {
   searchParams: {
     kategori?: string
+    altkategori?: string
     q?: string
     sayfa?: string
     sirala?: string
@@ -49,10 +50,12 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
 }
 
 export default async function ProductsPage({ searchParams }: PageProps) {
-  const [categories, response] = await Promise.all([
+  const [categories, subCategories, response] = await Promise.all([
     getCategories(),
+    searchParams.kategori ? getSubCategories(searchParams.kategori) : Promise.resolve([]),
     getProducts({
       category: searchParams.kategori,
+      subcategory: searchParams.altkategori,
       q: searchParams.q,
       page: searchParams.sayfa ? Number(searchParams.sayfa) : 1,
       limit: 24,
@@ -69,6 +72,7 @@ export default async function ProductsPage({ searchParams }: PageProps) {
   ]
 
   const activeCategory = searchParams.kategori
+  const activeSubCategory = searchParams.altkategori
 
   return (
     <>
@@ -90,6 +94,7 @@ export default async function ProductsPage({ searchParams }: PageProps) {
 
         {/* Kategori tabları */}
         <div className="bg-white border-b border-[#E0DDD4] sticky top-[104px] z-40">
+          {/* Ana kategoriler */}
           <div className="max-w-screen-2xl mx-auto px-4 overflow-x-auto">
             <div className="flex gap-1 py-2 min-w-max">
               <Link
@@ -118,6 +123,37 @@ export default async function ProductsPage({ searchParams }: PageProps) {
               ))}
             </div>
           </div>
+          {/* Alt kategoriler — sadece ana kategori seçiliyse ve alt kategori varsa göster */}
+          {activeCategory && subCategories.length > 0 && (
+            <div className="max-w-screen-2xl mx-auto px-4 overflow-x-auto border-t border-[#F0EDE6]">
+              <div className="flex gap-1 py-1.5 min-w-max">
+                <Link
+                  href={`/urunler?kategori=${activeCategory}`}
+                  className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${
+                    !activeSubCategory
+                      ? 'bg-[#5C7A62] text-white'
+                      : 'text-[#8C8A82] hover:bg-[#F4F2EC]'
+                  }`}
+                >
+                  Tümü
+                </Link>
+                {subCategories.map((sub) => (
+                  <Link
+                    key={sub.slug}
+                    href={`/urunler?kategori=${activeCategory}&altkategori=${sub.slug}`}
+                    className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${
+                      activeSubCategory === sub.slug
+                        ? 'bg-[#5C7A62] text-white'
+                        : 'text-[#8C8A82] hover:bg-[#F4F2EC]'
+                    }`}
+                  >
+                    {sub.name}
+                    <span className="ml-1 opacity-60">{sub.count}</span>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Ürün grid — tam genişlik */}
