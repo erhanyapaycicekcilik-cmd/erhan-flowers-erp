@@ -77,6 +77,19 @@ export default async function AdminDashboard() {
         </div>
       </div>
 
+      {/* Siparişler */}
+      <div className="mb-8">
+        <h2 className="text-xs uppercase tracking-widest text-[#5C7A62] font-semibold mb-4">Siparişler</h2>
+        <Link href="/admin/siparisler"
+          className="bg-white border border-[#E0DDD4] rounded-2xl p-6 hover:shadow-md transition-shadow flex items-center gap-4">
+          <div className="text-4xl">📋</div>
+          <div>
+            <h3 className="font-semibold text-lg text-[#0D1510]">Sipariş Yönetimi</h3>
+            <p className="text-sm text-[#8C8A82] mt-0.5">Tüm siparişleri görüntüle, durumları güncelle, müşteriyle iletişime geç</p>
+          </div>
+        </Link>
+      </div>
+
       {/* Ürün işlemleri */}
       <div>
         <h2 className="text-xs uppercase tracking-widest text-[#5C7A62] font-semibold mb-4">Ürün İşlemleri</h2>
