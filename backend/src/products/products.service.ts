@@ -1378,7 +1378,6 @@ export class ProductsService {
 
       try {
         const categoryId = await getCategoryId(categoryName);
-        if (!categoryId) { errors.push(`Satır ${i + 1}: Kategori bulunamadı — ${categoryName}`); skipped++; continue; }
         const existing = barcode
           ? await this.prisma.product.findFirst({ where: { barcode }, select: { id: true } })
           : modelCode
@@ -1400,6 +1399,8 @@ export class ProductsService {
         if (existing) {
           await this.prisma.product.update({ where: { id: existing.id }, data: updateData });
           updated++;
+        } else if (!categoryId) {
+          errors.push(`Satır ${i + 1}: Kategori bulunamadı — ${categoryName}`); skipped++; continue;
         } else {
           await this.prisma.product.create({
             data: {
