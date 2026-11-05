@@ -1402,23 +1402,27 @@ export class ProductsService {
         } else if (!categoryId) {
           errors.push(`Satır ${i + 1}: Kategori bulunamadı — ${categoryName}`); skipped++; continue;
         } else {
-          await this.prisma.product.create({
-            data: {
-              productName: productName || (barcode ?? modelCode ?? `Ürün-${i}`),
-              ...(barcode && { barcode }),
-              modelCode: modelCode || barcode || `URUN-${i}`,
-              categoryId,
-              marketPrice,
-              sitePrice,
-              listPrice: trendyolPrice,
-              stockQuantity: stock,
-              vatRate,
-              ...(desi > 0 && { desi }),
-              ...(description && { description }),
-              ...(colorVariant && { colorVariant }),
-              ...(imageUrls.length > 0 && { imageUrls }),
-              status: 'ACTIVE',
-            },
+          const resolvedModelCode = modelCode || barcode || `URUN-${i}`;
+          const createData = {
+            productName: productName || (barcode ?? modelCode ?? `Ürün-${i}`),
+            ...(barcode && { barcode }),
+            modelCode: resolvedModelCode,
+            categoryId,
+            marketPrice,
+            sitePrice,
+            listPrice: trendyolPrice,
+            stockQuantity: stock,
+            vatRate,
+            ...(desi > 0 && { desi }),
+            ...(description && { description }),
+            ...(colorVariant && { colorVariant }),
+            ...(imageUrls.length > 0 && { imageUrls }),
+            status: 'ACTIVE',
+          };
+          await this.prisma.product.upsert({
+            where: { modelCode: resolvedModelCode },
+            create: createData,
+            update: updateData,
           });
           created++;
         }
