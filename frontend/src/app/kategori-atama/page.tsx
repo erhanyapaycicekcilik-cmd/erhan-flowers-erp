@@ -143,7 +143,6 @@ export default function KategoriAtamaPage() {
       })
       setSavedBarcodes(prev => new Set(prev).add(barcode))
     } catch {
-      // Hata olursa kayıt göstergesi kırmızı yansıtsın — localStorage'da var ama DB'de değil
       setSendMsg('⚠️ Kayıt hatası — oturumunuz dolmuş olabilir. ERP\'ye Gönder butonunu kullanın.')
     }
     setSavingBarcodes(prev => { const s = new Set(prev); s.delete(barcode); return s })
@@ -159,16 +158,13 @@ export default function KategoriAtamaPage() {
         const fromStorage = loadState()
         const next: State = {}
         active.forEach(v => {
-          // 1. Öncelik: variant'ın kendi katalog kategorisi (product bağlantısı olmasa da çalışır)
           const dbCatLabel = (v as any).catalogCategory || v.product?.catalogCategory
           const dbSub = (v as any).catalogSubCategory || v.product?.catalogSubCategory || ''
           if (dbCatLabel) {
             const k = KEYS.find(k => CATS[k].label === dbCatLabel) || ''
             if (k) { next[v.barcode] = { k, sub: dbSub }; return }
           }
-          // 2. localStorage'daki atama
           if (fromStorage[v.barcode]?.k) { next[v.barcode] = fromStorage[v.barcode]; return }
-          // 3. Otomatik tahmin
           const k = guessKey(v.productName)
           if (k) next[v.barcode] = { k, sub: guessSub(v.productName, k) }
         })
@@ -226,8 +222,51 @@ export default function KategoriAtamaPage() {
     const next = { ...state }
     filtered.forEach(p => { next[p.barcode] = { k: bulkKey, sub: bulkSub } })
     updateState(next)
-    // Toplu atamada hepsini arka planda kaydet
     filtered.forEach(p => { void saveOne(p.id, p.barcode, bulkKey, bulkSub) })
+  }
+
+  async function downloadExcel() {
+    const XLSX = await import('xlsx')
+    const wb = XLSX.utils.book_new()
+    KEYS.forEach(k => {
+      const rows = products.filter(p => state[p.barcode]?.k === k)
+      if (!rows.length) return
+      const data = rows.map(p => ({
+        'Görsel URL': Array.isArray(p.images) && p.images.length ? p.images[0] : '',
+        'Ürün Adı': p.productName,
+        'Model Kodu': p.currentModelCode || '',
+        'Barkod': p.barcode,
+        'Fiyat (TL)': Number(p.productCostDraft?.marketplaceSalePrice || p.trendyolSalePrice || 0),
+        'Stok': p.stockQuantity,
+        'Ana Kategori': CATS[k].label,
+        'Alt Kategori': state[p.barcode]?.sub || '',
+      }))
+      const ws = XLSX.utils.json_to_sheet(data)
+      ws['!cols'] = [{ wch: 60 }, { wch: 45 }, { wch: 20 }, { wch: 20 }, { wch: 12 }, { wch: 8 }, { wch: 25 }, { wch: 25 }]
+      XLSX.utils.book_append_sheet(wb, ws, CATS[k].label.slice(0, 31))
+    })
+    const allData = products
+      .filter(p => state[p.barcode]?.k)
+      .sort((a, b) => {
+        const ai = KEYS.indexOf(state[a.barcode]?.k || ''), bi = KEYS.indexOf(state[b.barcode]?.k || '')
+        return ai - bi
+      })
+      .map(p => ({
+        'Görsel URL': Array.isArray(p.images) && p.images.length ? p.images[0] : '',
+        'Ürün Adı': p.productName,
+        'Model Kodu': p.currentModelCode || '',
+        'Barkod': p.barcode,
+        'Fiyat (TL)': Number(p.productCostDraft?.marketplaceSalePrice || p.trendyolSalePrice || 0),
+        'Stok': p.stockQuantity,
+        'Ana Kategori': CATS[state[p.barcode].k]?.label || '',
+        'Alt Kategori': state[p.barcode]?.sub || '',
+      }))
+    if (allData.length) {
+      const ws = XLSX.utils.json_to_sheet(allData)
+      ws['!cols'] = [{ wch: 60 }, { wch: 45 }, { wch: 20 }, { wch: 20 }, { wch: 12 }, { wch: 8 }, { wch: 25 }, { wch: 25 }]
+      XLSX.utils.book_append_sheet(wb, ws, 'Tüm Ürünler')
+    }
+    XLSX.writeFile(wb, `katalog-${new Date().toISOString().slice(0, 10)}.xlsx`)
   }
 
   async function sendToERP() {
@@ -323,6 +362,10 @@ export default function KategoriAtamaPage() {
             Ata
           </button>
           <div className="flex-1" />
+          <button onClick={downloadExcel} disabled={assigned === 0}
+            className="text-sm bg-green-600 text-white rounded-lg px-4 py-1.5 font-semibold disabled:opacity-40">
+            📥 Excel İndir ({assigned})
+          </button>
           <button onClick={sendToERP} disabled={sending || assigned === 0}
             className="text-sm bg-blue-600 text-white rounded-lg px-4 py-1.5 font-semibold disabled:opacity-40">
             {sending ? 'Gönderiliyor...' : `ERP'ye Gönder (${assigned})`}
