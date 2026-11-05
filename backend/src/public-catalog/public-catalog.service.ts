@@ -175,8 +175,29 @@ export class PublicCatalogService {
       }));
   }
 
+  async listSubCategories(categorySlug: string): Promise<{ name: string; slug: string; count: number }[]> {
+    const CAT_NAMES = ['Ağaçlar', 'Bambu', 'Yapay Çiçekler', 'Buketler', 'Dikey Bahçeler', 'Sarmaşıklar', 'Bonsai ve Zeytin Ağaçları', 'Saksı Aranjmanları', 'Yapay Bitkiler', 'Saksılar'];
+    const matched = CAT_NAMES.find((n) => slugify(n) === categorySlug);
+    if (!matched) return [];
+
+    const products = await this.prisma.product.findMany({
+      where: { status: 'ACTIVE', sitePrice: { gt: 0 }, catalogCategory: matched, catalogSubCategory: { not: null } },
+      select: { catalogSubCategory: true },
+    });
+
+    const counts = new Map<string, number>();
+    for (const p of products) {
+      if (p.catalogSubCategory) counts.set(p.catalogSubCategory, (counts.get(p.catalogSubCategory) ?? 0) + 1);
+    }
+
+    return Array.from(counts.entries())
+      .sort(([a], [b]) => a.localeCompare(b, 'tr'))
+      .map(([name, count]) => ({ name, slug: slugify(name), count }));
+  }
+
   async listProducts(params: {
     categorySlug?: string;
+    subCategorySlug?: string;
     search?: string;
     barcode?: string;
     modelCode?: string;
@@ -196,12 +217,18 @@ export class PublicCatalogService {
 
     // catalogCategory alanına göre filtrele
     if (params.categorySlug) {
-      // slug'dan katalog kategori adını bul
       const CAT_NAMES = ['Ağaçlar', 'Bambu', 'Yapay Çiçekler', 'Buketler', 'Dikey Bahçeler', 'Sarmaşıklar', 'Bonsai ve Zeytin Ağaçları', 'Saksı Aranjmanları', 'Yapay Bitkiler', 'Saksılar'];
       const matched = CAT_NAMES.find((n) => slugify(n) === params.categorySlug);
-      if (matched) {
-        where['catalogCategory'] = matched;
-      }
+      if (matched) where['catalogCategory'] = matched;
+    }
+    if (params.subCategorySlug) {
+      const allProducts = await this.prisma.product.findMany({
+        where: { status: 'ACTIVE', sitePrice: { gt: 0 }, catalogSubCategory: { not: null } },
+        select: { catalogSubCategory: true },
+        distinct: ['catalogSubCategory'],
+      });
+      const matchedSub = allProducts.find((p) => p.catalogSubCategory && slugify(p.catalogSubCategory) === params.subCategorySlug)?.catalogSubCategory;
+      if (matchedSub) where['catalogSubCategory'] = matchedSub;
     }
 
     // Barkod filtresi — stok/fiyat/status kısıtlaması olmadan

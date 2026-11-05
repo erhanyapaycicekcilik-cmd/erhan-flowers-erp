@@ -25,9 +25,15 @@ export class PublicCatalogController {
     return this.catalog.listCategories();
   }
 
+  @Get('subcategories')
+  listSubCategories(@Query('category') category: string) {
+    return this.catalog.listSubCategories(category);
+  }
+
   @Get('products')
   listProducts(
     @Query('category') category?: string,
+    @Query('subcategory') subcategory?: string,
     @Query('q') search?: string,
     @Query('barcode') barcode?: string,
     @Query('modelCode') modelCode?: string,
@@ -37,6 +43,7 @@ export class PublicCatalogController {
   ) {
     return this.catalog.listProducts({
       categorySlug: category,
+      subCategorySlug: subcategory,
       search,
       barcode,
       modelCode,

@@ -54,8 +54,17 @@ export async function getCategories(): Promise<Category[]> {
   }
 }
 
+export async function getSubCategories(categorySlug: string): Promise<Category[]> {
+  try {
+    return await apiFetch<Category[]>(`/public/catalog/subcategories?category=${encodeURIComponent(categorySlug)}`)
+  } catch {
+    return []
+  }
+}
+
 export async function getProducts(params: {
   category?: string
+  subcategory?: string
   q?: string
   page?: number
   limit?: number
@@ -63,6 +72,7 @@ export async function getProducts(params: {
 }): Promise<ProductsResponse> {
   const qs = new URLSearchParams()
   if (params.category) qs.set('category', params.category)
+  if (params.subcategory) qs.set('subcategory', params.subcategory)
   if (params.q) qs.set('q', params.q)
   if (params.page) qs.set('page', String(params.page))
   if (params.limit) qs.set('limit', String(params.limit))
