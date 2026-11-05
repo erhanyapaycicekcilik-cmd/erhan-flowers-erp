@@ -1472,8 +1472,8 @@ export class ProductsService {
           ? await this.prisma.product.findFirst({ where: { modelCode }, select: { id: true } })
           : null;
 
-        const data: Record<string, unknown> = {
-          categoryId,
+        // Mevcut ürün güncelleme: kategori dokunulmaz, sadece fiyat/stok/görsel/açıklama
+        const updateData: Record<string, unknown> = {
           ...(productName && { productName }),
           ...(description && { description }),
           ...(colorVariant && { colorVariant }),
@@ -1485,7 +1485,7 @@ export class ProductsService {
         };
 
         if (existing) {
-          await this.prisma.product.update({ where: { id: existing.id }, data });
+          await this.prisma.product.update({ where: { id: existing.id }, data: updateData });
           updated++;
         } else {
           await this.prisma.product.create({
