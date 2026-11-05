@@ -109,7 +109,7 @@ export default function RootLayout({
 }: {
   children: React.ReactNode
 }) {
-  const gtmId = process.env.NEXT_PUBLIC_GTM_ID
+  const gtmId = process.env.NEXT_PUBLIC_GTM_ID || 'GTM-MQ8KXWTM'
   const gaId = process.env.NEXT_PUBLIC_GA_ID
 
   return (
