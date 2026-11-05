@@ -1862,12 +1862,13 @@ export default function ProductsPage() {
               try {
                 const fd = new FormData();
                 fd.append('file', file);
-                const res = await fetch(`${apiBaseUrl}/products/import-trendyol-excel`, { method: 'POST', body: fd, credentials: 'include' });
+                const token = localStorage.getItem(`auth_token_${window.location.hostname}_${window.location.port || 'default'}`) ?? localStorage.getItem('auth_token');
+                const res = await fetch(`${apiBaseUrl}/products/import-trendyol-excel`, { method: 'POST', body: fd, credentials: 'include', headers: token ? { Authorization: `Bearer ${token}` } : {} });
                 if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error((err as any).message || `HTTP ${res.status}`); }
                 const result = await res.json();
                 setTrendyolImportResult({ created: result.created ?? 0, updated: result.updated ?? 0, skipped: result.skipped ?? 0, errors: result.errors ?? [] });
                 if ((result.created ?? 0) > 0 || (result.updated ?? 0) > 0) loadProducts();
-              } catch { alert('Aktarım sırasında hata oluştu.'); } finally { setImportingTrendyol(false); e.target.value = ''; }
+              } catch (err) { alert('Aktarım sırasında hata oluştu: ' + (err instanceof Error ? err.message : String(err))); } finally { setImportingTrendyol(false); e.target.value = ''; }
             }} />
           </label>
           <button
