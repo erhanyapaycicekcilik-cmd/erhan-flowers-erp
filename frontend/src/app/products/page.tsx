@@ -3,7 +3,7 @@
 import { FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { Boxes, Calculator, ChevronDown, CheckCircle2, Copy, Edit3, ExternalLink, Eye, Facebook, FileText, ImageIcon, Instagram, PackagePlus, Plus, Printer, RefreshCw, Save, Search, Send, Sparkles, Trash2, Upload, X, XCircle } from 'lucide-react';
 import { AdminShell } from '@/components/AdminShell';
-import { api, apiBaseUrl, apiFileUrl } from '@/lib/api';
+import { api, apiBaseUrl, apiFileUrl, getStoredToken } from '@/lib/api';
 import type { Category, CurrentUser, MediaFile } from '@/types';
 import trendyolFieldMap from '@/config/channel-field-maps/trendyol-yapay-kuru-cicek.json';
 
@@ -499,7 +499,7 @@ export default function ProductsPage() {
 
   async function downloadCatalogExcel() {
     try {
-      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+      const token = getStoredToken();
       const res = await fetch(`${apiBaseUrl}/products/export-excel-by-category`, {
         credentials: 'include',
         headers: token ? { Authorization: `Bearer ${token}` } : {},
