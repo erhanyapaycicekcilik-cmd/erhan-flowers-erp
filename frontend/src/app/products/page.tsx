@@ -1863,9 +1863,10 @@ export default function ProductsPage() {
                 const fd = new FormData();
                 fd.append('file', file);
                 const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001'}/products/import-trendyol-excel`, { method: 'POST', body: fd, credentials: 'include' });
+                if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error((err as any).message || `HTTP ${res.status}`); }
                 const result = await res.json();
-                setTrendyolImportResult(result);
-                if (result.created > 0 || result.updated > 0) loadProducts();
+                setTrendyolImportResult({ created: result.created ?? 0, updated: result.updated ?? 0, skipped: result.skipped ?? 0, errors: result.errors ?? [] });
+                if ((result.created ?? 0) > 0 || (result.updated ?? 0) > 0) loadProducts();
               } catch { alert('Aktarım sırasında hata oluştu.'); } finally { setImportingTrendyol(false); e.target.value = ''; }
             }} />
           </label>
@@ -2067,8 +2068,8 @@ export default function ProductsPage() {
       )}
       {trendyolImportResult && (
         <div className="mb-4 rounded-md bg-green-50 px-3 py-2 text-sm font-semibold text-green-800">
-          Trendyol aktarımı tamamlandı — Yeni: {trendyolImportResult.created} | Güncellendi: {trendyolImportResult.updated} | Atlandı: {trendyolImportResult.skipped} | Hata: {trendyolImportResult.errors.length}
-          {trendyolImportResult.errors.length > 0 && <div className="mt-1 text-xs font-normal text-red-600">{trendyolImportResult.errors.slice(0, 5).join(' | ')}</div>}
+          Trendyol aktarımı tamamlandı — Yeni: {trendyolImportResult.created} | Güncellendi: {trendyolImportResult.updated} | Atlandı: {trendyolImportResult.skipped} | Hata: {trendyolImportResult.errors?.length ?? 0}
+          {(trendyolImportResult.errors?.length ?? 0) > 0 && <div className="mt-1 text-xs font-normal text-red-600">{trendyolImportResult.errors.slice(0, 5).join(' | ')}</div>}
           <button className="ml-3 text-green-500 hover:underline" onClick={() => setTrendyolImportResult(null)}>×</button>
         </div>
       )}
