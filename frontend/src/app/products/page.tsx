@@ -497,6 +497,26 @@ export default function ProductsPage() {
     setMessage(`WhatsApp Katalog CSV hazırlandı: ${activeEntries.length} ürün.`);
   }
 
+  async function downloadCatalogExcel() {
+    try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+      const res = await fetch(`${apiBaseUrl}/products/export-excel-by-category`, {
+        credentials: 'include',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) throw new Error('İndirme başarısız');
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `kategori-katalog-${new Date().toISOString().slice(0, 10)}.xlsx`;
+      link.click();
+      window.URL.revokeObjectURL(url);
+    } catch {
+      setMessage('Katalog Excel indirilemedi.');
+    }
+  }
+
   async function downloadUnlinkedExcel() {
     try {
       const result = await api<{ fileName: string; mimeType: string; contentBase64: string; total: number }>('/product-center/export/excel');
@@ -1828,7 +1848,7 @@ export default function ProductsPage() {
           <button className="btn btn-primary" onClick={() => { setQuickFormOpen((v) => !v); setQuickResult(null); }}><PackagePlus size={17} /> Hızlı Ürün Ekle</button>
           <button className="btn btn-secondary" onClick={downloadUnlinkedExcel}><FileText size={17} /> Bağlanmamış Ürünler Excel</button>
           <button className="btn btn-secondary" onClick={downloadWhatsAppCsv}><FileText size={17} /> WhatsApp Katalog CSV</button>
-          <a className="btn btn-secondary" href={`${apiBaseUrl}/products/export-excel-by-category`} download><FileText size={17} /> Kategori Bazlı Excel İndir</a>
+          <button className="btn btn-secondary" onClick={downloadCatalogExcel}><FileText size={17} /> Kategori Bazlı Excel İndir</button>
           <label className="btn btn-secondary cursor-pointer">
             <Upload size={17} /> {importingExcel ? 'Yükleniyor...' : 'Excel ile Toplu Yükle'}
             <input type="file" accept=".xlsx,.xls" className="hidden" disabled={importingExcel} onChange={(event) => { const file = event.target.files?.[0]; if (file) importExcelFile(file); event.target.value = ''; }} />
