@@ -1828,6 +1828,7 @@ export default function ProductsPage() {
           <button className="btn btn-primary" onClick={() => { setQuickFormOpen((v) => !v); setQuickResult(null); }}><PackagePlus size={17} /> Hızlı Ürün Ekle</button>
           <button className="btn btn-secondary" onClick={downloadUnlinkedExcel}><FileText size={17} /> Bağlanmamış Ürünler Excel</button>
           <button className="btn btn-secondary" onClick={downloadWhatsAppCsv}><FileText size={17} /> WhatsApp Katalog CSV</button>
+          <a className="btn btn-secondary" href={`${apiBaseUrl}/products/export-excel-by-category`} download><FileText size={17} /> Kategori Bazlı Excel İndir</a>
           <label className="btn btn-secondary cursor-pointer">
             <Upload size={17} /> {importingExcel ? 'Yükleniyor...' : 'Excel ile Toplu Yükle'}
             <input type="file" accept=".xlsx,.xls" className="hidden" disabled={importingExcel} onChange={(event) => { const file = event.target.files?.[0]; if (file) importExcelFile(file); event.target.value = ''; }} />
