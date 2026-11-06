@@ -118,6 +118,19 @@ export class PublicCatalogController {
     return this.trendyolSync.syncNow();
   }
 
+  // Admin: Ürün kategorisi güncelle (florayapay admin panelinden çağrılır)
+  // productId > 0 → Product tablosu, productId < 0 → TrendyolProductVariant tablosu (abs(id))
+  @Post('admin/set-category')
+  async setCategory(
+    @Query('secret') secret: string,
+    @Body() body: { productId: number; category: string; subCategory?: string | null },
+  ) {
+    const expected = process.env.REVALIDATE_SECRET || 'dev-secret-local';
+    if (secret !== expected) return { error: 'Unauthorized' };
+    if (!body.productId || !body.category) throw new BadRequestException('productId ve category gerekli.');
+    return this.catalog.setCategory(body.productId, body.category, body.subCategory ?? null);
+  }
+
   // Meta/WhatsApp Commerce Manager ürün kataloğu feed'i (CSV)
   @Get('meta-feed')
   async metaCatalogFeed(@Res() res: Response) {

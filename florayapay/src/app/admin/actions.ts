@@ -81,6 +81,27 @@ export async function triggerRecategorize(): Promise<{ error?: string; data?: un
   }
 }
 
+/** Ürün kategorisi güncelle (admin panelinden) */
+export async function updateProductCategory(
+  productId: number,
+  category: string,
+  subCategory?: string | null,
+): Promise<{ ok?: boolean; error?: string }> {
+  try {
+    const secret = process.env.REVALIDATE_SECRET || 'dev-secret-local'
+    const res = await fetch(`${API_URL}/public/catalog/admin/set-category?secret=${secret}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ productId, category, subCategory: subCategory ?? null }),
+      cache: 'no-store',
+    })
+    if (!res.ok) return { error: `Hata (${res.status})` }
+    return { ok: true }
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : 'Bağlantı hatası' }
+  }
+}
+
 /** Trendyol'dan ürünleri çek ve siteyi revalidate et */
 export async function triggerTrendyolSync(): Promise<{ error?: string; data?: unknown }> {
   try {
