@@ -2,6 +2,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { getProducts, getCategories, getImageUrl } from '@/lib/api/catalog'
 import { formatPrice } from '@/lib/utils/format'
+import { CategoryEditor } from '@/components/admin/CategoryEditor'
 
 interface PageProps {
   searchParams: { kategori?: string; q?: string; sayfa?: string }
@@ -92,9 +93,7 @@ export default async function AdminProductsPage({ searchParams }: PageProps) {
                   </div>
                 </td>
                 <td className="px-4 py-3 hidden md:table-cell">
-                  <span className="text-xs px-2 py-1 bg-[#F4F2EC] rounded-full text-[#5C5C52]">
-                    {p.category || '—'}
-                  </span>
+                  <CategoryEditor productId={p.id} currentCategory={p.category} />
                 </td>
                 <td className="px-4 py-3 text-right font-semibold text-[#0D1510]">
                   {formatPrice(p.sitePrice)}

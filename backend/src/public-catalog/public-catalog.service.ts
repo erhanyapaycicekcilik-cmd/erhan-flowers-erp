@@ -350,15 +350,73 @@ export class PublicCatalogService {
         if (product) return this.toPublicProduct(product);
       }
     }
+    // Product tablosunda bulunamadıysa TrendyolProductVariant'ta ara
+    for (let take = 1; take <= 6; take++) {
+      const segment = parts.slice(-take).join('-').toUpperCase();
+      const candidates = [segment, segment.replace(/-/g, '.')];
+      for (const modelCode of candidates) {
+        const variant = await this.prisma.trendyolProductVariant.findFirst({
+          where: {
+            OR: [{ currentModelCode: modelCode }, { barcode: modelCode }],
+            catalogCategory: { not: null },
+          },
+          select: {
+            id: true, productName: true, currentModelCode: true, barcode: true,
+            trendyolSalePrice: true, stockQuantity: true, catalogCategory: true,
+            catalogSubCategory: true, images: true, brand: true, productDescription: true, productColor: true,
+          },
+        });
+        if (variant) return this.variantToPublicProduct(variant);
+      }
+    }
     return null;
   }
 
   async getProductById(id: number) {
+    if (id < 0) {
+      // Negatif ID → TrendyolProductVariant
+      const variant = await this.prisma.trendyolProductVariant.findFirst({
+        where: { id: Math.abs(id) },
+        select: {
+          id: true, productName: true, currentModelCode: true, barcode: true,
+          trendyolSalePrice: true, stockQuantity: true, catalogCategory: true,
+          catalogSubCategory: true, images: true, brand: true, productDescription: true, productColor: true,
+        },
+      });
+      return variant ? this.variantToPublicProduct(variant) : null;
+    }
     const product = await this.prisma.product.findFirst({
       where: { id, status: 'ACTIVE' },
       select: SAFE_SELECT,
     });
     return product ? this.toPublicProduct(product) : null;
+  }
+
+  async setCategory(productId: number, category: string, subCategory: string | null): Promise<{ ok: boolean; updated: string }> {
+    if (productId > 0) {
+      // Product tablosu
+      await this.prisma.product.update({
+        where: { id: productId },
+        data: { catalogCategory: category, catalogSubCategory: subCategory },
+      });
+      return { ok: true, updated: 'product' };
+    } else {
+      // TrendyolProductVariant tablosu (negatif id → gerçek id = abs)
+      const variantId = Math.abs(productId);
+      const variant = await this.prisma.trendyolProductVariant.update({
+        where: { id: variantId },
+        data: { catalogCategory: category, catalogSubCategory: subCategory },
+        select: { id: true, productId: true },
+      });
+      // Bağlı Product varsa onu da güncelle
+      if (variant.productId) {
+        await this.prisma.product.update({
+          where: { id: variant.productId },
+          data: { catalogCategory: category, catalogSubCategory: subCategory },
+        }).catch(() => undefined);
+      }
+      return { ok: true, updated: 'variant' };
+    }
   }
 
   private variantToPublicProduct(v: {
