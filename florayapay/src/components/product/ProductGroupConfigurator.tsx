@@ -28,16 +28,19 @@ export function ProductGroupConfigurator({ group }: Props) {
     return group.variants
       .filter(v => v.potLabel)
       .reduce((acc, v) => {
-        if (!seen.has(v.potLabel!)) { seen.add(v.potLabel!); acc.push(v.potLabel!) }
+        if (!seen.has(v.potLabel!)) {
+          seen.add(v.potLabel!)
+          acc.push({ label: v.potLabel!, image: v.potImage ?? null })
+        }
         return acc
-      }, [] as string[])
+      }, [] as { label: string; image: string | null }[])
   }, [group.variants])
 
   const hasSizes = sizes.length > 0
   const hasPots = pots.length > 0
 
   const [selectedSize, setSelectedSize] = useState<string | null>(hasSizes ? sizes[0] : null)
-  const [selectedPot, setSelectedPot] = useState<string | null>(hasPots ? pots[0] : null)
+  const [selectedPot, setSelectedPot] = useState<string | null>(hasPots ? pots[0].label : null)
 
   // Seçilen kombinasyona uyan varyant
   const matched: ProductGroupVariant | null = useMemo(() => {
@@ -135,15 +138,22 @@ export function ProductGroupConfigurator({ group }: Props) {
               </p>
               <div className="flex flex-wrap gap-2">
                 {pots.map(pot => (
-                  <button key={pot}
-                    onClick={() => setSelectedPot(pot)}
-                    className={`px-4 py-2 rounded-xl border-2 text-sm font-medium transition-all ${
-                      selectedPot === pot
-                        ? 'border-[#5C7A62] bg-[#5C7A62] text-white'
+                  <button key={pot.label}
+                    onClick={() => setSelectedPot(pot.label)}
+                    className={`flex flex-col items-center gap-1.5 p-2 rounded-xl border-2 text-xs font-medium transition-all ${
+                      selectedPot === pot.label
+                        ? 'border-[#5C7A62] bg-[#5C7A62]/5'
                         : 'border-[#E0DDD4] text-[#5C5C52] hover:border-[#5C7A62]'
                     }`}
                   >
-                    {pot}
+                    {pot.image ? (
+                      <div className="w-14 h-14 rounded-lg overflow-hidden bg-[#F4F2EC]">
+                        <Image src={getImageUrl(pot.image)} alt={pot.label} width={56} height={56} className="object-cover w-full h-full" />
+                      </div>
+                    ) : (
+                      <div className="w-14 h-14 rounded-lg bg-[#F4F2EC] flex items-center justify-center text-2xl">🪴</div>
+                    )}
+                    <span className={selectedPot === pot.label ? 'text-[#5C7A62] font-semibold' : ''}>{pot.label}</span>
                   </button>
                 ))}
               </div>
