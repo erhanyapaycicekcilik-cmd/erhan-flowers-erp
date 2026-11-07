@@ -4,7 +4,7 @@ import Image from 'next/image'
 import { Header } from '@/components/layout/Header'
 import { Footer } from '@/components/layout/Footer'
 import { AddToCartButton } from '@/components/product/AddToCartButton'
-import { getCategories, getSubCategories, getProducts, getImageUrl } from '@/lib/api/catalog'
+import { getCategories, getSubCategories, getProducts, getProductGroups, getImageUrl } from '@/lib/api/catalog'
 import { formatPrice } from '@/lib/utils/format'
 import { JsonLd } from '@/components/seo/JsonLd'
 import { breadcrumbSchema } from '@/lib/seo/schemas'
@@ -50,7 +50,7 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
 }
 
 export default async function ProductsPage({ searchParams }: PageProps) {
-  const [categories, subCategories, response] = await Promise.all([
+  const [categories, subCategories, response, groups] = await Promise.all([
     getCategories(),
     searchParams.kategori ? getSubCategories(searchParams.kategori) : Promise.resolve([]),
     getProducts({
@@ -61,6 +61,8 @@ export default async function ProductsPage({ searchParams }: PageProps) {
       limit: 24,
       sort: searchParams.sirala,
     }),
+    // Grupları sadece arama olmadığında getir
+    !searchParams.q ? getProductGroups(searchParams.kategori) : Promise.resolve([]),
   ])
 
   const breadcrumbs = [
@@ -158,7 +160,90 @@ export default async function ProductsPage({ searchParams }: PageProps) {
 
         {/* Ürün grid — tam genişlik */}
         <div className="max-w-screen-2xl mx-auto px-4 py-8">
-          {response.products.length === 0 ? (
+          {/* Grup kartları — üstte öne çıkan gruplar */}
+          {groups.length > 0 && (
+            <div className="mb-8">
+              <div className="flex items-center gap-2 mb-4">
+                <span className="text-xs font-medium uppercase tracking-widest text-[#5C7A62]">Koleksiyon</span>
+                <div className="flex-1 h-px bg-[#E0DDD4]" />
+              </div>
+              <ul className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 md:gap-4">
+                {groups.map((group, idx) => {
+                  const prices = group.variants?.map((v: any) => v.price).filter(Boolean) ?? []
+                  const minPrice = prices.length ? Math.min(...prices) : 0
+                  const maxPrice = prices.length ? Math.max(...prices) : 0
+                  const optionCount = group.variants?.length ?? 0
+                  const sizes = [...new Set(group.variants?.map((v: any) => v.sizeLabel).filter(Boolean))] as string[]
+                  return (
+                    <li key={group.id}>
+                      <article className="group bg-white rounded-2xl overflow-hidden hover:shadow-lg transition-all duration-300 ring-2 ring-[#5C7A62]/20">
+                        <Link href={`/urun-grubu/${group.slug}`} className="block relative overflow-hidden bg-[#F4F2EC]">
+                          <div className="aspect-square relative">
+                            {group.mainImage ? (
+                              <Image
+                                src={getImageUrl(group.mainImage)}
+                                alt={group.name}
+                                fill
+                                sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
+                                quality={70}
+                                priority={idx < 4}
+                                className="object-cover group-hover:scale-105 transition-transform duration-500"
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center text-4xl">🌳</div>
+                            )}
+                          </div>
+                          {/* Boy seçeneklerini üstte göster */}
+                          {sizes.length > 0 && (
+                            <div className="absolute top-2 left-2 flex flex-wrap gap-1">
+                              {sizes.slice(0, 4).map(s => (
+                                <span key={s} className="bg-white/90 backdrop-blur text-[#0D1510] text-[9px] font-semibold px-1.5 py-0.5 rounded-full shadow-sm">
+                                  {s}
+                                </span>
+                              ))}
+                              {sizes.length > 4 && (
+                                <span className="bg-white/90 backdrop-blur text-[#8C8A82] text-[9px] px-1.5 py-0.5 rounded-full shadow-sm">+{sizes.length - 4}</span>
+                              )}
+                            </div>
+                          )}
+                          <div className="absolute bottom-2 right-2">
+                            <span className="bg-[#5C7A62] text-white text-[10px] font-semibold px-2 py-1 rounded-full shadow">
+                              {optionCount} seçenek
+                            </span>
+                          </div>
+                        </Link>
+                        <div className="p-3">
+                          {group.category && (
+                            <p className="text-[10px] uppercase tracking-widest text-[#8C8A82] mb-1">{group.category}</p>
+                          )}
+                          <Link href={`/urun-grubu/${group.slug}`}>
+                            <h3 className="text-sm text-[#0D1510] hover:text-[#5C7A62] transition-colors line-clamp-2 leading-snug font-medium">
+                              {group.name}
+                            </h3>
+                          </Link>
+                          <div className="mt-2.5 flex items-center justify-between gap-2">
+                            <p className="font-semibold text-[#0D1510] text-xs">
+                              {minPrice > 0 ? (minPrice === maxPrice ? formatPrice(minPrice) : `${formatPrice(minPrice)} – ${formatPrice(maxPrice)}`) : '—'}
+                            </p>
+                            <Link href={`/urun-grubu/${group.slug}`}
+                              className="flex items-center gap-1 bg-[#5C7A62] text-white text-xs px-2.5 py-1.5 rounded-xl font-medium hover:bg-[#4a6350] transition-colors whitespace-nowrap">
+                              Boy Seç
+                            </Link>
+                          </div>
+                        </div>
+                      </article>
+                    </li>
+                  )
+                })}
+              </ul>
+              <div className="flex items-center gap-2 mt-8 mb-4">
+                <span className="text-xs font-medium uppercase tracking-widest text-[#8C8A82]">Tüm Ürünler</span>
+                <div className="flex-1 h-px bg-[#E0DDD4]" />
+              </div>
+            </div>
+          )}
+
+          {response.products.length === 0 && groups.length === 0 ? (
             <div className="text-center py-24">
               <p className="text-5xl mb-4">🌿</p>
               <p className="text-lg font-medium text-[#0D1510]">Ürün bulunamadı</p>
@@ -167,7 +252,7 @@ export default async function ProductsPage({ searchParams }: PageProps) {
                 Tüm Ürünlere Git →
               </Link>
             </div>
-          ) : (
+          ) : response.products.length > 0 ? (
             <>
               <ul className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 md:gap-4">
                 {response.products.map((product, idx) => (
@@ -246,7 +331,7 @@ export default async function ProductsPage({ searchParams }: PageProps) {
                 </nav>
               )}
             </>
-          )}
+          ) : null}
         </div>
       </main>
       <Footer />

@@ -17,7 +17,7 @@ export class ProductGroupsService {
   // ─── Public API ───────────────────────────────────────────────────────────
 
   async listGroups(category?: string) {
-    return this.prisma.productGroup.findMany({
+    const groups = await this.prisma.productGroup.findMany({
       where: { isActive: true, ...(category ? { category } : {}) },
       orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
       select: {
@@ -25,12 +25,40 @@ export class ProductGroupsService {
         category: true, subCategory: true,
         variants: {
           where: { isActive: true },
-          select: { id: true, sizeLabel: true, potLabel: true, priceOverride: true },
+          select: {
+            id: true, sizeLabel: true, potLabel: true,
+            priceOverride: true, productId: true, trendyolVariantId: true,
+          },
           orderBy: [{ sortOrder: 'asc' }],
-          take: 1,
         },
       },
     });
+
+    // Her varyant için fiyatı çek (priceOverride yoksa ürün fiyatı)
+    return Promise.all(
+      groups.map(async (g) => ({
+        ...g,
+        variants: await Promise.all(
+          g.variants.map(async (v) => {
+            let price = v.priceOverride ? Number(v.priceOverride) : 0;
+            if (!price && v.productId) {
+              const p = await this.prisma.product.findFirst({
+                where: { id: v.productId },
+                select: { sitePrice: true, marketPrice: true },
+              });
+              price = Number(p?.sitePrice) || Number(p?.marketPrice) || 0;
+            } else if (!price && v.trendyolVariantId) {
+              const tv = await this.prisma.trendyolProductVariant.findFirst({
+                where: { id: v.trendyolVariantId },
+                select: { trendyolSalePrice: true },
+              });
+              price = Number(tv?.trendyolSalePrice) || 0;
+            }
+            return { ...v, price };
+          }),
+        ),
+      })),
+    );
   }
 
   async getGroupBySlug(slug: string) {
