@@ -437,7 +437,7 @@ export class PublicCatalogService {
         shopPrice: 0,
       },
     });
-    return { ok: true, id: product.id, slug: product.slug };
+    return { ok: true, id: product.id };
   }
 
   async setVideo(productId: number, videoUrl: string | null): Promise<{ ok: boolean }> {
