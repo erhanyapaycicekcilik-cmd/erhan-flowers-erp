@@ -29,10 +29,10 @@ export async function adminLogout() {
 }
 
 export async function createProduct(form: FormData) {
+  const secret = process.env.REVALIDATE_SECRET || 'dev-secret-local'
   const data = {
     name: form.get('name'),
-    modelCode: form.get('modelCode'),
-    categoryId: form.get('categoryId') ? Number(form.get('categoryId')) : null,
+    modelCode: form.get('modelCode') || null,
     sitePrice: Number(form.get('sitePrice')),
     originalPrice: form.get('originalPrice') ? Number(form.get('originalPrice')) : null,
     brand: form.get('brand') || 'Erhan Flowers',
@@ -42,12 +42,14 @@ export async function createProduct(form: FormData) {
     warrantyMonths: Number(form.get('warrantyMonths')) || 0,
     inStock: form.get('inStock') === 'true',
     images: form.get('images') ? (form.get('images') as string).split('\n').map(s => s.trim()).filter(Boolean) : [],
+    videoUrl: form.get('videoUrl') ? String(form.get('videoUrl')).trim() : null,
   }
 
-  const res = await fetch(`${API_URL}/public/catalog/products`, {
+  const res = await fetch(`${API_URL}/public/catalog/admin/products?secret=${secret}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
+    cache: 'no-store',
   })
 
   if (!res.ok) {

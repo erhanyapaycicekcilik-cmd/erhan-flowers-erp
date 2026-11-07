@@ -131,6 +131,21 @@ export class PublicCatalogController {
     return this.catalog.setCategory(body.productId, body.category, body.subCategory ?? null);
   }
 
+  @Post('admin/products')
+  async createProduct(
+    @Query('secret') secret: string,
+    @Body() body: {
+      name: string; modelCode?: string; sitePrice: number; originalPrice?: number;
+      brand?: string; description?: string; origin?: string; vatRate?: number;
+      warrantyMonths?: number; inStock?: boolean; images?: string[]; videoUrl?: string | null;
+    },
+  ) {
+    const expected = process.env.REVALIDATE_SECRET || 'dev-secret-local';
+    if (secret !== expected) return { error: 'Unauthorized' };
+    if (!body.name || !body.sitePrice) throw new BadRequestException('name ve sitePrice gerekli.');
+    return this.catalog.createProduct(body);
+  }
+
   @Post('admin/set-video')
   async setVideo(
     @Query('secret') secret: string,
