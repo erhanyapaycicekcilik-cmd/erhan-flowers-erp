@@ -131,6 +131,17 @@ export class PublicCatalogController {
     return this.catalog.setCategory(body.productId, body.category, body.subCategory ?? null);
   }
 
+  @Post('admin/set-video')
+  async setVideo(
+    @Query('secret') secret: string,
+    @Body() body: { productId: number; videoUrl: string | null },
+  ) {
+    const expected = process.env.REVALIDATE_SECRET || 'dev-secret-local';
+    if (secret !== expected) return { error: 'Unauthorized' };
+    if (!body.productId) throw new BadRequestException('productId gerekli.');
+    return this.catalog.setVideo(body.productId, body.videoUrl ?? null);
+  }
+
   // Meta/WhatsApp Commerce Manager ürün kataloğu feed'i (CSV)
   @Get('meta-feed')
   async metaCatalogFeed(@Res() res: Response) {

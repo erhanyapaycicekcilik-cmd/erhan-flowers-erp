@@ -17,6 +17,7 @@ import { DeliveryEstimate } from '@/components/product/DeliveryEstimate'
 import { WhatsAppOrderButton } from '@/components/product/WhatsAppOrderButton'
 import { StickyMobileCTA } from '@/components/product/StickyMobileCTA'
 import { RelatedProducts } from '@/components/product/RelatedProducts'
+import { ProductVideo } from '@/components/product/ProductVideo'
 
 const SITE_URL = process.env.SITE_URL || 'https://www.erhanflowers.com'
 
@@ -247,6 +248,14 @@ export default async function ProductDetailPage({ params }: PageProps) {
             </div>
           </div>
         </div>
+
+        {/* Video */}
+        {product.videoUrl && (
+          <div className="max-w-2xl mx-auto px-4 pb-8">
+            <h2 className="font-semibold text-[#0D1510] mb-3">Ürün Videosu</h2>
+            <ProductVideo videoUrl={product.videoUrl} title={product.name} />
+          </div>
+        )}
 
         {/* Benzer ürünler */}
         <div className="max-w-screen-2xl mx-auto px-4 pb-12">

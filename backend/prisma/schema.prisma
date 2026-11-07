@@ -2563,6 +2563,7 @@ model ProductGroup {
   slug         String                @unique
   description  String?               @db.Text
   mainImage    String?               @map("main_image")
+  videoUrl     String?               @map("video_url")
   category     String?
   subCategory  String?               @map("sub_category")
   isActive     Boolean               @default(true) @map("is_active")

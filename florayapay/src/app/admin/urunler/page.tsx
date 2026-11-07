@@ -3,6 +3,7 @@ import Image from 'next/image'
 import { getProducts, getCategories, getImageUrl } from '@/lib/api/catalog'
 import { formatPrice } from '@/lib/utils/format'
 import { CategoryEditor } from '@/components/admin/CategoryEditor'
+import { VideoEditor } from '@/components/admin/VideoEditor'
 
 interface PageProps {
   searchParams: { kategori?: string; q?: string; sayfa?: string }
@@ -67,6 +68,7 @@ export default async function AdminProductsPage({ searchParams }: PageProps) {
               <th className="text-left px-4 py-3 font-medium text-[#5C5C52] w-16">Görsel</th>
               <th className="text-left px-4 py-3 font-medium text-[#5C5C52]">Ürün Adı</th>
               <th className="text-left px-4 py-3 font-medium text-[#5C5C52] hidden md:table-cell">Kategori</th>
+              <th className="text-left px-4 py-3 font-medium text-[#5C5C52] hidden lg:table-cell">Video</th>
               <th className="text-right px-4 py-3 font-medium text-[#5C5C52]">Fiyat</th>
               <th className="text-center px-4 py-3 font-medium text-[#5C5C52] hidden sm:table-cell">Stok</th>
               <th className="text-right px-4 py-3 font-medium text-[#5C5C52]">İşlem</th>
@@ -94,6 +96,9 @@ export default async function AdminProductsPage({ searchParams }: PageProps) {
                 </td>
                 <td className="px-4 py-3 hidden md:table-cell">
                   <CategoryEditor productId={p.id} currentCategory={p.category} />
+                </td>
+                <td className="px-4 py-3 hidden lg:table-cell">
+                  <VideoEditor productId={p.id} currentVideoUrl={(p as any).videoUrl ?? null} />
                 </td>
                 <td className="px-4 py-3 text-right font-semibold text-[#0D1510]">
                   {formatPrice(p.sitePrice)}

@@ -19,6 +19,7 @@ export interface PublicProduct {
   inStock: boolean
   images: string[]
   mainImage: string | null
+  videoUrl: string | null
 }
 
 export interface ProductsResponse {
@@ -111,6 +112,7 @@ export interface ProductGroup {
   slug: string
   description: string | null
   mainImage: string | null
+  videoUrl: string | null
   category: string | null
   subCategory: string | null
   variants: ProductGroupVariant[]

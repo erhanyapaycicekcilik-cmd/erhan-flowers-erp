@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { ProductGroup, ProductGroupVariant, getImageUrl } from '@/lib/api/catalog'
 import { formatPrice } from '@/lib/utils/format'
 import { AddToCartButton } from './AddToCartButton'
+import { ProductVideo } from './ProductVideo'
 
 interface Props {
   group: ProductGroup
@@ -185,6 +186,14 @@ export function ProductGroupConfigurator({ group }: Props) {
           {group.description && (
             <div className="pt-4 border-t border-[#E0DDD4]">
               <p className="text-sm text-[#5C5C52] leading-relaxed whitespace-pre-line">{group.description}</p>
+            </div>
+          )}
+
+          {/* Video */}
+          {group.videoUrl && (
+            <div className="pt-4 border-t border-[#E0DDD4]">
+              <p className="text-sm font-medium text-[#5C5C52] mb-3">Ürün Videosu</p>
+              <ProductVideo videoUrl={group.videoUrl} title={group.name} />
             </div>
           )}
 

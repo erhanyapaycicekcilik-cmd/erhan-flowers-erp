@@ -122,6 +122,7 @@ export class ProductGroupsService {
       slug: group.slug,
       description: group.description,
       mainImage: group.mainImage,
+      videoUrl: group.videoUrl,
       category: group.category,
       subCategory: group.subCategory,
       variants: enriched,
@@ -148,6 +149,7 @@ export class ProductGroupsService {
     name: string;
     description?: string;
     mainImage?: string;
+    videoUrl?: string;
     category?: string;
     subCategory?: string;
     sortOrder?: number;
@@ -159,6 +161,7 @@ export class ProductGroupsService {
         slug,
         description: data.description ?? null,
         mainImage: data.mainImage ?? null,
+        videoUrl: data.videoUrl ?? null,
         category: data.category ?? null,
         subCategory: data.subCategory ?? null,
         sortOrder: data.sortOrder ?? 0,
@@ -170,6 +173,7 @@ export class ProductGroupsService {
     name?: string;
     description?: string | null;
     mainImage?: string | null;
+    videoUrl?: string | null;
     category?: string | null;
     subCategory?: string | null;
     isActive?: boolean;
