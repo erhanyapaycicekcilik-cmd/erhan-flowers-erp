@@ -442,6 +442,7 @@ model Product {
   marketPrice          Float                   @default(0) @map("market_price")
   listPrice            Float                   @default(0) @map("list_price")
   imageUrls            Json                    @default("[]") @map("image_urls")
+  videoUrl             String?                 @map("video_url")
   brand                String                  @default("Erhan Flowers")
   vatRate              Int                     @default(20) @map("vat_rate")
   origin               String                  @default("Türkiye")
