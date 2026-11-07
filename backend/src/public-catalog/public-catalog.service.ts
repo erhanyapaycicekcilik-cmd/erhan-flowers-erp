@@ -409,10 +409,16 @@ export class PublicCatalogService {
     videoUrl?: string | null;
   }) {
     const modelCode = data.modelCode?.trim() || `URUN-${Date.now()}`;
+    // categoryId zorunlu — ilk kategoriyi default olarak kullan
+    let defaultCategory = await this.prisma.category.findFirst({ orderBy: { id: 'asc' } });
+    if (!defaultCategory) {
+      defaultCategory = await this.prisma.category.create({ data: { name: 'Genel', slug: 'genel' } });
+    }
     const product = await this.prisma.product.create({
       data: {
         productName: data.name,
         modelCode,
+        categoryId: defaultCategory.id,
         sitePrice: data.sitePrice,
         listPrice: data.originalPrice ?? 0,
         marketPrice: data.originalPrice ?? 0,
