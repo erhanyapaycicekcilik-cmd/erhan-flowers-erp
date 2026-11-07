@@ -395,6 +395,9 @@ export default function ProductsPage() {
   const [stockCards, setStockCards] = useState<StockCard[]>([]);
   const [defaultExpenses, setDefaultExpenses] = useState<DefaultExpense[]>([]);
   const [form, setForm] = useState(emptyForm);
+  // Satış fiyatı elle girildi / öneri butonuyla seçildi mi? Değilse maliyetten otomatik hesaplanır.
+  // Ayrı state: form tamamı kayıt isteğine gönderildiği için forma eklenmez.
+  const [salePriceManual, setSalePriceManual] = useState(false);
   const [step, setStep] = useState(0);
   const [sourceRecipeId, setSourceRecipeId] = useState('');
   const [costDetail, setCostDetail] = useState<CostDetail | null>(null);
@@ -642,6 +645,15 @@ export default function ProductsPage() {
     : entries.find((entry) => entry.variantId === Number(form.variantId))?.costStatus ?? 'Maliyet Girilmedi';
   const pricing = useMemo(() => calculatePricing(activeDraft, Number(form.salePrice), Number(form.commissionPercent)), [activeDraft, form.salePrice, form.commissionPercent]);
   const channelPricing = useMemo(() => calculateChannelPricing(activeDraft, Number(form.salePrice), Number(form.commissionPercent)), [activeDraft, form.salePrice, form.commissionPercent]);
+  const hasStockRecipe = activeDraft.items.some(isStockRecipeItem);
+  // Stok bileşenleri/maliyet değişince fiyatı yeniden hesapla. Önceki üründen kalan fiyat yeni ürüne taşınmasın.
+  useEffect(() => {
+    if (salePriceManual || !hasStockRecipe) return;
+    const suggested = pricing.suggestedSalePrice;
+    if (suggested > 0 && Math.abs(suggested - Number(form.salePrice || 0)) > 0.009) {
+      setForm((current) => ({ ...current, salePrice: suggested }));
+    }
+  }, [salePriceManual, hasStockRecipe, pricing.suggestedSalePrice, form.salePrice]);
   const priceResearchSummary = useMemo(() => calculatePriceResearch(priceResearch, pricing.suggestedSalePrice), [priceResearch, pricing.suggestedSalePrice]);
   const productStockMatches = useMemo(() => stockCards
     .filter((stockCard) => stockCard.status !== 'PASSIVE')
@@ -723,6 +735,7 @@ export default function ProductsPage() {
   const saleStageLabel = salePreparationStage(preparation, trendyolReadiness, canResearch);
 
   function update(name: string, value: unknown) {
+    if (name === 'salePrice') setSalePriceManual(true);
     setForm((current) => {
       if (name === 'categoryId') {
         const category = categories.find((item) => String(item.id) === String(value));
@@ -970,6 +983,7 @@ export default function ProductsPage() {
   }
 
   function editEntry(entry: Entry) {
+    setSalePriceManual(Number(entry.salePrice || 0) > 0);
     setForm({
       ...emptyForm,
       variantId: String(entry.variantId),
@@ -1135,7 +1149,7 @@ export default function ProductsPage() {
       channelCategoryName: matchedCategory?.name ?? current.channelCategoryName,
       colorVariant: [extractSizeText(productName), potStock.productType || potStock.category || potStock.name].filter(Boolean).join(' / '),
       stockQuantity: Math.trunc(stockQuantity),
-      salePrice: Number(current.salePrice || 0) > 0 ? current.salePrice : suggestedSalePrice,
+      salePrice: salePriceManual && Number(current.salePrice || 0) > 0 ? current.salePrice : suggestedSalePrice,
     }));
 
     setCostDetail({
@@ -1329,7 +1343,7 @@ export default function ProductsPage() {
     await api<{ ok: boolean }>(`/product-center/entries/${entry.variantId}/passive`, { method: 'POST' });
     setEntries((current) => current.map((item) => item.variantId === entry.variantId ? { ...item, status: 'PASSIVE' } : item));
     if (form.variantId === String(entry.variantId)) {
-      setForm(emptyForm);
+      setForm(emptyForm); setSalePriceManual(false);
       setCostDetail(null);
       setStep(0);
     }
@@ -1668,6 +1682,10 @@ export default function ProductsPage() {
   }
 
   async function sendToChannels() {
+    if (!hasStockRecipe) {
+      const ok = window.confirm('Bu üründe stok bileşeni (ağaç/bitki/saksı) seçilmedi, satış fiyatı maliyetten hesaplanmadı. Yine de gönderilsin mi?');
+      if (!ok) return;
+    }
     if (!canResearch && !allowIncomplete) {
       const blockers = [...preparation.blockingMissing, ...trendyolReadiness.blockingMissing];
       const text = `Gönderim yapılamadı. Eksik alanlar: ${blockers.join(', ') || 'Ürün hazırlığı tamamlanmadı.'}`;
@@ -2265,7 +2283,7 @@ export default function ProductsPage() {
             <Boxes size={15} />
             {productListOpen ? 'Ürün listesini kapat' : 'Ürün listesini aç'}
           </button>
-          <button type="button" className="btn btn-secondary min-h-9 px-3 text-xs" onClick={() => { setForm(emptyForm); setCostDetail(null); setStep(0); }}>
+          <button type="button" className="btn btn-secondary min-h-9 px-3 text-xs" onClick={() => { setForm(emptyForm); setSalePriceManual(false); setCostDetail(null); setStep(0); }}>
             <PackagePlus size={15} />
             Yeni ürün
           </button>
@@ -2783,7 +2801,16 @@ export default function ProductsPage() {
                   onUseSite={() => update('salePrice', pricing.siteSalePrice)}
                   onUseEcommerce={() => update('salePrice', pricing.suggestedSalePrice)}
                 />
-                <Field label="Seçilen satış fiyatı"><MoneyInput value={form.salePrice} onChange={(value) => update('salePrice', value)} /><div className="mt-1 text-xs font-semibold text-slate-500">Yukarıdaki önerilerden birini seçebilir veya elle girebilirsin; pazaryerlerine bu fiyat gider.</div></Field>
+                <Field label="Seçilen satış fiyatı"><MoneyInput value={form.salePrice} onChange={(value) => update('salePrice', value)} /><div className="mt-1 text-xs font-semibold text-slate-500">Yukarıdaki önerilerden birini seçebilir veya elle girebilirsin; pazaryerlerine bu fiyat gider.</div>
+                  <div className="mt-1 text-xs font-bold">
+                    {!hasStockRecipe ? (
+                      <span className="text-amber-700">Stok bileşeni seçilmedi — fiyat maliyetten hesaplanamıyor.</span>
+                    ) : salePriceManual ? (
+                      <span className="text-slate-600">Fiyat elle seçildi. <button type="button" className="underline text-emerald-700" onClick={() => setSalePriceManual(false)}>Maliyetten otomatik hesapla</button></span>
+                    ) : (
+                      <span className="text-emerald-700">Fiyat maliyetten otomatik hesaplanıyor (e-ticaret önerisi).</span>
+                    )}
+                  </div></Field>
                 {ownerMode ? (
                   <details className="rounded-md border border-line bg-slate-50 p-4">
                     <summary className="cursor-pointer text-sm font-black text-ink">Owner kâr ve kanal fiyat analizi</summary>
@@ -2968,7 +2995,7 @@ export default function ProductsPage() {
             )}
 
             <div className="mt-6 flex flex-wrap justify-between gap-2 border-t border-line pt-4">
-              <button type="button" className="btn btn-secondary" onClick={() => { setForm(emptyForm); setCostDetail(null); setStep(0); }}><PackagePlus size={16} /> Yeni Ürün</button>
+              <button type="button" className="btn btn-secondary" onClick={() => { setForm(emptyForm); setSalePriceManual(false); setCostDetail(null); setStep(0); }}><PackagePlus size={16} /> Yeni Ürün</button>
               <div className="flex gap-2">
                 <button type="button" className="hidden" onClick={goToPreviousStep}>Geri</button>
                 <button
