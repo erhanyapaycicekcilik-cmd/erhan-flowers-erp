@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { GoogleGenAI } from '@google/genai';
 import { PrismaService } from '../prisma/prisma.service';
 import { CredentialVaultService } from '../integrations/services/credential-vault.service';
+import { resolveGeminiModel } from '../common/gemini-model';
 
 const PLATFORM = 'INSTAGRAM';
 const GRAPH_API_BASE = 'https://graph.facebook.com/v19.0';
@@ -157,7 +158,7 @@ export class InstagramService implements OnModuleInit, OnModuleDestroy {
     if (!apiKey) {
       return { summary: 'Gemini API anahtarı tanımlı değil, otomatik özet üretilemedi.', suggestions: [] as string[] };
     }
-    const model = this.config.get<string>('GEMINI_MODEL')?.trim() || 'gemini-2.0-flash';
+    const model = resolveGeminiModel(this.config.get<string>('GEMINI_MODEL'));
     try {
       const ai = new GoogleGenAI({ apiKey });
       const response = await ai.models.generateContent({

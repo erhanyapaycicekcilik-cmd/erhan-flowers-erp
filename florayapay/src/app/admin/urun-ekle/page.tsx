@@ -105,6 +105,17 @@ export default function AdminAddProductPage() {
           </div>
         </div>
 
+        {/* Video */}
+        <div className="bg-white rounded-2xl border border-[#E0DDD4] p-6 space-y-4">
+          <h2 className="font-semibold text-[#0D1510] text-sm uppercase tracking-wider">Video</h2>
+          <Field
+            label="Video URL (YouTube / TikTok / MP4)"
+            name="videoUrl"
+            placeholder="https://www.youtube.com/watch?v=..."
+          />
+          <p className="text-xs text-[#8C8A82] -mt-2">Ürün sayfasında otomatik oynar ve tüm platformlara gönderilir.</p>
+        </div>
+
         {error && (
           <div className="bg-red-50 text-red-600 px-4 py-3 rounded-xl text-sm">{error}</div>
         )}

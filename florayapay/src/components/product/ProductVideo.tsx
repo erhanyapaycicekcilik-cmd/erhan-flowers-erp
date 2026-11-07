@@ -1,14 +1,17 @@
 'use client'
 
+import { useEffect, useRef } from 'react'
+
 interface Props {
   videoUrl: string
   title?: string
+  autoplay?: boolean
 }
 
 function getEmbedUrl(url: string): { type: 'youtube' | 'tiktok' | 'direct'; src: string } | null {
   // YouTube
   const yt = url.match(/(?:youtube\.com\/(?:watch\?v=|shorts\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/)
-  if (yt) return { type: 'youtube', src: `https://www.youtube.com/embed/${yt[1]}?autoplay=0&rel=0` }
+  if (yt) return { type: 'youtube', src: `https://www.youtube.com/embed/${yt[1]}?autoplay=1&mute=1&rel=0&playsinline=1` }
 
   // TikTok
   const tt = url.match(/tiktok\.com\/@[^/]+\/video\/(\d+)/)
@@ -20,14 +23,23 @@ function getEmbedUrl(url: string): { type: 'youtube' | 'tiktok' | 'direct'; src:
   return null
 }
 
-export function ProductVideo({ videoUrl, title }: Props) {
+export function ProductVideo({ videoUrl, title, autoplay = true }: Props) {
+  const videoRef = useRef<HTMLVideoElement>(null)
   const embed = getEmbedUrl(videoUrl)
   if (!embed) return null
 
   if (embed.type === 'direct') {
     return (
       <div className="rounded-2xl overflow-hidden bg-black aspect-video">
-        <video src={embed.src} controls playsInline className="w-full h-full object-contain" />
+        <video
+          ref={videoRef}
+          src={embed.src}
+          controls
+          playsInline
+          muted={autoplay}
+          autoPlay={autoplay}
+          className="w-full h-full object-contain"
+        />
       </div>
     )
   }

@@ -13,6 +13,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ProductionCostsService } from '../production-costs/production-costs.service';
 import { IntegrationCenterService } from '../integrations/services/integration-center.service';
 import { TrendyolAdapter } from '../integrations/adapters/trendyol.adapter';
+import { resolveGeminiModel } from '../common/gemini-model';
 
 type EntryPayload = {
   variantId?: unknown;
@@ -1393,7 +1394,7 @@ Açıklama: "${description}"
 - Her öneri yeni satırda, sadece ürün adı, başka açıklama yok
 
 Sadece 3 satır ürün adı yaz, başka hiçbir şey yazma.`;
-      const resp = await ai.models.generateContent({ model: 'gemini-2.0-flash', contents: [{ role: 'user', parts: [{ text: prompt }] }] });
+      const resp = await ai.models.generateContent({ model: resolveGeminiModel(this.config.get<string>('GEMINI_MODEL')), contents: [{ role: 'user', parts: [{ text: prompt }] }] });
       const lines = (resp.text ?? '').split('\n').map(s => s.replace(/^\d+[\.\)]\s*/, '').trim()).filter(Boolean).slice(0, 3);
       return { suggestions: lines };
     } catch { return { suggestions: [] }; }

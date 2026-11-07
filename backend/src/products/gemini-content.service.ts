@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { GoogleGenAI } from '@google/genai';
+import { geminiModelCandidates, resolveGeminiModel } from '../common/gemini-model';
 
 type GeminiContentPayload = {
   productName?: string;
@@ -74,10 +75,9 @@ export class GeminiContentService {
     throw new ServiceUnavailableException('Gemini içerik üretimi tamamlanamadı. Backend loglarında detaylı Gemini hata kaydı oluşturuldu.');
   }
 
-  /** Ayarlı model kapatılmış/erişilemez olsa bile güncel modellerle tekrar dene (gemini-2.0-flash kullanımdan kalktı). */
+  /** Ayarlı model kapatılmış/erişilemez olsa bile güncel modellerle tekrar dene. */
   private candidateModels() {
-    const configured = this.config.get<string>('GEMINI_MODEL')?.trim();
-    return [...new Set([configured, 'gemini-2.5-flash', 'gemini-2.5-flash-lite'].filter((model): model is string => Boolean(model)))];
+    return geminiModelCandidates(this.config.get<string>('GEMINI_MODEL'));
   }
 
   async generateReferenceSearch(payload: unknown) {
@@ -88,7 +88,7 @@ export class GeminiContentService {
       return this.referenceSearchResult(fallbackQuery, 'Gemini API anahtarı tanımlı değil; sistem kendi arama kelimesini hazırladı.');
     }
 
-    const model = this.config.get<string>('GEMINI_MODEL')?.trim() || 'gemini-2.0-flash';
+    const model = resolveGeminiModel(this.config.get<string>('GEMINI_MODEL'));
     try {
       const ai = new GoogleGenAI({ apiKey });
       const response = await ai.models.generateContent({

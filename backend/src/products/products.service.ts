@@ -427,12 +427,13 @@ export class ProductsService {
     } else if (barcode || modelCode) {
       const dbProduct = await this.prisma.product.findFirst({
         where: barcode ? { barcode } : { modelCode: modelCode! },
-        select: { productName: true, imageUrls: true, brand: true },
+        select: { productName: true, imageUrls: true, brand: true, videoUrl: true },
       });
       if (dbProduct) {
         productName = dbProduct.productName;
         images = dbProduct.imageUrls;
         brand = dbProduct.brand;
+        videoUrl = dbProduct.videoUrl ?? undefined;
       }
     }
 
