@@ -98,11 +98,16 @@ export default async function ProductDetailPage({ params }: PageProps) {
 
         <div className="max-w-screen-2xl mx-auto px-4 py-8 lg:py-12">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-16">
-            {/* Sol — Görsel galeri */}
-            <ProductImageGallery
-              images={images.map(getImageUrl)}
-              productName={product.name}
-            />
+            {/* Sol — Görsel galeri + video */}
+            <div className="space-y-4">
+              <ProductImageGallery
+                images={images.map(getImageUrl)}
+                productName={product.name}
+              />
+              {product.videoUrl && (
+                <ProductVideo videoUrl={product.videoUrl} title={product.name} autoplay={true} />
+              )}
+            </div>
 
             {/* Sağ — Ürün bilgisi */}
             <div className="flex flex-col">
