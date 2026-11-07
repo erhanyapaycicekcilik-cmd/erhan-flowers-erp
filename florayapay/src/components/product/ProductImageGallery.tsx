@@ -43,7 +43,7 @@ export function ProductImageGallery({ images, productName }: Props) {
             alt={`${productName} — görsel ${active + 1}`}
             fill
             sizes="(max-width: 768px) 100vw, (max-width: 1024px) 60vw, 50vw"
-            className="object-contain"
+            className="object-cover"
             priority
             quality={60}
           />
@@ -157,7 +157,7 @@ export function ProductImageGallery({ images, productName }: Props) {
               alt={`${productName} — tam görsel ${active + 1}`}
               fill
               sizes="100vw"
-              className="object-contain"
+              className="object-cover"
             />
           </div>
 
