@@ -4941,17 +4941,14 @@ function findCategoryIdForStock(stockCard: StockCard, categories: Category[], pr
   const exact = categories.find((category) => normalizeSearchText(category.name) === stockCategory);
   if (exact) return exact.id;
 
-  const contains = categories.find((category) => {
-    const categoryText = normalizeSearchText(category.name);
-    return categoryText && (stockText.includes(categoryText) || categoryText.split(/[^a-z0-9]+/).some((token) => token.length >= 4 && stockText.includes(token)));
-  });
+  const contains = findCategoryByDistinctiveName(stockText, categories);
   if (contains) return contains.id;
 
   if (/demet|buket|cicek|guller|gul|lavanta|limon/.test(stockText)) {
-    return categories.find((category) => /cicek|buket/.test(normalizeSearchText(category.name)))?.id ?? null;
+    return findGenericCategory(categories, /cicek|buket/)?.id ?? null;
   }
   if (/agac|ficus|bambu|areka|palmiye|yapay/.test(stockText)) {
-    return categories.find((category) => /agac|bambu/.test(normalizeSearchText(category.name)))?.id ?? null;
+    return findGenericCategory(categories, /agac|bambu/)?.id ?? null;
   }
   if (/saksi|pot|dekor/.test(stockText)) {
     return categories.find((category) => /saksi|dekor/.test(normalizeSearchText(category.name)))?.id ?? null;
@@ -4959,18 +4956,44 @@ function findCategoryIdForStock(stockCard: StockCard, categories: Category[], pr
   return null;
 }
 
+// Kategori adındaki genel kelimeler (ağaç, çiçek, yapay...) tek başına eşleşme sebebi olamaz.
+// Aksi halde "Muz Ağacı" ürünü "ağacı" kelimesi yüzünden "Zeytin Ağacı" kategorisine düşüyordu.
+const GENERIC_CATEGORY_TOKENS = new Set([
+  'yapay', 'agac', 'agaci', 'agaclar', 'agaclari', 'cicek', 'cicegi', 'cicekler', 'cicekleri', 'bitki', 'bitkisi', 'bitkiler', 'bitkileri',
+  'saksi', 'saksida', 'saksili', 'saksilar', 'plastik', 'dekoratif', 'dekor', 'buyuk', 'kucuk', 'orta', 'boy', 'yaprak', 'yaprakli', 'dal', 'dalli',
+  'model', 'urun', 'urunler', 'hazir', 'kuru', 'dogal', 'ithal', 've', 'ile',
+]);
+
+function distinctiveCategoryTokens(categoryName: string) {
+  return normalizeSearchText(categoryName)
+    .split(/[^a-z0-9]+/)
+    .filter((token) => token.length >= 3 && !GENERIC_CATEGORY_TOKENS.has(token));
+}
+
+function findCategoryByDistinctiveName(normalizedText: string, categories: Category[]) {
+  const words = new Set(normalizedText.split(/[^a-z0-9]+/).filter(Boolean));
+  return categories.find((category) => {
+    const categoryText = normalizeSearchText(category.name);
+    if (!categoryText) return false;
+    if (normalizedText.includes(categoryText)) return true;
+    return distinctiveCategoryTokens(category.name).some((token) => words.has(token) || (token.length >= 5 && normalizedText.includes(token)));
+  });
+}
+
+function findGenericCategory(categories: Category[], pattern: RegExp) {
+  // Belirli bir türe ait kategori (ör. Zeytin Ağacı) yerine genel kategoriyi (ör. Yapay Ağaçlar) tercih et.
+  return categories.find((category) => pattern.test(normalizeSearchText(category.name)) && distinctiveCategoryTokens(category.name).length === 0) ?? null;
+}
+
 function findCategoryIdForProductName(productName: string, categories: Category[]) {
   const text = normalizeSearchText(productName);
-  const direct = categories.find((category) => {
-    const categoryText = normalizeSearchText(category.name);
-    return categoryText && (text.includes(categoryText) || categoryText.split(/[^a-z0-9]+/).some((token) => token.length >= 4 && text.includes(token)));
-  });
+  const direct = findCategoryByDistinctiveName(text, categories);
   if (direct) return direct.id;
   if (/demet|buket|cicek|guller|gul|lavanta|limon/.test(text)) {
-    return categories.find((category) => /cicek|buket/.test(normalizeSearchText(category.name)))?.id ?? null;
+    return findGenericCategory(categories, /cicek|buket/)?.id ?? null;
   }
   if (/agac|ficus|bambu|areka|palmiye|yapay/.test(text)) {
-    return categories.find((category) => /agac|bambu/.test(normalizeSearchText(category.name)))?.id ?? null;
+    return findGenericCategory(categories, /agac|bambu/)?.id ?? null;
   }
   if (/saksi|pot|dekor/.test(text)) {
     return categories.find((category) => /saksi|dekor/.test(normalizeSearchText(category.name)))?.id ?? null;
@@ -4991,9 +5014,20 @@ function buildSeoProductName(productName: string, stockCard: StockCard | null, c
     normalizeSearchText(sourceName).includes('erhan flowers') ? '' : 'Erhan Flowers',
     sourceName,
     size && !normalizeSearchText(sourceName).includes(normalizeSearchText(size)) ? size : '',
-    categoryName && !normalizeSearchText(sourceName).includes(normalizeSearchText(categoryName)) ? categoryName : '',
+    categoryName && shouldAppendCategoryToName(sourceName, categoryName) ? categoryName : '',
   ].filter(Boolean);
   return titleCaseTr(dedupeSeoWords(parts.join(' ').replace(/\s+/g, ' ').trim()));
+}
+
+function shouldAppendCategoryToName(sourceName: string, categoryName: string) {
+  const source = normalizeSearchText(sourceName);
+  const category = normalizeSearchText(categoryName);
+  if (!category || source.includes(category)) return false;
+  // Ürün adı zaten bir tür belirtiyorsa (ağaç/çiçek/bitki...) farklı bir tür adı eklenmez:
+  // "Muz Ağacı" adına "Zeytin Ağacı" eklemek ürünü yanlış tanıtır.
+  const sourceWords = source.split(/[^a-z0-9]+/).filter(Boolean);
+  const categoryStems = category.split(/[^a-z0-9]+/).filter((token) => token.length >= 3).map((token) => token.slice(0, 4));
+  return !categoryStems.some((stem) => sourceWords.some((word) => word.startsWith(stem)));
 }
 
 function buildLocalSeoContent(data: { productName: string; productHeight?: string; potType?: string; potSize?: string; fillerMaterial?: string }): GeminiSeoResult {
