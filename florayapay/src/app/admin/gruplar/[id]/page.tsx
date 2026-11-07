@@ -168,6 +168,14 @@ export default function GroupEditPage() {
                 className="w-full px-3 py-2 rounded-lg border border-[#E0DDD4] text-sm focus:outline-none focus:ring-2 focus:ring-[#5C7A62] resize-none" />
             </div>
 
+            <div>
+              <label className="block text-xs text-[#8C8A82] mb-1">Video URL (YouTube / TikTok / MP4)</label>
+              <input defaultValue={(group as any).videoUrl ?? ''}
+                onBlur={e => handleSaveGroup({ videoUrl: e.target.value || null } as any)}
+                placeholder="https://youtube.com/watch?v=..."
+                className="w-full px-3 py-2 rounded-lg border border-[#E0DDD4] text-sm focus:outline-none focus:ring-2 focus:ring-[#5C7A62]" />
+            </div>
+
             <div className="flex items-center justify-between pt-1">
               <span className="text-sm text-[#5C5C52]">Aktif</span>
               <button onClick={() => handleSaveGroup({ isActive: !group.isActive })}

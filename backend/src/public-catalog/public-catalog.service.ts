@@ -15,6 +15,7 @@ const SAFE_SELECT = {
   listPrice: true,    // Liste / tavsiye edilen fiyat (üstü çizili gösterim için)
   marketPrice: true,  // Pazar yeri referans fiyatı
   imageUrls: true,
+  videoUrl: true,
   brand: true,
   description: true,
   colorVariant: true,
@@ -392,6 +393,13 @@ export class PublicCatalogService {
     return product ? this.toPublicProduct(product) : null;
   }
 
+  async setVideo(productId: number, videoUrl: string | null): Promise<{ ok: boolean }> {
+    if (productId > 0) {
+      await this.prisma.product.update({ where: { id: productId }, data: { videoUrl } });
+    }
+    return { ok: true };
+  }
+
   async setCategory(productId: number, category: string, subCategory: string | null): Promise<{ ok: boolean; updated: string }> {
     if (productId > 0) {
       // Product tablosu
@@ -457,6 +465,7 @@ export class PublicCatalogService {
       inStock: v.stockQuantity > 0,
       images,
       mainImage: images[0] ?? null,
+      videoUrl: null as string | null,
     };
   }
 
@@ -640,6 +649,7 @@ export class PublicCatalogService {
     listPrice: number;
     marketPrice: number;
     imageUrls: unknown;
+    videoUrl?: string | null;
     brand: string;
     description: string | null;
     colorVariant: string | null;
@@ -675,6 +685,7 @@ export class PublicCatalogService {
       inStock: product.stockQuantity > 0,
       images,
       mainImage: images[0] ?? null,
+      videoUrl: product.videoUrl ?? null,
     };
   }
 
