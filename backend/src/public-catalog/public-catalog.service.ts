@@ -393,6 +393,48 @@ export class PublicCatalogService {
     return product ? this.toPublicProduct(product) : null;
   }
 
+  async createProduct(data: {
+    name: string;
+    modelCode?: string | null;
+    sitePrice: number;
+    originalPrice?: number | null;
+    brand?: string | null;
+    description?: string | null;
+    origin?: string | null;
+    vatRate?: number | null;
+    warrantyMonths?: number | null;
+    inStock?: boolean;
+    images?: string[];
+    videoUrl?: string | null;
+  }) {
+    const modelCode = data.modelCode?.trim() || `URUN-${Date.now()}`;
+    const slug = `${slugify(data.name)}-${slugify(modelCode)}`;
+    const product = await this.prisma.product.create({
+      data: {
+        productName: data.name,
+        modelCode,
+        slug,
+        sitePrice: data.sitePrice,
+        listPrice: data.originalPrice ?? 0,
+        marketPrice: data.originalPrice ?? 0,
+        brand: data.brand ?? 'Erhan Flowers',
+        description: data.description ?? null,
+        origin: data.origin ?? 'ÇİN',
+        vatRate: data.vatRate ?? 10,
+        warrantyMonths: data.warrantyMonths ?? 0,
+        status: data.inStock === false ? 'PASSIVE' : 'ACTIVE',
+        imageUrls: data.images ?? [],
+        videoUrl: data.videoUrl ?? null,
+        stockQuantity: data.inStock === false ? 0 : 1,
+        costPrice: 0,
+        desi: 1,
+        shippingCost: 5,
+        shopPrice: 0,
+      },
+    });
+    return { ok: true, id: product.id, slug: product.slug };
+  }
+
   async setVideo(productId: number, videoUrl: string | null): Promise<{ ok: boolean }> {
     if (productId > 0) {
       await this.prisma.product.update({ where: { id: productId }, data: { videoUrl } });
