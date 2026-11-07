@@ -17,7 +17,7 @@ export async function createGroup(data: {
 }
 
 export async function updateGroup(id: number, data: {
-  name?: string; description?: string | null; mainImage?: string | null;
+  name?: string; description?: string | null; mainImage?: string | null; videoUrl?: string | null;
   category?: string | null; subCategory?: string | null; isActive?: boolean
 }) {
   const res = await fetch(`${API_URL}/public/catalog/groups/admin/${id}?secret=${secret()}`, {
@@ -40,7 +40,7 @@ export async function deleteGroup(id: number) {
 }
 
 export async function addVariant(groupId: number, data: {
-  sizeLabel?: string; potLabel?: string; potImage?: string;
+  sizeLabel?: string | null; potLabel?: string | null; potImage?: string | null;
   productId?: number | null; trendyolVariantId?: number | null; priceOverride?: number | null; sortOrder?: number
 }) {
   const res = await fetch(`${API_URL}/public/catalog/groups/admin/${groupId}/variants?secret=${secret()}`, {
