@@ -12,6 +12,7 @@ import { PazaramaAdapter } from '../adapters/pazarama.adapter';
 import { IdefixAdapter } from '../adapters/idefix.adapter';
 import { MockMarketplaceAdapter } from '../adapters/mock/mock-marketplace.adapter';
 import { CredentialVaultService } from './credential-vault.service';
+import { resolveGeminiModel } from '../../common/gemini-model';
 
 type AccountPayload = {
   companyId?: unknown;
@@ -305,7 +306,7 @@ export class IntegrationCenterService {
       throw new ServiceUnavailableException('Gorselden okuma icin GEMINI_API_KEY tanimli degil.');
     }
 
-    const model = this.config.get<string>('GEMINI_VISION_MODEL')?.trim() || this.config.get<string>('GEMINI_MODEL')?.trim() || 'gemini-2.0-flash';
+    const model = this.config.get<string>('GEMINI_VISION_MODEL')?.trim() || resolveGeminiModel(this.config.get<string>('GEMINI_MODEL'));
     const ai = new GoogleGenAI({ apiKey });
     const response = await ai.models.generateContent({
       model,

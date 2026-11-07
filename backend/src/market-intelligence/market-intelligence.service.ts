@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { GoogleGenAI } from '@google/genai';
 import { PrismaService } from '../prisma/prisma.service';
 import { TrendyolScraperService, ScrapedCompetitorProduct } from './trendyol-scraper.service';
+import { resolveGeminiModel } from '../common/gemini-model';
 
 const DEFAULT_KEYWORDS: Record<string, string> = {
   'Ağaçlar': 'yapay ağaç',
@@ -204,7 +205,7 @@ export class MarketIntelligenceService implements OnModuleInit, OnModuleDestroy 
     if (!apiKey) {
       return this.fallbackInsight(comparisons, 'Gemini API anahtarı tanımlı değil, otomatik özet üretilemedi.');
     }
-    const model = this.config.get<string>('GEMINI_MODEL')?.trim() || 'gemini-2.0-flash';
+    const model = resolveGeminiModel(this.config.get<string>('GEMINI_MODEL'));
     try {
       const ai = new GoogleGenAI({ apiKey });
       const response = await ai.models.generateContent({

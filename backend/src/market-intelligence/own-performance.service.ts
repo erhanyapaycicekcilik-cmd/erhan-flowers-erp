@@ -4,6 +4,7 @@ import { GoogleGenAI } from '@google/genai';
 import * as XLSX from 'xlsx';
 import { PrismaService } from '../prisma/prisma.service';
 import { TrendyolScraperService } from './trendyol-scraper.service';
+import { resolveGeminiModel } from '../common/gemini-model';
 
 @Injectable()
 export class OwnPerformanceService {
@@ -115,7 +116,7 @@ export class OwnPerformanceService {
   private async generateStrategyInsight(data: { totalActive: number; statsCount: number; deadZone: number; topFavorited: Awaited<ReturnType<OwnPerformanceService['getTopFavorited']>>; topSellers: Awaited<ReturnType<OwnPerformanceService['getTopSellers']>> }) {
     const apiKey = this.config.get<string>('GEMINI_API_KEY')?.trim();
     if (!apiKey) return { summary: 'Gemini API anahtarı tanımlı değil.', recommendation: 'düzenle' as const, reasons: [] as string[] };
-    const model = this.config.get<string>('GEMINI_MODEL')?.trim() || 'gemini-2.0-flash';
+    const model = resolveGeminiModel(this.config.get<string>('GEMINI_MODEL'));
     try {
       const ai = new GoogleGenAI({ apiKey });
       const response = await ai.models.generateContent({

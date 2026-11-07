@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { GoogleGenAI } from '@google/genai';
 import { MarketIntelligenceService } from './market-intelligence.service';
 import { OwnPerformanceService } from './own-performance.service';
+import { resolveGeminiModel } from '../common/gemini-model';
 
 export type ChatMessage = { role: 'user' | 'assistant'; content: string };
 
@@ -22,7 +23,7 @@ export class GeminiChatService {
       throw new ServiceUnavailableException('Gemini API anahtarı tanımlı değil. GEMINI_API_KEY değerini .env dosyasına ekleyin.');
     }
 
-    const model = this.config.get<string>('GEMINI_MODEL')?.trim() || 'gemini-2.0-flash';
+    const model = resolveGeminiModel(this.config.get<string>('GEMINI_MODEL'));
     const systemInstruction = await this.buildSystemPrompt();
 
     try {
