@@ -241,8 +241,8 @@ export class TrendyolAdapter extends BaseIntegrationAdapter {
       message: batchRequestId
         ? `Trendyol urun, stok ve fiyat gonderimi kuyruga alindi (batchRequestId: ${batchRequestId}${listingUploadId ? `, listingUploadId: ${listingUploadId}` : ''}). Trendyol tarafinda asenkron olarak islenir; hemen goruntulenmeyebilir.`
         : listingUploadId
-          ? `Trendyol stok ve fiyat guncelleme kuyruga alindi (urun zaten mevcut, listingUploadId: ${listingUploadId}).`
-          : 'Trendyol stok ve fiyat guncelleme tamamlandi (urun zaten mevcuttu).',
+          ? `Bu barkod Trendyol'da zaten kayitli; yeni urun acilmadi, sadece fiyat ve stok guncellendi (listingUploadId: ${listingUploadId}). Ad/gorsel degisikligi icin urunun Trendyol contentId'si gerekir.`
+          : "Bu barkod Trendyol'da zaten kayitli; yeni urun acilmadi, fiyat ve stok guncellendi.",
       batchRequestId,
       listingUploadId,
     };
@@ -283,8 +283,13 @@ export class TrendyolAdapter extends BaseIntegrationAdapter {
     if (!batchRequestId) return { ok: false, status: 'FAILED', message: 'batchRequestId zorunludur.' };
 
     const supplierId = this.env('SUPPLIER_ID');
-    const url = `https://apigw.trendyol.com/integration/product/sellers/${supplierId}/v2/products/batch-requests/${batchRequestId}`;
-    const response = await fetch(url, { headers: this.productHeaders(supplierId) });
+    // Ürün oluşturma (v2) batch'leri v2 yolunda, fiyat/stok (price-and-inventory) batch'leri v1 yolunda sorgulanır.
+    // Hangi tür olduğunu bilmediğimiz için önce v2, 404 gelirse v1 denenir.
+    const base = `https://apigw.trendyol.com/integration/product/sellers/${supplierId}`;
+    let response = await fetch(`${base}/v2/products/batch-requests/${batchRequestId}`, { headers: this.productHeaders(supplierId) });
+    if (response.status === 404) {
+      response = await fetch(`${base}/products/batch-requests/${batchRequestId}`, { headers: this.productHeaders(supplierId) });
+    }
     if (!response.ok) {
       return {
         ok: false,
