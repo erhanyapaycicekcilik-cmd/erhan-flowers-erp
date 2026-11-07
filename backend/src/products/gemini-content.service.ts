@@ -52,23 +52,32 @@ export class GeminiContentService {
       throw new ServiceUnavailableException('Gemini API anahtarı tanımlı değil. GEMINI_API_KEY değerini .env dosyasına ekleyin.');
     }
 
-    const model = this.config.get<string>('GEMINI_MODEL')?.trim() || 'gemini-2.0-flash';
-
-    try {
-      const ai = new GoogleGenAI({ apiKey });
-      const response = await ai.models.generateContent({
-        model,
-        contents: this.prompt(data),
-        config: {
-          responseMimeType: 'application/json',
-        },
-      });
-
-      return this.parseResponse(response.text ?? '', data.productName);
-    } catch (error) {
-      this.logger.error(`Gemini içerik üretimi başarısız. model=${model} apiKeyLength=${apiKey.length}`, this.errorDetails(error));
-      throw new ServiceUnavailableException('Gemini içerik üretimi tamamlanamadı. Backend loglarında detaylı Gemini hata kaydı oluşturuldu.');
+    const models = this.candidateModels();
+    const ai = new GoogleGenAI({ apiKey });
+    let lastError: unknown;
+    for (const model of models) {
+      try {
+        const response = await ai.models.generateContent({
+          model,
+          contents: this.prompt(data),
+          config: {
+            responseMimeType: 'application/json',
+          },
+        });
+        return this.parseResponse(response.text ?? '', data.productName);
+      } catch (error) {
+        lastError = error;
+        this.logger.warn(`Gemini içerik üretimi başarısız, sıradaki model denenecek. model=${model} apiKeyLength=${apiKey.length}`, this.errorDetails(error));
+      }
     }
+    this.logger.error(`Gemini içerik üretimi tüm modellerde başarısız. models=${models.join(',')}`, this.errorDetails(lastError));
+    throw new ServiceUnavailableException('Gemini içerik üretimi tamamlanamadı. Backend loglarında detaylı Gemini hata kaydı oluşturuldu.');
+  }
+
+  /** Ayarlı model kapatılmış/erişilemez olsa bile güncel modellerle tekrar dene (gemini-2.0-flash kullanımdan kalktı). */
+  private candidateModels() {
+    const configured = this.config.get<string>('GEMINI_MODEL')?.trim();
+    return [...new Set([configured, 'gemini-2.5-flash', 'gemini-2.5-flash-lite'].filter((model): model is string => Boolean(model)))];
   }
 
   async generateReferenceSearch(payload: unknown) {
@@ -131,6 +140,7 @@ export class GeminiContentService {
       'Yalnızca geçerli JSON döndür. Markdown, açıklama veya kod bloğu kullanma.',
       'JSON şeması: {"productName":"...","description":"...","hashtags":["#etiket1","#etiket2"]}',
       'productName: SEO uyumlu, doğal, aranabilir ve Trendyol/N11/HB pazaryeri formatına uygun olsun.',
+      'productName kuralı: Verilen ürün adındaki bitki/ağaç/çiçek türünü (ör. Muz Ağacı, Benjamin, Orkide) ASLA değiştirme ve başka bir tür adı (ör. Zeytin Ağacı) ekleme. Ölçü, yaprak sayısı ve saksı bilgisini koru.',
       'description: Zengin, satış odaklı, soruları yanıtlayan düz metin. Teknik detayları doğal şekilde yaz.',
       'Açıklamada saksı ölçüsü, boy, gövde/yaprak sayısı, montaj bilgisi ve aksesuar detaylarını doğal dilde kullan.',
       'hashtags: 8-12 adet Türkçe Instagram/TikTok hashtag listesi. # işareti ile başlasın.',
@@ -211,7 +221,7 @@ export class GeminiContentService {
     try {
       const parsed = JSON.parse(cleaned) as Partial<GeminiContentResult & { hashtags?: unknown[] }>;
       return {
-        productName: this.text(parsed.productName) ?? fallbackName,
+        productName: this.keepsPlantType(fallbackName, this.text(parsed.productName)) ?? fallbackName,
         description: this.ensureCareInstructions(this.text(parsed.description) ?? ''),
         hashtags: Array.isArray(parsed.hashtags) ? parsed.hashtags.map(String) : [],
       };
@@ -222,6 +232,17 @@ export class GeminiContentService {
         hashtags: [],
       };
     }
+  }
+
+  /** Gemini adı farklı bir türe çevirdiyse (Muz Ağacı → Zeytin Ağacı) üretilen adı kullanma. */
+  private keepsPlantType(sourceName: string, generatedName?: string) {
+    if (!generatedName) return undefined;
+    const normalize = (value: string) => value.toLocaleLowerCase('tr-TR');
+    const source = normalize(sourceName);
+    const generated = normalize(generatedName);
+    const typeWords = [...source.matchAll(/([a-zçğıöşü]{3,})\s+(?:ağacı|ağaç|çiçeği|bitkisi|yaprağı)/g)].map((match) => match[1]);
+    if (typeWords.some((word) => !generated.includes(word))) return undefined;
+    return generatedName;
   }
 
   private ensureCareInstructions(description: string) {
