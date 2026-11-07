@@ -2591,3 +2591,32 @@ model ProductGroupVariant {
 
   @@map("product_group_variants")
 }
+
+// ─── e-Dönüşüm (e-Arşiv / e-Fatura) ─────────────────────────────────────────
+// Dükkan satışları ve web siparişleri için kesilen/kesilmeye çalışılan faturalar.
+// sourceType: RETAIL_SALE | WEB_ORDER — status: PENDING | ISSUED | ERROR | CANCELLED
+// invoiceType: E_ARSIV | E_FATURA
+model EInvoice {
+  id            Int       @id @default(autoincrement())
+  provider      String    @default("TRENDYOL_EFATURAM")
+  sourceType    String    @map("source_type")
+  sourceId      Int       @map("source_id")
+  sourceNumber  String    @map("source_number")
+  customerName  String?   @map("customer_name")
+  amount        Decimal   @default(0) @db.Decimal(14, 2)
+  invoiceType   String    @default("E_ARSIV") @map("invoice_type")
+  status        String    @default("PENDING")
+  invoiceNumber String?   @map("invoice_number")
+  providerRef   String?   @map("provider_ref")
+  pdfUrl        String?   @map("pdf_url")
+  errorMessage  String?   @map("error_message") @db.Text
+  attempts      Int       @default(0)
+  issuedAt      DateTime? @map("issued_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  @@unique([sourceType, sourceId])
+  @@index([status])
+  @@index([createdAt(sort: Desc)])
+  @@map("e_invoices")
+}
