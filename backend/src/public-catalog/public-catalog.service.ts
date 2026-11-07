@@ -412,7 +412,7 @@ export class PublicCatalogService {
     // categoryId zorunlu — ilk kategoriyi default olarak kullan
     let defaultCategory = await this.prisma.category.findFirst({ orderBy: { id: 'asc' } });
     if (!defaultCategory) {
-      defaultCategory = await this.prisma.category.create({ data: { name: 'Genel', slug: 'genel' } });
+      defaultCategory = await this.prisma.category.create({ data: { name: 'Genel', codePrefix: 'GEN', startCode: 1, currentCode: 1 } });
     }
     const product = await this.prisma.product.create({
       data: {
