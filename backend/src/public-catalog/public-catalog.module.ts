@@ -7,6 +7,8 @@ import { PublicCatalogService } from './public-catalog.service';
 import { TrendyolProductSyncService } from './trendyol-product-sync.service';
 import { SiteSettingsModule } from '../site-settings/site-settings.module';
 import { CredentialVaultService } from '../integrations/services/credential-vault.service';
+import { ProductGroupsController } from './product-groups.controller';
+import { ProductGroupsService } from './product-groups.service';
 
 @Module({
   imports: [
@@ -15,8 +17,8 @@ import { CredentialVaultService } from '../integrations/services/credential-vaul
     JwtModule.register({ secret: process.env.JWT_SECRET || 'secret' }),
     SiteSettingsModule,
   ],
-  controllers: [PublicCatalogController],
-  providers: [PublicCatalogService, TrendyolProductSyncService, CredentialVaultService],
+  controllers: [PublicCatalogController, ProductGroupsController],
+  providers: [PublicCatalogService, TrendyolProductSyncService, CredentialVaultService, ProductGroupsService],
   exports: [TrendyolProductSyncService],
 })
 export class PublicCatalogModule {}

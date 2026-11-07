@@ -93,6 +93,46 @@ export async function getProductBySlug(slug: string): Promise<PublicProduct | nu
   }
 }
 
+export interface ProductGroupVariant {
+  id: number
+  sizeLabel: string | null
+  potLabel: string | null
+  potImage: string | null
+  price: number
+  images: string[]
+  productName: string
+  productId: number | null
+  trendyolVariantId: number | null
+}
+
+export interface ProductGroup {
+  id: number
+  name: string
+  slug: string
+  description: string | null
+  mainImage: string | null
+  category: string | null
+  subCategory: string | null
+  variants: ProductGroupVariant[]
+}
+
+export async function getProductGroup(slug: string): Promise<ProductGroup | null> {
+  try {
+    return await apiFetch<ProductGroup>(`/public/catalog/groups/${encodeURIComponent(slug)}`)
+  } catch {
+    return null
+  }
+}
+
+export async function getProductGroups(category?: string): Promise<ProductGroup[]> {
+  try {
+    const qs = category ? `?category=${encodeURIComponent(category)}` : ''
+    return await apiFetch<ProductGroup[]>(`/public/catalog/groups${qs}`)
+  } catch {
+    return []
+  }
+}
+
 export function getImageUrl(path: string | null): string {
   if (!path) return '/placeholder-product.svg'
   if (path.startsWith('http')) return path

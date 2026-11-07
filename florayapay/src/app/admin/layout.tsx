@@ -28,6 +28,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             <Link href="/admin/banner" className="px-3 py-1.5 rounded-lg text-sm hover:bg-white/10 transition-colors">
               Banner
             </Link>
+            <Link href="/admin/gruplar" className="px-3 py-1.5 rounded-lg text-sm hover:bg-white/10 transition-colors">
+              Gruplar
+            </Link>
             <Link href="/admin/siparisler" className="px-3 py-1.5 rounded-lg text-sm hover:bg-white/10 transition-colors">
               Siparişler
             </Link>
