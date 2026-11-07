@@ -409,12 +409,10 @@ export class PublicCatalogService {
     videoUrl?: string | null;
   }) {
     const modelCode = data.modelCode?.trim() || `URUN-${Date.now()}`;
-    const slug = `${slugify(data.name)}-${slugify(modelCode)}`;
     const product = await this.prisma.product.create({
       data: {
         productName: data.name,
         modelCode,
-        slug,
         sitePrice: data.sitePrice,
         listPrice: data.originalPrice ?? 0,
         marketPrice: data.originalPrice ?? 0,
@@ -433,7 +431,7 @@ export class PublicCatalogService {
         shopPrice: 0,
       },
     });
-    return { ok: true, id: product.id, slug: product.slug };
+    return { ok: true, id: product.id };
   }
 
   async setVideo(productId: number, videoUrl: string | null): Promise<{ ok: boolean }> {
