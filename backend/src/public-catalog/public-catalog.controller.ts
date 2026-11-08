@@ -168,21 +168,44 @@ export class PublicCatalogController {
       return s.includes('"') || s.includes(',') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s;
     };
 
-    const headers = ['id', 'title', 'description', 'availability', 'condition', 'price', 'link', 'image_link', 'brand', 'retailer_id'];
+    // ERP'ye yüklenen görseller "/uploads/..." gibi göreli kaydediliyor; Meta tam URL ister,
+    // göreli adresli ürünleri görsel indiremediği için reddeder.
+    const fileBase = (
+      process.env.PUBLIC_FILE_BASE_URL ||
+      process.env.PUBLIC_IMAGE_BASE_URL ||
+      process.env.BACKEND_PUBLIC_URL ||
+      'https://api.erhanflowers.com'
+    ).trim().replace(/\/+$/, '');
+    const absUrl = (u: string | null | undefined) => {
+      const s = String(u ?? '').trim();
+      if (!s) return '';
+      if (/^https?:\/\//i.test(s)) return s;
+      if (s.startsWith('//')) return `https:${s}`;
+      return `${fileBase}/${s.replace(/^\/+/, '')}`;
+    };
+
+    const headers = ['id', 'title', 'description', 'availability', 'condition', 'price', 'link', 'image_link', 'additional_image_link', 'brand', 'product_type', 'retailer_id'];
     const rows = (products as any[])
-      .filter((p) => p.mainImage && p.sitePrice > 0)
-      .map((p) => [
-        escapeCsv(p.id),
-        escapeCsv(p.name),
-        escapeCsv(p.description || p.name),
-        escapeCsv(p.inStock ? 'in stock' : 'out of stock'),
-        'new',
-        escapeCsv(`${Number(p.sitePrice).toFixed(2)} TRY`),
-        escapeCsv(`${siteUrl}/urun/${p.slug}`),
-        escapeCsv(p.mainImage),
-        escapeCsv(p.brand || 'Flora Yapay Çiçek'),
-        escapeCsv(p.modelCode || p.id),
-      ].join(','));
+      .filter((p) => absUrl(p.mainImage) && Number(p.sitePrice) > 0)
+      .map((p) => {
+        const images: string[] = (Array.isArray(p.images) ? p.images : []).map(absUrl).filter(Boolean);
+        const mainImage = absUrl(p.mainImage);
+        const extraImages = images.filter((u) => u !== mainImage).slice(0, 10);
+        return [
+          escapeCsv(p.id),
+          escapeCsv(String(p.name ?? '').slice(0, 200)),
+          escapeCsv(String(p.description || p.name || '').slice(0, 9999)),
+          escapeCsv(p.inStock ? 'in stock' : 'out of stock'),
+          'new',
+          escapeCsv(`${Number(p.sitePrice).toFixed(2)} TRY`),
+          escapeCsv(`${siteUrl}/urun/${p.slug}`),
+          escapeCsv(mainImage),
+          escapeCsv(extraImages.join(',')),
+          escapeCsv(p.brand || 'Erhan Flowers'),
+          escapeCsv(p.category || ''),
+          escapeCsv(p.modelCode || p.id),
+        ].join(',');
+      });
 
     const csv = [headers.join(','), ...rows].join('\n');
 
