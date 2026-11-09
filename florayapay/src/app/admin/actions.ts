@@ -8,6 +8,15 @@ const COOKIE_NAME = 'admin_auth'
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8101'
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3200'
 
+async function revalidateSite() {
+  const secret = process.env.REVALIDATE_SECRET || 'dev-secret-local'
+  await fetch(`${APP_URL}/api/revalidate?secret=${secret}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({}),
+  }).catch(() => null)
+}
+
 export async function adminLogin(form: FormData) {
   const password = form.get('password')?.toString() || ''
   if (password !== ADMIN_PASSWORD) {
@@ -27,15 +36,6 @@ export async function adminLogout() {
   const jar = await cookies()
   jar.delete(COOKIE_NAME)
   redirect('/admin/login')
-}
-
-async function revalidateSite() {
-  const secret = process.env.REVALIDATE_SECRET || 'dev-secret-local'
-  await fetch(`${APP_URL}/api/revalidate?secret=${secret}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({}),
-  }).catch(() => null)
 }
 
 export async function createProduct(form: FormData) {
@@ -66,10 +66,7 @@ export async function createProduct(form: FormData) {
     const text = await res.text()
     return { error: `Ürün eklenemedi: ${text}` }
   }
-
-  // Ürün eklendikten sonra site cache'ini temizle — ürün anında siteye yansısın
   await revalidateSite()
-
   return { ok: true }
 }
 
@@ -78,7 +75,6 @@ export async function deleteProduct(id: number) {
     method: 'DELETE',
   })
   if (!res.ok) return { error: 'Silinemedi' }
-  // Silindikten sonra da cache temizle
   await revalidateSite()
   return { ok: true }
 }
@@ -120,6 +116,29 @@ export async function updateProductCategory(
   }
 }
 
+/** Toplu fiyat ayarı (keyword + yüzde değişim) */
+export async function bulkPriceAdjust(params: {
+  search: string
+  changePercent: number
+  dryRun?: boolean
+}): Promise<{ error?: string; updated?: number; skipped?: number; preview?: Array<{ id: number; name: string; oldSitePrice: number; newSitePrice: number; oldMarketPrice: number; newMarketPrice: number }> }> {
+  try {
+    const secret = process.env.REVALIDATE_SECRET || 'dev-secret-local'
+    const res = await fetch(`${API_URL}/public/catalog/admin/bulk-price-adjust?secret=${secret}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params),
+      cache: 'no-store',
+    })
+    if (!res.ok) return { error: `Hata (${res.status})` }
+    const data = await res.json()
+    if (!params.dryRun) await revalidateSite()
+    return data
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : 'Bağlantı hatası' }
+  }
+}
+
 /** Trendyol'dan ürünleri çek ve siteyi revalidate et */
 export async function triggerTrendyolSync(): Promise<{ error?: string; data?: unknown }> {
   try {
@@ -135,7 +154,6 @@ export async function triggerTrendyolSync(): Promise<{ error?: string; data?: un
     }
 
     const data = await res.json()
-    await revalidateSite()
     return { data }
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'Bağlantı hatası' }

@@ -4,6 +4,7 @@ import { getProducts, getCategories, getImageUrl } from '@/lib/api/catalog'
 import { formatPrice } from '@/lib/utils/format'
 import { CategoryEditor } from '@/components/admin/CategoryEditor'
 import { VideoEditor } from '@/components/admin/VideoEditor'
+import { BulkPriceAdjust } from '@/components/admin/BulkPriceAdjust'
 
 interface PageProps {
   searchParams: { kategori?: string; q?: string; sayfa?: string }
@@ -31,6 +32,8 @@ export default async function AdminProductsPage({ searchParams }: PageProps) {
           + Ürün Ekle
         </Link>
       </div>
+
+      <BulkPriceAdjust />
 
       {/* Filtreler */}
       <div className="bg-white rounded-2xl border border-[#E0DDD4] p-4 mb-6 flex flex-wrap gap-3 items-center">
