@@ -6,6 +6,7 @@ import { redirect } from 'next/navigation'
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'erhan2024'
 const COOKIE_NAME = 'admin_auth'
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8101'
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3200'
 
 export async function adminLogin(form: FormData) {
   const password = form.get('password')?.toString() || ''
@@ -26,6 +27,15 @@ export async function adminLogout() {
   const jar = await cookies()
   jar.delete(COOKIE_NAME)
   redirect('/admin/login')
+}
+
+async function revalidateSite() {
+  const secret = process.env.REVALIDATE_SECRET || 'dev-secret-local'
+  await fetch(`${APP_URL}/api/revalidate?secret=${secret}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({}),
+  }).catch(() => null)
 }
 
 export async function createProduct(form: FormData) {
@@ -56,6 +66,10 @@ export async function createProduct(form: FormData) {
     const text = await res.text()
     return { error: `Ürün eklenemedi: ${text}` }
   }
+
+  // Ürün eklendikten sonra site cache'ini temizle — ürün anında siteye yansısın
+  await revalidateSite()
+
   return { ok: true }
 }
 
@@ -64,6 +78,8 @@ export async function deleteProduct(id: number) {
     method: 'DELETE',
   })
   if (!res.ok) return { error: 'Silinemedi' }
+  // Silindikten sonra da cache temizle
+  await revalidateSite()
   return { ok: true }
 }
 
@@ -107,7 +123,6 @@ export async function updateProductCategory(
 /** Trendyol'dan ürünleri çek ve siteyi revalidate et */
 export async function triggerTrendyolSync(): Promise<{ error?: string; data?: unknown }> {
   try {
-    // Backend'in internal sync endpoint'ini çağır (auth gerekmez çünkü internal)
     const secret = process.env.REVALIDATE_SECRET || 'dev-secret-local'
     const res = await fetch(`${API_URL}/public/catalog/admin/trendyol-sync?secret=${secret}`, {
       method: 'POST',
@@ -115,18 +130,12 @@ export async function triggerTrendyolSync(): Promise<{ error?: string; data?: un
     })
 
     if (!res.ok) {
-      // Eğer 401 gelirse, doğrudan TrendyolProductSyncService'i DB'ye bağlanarak çağıramayız
-      // O yüzden Next.js revalidate endpoint'ini çağırarak cache'i temizleriz
-      await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3200'}/api/revalidate?secret=${process.env.REVALIDATE_SECRET}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
-      }).catch(() => null)
-
+      await revalidateSite()
       return { error: `Backend yanıt vermedi (${res.status}). Sadece cache temizlendi.` }
     }
 
     const data = await res.json()
+    await revalidateSite()
     return { data }
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'Bağlantı hatası' }
