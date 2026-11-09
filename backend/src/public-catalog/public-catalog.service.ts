@@ -474,6 +474,61 @@ export class PublicCatalogService {
     }
   }
 
+  // Ürün adındaki anahtar kelimeye göre toplu fiyat güncelleme
+  // changePercent: +20 → %20 zam, -10 → %10 indirim
+  async bulkPriceAdjust(params: {
+    search: string;
+    changePercent: number;
+    dryRun?: boolean;
+  }): Promise<{ updated: number; skipped: number; preview: Array<{ id: number; name: string; oldSitePrice: number; newSitePrice: number; oldMarketPrice: number; newMarketPrice: number }> }> {
+    const term = params.search.trim();
+    if (!term) return { updated: 0, skipped: 0, preview: [] };
+
+    const multiplier = 1 + params.changePercent / 100;
+
+    const products = await this.prisma.product.findMany({
+      where: {
+        productName: { contains: term, mode: 'insensitive' },
+        status: 'ACTIVE',
+      },
+      select: { id: true, productName: true, sitePrice: true, marketPrice: true, listPrice: true },
+    });
+
+    const preview: Array<{ id: number; name: string; oldSitePrice: number; newSitePrice: number; oldMarketPrice: number; newMarketPrice: number }> = [];
+    let updated = 0;
+    let skipped = 0;
+
+    for (const p of products) {
+      const oldSitePrice = Number(p.sitePrice) || 0;
+      const oldMarketPrice = Number(p.marketPrice) || 0;
+
+      if (oldSitePrice <= 0 && oldMarketPrice <= 0) { skipped++; continue; }
+
+      const newSitePrice = oldSitePrice > 0 ? Math.round(oldSitePrice * multiplier) : 0;
+      const newMarketPrice = oldMarketPrice > 0 ? Math.round(oldMarketPrice * multiplier) : 0;
+      const newListPrice = Math.max(newSitePrice, newMarketPrice, Number(p.listPrice) || 0);
+
+      preview.push({ id: p.id, name: p.productName, oldSitePrice, newSitePrice, oldMarketPrice, newMarketPrice });
+
+      if (!params.dryRun) {
+        await this.prisma.product.update({
+          where: { id: p.id },
+          data: {
+            sitePrice: newSitePrice > 0 ? newSitePrice : undefined,
+            marketPrice: newMarketPrice > 0 ? newMarketPrice : undefined,
+            listPrice: newListPrice > 0 ? newListPrice : undefined,
+          },
+        });
+        updated++;
+      }
+    }
+
+    if (params.dryRun) skipped = products.length - preview.length;
+    else skipped = products.length - updated;
+
+    return { updated: params.dryRun ? 0 : updated, skipped, preview };
+  }
+
   private variantToPublicProduct(v: {
     id: number;
     productName: string;

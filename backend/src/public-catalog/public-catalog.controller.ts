@@ -91,7 +91,6 @@ export class PublicCatalogController {
   }
 
   // Admin: Ürün adına göre otomatik kategori ataması
-  // Bambu → Bambu, Sarmaşık → Sarmaşık, Ağaç → Yapay Ağaç Yeşil vb.
   @Post('admin/recategorize')
   recategorizeByName(@Query('secret') secret?: string) {
     const expected = process.env.REVALIDATE_SECRET || 'dev-secret-local';
@@ -107,8 +106,25 @@ export class PublicCatalogController {
     return this.catalog.bulkSyncSitePriceFromApprovedCosts();
   }
 
+  // Admin: Toplu fiyat güncelleme — ürün adındaki kelimeye göre zam/indirim
+  // dryRun: true → sadece önizleme, DB'ye yazmaz
+  @Post('admin/bulk-price-adjust')
+  async bulkPriceAdjust(
+    @Query('secret') secret: string,
+    @Body() body: { search: string; changePercent: number; dryRun?: boolean },
+  ) {
+    const expected = process.env.REVALIDATE_SECRET || 'dev-secret-local';
+    if (secret !== expected) return { error: 'Unauthorized' };
+    if (!body.search?.trim()) throw new BadRequestException('search gerekli.');
+    if (typeof body.changePercent !== 'number') throw new BadRequestException('changePercent sayı olmalı.');
+    return this.catalog.bulkPriceAdjust({
+      search: body.search,
+      changePercent: body.changePercent,
+      dryRun: body.dryRun ?? false,
+    });
+  }
+
   // Admin: Trendyol ürünlerini anında çek
-  // REVALIDATE_SECRET ile korunur — JWT gerekmez, florayapay admin panelinden çağrılabilir
   @Post('admin/trendyol-sync')
   runTrendyolSync(@Query('secret') secret?: string) {
     const expected = process.env.REVALIDATE_SECRET || 'dev-secret-local';
@@ -118,8 +134,7 @@ export class PublicCatalogController {
     return this.trendyolSync.syncNow();
   }
 
-  // Admin: Ürün kategorisi güncelle (florayapay admin panelinden çağrılır)
-  // productId > 0 → Product tablosu, productId < 0 → TrendyolProductVariant tablosu (abs(id))
+  // Admin: Ürün kategorisi güncelle
   @Post('admin/set-category')
   async setCategory(
     @Query('secret') secret: string,
@@ -168,8 +183,6 @@ export class PublicCatalogController {
       return s.includes('"') || s.includes(',') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s;
     };
 
-    // ERP'ye yüklenen görseller "/uploads/..." gibi göreli kaydediliyor; Meta tam URL ister,
-    // göreli adresli ürünleri görsel indiremediği için reddeder.
     const fileBase = (
       process.env.PUBLIC_FILE_BASE_URL ||
       process.env.PUBLIC_IMAGE_BASE_URL ||
