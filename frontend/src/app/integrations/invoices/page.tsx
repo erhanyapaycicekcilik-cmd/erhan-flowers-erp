@@ -1,3 +1,5 @@
-import { InvoicesPage } from '../_components/Sprint1MockUi';
+import { redirect } from 'next/navigation';
 
-export default InvoicesPage;
+export default function InvoicesRedirect() {
+  redirect('/e-donusum');
+}

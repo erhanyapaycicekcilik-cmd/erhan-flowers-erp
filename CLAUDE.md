@@ -102,6 +102,14 @@ Sonra tarayıcıda: **http://localhost:3200**
 - **Yeni ürün açarken iki hesaba birden:** Ürün Merkezi'nde (hızlı kayıt + tam form) "Trendyol (Flora)" kanalı = platform kodu `TRENDYOL_FLORA`. `/publishing/send` bu kodu görünce ürünü FLORA Trendyol hesabına da gönderir (barkod aynı, model kodu FL- ön ekli, %-3 fiyat; `DEFAULT_STORES`). Varsayılan olarak işaretli
 - `IntegrationCenterService.storeCredentials(platform, company)`: ERHAN dışı mağazada .env'e **düşmez**, eksik API bilgisi varsa hata verir (Flora işlemi yanlışlıkla Erhan mağazasına gitmesin)
 
+## e-Dönüşüm / Fatura (`/e-donusum`, sadece OWNER)
+
+- Backend: `backend/src/e-invoices/` — `GET/PUT /e-invoices/settings`, `POST /e-invoices/settings/test`, `GET /e-invoices/pending?days=`, `POST /e-invoices/issue` (`{items:[{sourceType,sourceId}]}` veya `{all:true}`), `GET /e-invoices`, `POST /e-invoices/:id/retry`, `GET /e-invoices/draft/:sourceType/:id`
+- Kapsam: sadece dükkan/telefon/WhatsApp/Instagram satışları (`retail_sales`) + web siparişleri (`web_orders`). Pazaryeri siparişleri hariç
+- Ayarlar `app_settings` tablosunda `einvoice_settings` anahtarında (şifre GET'te maskelenir); kayıtlar `e_invoices` tablosu
+- Sağlayıcı: `providers/trendyol-efaturam.provider.ts` — **henüz `ready = false`**: Trendyol e-Faturam web servis dokümanı gelince `issue`/`testConnection` doldurulacak. O zamana kadar fatura gönderimi kapalı, ekranlar ve faturasız satış listesi çalışır
+- 15 dk cron (`autoIssue`): ayar aktif + otomatik açık + sağlayıcı hazırsa son 7 günün faturasızlarını keser (3 hatalı denemeden sonra durur)
+
 ## Veritabanı
 
 - **PostgreSQL 16** Docker container'da (`erhan-flowers-postgres-prod`)
