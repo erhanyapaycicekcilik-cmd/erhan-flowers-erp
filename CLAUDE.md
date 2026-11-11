@@ -107,8 +107,13 @@ Sonra tarayıcıda: **http://localhost:3200**
 - Backend: `backend/src/e-invoices/` — `GET/PUT /e-invoices/settings`, `POST /e-invoices/settings/test`, `GET /e-invoices/pending?days=`, `POST /e-invoices/issue` (`{items:[{sourceType,sourceId}]}` veya `{all:true}`), `GET /e-invoices`, `POST /e-invoices/:id/retry`, `GET /e-invoices/draft/:sourceType/:id`
 - Kapsam: sadece dükkan/telefon/WhatsApp/Instagram satışları (`retail_sales`) + web siparişleri (`web_orders`). Pazaryeri siparişleri hariç
 - Ayarlar `app_settings` tablosunda `einvoice_settings` anahtarında (şifre GET'te maskelenir); kayıtlar `e_invoices` tablosu
-- Sağlayıcı: `providers/trendyol-efaturam.provider.ts` — **henüz `ready = false`**: Trendyol e-Faturam web servis dokümanı gelince `issue`/`testConnection` doldurulacak. O zamana kadar fatura gönderimi kapalı, ekranlar ve faturasız satış listesi çalışır
-- 15 dk cron (`autoIssue`): ayar aktif + otomatik açık + sağlayıcı hazırsa son 7 günün faturasızlarını keser (3 hatalı denemeden sonra durur)
+- Sağlayıcı: `providers/trendyol-efaturam.provider.ts` — Trendyol e-Faturam Bireysel Entegrasyon API (doküman: developers.trendyolefaturam.com/docs). Giriş: portal e-postası + şifre → `x-access-token` (JWT, companyId/userId içinden okunur). Test: `https://stage-apigateway.trendyolefaturam.com`, canlı: `https://apigateway.trendyolecozum.com`. Tutarlar **kuruş**. Fiyatlar KDV dahil kabul edilir
+- **IP whitelist:** e-Faturam portalı → Entegrasyon → IP Adresi (en fazla 3, virgülle). Sunucu IP'si `77.42.122.169` ekli olmalı, yoksa Cloudflare 403. İstekler IPv4 ile atılır
+- Şu an sadece **e-Arşiv** kesilir. Alıcı e-Fatura mükellefiyse (mükellef sorgusu) hata verir → portaldan kesilir
+- Web siparişleri internet satışı: ayarlarda web sitesi + kargo firması adı/VKN zorunlu
+- Her kayıt için ETTN (UUID) bir kez üretilir (`providerRef`) → tekrar denemede çift fatura olmaz (409'da durum sorgulanır)
+- TEST ortamında kesilenler `provider = TRENDYOL_EFATURAM_TEST`: satışı "faturalandı" yapmaz, canlıda tekrar listelenir. Otomatik kesim sadece CANLI'da
+- 15 dk cron (`autoIssue`): aktif + otomatik açık + CANLI ise son 7 günün faturasızlarını keser (3 hatalı denemeden sonra durur)
 
 ## Veritabanı
 

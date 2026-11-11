@@ -44,6 +44,11 @@ export class EInvoicesController {
     return this.service.listInvoices({ status, limit });
   }
 
+  @Get(':id/pdf')
+  pdf(@Param('id', ParseIntPipe) id: number) {
+    return this.service.pdf(id);
+  }
+
   @Post(':id/retry')
   retry(@Param('id', ParseIntPipe) id: number) {
     return this.service.retry(id);
