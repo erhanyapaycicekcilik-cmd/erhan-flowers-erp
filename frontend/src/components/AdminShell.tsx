@@ -86,6 +86,7 @@ const navGroups: { section: string; icon: LucideIcon; items: NavItem[] }[] = [
       { href: '/iade-takip', label: 'İade Takip', icon: ShoppingCart, roles: OWNER_MANAGER },
       { href: '/staff/orders', label: 'Personel Sipariş', icon: ShoppingCart, roles: ALL },
       { href: '/staff/photo-archive', label: 'Fotoğraf Arşivi', icon: ShoppingCart, roles: ALL },
+      { href: '/adres-ciktisi', label: 'Adres Çıktısı', icon: ShoppingCart, roles: ALL },
       { href: '/sales', label: 'Satış Merkezi', icon: ShoppingCart, roles: OWNER_MANAGER, enabled: process.env.NEXT_PUBLIC_ENABLE_SALES_CENTER === 'true' },
       { href: '/crm', label: 'CRM', icon: Users, roles: OWNER_MANAGER },
       { href: '/eft-yonetim', label: 'EFT Ödemeleri', icon: Landmark, roles: OWNER_MANAGER },
@@ -148,9 +149,9 @@ const roleAllowedPaths: Record<UserRole, string[]> = {
     '/dashboard', '/products', '/products/excel-export', '/media', '/model-codes', '/barcodes', '/stock-cards',
     '/hesap-makinesi', '/orders', '/staff/orders', '/sales', '/crm',
     '/integrations', '/market-analizi', '/reports', '/staff/tasks',
-    '/urun-duzenle', '/kategori-atama', '/kategoriler', '/referanslar', '/eft-yonetim', '/musteri-sorulari',
+    '/urun-duzenle', '/kategori-atama', '/kategoriler', '/referanslar', '/eft-yonetim', '/musteri-sorulari', '/adres-ciktisi',
   ],
-  STAFF: ['/staff/orders', '/staff/photo-archive', '/products'],
+  STAFF: ['/staff/orders', '/staff/photo-archive', '/products', '/adres-ciktisi'],
 };
 
 const roleLabel: Record<UserRole, string> = {
