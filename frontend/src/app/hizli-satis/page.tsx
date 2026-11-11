@@ -31,6 +31,49 @@ interface CartItem extends Product {
   unitPrice: number;
 }
 
+type CustomerForm = {
+  anonymous: boolean;
+  type: 'INDIVIDUAL' | 'CORPORATE';
+  firstName: string;
+  lastName: string;
+  phone: string;
+  email: string;
+  nationalId: string;
+  companyTitle: string;
+  taxNumber: string;
+  taxOffice: string;
+  city: string;
+  district: string;
+  fullAddress: string;
+};
+
+const EMPTY_CUSTOMER: CustomerForm = {
+  anonymous: false, type: 'INDIVIDUAL', firstName: '', lastName: '', phone: '', email: '', nationalId: '',
+  companyTitle: '', taxNumber: '', taxOffice: '', city: '', district: '', fullAddress: '',
+};
+
+const onlyDigits = (v: string) => v.replace(/\D/g, '');
+
+/** Hata varsa mesaj döner */
+function validateCustomer(c: CustomerForm): string | null {
+  if (c.anonymous) return null;
+  const phone = onlyDigits(c.phone);
+  if (c.type === 'CORPORATE') {
+    if (c.companyTitle.trim().length < 2) return 'Firma ünvanı zorunlu.';
+    if (onlyDigits(c.taxNumber).length !== 10) return 'Vergi numarası 10 haneli olmalı.';
+    if (c.taxOffice.trim().length < 2) return 'Vergi dairesi zorunlu.';
+  } else {
+    if (c.firstName.trim().length < 2) return 'Müşteri adı zorunlu.';
+    if (c.lastName.trim().length < 2) return 'Müşteri soyadı zorunlu.';
+    if (c.nationalId && onlyDigits(c.nationalId).length !== 11) return 'TC kimlik no 11 haneli olmalı (bilinmiyorsa boş bırakın).';
+  }
+  if (phone.length < 10) return 'Geçerli bir telefon numarası girin.';
+  if (c.city.trim().length < 2) return 'İl zorunlu.';
+  if (c.district.trim().length < 2) return 'İlçe zorunlu.';
+  if (c.fullAddress.trim().length < 5) return 'Açık adres zorunlu.';
+  return null;
+}
+
 export default function HizliSatisPage() {
   const [query, setQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
@@ -40,6 +83,8 @@ export default function HizliSatisPage() {
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [customer, setCustomer] = useState<CustomerForm>(EMPTY_CUSTOMER);
+  const setC = (patch: Partial<CustomerForm>) => setCustomer(prev => ({ ...prev, ...patch }));
   const inputRef = useRef<HTMLInputElement>(null);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -100,6 +145,30 @@ export default function HizliSatisPage() {
       setError(`Fiyat sıfır olamaz: ${zeroPriceItems.map(i => i.productName).join(', ')}`);
       return;
     }
+    const customerError = validateCustomer(customer);
+    if (customerError) {
+      setError(customerError);
+      return;
+    }
+    const c = customer;
+    const customerPayload = c.anonymous
+      ? { customerType: 'INDIVIDUAL', firstName: 'Perakende', lastName: 'Müşteri', walkIn: true }
+      : c.type === 'CORPORATE'
+        ? {
+            customerType: 'CORPORATE', companyTitle: c.companyTitle.trim(), firstName: c.companyTitle.trim(),
+            taxNumber: onlyDigits(c.taxNumber), taxOffice: c.taxOffice.trim(), phone: c.phone.trim(), email: c.email.trim() || undefined,
+          }
+        : {
+            customerType: 'INDIVIDUAL', firstName: c.firstName.trim(), lastName: c.lastName.trim(),
+            nationalId: onlyDigits(c.nationalId) || undefined, phone: c.phone.trim(), email: c.email.trim() || undefined,
+          };
+    const addressPayload = c.anonymous
+      ? undefined
+      : {
+          title: 'Fatura', fullAddress: c.fullAddress.trim(), city: c.city.trim(), district: c.district.trim(),
+          recipientName: c.type === 'CORPORATE' ? c.companyTitle.trim() : `${c.firstName.trim()} ${c.lastName.trim()}`,
+          recipientPhone: c.phone.trim(),
+        };
     setSaving(true);
     setError(null);
     setSuccess(null);
@@ -112,7 +181,8 @@ export default function HizliSatisPage() {
           saleType: 'STORE_SALE',
           delivery: { deliveryType: 'STORE_PICKUP' },
           payments: [{ method: 'CASH', amount: total, clientKey: `cash-${Date.now()}` }],
-          customer: { customerType: 'INDIVIDUAL', firstName: 'Perakende', lastName: 'Müşteri', walkIn: true },
+          customer: customerPayload,
+          ...(addressPayload ? { address: addressPayload } : {}),
           items: cart.map(i => ({
             id: i.id,
             variantId: i.id > 0 ? i.id : null,
@@ -132,6 +202,7 @@ export default function HizliSatisPage() {
       await api(`/sales/${sale.id}/complete`, { method: 'POST', json: { force: true } });
       setSuccess(`Satış tamamlandı! Toplam: ${total.toLocaleString('tr-TR', { style: 'currency', currency: 'TRY' })}`);
       setCart([]);
+      setCustomer(EMPTY_CUSTOMER);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Satış kaydedilemedi. Tekrar dene.');
     } finally {
@@ -229,6 +300,49 @@ export default function HizliSatisPage() {
               </button>
             </div>
           ))}
+
+          {/* Müşteri / Fatura bilgileri */}
+          <div className="px-4 py-4 space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="text-sm font-semibold text-slate-700">Müşteri / Fatura Bilgileri</div>
+              <label className="flex items-center gap-2 text-xs text-slate-500">
+                <input type="checkbox" checked={customer.anonymous} onChange={e => setC({ anonymous: e.target.checked })} />
+                Müşteri bilgi vermek istemiyor (Perakende Müşteri)
+              </label>
+            </div>
+            {!customer.anonymous && (
+              <>
+                <div className="flex gap-2">
+                  {(['INDIVIDUAL', 'CORPORATE'] as const).map(t => (
+                    <button key={t} type="button" onClick={() => setC({ type: t })}
+                      className={`rounded-full border px-3 py-1 text-xs font-medium ${customer.type === t ? 'bg-brand text-white border-brand' : 'bg-white border-slate-200 text-slate-600'}`}>
+                      {t === 'INDIVIDUAL' ? 'Bireysel' : 'Kurumsal (Firma)'}
+                    </button>
+                  ))}
+                </div>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {customer.type === 'INDIVIDUAL' ? (
+                    <>
+                      <input className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" placeholder="Ad *" value={customer.firstName} onChange={e => setC({ firstName: e.target.value })} />
+                      <input className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" placeholder="Soyad *" value={customer.lastName} onChange={e => setC({ lastName: e.target.value })} />
+                      <input className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" placeholder="TC Kimlik No (isteğe bağlı)" inputMode="numeric" maxLength={11} value={customer.nationalId} onChange={e => setC({ nationalId: onlyDigits(e.target.value) })} />
+                    </>
+                  ) : (
+                    <>
+                      <input className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30 sm:col-span-2" placeholder="Firma Ünvanı *" value={customer.companyTitle} onChange={e => setC({ companyTitle: e.target.value })} />
+                      <input className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" placeholder="Vergi No (10 hane) *" inputMode="numeric" maxLength={10} value={customer.taxNumber} onChange={e => setC({ taxNumber: onlyDigits(e.target.value) })} />
+                      <input className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" placeholder="Vergi Dairesi *" value={customer.taxOffice} onChange={e => setC({ taxOffice: e.target.value })} />
+                    </>
+                  )}
+                  <input className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" placeholder="Telefon *" inputMode="tel" value={customer.phone} onChange={e => setC({ phone: e.target.value })} />
+                  <input className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" placeholder="E-posta (isteğe bağlı)" type="email" value={customer.email} onChange={e => setC({ email: e.target.value })} />
+                  <input className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" placeholder="İl *" value={customer.city} onChange={e => setC({ city: e.target.value })} />
+                  <input className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" placeholder="İlçe *" value={customer.district} onChange={e => setC({ district: e.target.value })} />
+                  <textarea className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30 sm:col-span-2" rows={2} placeholder="Açık Adres *" value={customer.fullAddress} onChange={e => setC({ fullAddress: e.target.value })} />
+                </div>
+              </>
+            )}
+          </div>
 
           {/* Toplam + Satıldı */}
           <div className="px-4 py-4 bg-slate-50 flex items-center justify-between">
