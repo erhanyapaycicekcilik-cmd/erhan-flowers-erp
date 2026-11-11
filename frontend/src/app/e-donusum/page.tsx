@@ -44,6 +44,7 @@ type PendingRow = {
 type InvoiceRow = {
   id: number;
   provider: string;
+  sourceId: number;
   sourceType: string;
   sourceNumber: string;
   customerName: string | null;
@@ -448,6 +449,19 @@ export default function EDonusumPage() {
                             })}
                             className="inline-flex items-center gap-1 text-xs text-blue-600 disabled:opacity-40"
                           ><ExternalLink className="h-3.5 w-3.5" /> PDF</button>
+                        )}
+                        {r.provider.endsWith('_TEST') && r.sourceType === 'RETAIL_SALE' && r.status !== 'CANCELLED' && (
+                          <button
+                            disabled={busy !== null}
+                            title="Deneme satışı: satış iptal edilir, stok ve kasa geri alınır (test faturası gerçek değildir)"
+                            onClick={() => run(`void-inv-${r.id}`, async () => {
+                              if (!confirm(`${r.sourceNumber} deneme satışı silinsin mi?\n\nSatış iptal edilir, düşen stok geri eklenir ve kasa tahsilatı kaldırılır. Test faturası gerçek olmadığı için ayrıca iptal gerekmez.`)) return;
+                              await api(`/sales/${r.sourceId}/void`, { method: 'POST', json: { reason: 'e-Dönüşüm ekranından silindi (deneme satışı)' } });
+                              await Promise.all([loadPending(), loadInvoices()]);
+                              return `${r.sourceNumber} silindi; stok ve kasa geri alındı.`;
+                            })}
+                            className="ml-2 rounded-md border border-red-200 px-2.5 py-1 text-xs text-red-600 disabled:opacity-40"
+                          >Satışı Sil</button>
                         )}
                         {r.status === 'SKIPPED' && (
                           <button
