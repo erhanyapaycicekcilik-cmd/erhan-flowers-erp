@@ -590,6 +590,18 @@ export class OrderSyncService {
         if (newStatus && existing.status !== newStatus) {
           await this.prisma.marketplaceOrder.update({ where: { id: existing.id }, data: { status: newStatus } });
         }
+        // retail_sales içinde de aynı external_order_id ile kayıt varsa status'unu güncelle
+        const isDelivered = ['Delivered', 'DELIVERED', 'delivered', 'Shipped', 'SHIPPED'].includes(newStatus);
+        const isCancelled = ['Cancelled', 'CANCELLED', 'Returned', 'RETURNED'].includes(newStatus);
+        if (isDelivered || isCancelled) {
+          await this.prisma.$executeRaw`
+            UPDATE retail_sales
+            SET status = ${isDelivered ? 'DELIVERED' : 'CANCELLED'}::"RetailSaleStatus", updated_at = NOW()
+            WHERE channel = 'HEPSIBURADA'::"RetailSaleChannel"
+              AND external_order_id = ${externalOrderId}
+              AND status NOT IN ('DELIVERED'::"RetailSaleStatus", 'CANCELLED'::"RetailSaleStatus", 'COMPLETED'::"RetailSaleStatus")
+          `;
+        }
         continue;
       }
 

@@ -594,6 +594,12 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
     const offset = (page - 1) * take;
     const startDate = this.text(query.startDate);
     const endDate = this.text(query.endDate);
+    const statuses = this.text(query.status)
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    // excludeDelivered: varsayılan true — status parametresi yoksa Delivered/Cancelled hariç tutulur
+    const excludeDelivered = !statuses.length && query.excludeDelivered !== 'false';
 
     return this.prisma.$queryRaw<Array<Record<string, unknown>>>(Prisma.sql`
       SELECT
@@ -637,7 +643,14 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
                   line_item->>'productImageUrl',
                   line_item->>'thumbnailUrl',
                   line_item->'images'->0->>'url'
-                ) FROM jsonb_array_elements(CASE WHEN jsonb_typeof(mo.raw_payload->'lines') = 'array' THEN mo.raw_payload->'lines' ELSE (CASE WHEN jsonb_typeof(mo.raw_payload->'orderItems') = 'array' THEN mo.raw_payload->'orderItems' ELSE '[]'::jsonb END) END) AS line_item WHERE (moi.barcode IS NOT NULL AND (line_item->>'barcode' = moi.barcode OR line_item->>'productCode' = moi.barcode) OR moi.sku IS NOT NULL AND (line_item->>'merchantSku' = moi.sku OR line_item->>'stockCode' = moi.sku OR line_item->>'productSellerCode' = moi.sku)) AND COALESCE(line_item->>'productImage', line_item->>'imageUrl', line_item->>'productImageUrl', line_item->>'thumbnailUrl', line_item->'images'->0->>'url') IS NOT NULL AND COALESCE(line_item->>'productImage', line_item->>'imageUrl', line_item->>'productImageUrl', line_item->>'thumbnailUrl', line_item->'images'->0->>'url') <> '' LIMIT 1)
+                ) FROM jsonb_array_elements(
+                  CASE
+                    WHEN jsonb_typeof(mo.raw_payload->'lines') = 'array' THEN mo.raw_payload->'lines'
+                    WHEN jsonb_typeof(mo.raw_payload->'orderlines') = 'array' THEN mo.raw_payload->'orderlines'
+                    WHEN jsonb_typeof(mo.raw_payload->'orderItems') = 'array' THEN mo.raw_payload->'orderItems'
+                    ELSE '[]'::jsonb
+                  END
+                ) AS line_item WHERE (moi.barcode IS NOT NULL AND (line_item->>'barcode' = moi.barcode OR line_item->>'productCode' = moi.barcode OR line_item->>'hepsiburadaSku' = moi.barcode) OR moi.sku IS NOT NULL AND (line_item->>'merchantSku' = moi.sku OR line_item->>'stockCode' = moi.sku OR line_item->>'productSellerCode' = moi.sku OR line_item->>'hepsiburadaSku' = moi.sku)) AND COALESCE(line_item->>'productImage', line_item->>'imageUrl', line_item->>'productImageUrl', line_item->>'thumbnailUrl', line_item->'images'->0->>'url') IS NOT NULL AND COALESCE(line_item->>'productImage', line_item->>'imageUrl', line_item->>'productImageUrl', line_item->>'thumbnailUrl', line_item->'images'->0->>'url') <> '' LIMIT 1)
               )
             )
             ORDER BY moi.id
@@ -652,6 +665,11 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
         AND (${q} = '' OR mo.order_number ILIKE ${`%${q}%`} OR mo.customer_name ILIKE ${`%${q}%`} OR mo.external_order_id ILIKE ${`%${q}%`})
         AND (${startDate} = '' OR COALESCE(mo.order_date, mo.created_at)::date >= ${startDate}::date)
         AND (${endDate} = '' OR COALESCE(mo.order_date, mo.created_at)::date <= ${endDate}::date)
+        AND (${statuses.length} > 0
+          OR NOT ${excludeDelivered}
+          OR mo.status NOT IN ('Delivered', 'DELIVERED', 'Cancelled', 'CANCELLED', 'Returned', 'RETURNED')
+        )
+        AND (${statuses.length} = 0 OR mo.status = ANY(${statuses}::text[]))
       GROUP BY mo.id
       ORDER BY COALESCE(mo.order_date, mo.created_at) DESC
       LIMIT ${take} OFFSET ${offset}
