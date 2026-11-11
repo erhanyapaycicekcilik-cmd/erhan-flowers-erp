@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import { Cron } from '@nestjs/schedule';
 import { Prisma, RetailSaleChannel, RetailSaleStatus, WebOrderStatus } from '../generated/prisma-client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -22,6 +23,9 @@ export type PendingInvoiceRow = {
 };
 
 const SETTINGS_KEY = 'einvoice_settings';
+/** Test ortamında kesilen faturalar ayrı etiketlenir; gerçek satışı "faturalandı" yapmaz */
+const providerTag = (s: EInvoiceSettings) => (s.environment === 'PROD' ? 'TRENDYOL_EFATURAM' : 'TRENDYOL_EFATURAM_TEST');
+const STALE_PENDING_MS = 5 * 60 * 1000;
 const PASSWORD_MASK = '••••••••';
 
 /** Pazaryeri siparişlerinin faturası pazaryeri tarafında kesilir; burada sadece dükkan/web kanalları */
@@ -30,16 +34,20 @@ const OWN_CHANNELS: RetailSaleChannel[] = ['STORE', 'PHONE', 'WHATSAPP', 'INSTAG
 const DEFAULT_SETTINGS: EInvoiceSettings = {
   provider: 'TRENDYOL_EFATURAM',
   active: false,
-  firmCode: '',
-  username: '',
-  password: '',
+  environment: 'STAGE',
   email: '',
+  password: '',
   firmId: '',
+  userId: '',
   eArchiveSeries: 'TRD',
   eInvoiceSeries: 'TRD',
   autoIssue: false,
   issueOn: 'DELIVERED',
   vatRate: 20,
+  webSiteUrl: 'https://www.erhanflowers.com',
+  carrierName: '',
+  carrierTaxId: '',
+  defaultCity: '',
 };
 
 @Injectable()
@@ -58,7 +66,11 @@ export class EInvoicesService {
     const row = await this.prisma.appSetting.findUnique({ where: { key: SETTINGS_KEY } });
     if (!row) return { ...DEFAULT_SETTINGS };
     try {
-      return { ...DEFAULT_SETTINGS, ...(JSON.parse(row.value) as Partial<EInvoiceSettings>) };
+      const stored = JSON.parse(row.value) as Partial<EInvoiceSettings> & Record<string, unknown>;
+      const merged = { ...DEFAULT_SETTINGS, ...stored } as EInvoiceSettings & Record<string, unknown>;
+      delete merged.firmCode;
+      delete merged.username;
+      return merged;
     } catch {
       return { ...DEFAULT_SETTINGS };
     }
@@ -69,7 +81,7 @@ export class EInvoicesService {
     return {
       settings: { ...settings, password: settings.password ? PASSWORD_MASK : '' },
       providerReady: this.provider.ready,
-      providerNotice: this.provider.ready ? null : this.provider.notReadyReason,
+      providerNotice: this.provider.ready ? null : this.provider.notReadyReason ?? null,
     };
   }
 
@@ -79,12 +91,16 @@ export class EInvoicesService {
     const next: EInvoiceSettings = {
       ...current,
       active: typeof body.active === 'boolean' ? body.active : current.active,
-      firmCode: str(body.firmCode, current.firmCode),
-      username: str(body.username, current.username),
+      environment: body.environment === 'PROD' || body.environment === 'STAGE' ? body.environment : current.environment,
       password:
         typeof body.password === 'string' && body.password !== PASSWORD_MASK ? body.password.trim() : current.password,
-      email: str(body.email, current.email),
+      email: str(body.email, current.email).toLowerCase(),
       firmId: str(body.firmId, current.firmId),
+      userId: str(body.userId, current.userId),
+      webSiteUrl: str(body.webSiteUrl, current.webSiteUrl),
+      carrierName: str(body.carrierName, current.carrierName),
+      carrierTaxId: str(body.carrierTaxId, current.carrierTaxId).replace(/\D/g, ''),
+      defaultCity: str(body.defaultCity, current.defaultCity),
       eArchiveSeries: str(body.eArchiveSeries, current.eArchiveSeries).toUpperCase(),
       eInvoiceSeries: str(body.eInvoiceSeries, current.eInvoiceSeries).toUpperCase(),
       autoIssue: typeof body.autoIssue === 'boolean' ? body.autoIssue : current.autoIssue,
@@ -147,11 +163,13 @@ export class EInvoicesService {
       }),
       this.prisma.eInvoice.findMany({
         where: { sourceType: { in: ['RETAIL_SALE', 'WEB_ORDER'] } },
-        select: { sourceType: true, sourceId: true, status: true, errorMessage: true, attempts: true },
+        select: { sourceType: true, sourceId: true, status: true, errorMessage: true, attempts: true, provider: true },
       }),
     ]);
 
-    const byKey = new Map(existing.map((e) => [`${e.sourceType}:${e.sourceId}`, e]));
+    // Sadece aktif ortamda (test/canlı) kesilmiş kayıtlar satışı "faturalı" sayar
+    const tag = providerTag(settings);
+    const byKey = new Map(existing.filter((e) => e.provider === tag).map((e) => [`${e.sourceType}:${e.sourceId}`, e]));
     const rows: PendingInvoiceRow[] = [];
 
     for (const s of sales) {
@@ -236,6 +254,7 @@ export class EInvoicesService {
         invoiceType,
         series: invoiceType === 'E_FATURA' ? s.eInvoiceSeries : s.eArchiveSeries,
         issueDate: new Date(),
+        orderDate: sale.orderDate ?? sale.createdAt,
         currency: sale.currency,
         buyer: {
           name: c.companyTitle || c.displayName,
@@ -246,7 +265,9 @@ export class EInvoicesService {
           address: sale.address?.fullAddress ?? null,
           city: sale.address?.city ?? null,
           district: sale.address?.district ?? null,
+          postalCode: sale.address?.postalCode ?? null,
         },
+        internetSale: null,
         lines,
         totalInclVat: Number(sale.grandTotal),
       };
@@ -268,6 +289,7 @@ export class EInvoicesService {
       invoiceType: 'E_ARSIV',
       series: s.eArchiveSeries,
       issueDate: new Date(),
+      orderDate: order.createdAt,
       currency: 'TRY',
       buyer: {
         name: (corporate && order.companyTitle) || order.customerName,
@@ -278,6 +300,12 @@ export class EInvoicesService {
         address: order.address,
         city: order.city,
         district: order.district,
+        postalCode: order.postalCode,
+      },
+      internetSale: {
+        paymentMeans: order.paymentMethod === 'ONLINE' ? 'CREDIT_CARD' : order.paymentMethod === 'EFT' ? 'EFT' : 'OTHER',
+        paymentDate: order.paidAt,
+        shippedAt: order.updatedAt,
       },
       lines,
       totalInclVat: Number(order.grandTotal),
@@ -328,7 +356,10 @@ export class EInvoicesService {
   private async issueOne(ref: SourceRef, settings: EInvoiceSettings): Promise<boolean> {
     const key = { sourceType_sourceId: { sourceType: ref.sourceType, sourceId: ref.sourceId } };
     const existing = await this.prisma.eInvoice.findUnique({ where: key });
-    if (existing && (existing.status === 'ISSUED' || existing.status === 'PENDING')) return existing.status === 'ISSUED';
+    const tag = providerTag(settings);
+    const sameEnv = existing?.provider === tag;
+    if (existing && sameEnv && existing.status === 'ISSUED') return true;
+    if (existing && sameEnv && existing.status === 'PENDING' && Date.now() - existing.updatedAt.getTime() < STALE_PENDING_MS) return false;
 
     let draft: EInvoiceDraft;
     try {
@@ -338,14 +369,14 @@ export class EInvoicesService {
       this.logger.warn(`${ref.sourceType}#${ref.sourceId} ${message}`);
       await this.prisma.eInvoice.upsert({
         where: key,
-        create: { sourceType: ref.sourceType, sourceId: ref.sourceId, sourceNumber: `${ref.sourceType}#${ref.sourceId}`, status: 'ERROR', errorMessage: message, attempts: 1 },
-        update: { status: 'ERROR', errorMessage: message, attempts: { increment: 1 } },
+        create: { provider: tag, sourceType: ref.sourceType, sourceId: ref.sourceId, sourceNumber: `${ref.sourceType}#${ref.sourceId}`, status: 'ERROR', errorMessage: message, attempts: 1 },
+        update: { provider: tag, status: 'ERROR', errorMessage: message, attempts: sameEnv ? { increment: 1 } : 1 },
       });
       return false;
     }
 
     const base = {
-      provider: settings.provider,
+      provider: tag,
       sourceNumber: draft.sourceNumber,
       customerName: draft.buyer.name,
       amount: new Prisma.Decimal(draft.totalInclVat),
@@ -353,25 +384,27 @@ export class EInvoicesService {
       status: 'PENDING',
       errorMessage: null,
     };
+    // ETTN (UUID) kayıt başına bir kez üretilir; tekrar denemelerde aynı ETTN gider, fatura iki kez kesilmez
+    const documentUuid = (sameEnv && existing?.status !== 'ISSUED' && existing?.providerRef) || randomUUID();
     const record = await this.prisma.eInvoice.upsert({
       where: key,
-      create: { ...base, sourceType: ref.sourceType, sourceId: ref.sourceId, attempts: 1 },
-      update: { ...base, attempts: { increment: 1 } },
+      create: { ...base, providerRef: documentUuid, sourceType: ref.sourceType, sourceId: ref.sourceId, attempts: 1 },
+      update: { ...base, providerRef: documentUuid, invoiceNumber: null, pdfUrl: null, issuedAt: null, attempts: sameEnv ? { increment: 1 } : 1 },
     });
 
     try {
-      const result = await this.provider.issue(settings, draft);
+      const result = await this.provider.issue(settings, draft, documentUuid);
       await this.prisma.eInvoice.update({
         where: { id: record.id },
         data: {
           status: 'ISSUED',
           invoiceNumber: result.invoiceNumber,
-          providerRef: result.providerRef ?? null,
+          providerRef: result.providerRef ?? documentUuid,
           pdfUrl: result.pdfUrl ?? null,
           issuedAt: new Date(),
         },
       });
-      if (ref.sourceType === 'RETAIL_SALE') {
+      if (ref.sourceType === 'RETAIL_SALE' && settings.environment === 'PROD') {
         await this.prisma.retailSale.update({
           where: { id: ref.sourceId },
           data: {
@@ -389,13 +422,29 @@ export class EInvoicesService {
     }
   }
 
+  async pdf(id: number) {
+    const inv = await this.prisma.eInvoice.findUnique({ where: { id } });
+    if (!inv) throw new NotFoundException('Fatura kaydı bulunamadı.');
+    if (inv.status !== 'ISSUED' || !inv.providerRef) throw new BadRequestException('Bu fatura henüz kesilmemiş.');
+    if (inv.pdfUrl) return { url: inv.pdfUrl };
+    const settings = await this.loadSettings();
+    try {
+      const url = await this.provider.pdfUrl(settings, inv.providerRef, inv.invoiceType === 'E_FATURA' ? 'E_FATURA' : 'E_ARSIV');
+      await this.prisma.eInvoice.update({ where: { id }, data: { pdfUrl: url } });
+      return { url };
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
+  }
+
   // ─── Otomatik kesim (15 dk) ─────────────────────────────────────────────
 
   @Cron('*/15 * * * *')
   async autoIssue() {
     if (!this.provider.ready || this.autoRunning) return;
     const settings = await this.loadSettings();
-    if (!settings.active || !settings.autoIssue) return;
+    // Otomatik kesim sadece canlı ortamda çalışır
+    if (!settings.active || !settings.autoIssue || settings.environment !== 'PROD') return;
     this.autoRunning = true;
     try {
       const pending = await this.listPending(7);

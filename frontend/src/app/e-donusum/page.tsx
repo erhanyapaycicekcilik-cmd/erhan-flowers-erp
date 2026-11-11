@@ -8,16 +8,20 @@ import { api } from '@/lib/api';
 type Settings = {
   provider: 'TRENDYOL_EFATURAM';
   active: boolean;
-  firmCode: string;
-  username: string;
-  password: string;
+  environment: 'STAGE' | 'PROD';
   email: string;
+  password: string;
   firmId: string;
+  userId: string;
   eArchiveSeries: string;
   eInvoiceSeries: string;
   autoIssue: boolean;
   issueOn: 'DELIVERED' | 'SHIPPED';
   vatRate: number;
+  webSiteUrl: string;
+  carrierName: string;
+  carrierTaxId: string;
+  defaultCity: string;
 };
 
 type SettingsResponse = { settings: Settings; providerReady: boolean; providerNotice: string | null };
@@ -37,6 +41,7 @@ type PendingRow = {
 
 type InvoiceRow = {
   id: number;
+  provider: string;
   sourceType: string;
   sourceNumber: string;
   customerName: string | null;
@@ -121,7 +126,8 @@ export default function EDonusumPage() {
   const s = data?.settings;
   const ready = !!data?.providerReady;
   const canIssue = ready && !!s?.active;
-  const configured = !!(s?.firmCode && s?.username && s?.password);
+  const configured = !!(s?.email && s?.password);
+  const isProd = s?.environment === 'PROD';
 
   return (
     <AdminShell title="e-Dönüşüm">
@@ -156,20 +162,25 @@ export default function EDonusumPage() {
                   <div className="text-sm text-gray-500">{s.email || 'e-posta girilmedi'}</div>
                 </div>
               </div>
+              <div className="flex items-center gap-2">
+              <span className={`rounded-full px-3 py-1 text-xs font-medium ${isProd ? 'bg-blue-50 text-blue-700' : 'bg-amber-50 text-amber-700'}`}>
+                {isProd ? 'CANLI ortam' : 'TEST ortamı'}
+              </span>
               {s.active && configured ? (
                 <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">● Aktif</span>
               ) : (
                 <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-600">{configured ? 'Pasif' : 'Bilgi girilmedi'}</span>
               )}
+              </div>
             </div>
 
             {!editing ? (
               <div className="mt-4 grid gap-3 md:grid-cols-3">
                 <div className="rounded-lg bg-gray-50 p-3">
-                  <div className="text-xs font-medium uppercase text-gray-500">Firma</div>
-                  <div className="mt-1 text-sm">Firma ID: <b>{s.firmId || '-'}</b></div>
-                  <div className="text-sm">Kısa Kod: <b>{s.firmCode || '-'}</b></div>
-                  <div className="text-sm">Web Servis Kullanıcı: <b>{s.username || '-'}</b></div>
+                  <div className="text-xs font-medium uppercase text-gray-500">Hesap</div>
+                  <div className="mt-1 text-sm">Kullanıcı: <b>{s.email || '-'}</b></div>
+                  <div className="text-sm">Firma ID: <b>{s.firmId || 'token\'dan otomatik'}</b></div>
+                  <div className="text-sm">Web siparişi kargo: <b>{s.carrierName || '-'}</b>{s.carrierTaxId ? ` (${s.carrierTaxId})` : ''}</div>
                 </div>
                 <div className="rounded-lg bg-gray-50 p-3">
                   <div className="text-xs font-medium uppercase text-gray-500">Fatura Serisi</div>
@@ -196,19 +207,34 @@ export default function EDonusumPage() {
                     <option value="SHIPPED">Kargoya / yola çıkınca</option>
                   </select>
                   <div className="mt-1 text-xs text-gray-500">Dükkan satışları tamamlanınca faturalanır. Sonra en geç 15 dakika içinde kesilir.</div>
+                  {!isProd && <div className="mt-1 text-xs font-medium text-amber-700">Otomatik kesim sadece CANLI ortamda çalışır.</div>}
                 </div>
               </div>
             ) : (
               <div className="mt-4 grid gap-3 md:grid-cols-3">
+                <label className="text-sm">
+                  <span className="text-xs text-gray-500">Ortam</span>
+                  <select
+                    className="mt-1 w-full rounded-md border px-2 py-1.5"
+                    value={form.environment}
+                    onChange={(e) => setForm({ ...form, environment: e.target.value as Settings['environment'] })}
+                  >
+                    <option value="STAGE">TEST (stage) — fatura GİB&apos;e gitmez</option>
+                    <option value="PROD">CANLI — gerçek fatura</option>
+                  </select>
+                </label>
                 {([
-                  ['firmId', 'Firma ID (panelde görünen)'],
-                  ['firmCode', 'Firma Kısa Kodu'],
-                  ['username', 'Web Servis Kullanıcı Kodu'],
-                  ['password', 'Web Servis Şifresi'],
-                  ['email', 'e-Faturam e-posta'],
+                  ['email', 'e-Faturam e-posta (kullanıcı adı)'],
+                  ['password', 'Şifre (test ve canlı ayrı)'],
+                  ['firmId', 'Firma ID (boşsa otomatik)'],
+                  ['userId', 'Kullanıcı ID (boşsa otomatik)'],
                   ['eArchiveSeries', 'e-Arşiv Seri (3 karakter)'],
                   ['eInvoiceSeries', 'e-Fatura Seri (3 karakter)'],
                   ['vatRate', 'KDV Oranı (%)'],
+                  ['defaultCity', 'Varsayılan Şehir (adres yoksa)'],
+                  ['webSiteUrl', 'Web sitesi adresi'],
+                  ['carrierName', 'Kargo firması adı (web siparişleri)'],
+                  ['carrierTaxId', 'Kargo firması VKN'],
                 ] as const).map(([key, label]) => (
                   <label key={key} className="text-sm">
                     <span className="text-xs text-gray-500">{label}</span>
@@ -222,7 +248,8 @@ export default function EDonusumPage() {
                   </label>
                 ))}
                 <p className="text-xs text-gray-500 md:col-span-3">
-                  Kısa kod, web servis kullanıcı kodu ve şifresi Trendyol e-Faturam&apos;ın gönderdiği e-postada yer alır.
+                  Kullanıcı adı, e-Faturam portalına kayıtlı e-posta adresinizdir. Test ortamı şifresini e-Faturam&apos;ın gönderdiği e-postadaki linkten belirlersiniz.
+                  Web sitesi siparişleri &quot;internet satışı&quot; faturası olduğu için kargo firması adı ve VKN&apos;si zorunludur.
                 </p>
               </div>
             )}
@@ -251,7 +278,10 @@ export default function EDonusumPage() {
                   <button onClick={() => setEditing(true)} className="rounded-md border px-3 py-1.5 text-sm">Bilgileri Düzenle</button>
                   <button
                     disabled={busy !== null}
-                    onClick={() => run('active', () => saveSettings({ active: !s.active }, s.active ? 'Entegrasyon pasife alındı.' : 'Entegrasyon aktif edildi.'))}
+                    onClick={() => run('active', () => {
+                      if (!s.active && isProd && !confirm('CANLI ortamda aktif ediyorsunuz. Kesilen faturalar GİB\'e gerçek fatura olarak gider. Devam edilsin mi?')) return Promise.resolve();
+                      return saveSettings({ active: !s.active }, s.active ? 'Entegrasyon pasife alındı.' : 'Entegrasyon aktif edildi.');
+                    })}
                     className={`rounded-md border px-3 py-1.5 text-sm disabled:opacity-50 ${s.active ? 'border-amber-300 bg-amber-50 text-amber-800' : 'border-emerald-300 bg-emerald-50 text-emerald-800'}`}
                   >{s.active ? 'Pasife Al' : 'Aktif Et'}</button>
                 </>
@@ -278,8 +308,8 @@ export default function EDonusumPage() {
                 <RefreshCw className="h-4 w-4" /> Yenile
               </button>
               <button
-                disabled={!canIssue || !pending.length || busy !== null}
-                title={!canIssue ? 'Entegrasyon hazır/aktif değil' : undefined}
+                disabled={!canIssue || !isProd || !pending.length || busy !== null}
+                title={!canIssue ? 'Entegrasyon aktif değil' : !isProd ? 'Test ortamında tek tek deneyin' : undefined}
                 onClick={() => run('all', async () => {
                   if (!confirm(`${pending.length} satış için fatura kesilsin mi?`)) return;
                   const r = await api<{ issued: number; failed: number }>('/e-invoices/issue', { method: 'POST', json: { all: true, days } });
@@ -372,14 +402,20 @@ export default function EDonusumPage() {
                       <td className="px-3 py-2">{typeLabel(r.invoiceType)}</td>
                       <td className="px-3 py-2">
                         <StatusBadge row={r} />
+                        {r.provider.endsWith('_TEST') && <span className="ml-1 rounded-md bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">TEST</span>}
                         {r.status === 'ERROR' && r.errorMessage && <div className="mt-1 max-w-sm text-xs text-red-600">{r.errorMessage}</div>}
                       </td>
                       <td className="px-3 py-2">{date(r.issuedAt ?? r.createdAt)}</td>
                       <td className="px-3 py-2 text-right">
-                        {r.pdfUrl && (
-                          <a href={r.pdfUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-blue-600">
-                            <ExternalLink className="h-3.5 w-3.5" /> PDF
-                          </a>
+                        {r.status === 'ISSUED' && (
+                          <button
+                            disabled={busy !== null}
+                            onClick={() => run(`pdf-${r.id}`, async () => {
+                              const res = await api<{ url: string }>(`/e-invoices/${r.id}/pdf`);
+                              window.open(res.url, '_blank', 'noopener');
+                            })}
+                            className="inline-flex items-center gap-1 text-xs text-blue-600 disabled:opacity-40"
+                          ><ExternalLink className="h-3.5 w-3.5" /> PDF</button>
                         )}
                         {r.status === 'ERROR' && (
                           <button

@@ -1,16 +1,16 @@
 export type EInvoiceSettings = {
   provider: 'TRENDYOL_EFATURAM';
   active: boolean;
-  /** Trendyol e-Faturam'ın gönderdiği maildeki Firma Kısa Kodu */
-  firmCode: string;
-  /** Web Servis Kullanıcı Kodu */
-  username: string;
-  /** Web Servis Şifresi (GET'te maskelenir) */
-  password: string;
-  /** e-Faturam hesabının e-posta adresi (bilgi amaçlı) */
+  /** STAGE: test ortamı (fatura GİB'e gitmez) / PROD: canlı */
+  environment: 'STAGE' | 'PROD';
+  /** Trendyol e-Faturam portal e-posta adresi (API kullanıcı adı) */
   email: string;
-  /** Panelde görünen Firma ID (bilgi amaçlı) */
+  /** Şifre (test ortamında e-postadaki linkle belirlenen; GET'te maskelenir) */
+  password: string;
+  /** Firma ID (companyId). Boşsa token içinden okunur */
   firmId: string;
+  /** Kullanıcı ID (userId). Boşsa token içinden okunur */
+  userId: string;
   eArchiveSeries: string;
   eInvoiceSeries: string;
   autoIssue: boolean;
@@ -18,6 +18,13 @@ export type EInvoiceSettings = {
   issueOn: 'DELIVERED' | 'SHIPPED';
   /** Fiyatlar KDV dahil kabul edilir */
   vatRate: number;
+  /** İnternet satışı e-Arşiv için zorunlu: satış yapılan web sitesi */
+  webSiteUrl: string;
+  /** İnternet satışı e-Arşiv için zorunlu: taşıyıcı (kargo firması) bilgisi */
+  carrierName: string;
+  carrierTaxId: string;
+  /** Alıcı adresinde şehir yoksa kullanılacak şehir (dükkanın bulunduğu il) */
+  defaultCity: string;
 };
 
 export type EInvoiceDraftLine = {
@@ -35,6 +42,7 @@ export type EInvoiceDraft = {
   invoiceType: 'E_ARSIV' | 'E_FATURA';
   series: string;
   issueDate: Date;
+  orderDate: Date;
   currency: string;
   buyer: {
     name: string;
@@ -45,7 +53,14 @@ export type EInvoiceDraft = {
     address: string | null;
     city: string | null;
     district: string | null;
+    postalCode: string | null;
   };
+  /** Dolu ise internet satışı (web sitesi) faturasıdır: ödeme + gönderi bilgisi zorunlu */
+  internetSale: {
+    paymentMeans: 'CREDIT_CARD' | 'EFT' | 'ON_DELIVERY' | 'MEDIATOR' | 'OTHER';
+    paymentDate: Date | null;
+    shippedAt: Date;
+  } | null;
   lines: EInvoiceDraftLine[];
   totalInclVat: number;
 };
@@ -61,5 +76,7 @@ export interface EInvoiceProvider {
   readonly ready: boolean;
   readonly notReadyReason?: string;
   testConnection(settings: EInvoiceSettings): Promise<{ ok: boolean; message: string }>;
-  issue(settings: EInvoiceSettings, draft: EInvoiceDraft): Promise<EInvoiceIssueResult>;
+  /** documentUuid: tekrar denemelerde aynı faturanın iki kez kesilmemesi için sabit ETTN */
+  issue(settings: EInvoiceSettings, draft: EInvoiceDraft, documentUuid: string): Promise<EInvoiceIssueResult>;
+  pdfUrl(settings: EInvoiceSettings, documentUuid: string, invoiceType: 'E_ARSIV' | 'E_FATURA'): Promise<string>;
 }
