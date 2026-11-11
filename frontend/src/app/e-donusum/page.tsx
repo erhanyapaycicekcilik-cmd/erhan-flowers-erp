@@ -22,6 +22,8 @@ type Settings = {
   carrierName: string;
   carrierTaxId: string;
   defaultCity: string;
+  defaultDistrict: string;
+  defaultAddress: string;
 };
 
 type SettingsResponse = { settings: Settings; providerReady: boolean; providerNotice: string | null };
@@ -42,12 +44,13 @@ type PendingRow = {
 type InvoiceRow = {
   id: number;
   provider: string;
+  sourceId: number;
   sourceType: string;
   sourceNumber: string;
   customerName: string | null;
   amount: number;
   invoiceType: string;
-  status: 'PENDING' | 'ISSUED' | 'ERROR' | 'CANCELLED';
+  status: 'PENDING' | 'ISSUED' | 'ERROR' | 'CANCELLED' | 'SKIPPED';
   invoiceNumber: string | null;
   pdfUrl: string | null;
   errorMessage: string | null;
@@ -66,6 +69,7 @@ const typeLabel = (t: string) => (t === 'E_FATURA' ? 'e-Fatura' : 'e-Arşiv');
 
 function StatusBadge({ row }: { row: InvoiceRow }) {
   if (row.status === 'ISSUED') return <span className="rounded-md bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">Kesildi</span>;
+  if (row.status === 'SKIPPED') return <span className="rounded-md bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">Faturalanmayacak</span>;
   if (row.status === 'PENDING') return <span className="rounded-md bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">Gönderiliyor</span>;
   if (row.status === 'CANCELLED') return <span className="rounded-md bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">İptal</span>;
   return <span className="rounded-md bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700">Hata</span>;
@@ -231,7 +235,9 @@ export default function EDonusumPage() {
                   ['eArchiveSeries', 'e-Arşiv Seri (3 karakter)'],
                   ['eInvoiceSeries', 'e-Fatura Seri (3 karakter)'],
                   ['vatRate', 'KDV Oranı (%)'],
-                  ['defaultCity', 'Varsayılan Şehir (adres yoksa)'],
+                  ['defaultCity', 'Varsayılan Şehir (dükkan)'],
+                  ['defaultDistrict', 'Varsayılan İlçe (dükkan)'],
+                  ['defaultAddress', 'Varsayılan Açık Adres (dükkan)'],
                   ['webSiteUrl', 'Web sitesi adresi'],
                   ['carrierName', 'Kargo firması adı (web siparişleri)'],
                   ['carrierTaxId', 'Kargo firması VKN'],
@@ -360,6 +366,33 @@ export default function EDonusumPage() {
                           })}
                           className="rounded-md border px-2.5 py-1 text-xs disabled:opacity-40"
                         >Faturala</button>
+                        <button
+                          disabled={busy !== null}
+                          title="Deneme veya iptal satışı: fatura kesilmesin"
+                          onClick={() => run(`skip-${r.sourceType}-${r.sourceId}`, async () => {
+                            if (!confirm(`${r.sourceNumber} faturalanmayacak olarak işaretlensin mi? (Kesilen Faturalar listesinden geri alabilirsiniz)`)) return;
+                            await api('/e-invoices/skip', {
+                              method: 'POST',
+                              json: { sourceType: r.sourceType, sourceId: r.sourceId, sourceNumber: r.sourceNumber, customerName: r.customerName, amount: r.amount },
+                            });
+                            await Promise.all([loadPending(), loadInvoices()]);
+                            return `${r.sourceNumber} faturalanmayacak.`;
+                          })}
+                          className="ml-1 rounded-md border px-2.5 py-1 text-xs text-gray-500 disabled:opacity-40"
+                        >Faturalama</button>
+                        {r.sourceType === 'RETAIL_SALE' && (
+                          <button
+                            disabled={busy !== null}
+                            title="Deneme/yanlış satış: satış iptal edilir, stok ve kasa geri alınır"
+                            onClick={() => run(`void-${r.sourceId}`, async () => {
+                              if (!confirm(`${r.sourceNumber} (${money(r.amount)}) satışı silinsin mi?\n\nSatış iptal edilir, düşen stok geri eklenir ve kasa tahsilatı kaldırılır. Bu işlem geri alınamaz.`)) return;
+                              await api(`/sales/${r.sourceId}/void`, { method: 'POST', json: { reason: 'e-Dönüşüm ekranından silindi (deneme satışı)' } });
+                              await Promise.all([loadPending(), loadInvoices()]);
+                              return `${r.sourceNumber} silindi; stok ve kasa geri alındı.`;
+                            })}
+                            className="ml-1 rounded-md border border-red-200 px-2.5 py-1 text-xs text-red-600 disabled:opacity-40"
+                          >Satışı Sil</button>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -416,6 +449,30 @@ export default function EDonusumPage() {
                             })}
                             className="inline-flex items-center gap-1 text-xs text-blue-600 disabled:opacity-40"
                           ><ExternalLink className="h-3.5 w-3.5" /> PDF</button>
+                        )}
+                        {r.provider.endsWith('_TEST') && r.sourceType === 'RETAIL_SALE' && r.status !== 'CANCELLED' && (
+                          <button
+                            disabled={busy !== null}
+                            title="Deneme satışı: satış iptal edilir, stok ve kasa geri alınır (test faturası gerçek değildir)"
+                            onClick={() => run(`void-inv-${r.id}`, async () => {
+                              if (!confirm(`${r.sourceNumber} deneme satışı silinsin mi?\n\nSatış iptal edilir, düşen stok geri eklenir ve kasa tahsilatı kaldırılır. Test faturası gerçek olmadığı için ayrıca iptal gerekmez.`)) return;
+                              await api(`/sales/${r.sourceId}/void`, { method: 'POST', json: { reason: 'e-Dönüşüm ekranından silindi (deneme satışı)' } });
+                              await Promise.all([loadPending(), loadInvoices()]);
+                              return `${r.sourceNumber} silindi; stok ve kasa geri alındı.`;
+                            })}
+                            className="ml-2 rounded-md border border-red-200 px-2.5 py-1 text-xs text-red-600 disabled:opacity-40"
+                          >Satışı Sil</button>
+                        )}
+                        {r.status === 'SKIPPED' && (
+                          <button
+                            disabled={busy !== null}
+                            onClick={() => run(`unskip-${r.id}`, async () => {
+                              await api(`/e-invoices/${r.id}/unskip`, { method: 'POST' });
+                              await Promise.all([loadPending(), loadInvoices()]);
+                              return `${r.sourceNumber} tekrar faturalanacaklar listesine alındı.`;
+                            })}
+                            className="rounded-md border px-2.5 py-1 text-xs disabled:opacity-40"
+                          >Geri Al</button>
                         )}
                         {r.status === 'ERROR' && (
                           <button

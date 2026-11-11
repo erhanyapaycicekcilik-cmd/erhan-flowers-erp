@@ -25,6 +25,9 @@ export type EInvoiceSettings = {
   carrierTaxId: string;
   /** Alıcı adresinde şehir yoksa kullanılacak şehir (dükkanın bulunduğu il) */
   defaultCity: string;
+  /** Alıcı adresi yoksa kullanılacak ilçe ve açık adres (dükkan adresi) */
+  defaultDistrict: string;
+  defaultAddress: string;
 };
 
 export type EInvoiceDraftLine = {

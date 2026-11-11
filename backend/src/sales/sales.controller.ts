@@ -5,6 +5,7 @@ import { extname, join } from 'path';
 import * as fs from 'fs';
 import { Request } from 'express';
 import { AuthGuard } from '../auth/auth.guard';
+import { OwnerGuard } from '../auth/owner.guard';
 import { SalesService } from './sales.service';
 
 type AuthenticatedRequest = Request & { user?: { id: number; name: string; email: string; role: string } };
@@ -122,6 +123,13 @@ export class SalesController {
   @Post(':id/cancel')
   cancelSale(@Param('id') id: string, @Body() body: { reason?: string }, @Req() request: AuthenticatedRequest) {
     return this.sales.cancelSale(Number(id), body.reason ?? '', request.user!.id);
+  }
+
+  /** Tamamlanmış dükkan satışını geri al (stok + kasa geri, satış iptal). Sadece OWNER */
+  @Post(':id/void')
+  @UseGuards(OwnerGuard)
+  voidSale(@Param('id') id: string, @Body() body: { reason?: string }, @Req() request: AuthenticatedRequest) {
+    return this.sales.voidCompletedSale(Number(id), body?.reason ?? '', request.user!.id);
   }
 
   @Post(':id/status')

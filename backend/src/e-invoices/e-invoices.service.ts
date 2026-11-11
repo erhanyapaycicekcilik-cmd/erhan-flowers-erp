@@ -48,6 +48,8 @@ const DEFAULT_SETTINGS: EInvoiceSettings = {
   carrierName: '',
   carrierTaxId: '',
   defaultCity: '',
+  defaultDistrict: '',
+  defaultAddress: '',
 };
 
 @Injectable()
@@ -101,6 +103,8 @@ export class EInvoicesService {
       carrierName: str(body.carrierName, current.carrierName),
       carrierTaxId: str(body.carrierTaxId, current.carrierTaxId).replace(/\D/g, ''),
       defaultCity: str(body.defaultCity, current.defaultCity),
+      defaultDistrict: str(body.defaultDistrict, current.defaultDistrict),
+      defaultAddress: str(body.defaultAddress, current.defaultAddress),
       eArchiveSeries: str(body.eArchiveSeries, current.eArchiveSeries).toUpperCase(),
       eInvoiceSeries: str(body.eInvoiceSeries, current.eInvoiceSeries).toUpperCase(),
       autoIssue: typeof body.autoIssue === 'boolean' ? body.autoIssue : current.autoIssue,
@@ -170,9 +174,12 @@ export class EInvoicesService {
     // Sadece aktif ortamda (test/canlı) kesilmiş kayıtlar satışı "faturalı" sayar
     const tag = providerTag(settings);
     const byKey = new Map(existing.filter((e) => e.provider === tag).map((e) => [`${e.sourceType}:${e.sourceId}`, e]));
+    // "Faturalama" ile hariç tutulanlar her iki ortamda da listelenmez
+    const skipped = new Set(existing.filter((e) => e.status === 'SKIPPED').map((e) => `${e.sourceType}:${e.sourceId}`));
     const rows: PendingInvoiceRow[] = [];
 
     for (const s of sales) {
+      if (skipped.has(`RETAIL_SALE:${s.id}`)) continue;
       const inv = byKey.get(`RETAIL_SALE:${s.id}`);
       if (inv && inv.status !== 'ERROR') continue;
       rows.push({
@@ -189,6 +196,7 @@ export class EInvoicesService {
       });
     }
     for (const w of webOrders) {
+      if (skipped.has(`WEB_ORDER:${w.id}`)) continue;
       const inv = byKey.get(`WEB_ORDER:${w.id}`);
       if (inv && inv.status !== 'ERROR') continue;
       rows.push({
@@ -237,6 +245,7 @@ export class EInvoicesService {
         },
       });
       if (!sale) throw new NotFoundException('Satış bulunamadı.');
+      if (sale.status === 'CANCELLED') throw new BadRequestException('Satış iptal edilmiş; fatura kesilemez.');
       const c = sale.customer;
       const invoiceType = c.isEInvoicePayer ? 'E_FATURA' : 'E_ARSIV';
       const lines = sale.items.map((i) => {
@@ -275,6 +284,7 @@ export class EInvoicesService {
 
     const order = await this.prisma.webOrder.findUnique({ where: { id: ref.sourceId }, include: { items: true } });
     if (!order) throw new NotFoundException('Web siparişi bulunamadı.');
+    if (order.status === 'CANCELLED') throw new BadRequestException('Sipariş iptal edilmiş; fatura kesilemez.');
     const lines = order.items.map((i) => ({
       name: i.productName, quantity: i.quantity, unitPriceInclVat: Number(i.unitPrice), vatRate: vat, totalInclVat: Number(i.lineTotal),
     }));
@@ -333,10 +343,40 @@ export class EInvoicesService {
     return this.issueMany(refs, settings);
   }
 
+  /** Satışı faturalamadan çıkar (deneme/iptal satışlar). Kesilmiş canlı fatura varsa izin verilmez */
+  async skip(body: { sourceType?: string; sourceId?: number; sourceNumber?: string; customerName?: string; amount?: number }) {
+    const sourceType = body.sourceType === 'WEB_ORDER' ? 'WEB_ORDER' : 'RETAIL_SALE';
+    const sourceId = Number(body.sourceId);
+    if (!Number.isInteger(sourceId) || sourceId <= 0) throw new BadRequestException('Satış seçilmedi.');
+    const key = { sourceType_sourceId: { sourceType, sourceId } };
+    const existing = await this.prisma.eInvoice.findUnique({ where: key });
+    if (existing?.status === 'ISSUED' && existing.provider === 'TRENDYOL_EFATURAM') {
+      throw new BadRequestException('Bu satışın canlı faturası kesilmiş; faturalamadan çıkarılamaz.');
+    }
+    const data = {
+      status: 'SKIPPED',
+      errorMessage: null,
+      sourceNumber: String(body.sourceNumber ?? existing?.sourceNumber ?? `${sourceType}#${sourceId}`),
+      customerName: body.customerName ?? existing?.customerName ?? null,
+      amount: new Prisma.Decimal(Number(body.amount ?? existing?.amount ?? 0)),
+    };
+    await this.prisma.eInvoice.upsert({ where: key, create: { ...data, sourceType, sourceId }, update: data });
+    return { ok: true };
+  }
+
+  /** Faturalama dışı bırakılanı geri al → tekrar faturasız listesine döner */
+  async unskip(id: number) {
+    const inv = await this.prisma.eInvoice.findUnique({ where: { id } });
+    if (!inv || inv.status !== 'SKIPPED') throw new BadRequestException('Bu kayıt faturalama dışı değil.');
+    await this.prisma.eInvoice.delete({ where: { id } });
+    return { ok: true };
+  }
+
   async retry(id: number) {
     const inv = await this.prisma.eInvoice.findUnique({ where: { id } });
     if (!inv) throw new NotFoundException('Fatura kaydı bulunamadı.');
     if (inv.status === 'ISSUED') throw new BadRequestException('Bu fatura zaten kesilmiş.');
+    if (inv.status === 'CANCELLED' || inv.status === 'SKIPPED') throw new BadRequestException('Bu satış faturalanmayacak olarak işaretli.');
     const settings = await this.loadSettings();
     this.assertReady(settings);
     return this.issueMany([{ sourceType: inv.sourceType as SourceType, sourceId: inv.sourceId }], settings);
@@ -357,6 +397,7 @@ export class EInvoicesService {
     const key = { sourceType_sourceId: { sourceType: ref.sourceType, sourceId: ref.sourceId } };
     const existing = await this.prisma.eInvoice.findUnique({ where: key });
     const tag = providerTag(settings);
+    if (existing?.status === 'SKIPPED') return false;
     const sameEnv = existing?.provider === tag;
     if (existing && sameEnv && existing.status === 'ISSUED') return true;
     if (existing && sameEnv && existing.status === 'PENDING' && Date.now() - existing.updatedAt.getTime() < STALE_PENDING_MS) return false;
