@@ -696,20 +696,21 @@ export class OrderSyncService {
         this.logger.log(`[${platform}] Siparis #${sale.id} (${sale.external_order_id}) API'de gorünmuyor → DELIVERED olarak isaratlendi.`);
       }
     }
-    // retail_sales: CONFIRMED / PREPARING → CANCELLED (2 günden eski)
+    // retail_sales: CONFIRMED / PREPARING → API'de görünmüyorsa DELIVERED say (kargoya verildi demek)
+    // Trendyol için de aynı mantık geçerli; eski CANCELLED mantığı siparişleri yanlış kapatıyordu
     const staleSales = await this.prisma.$queryRaw<Array<{ id: number; external_order_id: string }>>`
       SELECT id, external_order_id FROM retail_sales
       WHERE channel = ${platform}::"RetailSaleChannel"
-        AND status IN ('CONFIRMED'::"RetailSaleStatus", 'PREPARING'::"RetailSaleStatus")
+        AND status IN ('CONFIRMED'::"RetailSaleStatus", 'PREPARING'::"RetailSaleStatus", 'IN_PRODUCTION'::"RetailSaleStatus", 'READY'::"RetailSaleStatus")
         AND external_order_id IS NOT NULL
-        AND created_at < NOW() - INTERVAL '2 days'
+        AND created_at < NOW() - INTERVAL '1 days'
     `;
     for (const sale of staleSales) {
       if (!fetchedIds.includes(sale.external_order_id)) {
         await this.prisma.$executeRaw`
-          UPDATE retail_sales SET status = 'CANCELLED'::"RetailSaleStatus", updated_at = NOW() WHERE id = ${sale.id}
+          UPDATE retail_sales SET status = 'DELIVERED'::"RetailSaleStatus", updated_at = NOW() WHERE id = ${sale.id}
         `;
-        this.logger.log(`[${platform}] Eski siparis #${sale.id} (${sale.external_order_id}) API'de yok → CANCELLED olarak isaratlendi.`);
+        this.logger.log(`[${platform}] Siparis #${sale.id} (${sale.external_order_id}) API'de yok → DELIVERED olarak isaratlendi.`);
       }
     }
     // marketplace_orders: 2 günden eski ve API'de görünmeyenleri DELIVERED yap
