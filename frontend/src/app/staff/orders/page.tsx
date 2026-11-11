@@ -201,8 +201,8 @@ export default function StaffOrdersPage() {
     setSyncing(true);
     setSyncMsg('');
     try {
-      const result = await api<{ ok: boolean; imported: number; message?: string }>('/integrations/orders/HEPSIBURADA/sync', { method: 'POST' });
-      setSyncMsg(`Tamamlandı: ${result.imported ?? 0} sipariş güncellendi`);
+      const result = await api<{ ok: boolean; newOrders?: number; imported?: number; message?: string }>('/integrations/hepsiburada/sync-orders', { method: 'POST' });
+      setSyncMsg(`Tamamlandı: ${result.newOrders ?? result.imported ?? 0} sipariş güncellendi`);
       await load();
     } catch {
       setSyncMsg('Hata oluştu');
