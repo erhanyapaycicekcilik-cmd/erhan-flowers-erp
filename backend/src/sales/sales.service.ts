@@ -580,13 +580,14 @@ export class SalesService {
       const saleRows = await tx.$queryRaw<Array<{ id: number }>>`
         INSERT INTO retail_sales (
           sale_number, customer_id, address_id, channel, sale_type, status, currency, subtotal, discount_total,
-          delivery_fee, grand_total, paid_total, remaining_total, customer_note, internal_note, event_key, created_by_id, created_at, updated_at
+          delivery_fee, grand_total, paid_total, remaining_total, customer_note, internal_note, event_key, created_by_id, created_at, updated_at, company_id
         )
         VALUES (
           ${saleNumber}, ${Number(customer.id)}, ${address ? Number(address.id) : null}, ${this.saleChannel(body.channel)}::"RetailSaleChannel",
           ${this.saleType(body.saleType)}::"RetailSaleType", ${initialStatus}::"RetailSaleStatus", 'TRY',
           ${totals.subtotal}, ${totals.discountTotal}, ${totals.deliveryFee}, ${totals.grandTotal}, ${totals.paidTotal}, ${totals.remainingTotal},
-          ${this.text(body.customerNote)}, ${this.text(body.internalNote)}, ${eventKey}, ${userId}, NOW(), NOW()
+          ${this.text(body.customerNote)}, ${this.text(body.internalNote)}, ${eventKey}, ${userId}, NOW(), NOW(),
+          COALESCE((SELECT id FROM companies WHERE code = 'ERHAN' LIMIT 1), (SELECT MIN(id) FROM companies))
         )
         RETURNING id
       `;
@@ -1351,7 +1352,11 @@ export class SalesService {
       const productNameSnapshot = this.text(body.productNameSnapshot ?? body.productName);
       if (!productNameSnapshot) throw new BadRequestException('Ürün adı bulunamadı.');
       return {
-        variantId: this.optionalNumber(body.variantId ?? body.id),
+        // Hızlı satış: varyantı olmayan ürünler aramada negatif id ile gelir → varyant yok
+        variantId: (() => {
+          const v = this.optionalNumber('variantId' in body ? body.variantId : body.id);
+          return v && v > 0 ? v : null;
+        })(),
         stockCardId: this.optionalNumber(body.stockCardId),
         barcode: this.text(body.barcode) || null,
         modelCode: this.text(body.modelCode ?? body.proposedModelCode ?? body.currentModelCode) || null,
