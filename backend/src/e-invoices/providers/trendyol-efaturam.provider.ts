@@ -170,8 +170,12 @@ export class TrendyolEFaturamProvider implements EInvoiceProvider {
     const claims = this.decodeJwt(token);
     const flat = this.flatten(claims);
     const bodyNum = Number(res.body.trim());
+    // e-Faturam token'ı: { sub: <userId>, eml, privs: { "<companyId>": [yetkiler] }, rls }
+    const privs = claims.privs && typeof claims.privs === 'object' && !Array.isArray(claims.privs) ? Object.keys(claims.privs) : [];
+    const privCompanyId = Number(privs.find((k) => /^\d{6,}$/.test(k))) || null;
     const companyId =
       Number(s.firmId) ||
+      privCompanyId ||
       this.findNumericClaim(flat, [/^companyId$/i, /compan(y|ies).?ids?$/i, /^company$/i, /^cid$/i, /compan[^.]*\.id$/i, /firm.?id/i, /tenant.?id/i, /customer.?id/i]);
     const userId =
       Number(s.userId) ||
