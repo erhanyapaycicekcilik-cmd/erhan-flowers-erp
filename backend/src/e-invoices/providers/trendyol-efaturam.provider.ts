@@ -107,14 +107,50 @@ export class TrendyolEFaturamProvider implements EInvoiceProvider {
     }
   }
 
-  private findNumericClaim(payload: Record<string, unknown>, patterns: RegExp[]): number | null {
-    const entries = Object.entries(payload);
+  /** JWT içindeki alanları düzleştirir: {a:{b:1}} → {"a.b": 1}; JSON-string alanları da açar */
+  private flatten(obj: unknown, prefix = '', out: Record<string, unknown> = {}, depth = 0): Record<string, unknown> {
+    if (depth > 4 || obj === null || obj === undefined) return out;
+    if (typeof obj === 'string' && /^[\[{]/.test(obj.trim())) {
+      try {
+        return this.flatten(JSON.parse(obj), prefix, out, depth + 1);
+      } catch {
+        /* düz metin */
+      }
+    }
+    if (Array.isArray(obj)) {
+      obj.slice(0, 5).forEach((v, i) => this.flatten(v, `${prefix}[${i}]`, out, depth + 1));
+      if (prefix) out[prefix] = obj;
+      return out;
+    }
+    if (typeof obj === 'object') {
+      for (const [k, v] of Object.entries(obj as Record<string, unknown>)) this.flatten(v, prefix ? `${prefix}.${k}` : k, out, depth + 1);
+      return out;
+    }
+    out[prefix] = obj;
+    return out;
+  }
+
+  private findNumericClaim(flat: Record<string, unknown>, patterns: RegExp[]): number | null {
+    const entries = Object.entries(flat);
     for (const p of patterns) {
       for (const [k, v] of entries) {
-        if (p.test(k) && v !== null && v !== '' && Number.isFinite(Number(v))) return Number(v);
+        const leaf = k.split('.').pop() ?? k;
+        if (!p.test(leaf) && !p.test(k)) continue;
+        const n = Array.isArray(v) ? Number(v[0]) : Number(v);
+        if (v !== null && v !== '' && typeof v !== 'boolean' && Number.isFinite(n) && n > 0) return n;
       }
     }
     return null;
+  }
+
+  /** Teşhis için: token alan adları ve sayısal değerleri (kimlik numaraları; gizli bilgi içermez) */
+  private describeClaims(flat: Record<string, unknown>): string {
+    const skip = /^(exp|iat|nbf|jti|iss|aud)$/i;
+    return Object.entries(flat)
+      .filter(([k]) => !skip.test(k))
+      .map(([k, v]) => (typeof v === 'number' || /^\d+$/.test(String(v)) ? `${k}=${v}` : k))
+      .slice(0, 25)
+      .join(', ');
   }
 
   private async login(s: EInvoiceSettings, force = false): Promise<Session> {
@@ -132,11 +168,22 @@ export class TrendyolEFaturamProvider implements EInvoiceProvider {
     if (!token) throw new EFaturamError('e-Faturam girişi başarılı ama x-access-token dönmedi.');
 
     const claims = this.decodeJwt(token);
-    const companyId = Number(s.firmId) || this.findNumericClaim(claims, [/^companyId$/i, /company.?id/i, /^cid$/i]);
-    const bodyNum = Number(res.body);
+    const flat = this.flatten(claims);
+    const bodyNum = Number(res.body.trim());
+    const companyId =
+      Number(s.firmId) ||
+      this.findNumericClaim(flat, [/^companyId$/i, /compan(y|ies).?ids?$/i, /^company$/i, /^cid$/i, /compan[^.]*\.id$/i, /firm.?id/i, /tenant.?id/i, /customer.?id/i]);
     const userId =
-      Number(s.userId) || this.findNumericClaim(claims, [/^userId$/i, /user.?id/i, /^uid$/i, /^sub$/i]) || (Number.isFinite(bodyNum) && bodyNum > 0 ? bodyNum : null);
-    if (!companyId) throw new EFaturamError('Firma ID token içinde bulunamadı. Ayarlarda "Firma ID" alanını doldurun.');
+      Number(s.userId) ||
+      this.findNumericClaim(flat, [/^userId$/i, /user.?id/i, /^uid$/i, /^id$/i, /^sub$/i]) ||
+      (Number.isFinite(bodyNum) && bodyNum > 0 ? bodyNum : null);
+    if (!companyId) {
+      this.logger.warn(`e-Faturam token alanları: ${this.describeClaims(flat)} | giriş cevabı: ${res.body.slice(0, 100)}`);
+      throw new EFaturamError(
+        `Giriş başarılı ama Firma ID token içinde bulunamadı. Ayarlarda "Firma ID" alanını doldurun. ` +
+          `(Token alanları: ${this.describeClaims(flat) || 'yok'}; giriş cevabı: ${res.body.slice(0, 40) || 'boş'})`,
+      );
+    }
     if (!userId) throw new EFaturamError('Kullanıcı ID token içinde bulunamadı. Ayarlarda "Kullanıcı ID" alanını doldurun.');
     const exp = Number(claims.exp);
     this.session = { key, token, companyId, userId, expiresAt: Number.isFinite(exp) && exp > 0 ? exp * 1000 : Date.now() + 30 * 60_000 };
