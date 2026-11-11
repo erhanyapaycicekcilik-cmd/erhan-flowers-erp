@@ -3,6 +3,7 @@ import { Cron } from '@nestjs/schedule';
 import * as XLSX from 'xlsx';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CredentialVaultService } from './credential-vault.service';
+import { IntegrationsService } from '../integrations.service';
 
 interface TrendyolOrderLine {
   id?: unknown;
@@ -46,16 +47,30 @@ export class OrderSyncService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly credentialVault: CredentialVaultService,
+    private readonly integrations: IntegrationsService,
   ) {}
 
   @Cron('*/15 * * * *')
   async syncAllPlatforms() {
     this.logger.log('Tüm platform siparis senkronizasyonu basliyor...');
+    const owner = await this.prisma.user.findFirst({ where: { role: 'OWNER' } });
     try { await this.runSync(); } catch (err) {
       this.logger.error('Trendyol sync hatasi', err instanceof Error ? err.message : String(err));
     }
+    // Trendyol siparişlerini retail_sales'e de aktar (personel ekranında görünsün)
+    if (owner) {
+      try { await this.integrations.syncOrders('TRENDYOL', owner.id); } catch (err) {
+        this.logger.warn('Trendyol retail_sales sync hatasi: ' + String(err));
+      }
+    }
     try { await this.runN11Sync(); } catch (err) {
       this.logger.error('N11 sync hatasi', err instanceof Error ? err.message : String(err));
+    }
+    // N11 siparişlerini retail_sales'e de aktar
+    if (owner) {
+      try { await this.integrations.syncOrders('N11', owner.id); } catch (err) {
+        this.logger.warn('N11 retail_sales sync hatasi: ' + String(err));
+      }
     }
     try { await this.runHepsiburadaSync(); } catch (err) {
       this.logger.error('Hepsiburada sync hatasi', err instanceof Error ? err.message : String(err));
@@ -608,12 +623,13 @@ export class OrderSyncService {
       const lines = Array.isArray(order.lines) ? order.lines as Array<Record<string, unknown>>
         : Array.isArray(order.orderlines) ? order.orderlines as Array<Record<string, unknown>> : [];
 
+      const hbNewStatus = String(order.status ?? 'Created');
       const savedOrder = await this.prisma.marketplaceOrder.create({
         data: {
           platform: 'HEPSIBURADA',
           externalOrderId,
           orderNumber: String(order.orderNumber ?? externalOrderId),
-          status: String(order.status ?? 'Created'),
+          status: hbNewStatus,
           customerName: String((order.shippingAddress as Record<string,unknown>)?.fullName ?? order.buyerName ?? ''),
           totalAmount: Number(order.totalPrice ?? order.amount ?? 0),
           cargoAmount: Number(order.cargoPrice ?? order.shippingAmount ?? 0),
@@ -623,6 +639,19 @@ export class OrderSyncService {
         },
       });
       newOrders++;
+
+      // retail_sales içinde aynı external_order_id ile kayıt varsa status'unu da güncelle
+      const isDeliveredNew = ['Delivered', 'DELIVERED', 'delivered', 'Shipped', 'SHIPPED'].includes(hbNewStatus);
+      const isCancelledNew = ['Cancelled', 'CANCELLED', 'Returned', 'RETURNED'].includes(hbNewStatus);
+      if (isDeliveredNew || isCancelledNew) {
+        await this.prisma.$executeRaw`
+          UPDATE retail_sales
+          SET status = ${isDeliveredNew ? 'DELIVERED' : 'CANCELLED'}::"RetailSaleStatus", updated_at = NOW()
+          WHERE channel = 'HEPSIBURADA'::"RetailSaleChannel"
+            AND external_order_id = ${externalOrderId}
+            AND status NOT IN ('DELIVERED'::"RetailSaleStatus", 'CANCELLED'::"RetailSaleStatus", 'COMPLETED'::"RetailSaleStatus")
+        `;
+      }
 
       for (const line of lines) {
         const sku = line.merchantSku ? String(line.merchantSku) : null;
