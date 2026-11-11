@@ -573,6 +573,7 @@ export class OrderSyncService {
 
     const allOrders: Array<Record<string, unknown>> = [];
     let offset = 0;
+    let hbApiSucceeded = false;
     while (offset < 500) {
       // /openorders: sadece aktif (henüz kargoya verilmemiş) siparişler
       // /orders tüm siparişleri döndürür — bu yüzden markMissingAsDelivered çalışmaz
@@ -581,6 +582,7 @@ export class OrderSyncService {
       url.searchParams.set('limit', '50');
       const res = await fetch(url.toString(), { method: 'GET', headers });
       if (!res.ok) { this.logger.warn(`Hepsiburada openorders API hatasi: HTTP ${res.status}`); break; }
+      hbApiSucceeded = true; // API yanıt verdi (0 sipariş bile olsa bu geçerli sonuç)
       const data = await res.json() as { data?: Array<Record<string, unknown>>; items?: Array<Record<string, unknown>> };
       const items = data.data ?? data.items ?? [];
       if (!Array.isArray(items) || items.length === 0) break;
@@ -704,14 +706,17 @@ export class OrderSyncService {
     });
 
     const fetchedHbIds = allOrders.map((o) => String(o.id ?? o.orderNumber ?? '')).filter(Boolean);
-    await this.markMissingAsDelivered('HEPSIBURADA', fetchedHbIds);
+    // hbApiSucceeded: API başarıyla yanıt verdiyse eski siparişleri temizle
+    // 0 sipariş = hepsi kargoya verildi demek — boş liste dönmesi API hatası değil, gerçek sonuç
+    await this.markMissingAsDelivered('HEPSIBURADA', fetchedHbIds, hbApiSucceeded);
 
     this.logger.log(`Hepsiburada sync tamamlandi: ${newOrders} yeni siparis, ${stockDeductions} stok dusumu.`);
     return { processed: allOrders.length, newOrders, stockDeductions };
   }
 
-  private async markMissingAsDelivered(platform: string, fetchedIds: string[]): Promise<void> {
-    if (fetchedIds.length === 0) return;
+  private async markMissingAsDelivered(platform: string, fetchedIds: string[], forceCleanup = false): Promise<void> {
+    // fetchedIds boşsa ve API başarılı değilse temizleme yapma (API hatası olabilir)
+    if (fetchedIds.length === 0 && !forceCleanup) return;
     // retail_sales: OUT_FOR_DELIVERY → DELIVERED
     const transitSales = await this.prisma.$queryRaw<Array<{ id: number; external_order_id: string }>>`
       SELECT id, external_order_id FROM retail_sales
