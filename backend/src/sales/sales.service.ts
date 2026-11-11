@@ -936,6 +936,7 @@ export class SalesService {
           UPDATE retail_customers SET
             customer_type = ${customerType}, first_name = ${firstName}, last_name = ${lastName || null}, display_name = ${displayName},
             company_title = ${companyTitle || null}, tax_office = ${this.text(body.taxOffice) || null}, tax_number = ${this.text(body.taxNumber) || null},
+            national_id = COALESCE(${this.text(body.nationalId ?? body.tckn) || null}, national_id),
             phone = ${phone}, whatsapp_phone = ${this.text(body.whatsappPhone) || phone}, email = ${this.text(body.email) || null},
             customer_note = ${this.text(body.customerNote ?? body.note) || null}, source = ${this.saleChannel(body.source)}::"RetailSaleChannel",
             source_definition_id = (SELECT id FROM retail_customer_source_definitions WHERE code = ${this.text(body.source).toUpperCase() || 'STORE'} AND is_active = true LIMIT 1),
