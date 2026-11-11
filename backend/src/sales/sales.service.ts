@@ -919,6 +919,8 @@ export class SalesService {
     const normalizedPhone = this.normalizePhone(phone);
     const displayName = customerType === 'CORPORATE' ? companyTitle || firstName : [firstName, lastName].filter(Boolean).join(' ');
     if (!firstName) throw new BadRequestException('Müşteri adı zorunludur.');
+    // Hızlı dükkan satışı: telefonu olmayan anonim müşteri → tek ortak "Perakende Müşteri" kaydı
+    if (!normalizedPhone && body.walkIn === true) return this.ensureWalkInCustomer(tx, userId);
     if (!normalizedPhone) throw new BadRequestException('Geçerli bir telefon numarası zorunludur.');
     if (normalizedPhone) {
       const existing = await tx.$queryRaw<Array<Record<string, unknown>>>`
@@ -972,6 +974,23 @@ export class SalesService {
       RETURNING id, customer_code AS "customerCode", first_name AS "firstName", last_name AS "lastName", display_name AS "displayName", phone, normalized_phone AS "normalizedPhone"
     `;
     return rows[0];
+  }
+
+  private async ensureWalkInCustomer(tx: Prisma.TransactionClient, userId: number) {
+    const code = 'MUS-PERAKENDE';
+    const select = async () =>
+      tx.$queryRaw<Array<Record<string, unknown>>>`
+        SELECT id, customer_code AS "customerCode", first_name AS "firstName", last_name AS "lastName", display_name AS "displayName", phone, normalized_phone AS "normalizedPhone"
+        FROM retail_customers WHERE customer_code = ${code} LIMIT 1
+      `;
+    const existing = await select();
+    if (existing[0]) return existing[0];
+    await tx.$executeRaw`
+      INSERT INTO retail_customers (customer_code, customer_type, first_name, last_name, display_name, source, created_by_id, created_at, updated_at)
+      VALUES (${code}, 'INDIVIDUAL', 'Perakende', 'Müşteri', 'Perakende Müşteri', 'STORE'::"RetailSaleChannel", ${userId}, NOW(), NOW())
+      ON CONFLICT (customer_code) DO NOTHING
+    `;
+    return (await select())[0];
   }
 
   private async ensureAddress(tx: Prisma.TransactionClient, customerId: number, body: SaleAddressPayload, userId: number) {

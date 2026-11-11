@@ -112,7 +112,7 @@ export default function HizliSatisPage() {
           saleType: 'STORE_SALE',
           delivery: { deliveryType: 'STORE_PICKUP' },
           payments: [{ method: 'CASH', amount: total, clientKey: `cash-${Date.now()}` }],
-          customer: { customerType: 'INDIVIDUAL', firstName: 'Perakende', lastName: 'Müşteri' },
+          customer: { customerType: 'INDIVIDUAL', firstName: 'Perakende', lastName: 'Müşteri', walkIn: true },
           items: cart.map(i => ({
             id: i.id,
             variantId: i.id > 0 ? i.id : null,
