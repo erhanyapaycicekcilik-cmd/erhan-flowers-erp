@@ -302,8 +302,9 @@ export class IntegrationsController {
 
   @Post('hepsiburada/sync-orders')
   @UseGuards(OwnerGuard)
-  hbSyncOrders() {
-    return this.hbSync.syncOrdersNow();
+  async hbSyncOrders() {
+    const result = await this.orderSync.runHepsiburadaSync();
+    return { ok: true, newOrders: result.newOrders, message: `${result.newOrders} yeni sipariş, ${result.stockDeductions} stok düşümü.` };
   }
 
   @Post('hepsiburada/push-stock')
