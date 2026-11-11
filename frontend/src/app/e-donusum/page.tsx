@@ -449,6 +449,17 @@ export default function EDonusumPage() {
                             className="inline-flex items-center gap-1 text-xs text-blue-600 disabled:opacity-40"
                           ><ExternalLink className="h-3.5 w-3.5" /> PDF</button>
                         )}
+                        {r.status === 'SKIPPED' && (
+                          <button
+                            disabled={busy !== null}
+                            onClick={() => run(`unskip-${r.id}`, async () => {
+                              await api(`/e-invoices/${r.id}/unskip`, { method: 'POST' });
+                              await Promise.all([loadPending(), loadInvoices()]);
+                              return `${r.sourceNumber} tekrar faturalanacaklar listesine alındı.`;
+                            })}
+                            className="rounded-md border px-2.5 py-1 text-xs disabled:opacity-40"
+                          >Geri Al</button>
+                        )}
                         {r.status === 'ERROR' && (
                           <button
                             disabled={!canIssue || busy !== null}
