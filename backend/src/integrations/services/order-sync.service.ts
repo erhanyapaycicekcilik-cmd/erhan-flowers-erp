@@ -574,11 +574,13 @@ export class OrderSyncService {
     const allOrders: Array<Record<string, unknown>> = [];
     let offset = 0;
     while (offset < 500) {
-      const url = new URL(`/orders/merchantid/${encodeURIComponent(merchantId)}`, apiBase);
+      // /openorders: sadece aktif (henüz kargoya verilmemiş) siparişler
+      // /orders tüm siparişleri döndürür — bu yüzden markMissingAsDelivered çalışmaz
+      const url = new URL(`/orders/merchantid/${encodeURIComponent(merchantId)}/openorders`, apiBase);
       url.searchParams.set('offset', String(offset));
       url.searchParams.set('limit', '50');
       const res = await fetch(url.toString(), { method: 'GET', headers });
-      if (!res.ok) { this.logger.warn(`Hepsiburada orders API hatasi: HTTP ${res.status}`); break; }
+      if (!res.ok) { this.logger.warn(`Hepsiburada openorders API hatasi: HTTP ${res.status}`); break; }
       const data = await res.json() as { data?: Array<Record<string, unknown>>; items?: Array<Record<string, unknown>> };
       const items = data.data ?? data.items ?? [];
       if (!Array.isArray(items) || items.length === 0) break;
