@@ -49,6 +49,16 @@ export class EInvoicesController {
     return this.service.pdf(id);
   }
 
+  @Post('skip')
+  skip(@Body() body: Parameters<EInvoicesService['skip']>[0]) {
+    return this.service.skip(body ?? {});
+  }
+
+  @Post(':id/unskip')
+  unskip(@Param('id', ParseIntPipe) id: number) {
+    return this.service.unskip(id);
+  }
+
   @Post(':id/retry')
   retry(@Param('id', ParseIntPipe) id: number) {
     return this.service.retry(id);
