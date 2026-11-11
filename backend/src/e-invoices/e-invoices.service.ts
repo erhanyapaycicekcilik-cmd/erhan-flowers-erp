@@ -245,6 +245,7 @@ export class EInvoicesService {
         },
       });
       if (!sale) throw new NotFoundException('Satış bulunamadı.');
+      if (sale.status === 'CANCELLED') throw new BadRequestException('Satış iptal edilmiş; fatura kesilemez.');
       const c = sale.customer;
       const invoiceType = c.isEInvoicePayer ? 'E_FATURA' : 'E_ARSIV';
       const lines = sale.items.map((i) => {
@@ -283,6 +284,7 @@ export class EInvoicesService {
 
     const order = await this.prisma.webOrder.findUnique({ where: { id: ref.sourceId }, include: { items: true } });
     if (!order) throw new NotFoundException('Web siparişi bulunamadı.');
+    if (order.status === 'CANCELLED') throw new BadRequestException('Sipariş iptal edilmiş; fatura kesilemez.');
     const lines = order.items.map((i) => ({
       name: i.productName, quantity: i.quantity, unitPriceInclVat: Number(i.unitPrice), vatRate: vat, totalInclVat: Number(i.lineTotal),
     }));
@@ -374,6 +376,7 @@ export class EInvoicesService {
     const inv = await this.prisma.eInvoice.findUnique({ where: { id } });
     if (!inv) throw new NotFoundException('Fatura kaydı bulunamadı.');
     if (inv.status === 'ISSUED') throw new BadRequestException('Bu fatura zaten kesilmiş.');
+    if (inv.status === 'CANCELLED' || inv.status === 'SKIPPED') throw new BadRequestException('Bu satış faturalanmayacak olarak işaretli.');
     const settings = await this.loadSettings();
     this.assertReady(settings);
     return this.issueMany([{ sourceType: inv.sourceType as SourceType, sourceId: inv.sourceId }], settings);

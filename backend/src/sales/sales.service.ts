@@ -837,6 +837,11 @@ export class SalesService {
       `;
       await tx.$executeRaw`UPDATE retail_deliveries SET status = 'CANCELLED'::"RetailDeliveryStatus", updated_at = NOW() WHERE sale_id = ${saleId}`;
       await this.addStatusHistory(tx, saleId, sale.status, 'CANCELLED', `Satış geri alındı: ${reason || '-'}`, userId);
+      // Bu satışa ait kesilmemiş (hatalı/test) fatura kayıtları da iptal: "Tekrar Dene" ile faturalanamasın
+      await tx.$executeRaw`
+        UPDATE e_invoices SET status = 'CANCELLED', error_message = 'Satış silindi.', updated_at = NOW()
+        WHERE source_type = 'RETAIL_SALE' AND source_id = ${saleId} AND status <> 'ISSUED'
+      `;
       return { ok: true, saleNumber: sale.saleNumber, stockReturned: affectedIds.length };
     });
     if (affectedIds.length) this.products.broadcastStockCardUpdate([...new Set(affectedIds)]).catch(() => {});
