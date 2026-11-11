@@ -779,6 +779,70 @@ export class SalesService {
     }
   }
 
+  /**
+   * Tamamlanmış dükkan satışını tamamen geri al (deneme/yanlış satış): stok hareketleri ters çevrilir,
+   * kasa tahsilatı silinir, satış CANCELLED olur. Pazaryeri satışları ve canlı e-faturası kesilmiş satışlar hariç.
+   */
+  async voidCompletedSale(saleId: number, reason: string, userId: number) {
+    const affectedIds: number[] = [];
+    const result = await this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM retail_sales WHERE id = ${saleId} FOR UPDATE`;
+      const rows = await tx.$queryRaw<Array<{ status: string; channel: string; saleNumber: string }>>`
+        SELECT status::text AS status, channel::text AS channel, sale_number AS "saleNumber" FROM retail_sales WHERE id = ${saleId}
+      `;
+      const sale = rows[0];
+      if (!sale) throw new NotFoundException('Satış bulunamadı.');
+      if (sale.status === 'CANCELLED') return { ok: true, alreadyCancelled: true };
+      if (['TRENDYOL', 'HEPSIBURADA', 'N11', 'AMAZON'].includes(sale.channel)) {
+        throw new BadRequestException('Pazaryeri siparişleri buradan iptal edilemez.');
+      }
+      const liveInvoice = await tx.$queryRaw<Array<{ id: number }>>`
+        SELECT id FROM e_invoices
+        WHERE source_type = 'RETAIL_SALE' AND source_id = ${saleId} AND status = 'ISSUED' AND provider = 'TRENDYOL_EFATURAM'
+        LIMIT 1
+      `;
+      if (liveInvoice.length) throw new BadRequestException('Bu satışın canlı e-faturası kesilmiş; önce faturayı e-Faturam\'dan iptal edin.');
+
+      // Stok: bu satışa ait tüm çıkış hareketlerini ters çevir (hazır stok + reçete)
+      const movements = await tx.$queryRaw<Array<{ id: number; stockCardId: number; quantity: number; unit: string }>>`
+        SELECT id, stock_card_id AS "stockCardId", quantity, unit FROM stock_movements
+        WHERE type = 'OUT' AND reference_type IN ('RETAIL_SALE', 'SALE') AND reference_id = ${String(saleId)}
+      `;
+      for (const m of movements) {
+        const eventKey = `SALE_VOID:${saleId}:${m.id}`;
+        const done = await tx.$queryRaw<Array<{ id: number }>>`SELECT id FROM stock_movements WHERE event_key = ${eventKey} LIMIT 1`;
+        if (done.length) continue;
+        await tx.$queryRaw`SELECT id FROM stock_cards WHERE id = ${m.stockCardId} FOR UPDATE`;
+        const cards = await tx.$queryRaw<Array<{ stockQuantity: number }>>`SELECT stock_quantity AS "stockQuantity" FROM stock_cards WHERE id = ${m.stockCardId}`;
+        const previousStock = Number(cards[0]?.stockQuantity ?? 0);
+        const nextStock = previousStock + Number(m.quantity);
+        await tx.$executeRaw`UPDATE stock_cards SET stock_quantity = ${nextStock}, last_movement_at = NOW(), updated_at = NOW() WHERE id = ${m.stockCardId}`;
+        await tx.$executeRaw`
+          INSERT INTO stock_movements (stock_card_id, type, quantity, unit, previous_stock, next_stock, reason, reference_type, reference_id, event_key, created_by_id, created_at)
+          VALUES (${m.stockCardId}, 'IN', ${Number(m.quantity)}, ${m.unit ?? 'Adet'}, ${previousStock}, ${nextStock}, 'SALE_VOID', 'RETAIL_SALE', ${String(saleId)}, ${eventKey}, ${userId}, NOW())
+          ON CONFLICT (event_key) DO NOTHING
+        `;
+        affectedIds.push(m.stockCardId);
+      }
+
+      // Kasa: satış tahsilat kayıtlarını kaldır
+      await tx.$executeRaw`UPDATE retail_sale_payments SET finance_transaction_id = NULL WHERE sale_id = ${saleId}`;
+      await tx.$executeRaw`DELETE FROM finance_transactions WHERE linked_record_type = 'RETAIL_SALE' AND linked_record_id = ${String(saleId)}`;
+
+      await tx.$executeRaw`
+        UPDATE retail_sales
+        SET status = 'CANCELLED'::"RetailSaleStatus", cancelled_at = NOW(), cancelled_by_id = ${userId},
+            internal_note = COALESCE(internal_note, '') || ${`\nSatış geri alındı: ${reason || 'Sebep girilmedi.'}`}, updated_at = NOW()
+        WHERE id = ${saleId}
+      `;
+      await tx.$executeRaw`UPDATE retail_deliveries SET status = 'CANCELLED'::"RetailDeliveryStatus", updated_at = NOW() WHERE sale_id = ${saleId}`;
+      await this.addStatusHistory(tx, saleId, sale.status, 'CANCELLED', `Satış geri alındı: ${reason || '-'}`, userId);
+      return { ok: true, saleNumber: sale.saleNumber, stockReturned: affectedIds.length };
+    });
+    if (affectedIds.length) this.products.broadcastStockCardUpdate([...new Set(affectedIds)]).catch(() => {});
+    return result;
+  }
+
   async returnSaleStock(saleId: number, userId: number) {
     const affectedIds: number[] = [];
     await this.prisma.$transaction(async (tx) => {
