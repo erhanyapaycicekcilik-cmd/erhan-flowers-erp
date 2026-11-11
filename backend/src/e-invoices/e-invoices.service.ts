@@ -48,6 +48,8 @@ const DEFAULT_SETTINGS: EInvoiceSettings = {
   carrierName: '',
   carrierTaxId: '',
   defaultCity: '',
+  defaultDistrict: '',
+  defaultAddress: '',
 };
 
 @Injectable()
@@ -101,6 +103,8 @@ export class EInvoicesService {
       carrierName: str(body.carrierName, current.carrierName),
       carrierTaxId: str(body.carrierTaxId, current.carrierTaxId).replace(/\D/g, ''),
       defaultCity: str(body.defaultCity, current.defaultCity),
+      defaultDistrict: str(body.defaultDistrict, current.defaultDistrict),
+      defaultAddress: str(body.defaultAddress, current.defaultAddress),
       eArchiveSeries: str(body.eArchiveSeries, current.eArchiveSeries).toUpperCase(),
       eInvoiceSeries: str(body.eInvoiceSeries, current.eInvoiceSeries).toUpperCase(),
       autoIssue: typeof body.autoIssue === 'boolean' ? body.autoIssue : current.autoIssue,

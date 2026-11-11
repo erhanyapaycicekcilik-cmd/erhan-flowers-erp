@@ -340,18 +340,28 @@ export class TrendyolEFaturamProvider implements EInvoiceProvider {
     const phone = (b.phone ?? '').replace(/[^\d+]/g, '');
     const email = (b.email ?? '').trim().toLowerCase();
     const postal = (b.postalCode ?? '').replace(/\D/g, '');
+    // Alıcının adresi yoksa (ör. hızlı dükkan satışı) dükkan adresi kullanılır; e-Faturam il + ilçe istiyor
+    const buyerHasCity = !!(b.city && b.city.trim().length >= 2);
+    const city = buyerHasCity ? b.city!.trim() : (s.defaultCity ?? '').trim();
+    const district = b.district?.trim() || (buyerHasCity ? 'Merkez' : (s.defaultDistrict ?? '').trim());
+    const address =
+      b.address && b.address.trim().length >= 2
+        ? b.address.trim()
+        : !buyerHasCity && (s.defaultAddress ?? '').trim().length >= 2
+          ? s.defaultAddress.trim()
+          : `${district} / ${city}`;
     const recipientInfo: Record<string, unknown> = {
       taxId: validTaxId,
       countryCode: 'TR',
-      city: b.city && b.city.trim().length >= 2 ? b.city.trim() : s.defaultCity.trim(),
+      city,
       name: name.length >= 2 ? name.slice(0, 127) : 'Nihai Tüketici',
     };
-    if (String(recipientInfo.city).length < 2) {
-      throw new EFaturamError('Alıcının şehir bilgisi yok. Ayarlarda "Varsayılan Şehir" alanını doldurun.');
+    if (city.length < 2 || !district) {
+      throw new EFaturamError('Alıcının adresi yok. Ayarlarda "Varsayılan Şehir" ve "Varsayılan İlçe" (dükkan adresi) alanlarını doldurun.');
     }
+    recipientInfo.district = district;
+    recipientInfo.address = address.slice(0, 255);
     if (surname && surname.length >= 2) recipientInfo.surname = surname.slice(0, 255);
-    if (b.district?.trim()) recipientInfo.district = b.district.trim();
-    if (b.address && b.address.trim().length >= 2) recipientInfo.address = b.address.trim().slice(0, 255);
     if (postal.length === 5) recipientInfo.postalCode = postal;
     if (/^\+?[0-9]{7,15}$/.test(phone)) recipientInfo.phone = phone;
     if (/^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/.test(email)) recipientInfo.email = email;

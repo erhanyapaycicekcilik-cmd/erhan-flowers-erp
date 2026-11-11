@@ -22,6 +22,8 @@ type Settings = {
   carrierName: string;
   carrierTaxId: string;
   defaultCity: string;
+  defaultDistrict: string;
+  defaultAddress: string;
 };
 
 type SettingsResponse = { settings: Settings; providerReady: boolean; providerNotice: string | null };
@@ -231,7 +233,9 @@ export default function EDonusumPage() {
                   ['eArchiveSeries', 'e-Arşiv Seri (3 karakter)'],
                   ['eInvoiceSeries', 'e-Fatura Seri (3 karakter)'],
                   ['vatRate', 'KDV Oranı (%)'],
-                  ['defaultCity', 'Varsayılan Şehir (adres yoksa)'],
+                  ['defaultCity', 'Varsayılan Şehir (dükkan)'],
+                  ['defaultDistrict', 'Varsayılan İlçe (dükkan)'],
+                  ['defaultAddress', 'Varsayılan Açık Adres (dükkan)'],
                   ['webSiteUrl', 'Web sitesi adresi'],
                   ['carrierName', 'Kargo firması adı (web siparişleri)'],
                   ['carrierTaxId', 'Kargo firması VKN'],
