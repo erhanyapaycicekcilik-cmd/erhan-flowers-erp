@@ -792,7 +792,13 @@ export class SalesService {
       `;
       const sale = rows[0];
       if (!sale) throw new NotFoundException('Satış bulunamadı.');
-      if (sale.status === 'CANCELLED') return { ok: true, alreadyCancelled: true };
+      if (sale.status === 'CANCELLED') {
+        await tx.$executeRaw`
+          UPDATE e_invoices SET status = 'CANCELLED', error_message = 'Satış silindi.', updated_at = NOW()
+          WHERE source_type = 'RETAIL_SALE' AND source_id = ${saleId} AND (status <> 'ISSUED' OR provider <> 'TRENDYOL_EFATURAM')
+        `;
+        return { ok: true, alreadyCancelled: true, saleNumber: sale.saleNumber };
+      }
       if (['TRENDYOL', 'HEPSIBURADA', 'N11', 'AMAZON'].includes(sale.channel)) {
         throw new BadRequestException('Pazaryeri siparişleri buradan iptal edilemez.');
       }
@@ -840,7 +846,7 @@ export class SalesService {
       // Bu satışa ait kesilmemiş (hatalı/test) fatura kayıtları da iptal: "Tekrar Dene" ile faturalanamasın
       await tx.$executeRaw`
         UPDATE e_invoices SET status = 'CANCELLED', error_message = 'Satış silindi.', updated_at = NOW()
-        WHERE source_type = 'RETAIL_SALE' AND source_id = ${saleId} AND status <> 'ISSUED'
+        WHERE source_type = 'RETAIL_SALE' AND source_id = ${saleId} AND (status <> 'ISSUED' OR provider <> 'TRENDYOL_EFATURAM')
       `;
       return { ok: true, saleNumber: sale.saleNumber, stockReturned: affectedIds.length };
     });
