@@ -15,6 +15,7 @@ import { PazaramaAdapter } from './adapters/pazarama.adapter';
 import { IdefixAdapter } from './adapters/idefix.adapter';
 import { AmazonAdapter } from './adapters/amazon.adapter';
 import { IntegrationCenterService } from './services/integration-center.service';
+import { isSiteOnlyModelCode } from '../common/site-only';
 
 const platforms: Array<{ platform: IntegrationPlatform; displayName: string }> = [
   { platform: 'TRENDYOL', displayName: 'Trendyol' },
@@ -300,6 +301,7 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
   // (ürünü yeniden oluşturmadan, sadece fiyat günceller).
   async pushPrice(platformValue: string, payload: { barcode?: string; salePrice?: number; listPrice?: number; stockQuantity?: number }) {
     const platform = this.platform(platformValue);
+    if (this.isSiteOnlyPayload(payload)) return { ok: false, message: 'Sadece sitede satılan ürün (WEB-), pazaryerine gönderilmez.' };
     const adapter = await this.adapter(platform);
     const result = await adapter.pushPrice(payload);
     await this.log(platform, 'PUSH_PRICE', result.ok ? 'SUCCESS' : 'FAILED', result.message, payload.barcode ?? null, null, { salePrice: payload.salePrice, stockQuantity: payload.stockQuantity });
@@ -308,11 +310,19 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
 
   async pushProduct(platformValue: string, payload: unknown) {
     const platform = this.platform(platformValue);
+    if (this.isSiteOnlyPayload(payload)) return { ok: false, message: 'Sadece sitede satılan ürün (WEB-), pazaryerine gönderilmez.' };
     const adapter = await this.adapter(platform);
     const result = await adapter.pushProduct(payload);
     const barcode = (payload as Record<string, unknown>)?.barcode as string | undefined;
     await this.log(platform, 'PUSH_PRODUCT', result.ok ? 'SUCCESS' : 'FAILED', result.message, barcode ?? null, null, {});
     return result;
+  }
+
+  // Sadece bu ürünler: model kodu / barkod / stok kodu WEB- ile başlayan site ürünleri (diğer ürünler etkilenmez)
+  private isSiteOnlyPayload(payload: unknown): boolean {
+    const p = (payload ?? {}) as Record<string, unknown>;
+    return ['modelCode', 'productMainId', 'stockCode', 'barcode', 'sku', 'productCode']
+      .some((key) => typeof p[key] === 'string' && isSiteOnlyModelCode(p[key] as string));
   }
 
   async importOrderExcel(platformValue: string, file: Express.Multer.File | undefined, userId: number) {

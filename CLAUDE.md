@@ -124,7 +124,9 @@ Sonra tarayıcıda: **http://localhost:3200**
 - `WEB-BST-` ürünleri sitede düz listede gizli, sadece grup sayfasında (Boy + Renk seçimi) ve aramada görünür
 - Kapatmak için: `SITE_ONLY_CATALOG_SEED=false` (yeni ekleme yapmaz) + ERP'den ürünleri/grupları pasif yap
 - Fiber saksılar (`fiber-pots.data.ts`, `WEB-SRN-FBR…`): 69 ürün, Saksılar → Fiber Saksılar, site fiyatı 0 = **"Fiyat için iletişime geçin"** (API `priceOnRequest`, sepete eklenmez, WhatsApp'tan fiyat sor). ERP'den site fiyatı girilince normal satışa açılır. Görseller `florayapay/public/fiber-saksi/`
-- Kayıt servisi görselleri sadece hâlâ `www.erhanflowers.com/bostann|fiber-saksi/` altındaysa günceller; elle değiştirilen görsele dokunmaz
+- Kaktüs & sazlıklar (`cactus-reeds.data.ts`, `WEB-CNP-…`): 57 ürün, Ağaçlar → Kaktüs ve Sazlıklar, fiyatsız ("Fiyat için iletişime geçin"). Görseller `florayapay/public/kaktus-sazlik/` (arka plan silinip beyaz zemin, %12 kenar boşluğu — ERP Photoroom standardı)
+- Kayıt servisi görselleri sadece hâlâ `www.erhanflowers.com/bostann|fiber-saksi|kaktus-sazlik/` altındaysa günceller; elle değiştirilen görsele dokunmaz
+- **WEB- ürünleri pazaryerine KESİNLİKLE gönderilmez** (sadece bu ürünler, diğerleri etkilenmez): ek olarak `IntegrationsService.pushPrice/pushProduct` WEB- kodlu yükü reddeder, Entegrasyon Merkezi `syncAllFromTrendyol` (Pazarama/İdefix/N11/HB/Trendrum toplu gönderim) WEB- ürünlerini almaz
 - Web siparişinde fiyatı 0 olan kalem varsa sipariş reddedilir (`WebOrdersService.create`)
 
 ## Veritabanı

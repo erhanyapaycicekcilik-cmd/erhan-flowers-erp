@@ -14,6 +14,7 @@ import { AmazonAdapter } from '../adapters/amazon.adapter';
 import { MockMarketplaceAdapter } from '../adapters/mock/mock-marketplace.adapter';
 import { CredentialVaultService } from './credential-vault.service';
 import { resolveGeminiModel } from '../../common/gemini-model';
+import { SITE_ONLY_MODEL_PREFIX } from '../../common/site-only';
 
 type AccountPayload = {
   companyId?: unknown;
@@ -913,7 +914,8 @@ export class IntegrationCenterService {
   // ERP veritabanından ürünleri çeker (Trendyol API'ye bağımlılık yok)
   private async fetchProductsFromDb(limit?: number): Promise<Array<Record<string, unknown>>> {
     const rows = await this.prisma.product.findMany({
-      where: { status: 'ACTIVE' },
+      // Sadece sitede satılan (WEB-) ürünler pazaryerlerine KESİNLİKLE gönderilmez
+      where: { status: 'ACTIVE', NOT: { modelCode: { startsWith: SITE_ONLY_MODEL_PREFIX } } },
       take: limit,
       select: {
         id: true,
