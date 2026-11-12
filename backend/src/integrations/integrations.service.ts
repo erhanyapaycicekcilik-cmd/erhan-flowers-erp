@@ -897,6 +897,18 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
               updated_at = NOW()
           WHERE id = ${saleId}
         `;
+        // Daha önce kaydedilmemiş görsel URL'leri varsa item'lara ekle
+        for (const item of order.items) {
+          if (item.imageUrl && item.externalLineId) {
+            await tx.$executeRaw`
+              UPDATE retail_sale_items
+              SET external_image_url = ${item.imageUrl}
+              WHERE sale_id = ${saleId}
+                AND external_line_id = ${item.externalLineId}
+                AND (external_image_url IS NULL OR external_image_url = '')
+            `;
+          }
+        }
         if (invoiceStatus === 'RETURNED' && prevInvoiceStatus !== 'RETURNED') {
           await this.returnSaleStockTx(tx, saleId, userId);
         }
