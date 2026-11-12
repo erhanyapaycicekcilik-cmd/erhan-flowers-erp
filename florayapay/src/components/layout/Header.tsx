@@ -177,17 +177,17 @@ export function Header() {
 
       {/* Kategori navigasyonu — masaüstü */}
       <nav className="hidden md:block bg-[#1E3A28] border-t border-[#2A4F38]" aria-label="Kategori navigasyonu">
-        <div className="max-w-screen-2xl mx-auto px-4 overflow-x-auto">
-          <ul className="flex min-w-max">
+        <div className="max-w-screen-2xl mx-auto px-4">
+          {/* Sığmayan linkler kesilip yana kaymasın, alt satıra geçsin */}
+          <ul className="flex flex-wrap justify-center">
             {navLinks.map((link) => (
               <li key={link.href}>
-                <Link href={link.href} className="flex items-center gap-1.5 px-4 py-3 text-[12px] font-semibold text-[#C8DEC8] hover:text-white hover:bg-[#2A4F38] transition-colors whitespace-nowrap">
+                <Link href={link.href} className="flex items-center gap-1.5 px-3 py-3 text-[12px] font-semibold text-[#C8DEC8] hover:text-white hover:bg-[#2A4F38] transition-colors whitespace-nowrap">
                   <span>{link.emoji}</span>
                   <span>{link.label}</span>
                 </Link>
               </li>
             ))}
-            <li className="flex-1" />
             {extraLinks.map((link) => (
               <li key={link.href}>
                 <Link href={link.href} className="block px-3 py-3 text-[11px] font-medium text-[#8CAD8C] hover:text-white hover:bg-[#2A4F38] transition-colors whitespace-nowrap">
