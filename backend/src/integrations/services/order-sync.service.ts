@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import * as XLSX from 'xlsx';
 import { PrismaService } from '../../prisma/prisma.service';
-import { Prisma } from '@prisma/client';
+import { Prisma } from '../../generated/prisma-client';
 import { CredentialVaultService } from './credential-vault.service';
 import { IntegrationsService } from '../integrations.service';
 

@@ -11,10 +11,10 @@ function fmt(n: number) {
 }
 
 function statusLabel(s: string) {
-  return { PENDING: 'Beklemede', CONFIRMED: 'Onaylandı', PREPARING: 'Hazırlanıyor', SHIPPED: 'Kargoda', DELIVERED: 'Teslim Edildi', CANCELLED: 'İptal' }[s] || s
+  return { PENDING: 'Beklemede', CONFIRMED: 'Onaylandı', PREPARING: 'Hazırlanıyor', READY: 'Kargoya Hazır', SHIPPED: 'Kargoda', DELIVERED: 'Teslim Edildi', CANCELLED: 'İptal' }[s] || s
 }
 function statusColor(s: string) {
-  return { PENDING: 'bg-yellow-100 text-yellow-800', CONFIRMED: 'bg-blue-100 text-blue-800', PREPARING: 'bg-purple-100 text-purple-800', SHIPPED: 'bg-indigo-100 text-indigo-800', DELIVERED: 'bg-green-100 text-green-800', CANCELLED: 'bg-red-100 text-red-800' }[s] || 'bg-gray-100 text-gray-800'
+  return { PENDING: 'bg-yellow-100 text-yellow-800', CONFIRMED: 'bg-blue-100 text-blue-800', PREPARING: 'bg-purple-100 text-purple-800', READY: 'bg-teal-100 text-teal-800', SHIPPED: 'bg-indigo-100 text-indigo-800', DELIVERED: 'bg-green-100 text-green-800', CANCELLED: 'bg-red-100 text-red-800' }[s] || 'bg-gray-100 text-gray-800'
 }
 
 interface Musteri { id: number; firstName: string; lastName: string; email: string; phone?: string; birthDate?: string; city?: string; district?: string; address?: string; postalCode?: string }
