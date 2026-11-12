@@ -252,19 +252,6 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
       }
     }
 
-    // HB siparişleri: HB kendi lojistiğini yönetiyor — her import sonrası temizle
-    // importExternalOrder terminal protection ile DELIVERED'ı koruyacak
-    if (platform === 'HEPSIBURADA') {
-      try {
-        await this.prisma.$executeRaw`
-          UPDATE retail_sales
-          SET status = 'DELIVERED'::"RetailSaleStatus", updated_at = NOW()
-          WHERE channel = 'HEPSIBURADA'::"RetailSaleChannel"
-            AND status IN ('CONFIRMED'::"RetailSaleStatus", 'PREPARING'::"RetailSaleStatus", 'IN_PRODUCTION'::"RetailSaleStatus")
-        `;
-      } catch { /* ignore */ }
-    }
-
     await this.prisma.$executeRaw`
       UPDATE integration_connections SET status = 'CONNECTED', last_sync_at = NOW(), last_error = NULL, updated_at = NOW()
       WHERE platform = ${platform}
