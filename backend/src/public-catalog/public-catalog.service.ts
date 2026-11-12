@@ -3,6 +3,9 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { resolveGeminiModel } from '../common/gemini-model';
 
+// Sadece ürün grubu sayfasında (boyut/renk seçimiyle) satılan site ürünleri
+const GROUP_ONLY_MODEL_PREFIX = 'WEB-BST-';
+
 // Müşteriye güvenli gösterilebilecek alanlar.
 // Maliyet alanları (costPrice, purchasePrice, supplierName vb.) KESİNLİKLE YOK —
 // bu servis AuthGuard olmadan (public) çağrılır.
@@ -243,6 +246,11 @@ export class PublicCatalogService {
     };
     if (matchedCategory) productWhere['catalogCategory'] = matchedCategory;
     if (matchedSubCategory) productWhere['catalogSubCategory'] = matchedSubCategory;
+    // Ürün grubu varyantı olarak satılan site ürünleri (ör. Bostann saksı boyut×renk) düz listede
+    // tek tek gösterilmez; müşteri bunları grup sayfasından boyut/renk seçerek alır. Aramada görünürler.
+    if (!params.search?.trim()) {
+      productWhere['NOT'] = { modelCode: { startsWith: GROUP_ONLY_MODEL_PREFIX } };
+    }
 
     if (params.barcode?.trim()) {
       productWhere['barcode'] = params.barcode.trim();

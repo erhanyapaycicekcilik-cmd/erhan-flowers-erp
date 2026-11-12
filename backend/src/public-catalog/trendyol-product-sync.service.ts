@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import { SITE_ONLY_MODEL_PREFIX } from '../common/site-only';
 import { PrismaService } from '../prisma/prisma.service';
 import { CredentialVaultService } from '../integrations/services/credential-vault.service';
 
@@ -177,6 +178,8 @@ export class TrendyolProductSyncService {
           where: {
             status: 'ACTIVE',
             modelCode: { notIn: Array.from(activeTrendyolCodes) },
+            // Sadece sitede satılan ürünler Trendyol'da yok — onları kapatma
+            NOT: { modelCode: { startsWith: SITE_ONLY_MODEL_PREFIX } },
           },
           data: { status: 'PASSIVE' },
         });
