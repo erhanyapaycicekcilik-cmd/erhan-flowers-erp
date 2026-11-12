@@ -91,16 +91,27 @@ export class OrderSyncService {
     try { await this.runIdefixSync(); } catch (err) {
       this.logger.error('Idefix sync hatasi', err instanceof Error ? err.message : String(err));
     }
-    // API bağımsız temizleme: 1+ günlük marketplace siparişleri DELIVERED say
-    // HB API erişilemez olsa bile eski siparişler personel ekranında birikmez
-    // HB normal kargo süresi 24 saat → 1 günden eski CONFIRMED = kargoya verildi
+    // HB siparişleri: HB kendi lojistiğini yönetiyor, personel ekranında gösterilmemeli
+    // HB CONFIRMED/PREPARING siparişleri her cronada temizlenir (threshold yok)
+    try {
+      const cleanedHb = await this.prisma.$executeRaw`
+        UPDATE retail_sales
+        SET status = 'DELIVERED'::"RetailSaleStatus", updated_at = NOW()
+        WHERE channel = 'HEPSIBURADA'::"RetailSaleChannel"
+          AND status IN ('CONFIRMED'::"RetailSaleStatus", 'PREPARING'::"RetailSaleStatus", 'IN_PRODUCTION'::"RetailSaleStatus")
+      `;
+      if (Number(cleanedHb) > 0) this.logger.log(`[CRON] ${cleanedHb} HB siparisi DELIVERED yapildi.`);
+    } catch (err) {
+      this.logger.warn('HB siparis temizleme hatasi: ' + String(err));
+    }
+    // Diğer platformlar: 2 günden eski CONFIRMED siparişler
     try {
       const cleaned = await this.prisma.$executeRaw`
         UPDATE retail_sales
         SET status = 'DELIVERED'::"RetailSaleStatus", updated_at = NOW()
-        WHERE channel IN ('HEPSIBURADA'::"RetailSaleChannel", 'N11'::"RetailSaleChannel", 'TRENDYOL'::"RetailSaleChannel", 'TRENDYOL_FLORA'::"RetailSaleChannel")
+        WHERE channel IN ('N11'::"RetailSaleChannel", 'TRENDYOL'::"RetailSaleChannel", 'TRENDYOL_FLORA'::"RetailSaleChannel")
           AND status IN ('CONFIRMED'::"RetailSaleStatus", 'PREPARING'::"RetailSaleStatus", 'IN_PRODUCTION'::"RetailSaleStatus")
-          AND COALESCE(order_date, created_at) < NOW() - INTERVAL '1 day'
+          AND COALESCE(order_date, created_at) < NOW() - INTERVAL '2 days'
       `;
       if (Number(cleaned) > 0) this.logger.log(`[CRON] ${cleaned} eski marketplace siparisi DELIVERED yapildi.`);
     } catch (err) {
