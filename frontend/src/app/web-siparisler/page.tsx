@@ -9,12 +9,13 @@ const STATUS_LABEL: Record<string, { label: string; color: string }> = {
   PENDING:    { label: 'Yeni',        color: 'bg-yellow-100 text-yellow-800' },
   CONFIRMED:  { label: 'Onaylandı',   color: 'bg-blue-100 text-blue-800' },
   PREPARING:  { label: 'Hazırlanıyor',color: 'bg-purple-100 text-purple-800' },
+  READY:      { label: 'Kargoya Hazır',color: 'bg-teal-100 text-teal-800' },
   SHIPPED:    { label: 'Kargoda',     color: 'bg-indigo-100 text-indigo-800' },
   DELIVERED:  { label: 'Teslim',      color: 'bg-green-100 text-green-800' },
   CANCELLED:  { label: 'İptal',       color: 'bg-red-100 text-red-800' },
 }
 
-const STATUS_FLOW = ['PENDING', 'CONFIRMED', 'PREPARING', 'SHIPPED', 'DELIVERED']
+const STATUS_FLOW = ['PENDING', 'CONFIRMED', 'PREPARING', 'READY', 'SHIPPED', 'DELIVERED']
 
 function fmt(n: number) {
   return '₺' + new Intl.NumberFormat('tr-TR').format(n)

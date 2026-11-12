@@ -1496,13 +1496,14 @@ model RetailDelivery {
 
 model RetailSaleProofPhoto {
   id        Int        @id @default(autoincrement())
-  saleId    Int        @map("sale_id")
+  saleId    Int?       @map("sale_id")
+  webOrderId Int?      @map("web_order_id")
   imagePath String     @map("image_path")
   photoType String     @default("BARCODE") @map("photo_type")
   takenAt   DateTime   @default(now()) @map("taken_at")
   expiresAt DateTime   @map("expires_at")
   takenById Int?       @map("taken_by_id")
-  sale      RetailSale @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  sale      RetailSale? @relation(fields: [saleId], references: [id], onDelete: Cascade)
   takenBy   User?      @relation("ProofPhotoTakenBy", fields: [takenById], references: [id])
 
   @@map("retail_sale_proof_photos")
@@ -2386,6 +2387,7 @@ enum WebOrderStatus {
   PENDING
   CONFIRMED
   PREPARING
+  READY
   SHIPPED
   DELIVERED
   CANCELLED

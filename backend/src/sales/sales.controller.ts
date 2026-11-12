@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, UploadedFile, UploadedFiles, UseGuards, UseInterceptors } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, UploadedFile, UploadedFiles, UseGuards, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname, join } from 'path';
@@ -184,10 +184,42 @@ export class SalesController {
     @Req() request: AuthenticatedRequest,
     @Query('photoType') photoType?: string,
   ) {
+    if (!files?.length) throw new BadRequestException('Dosya gelmedi');
     const results = [];
-    for (const file of files ?? []) {
+    for (const file of files) {
       const result = await this.sales.saveProofPhotoAndMarkReady(Number(id), file, request.user!.id, photoType);
       results.push(result);
+    }
+    return { uploaded: results.length, results };
+  }
+
+  /** Web sitesi siparişi (web_orders.id) için kanıt videosu/fotoğrafı */
+  @Post('web-orders/:id/proof-photos')
+  @UseInterceptors(
+    FilesInterceptor('files', 10, {
+      storage: diskStorage({
+        destination: (_req, _file, cb) => {
+          const dest = join(process.cwd(), 'uploads', 'proof-photos');
+          fs.mkdirSync(dest, { recursive: true });
+          cb(null, dest);
+        },
+        filename: (_req, file, cb) => {
+          cb(null, `${Date.now()}-${Math.round(Math.random() * 1e9)}${extname(file.originalname)}`);
+        },
+      }),
+      limits: { fileSize: 200 * 1024 * 1024 },
+    }),
+  )
+  async uploadWebOrderProofPhotos(
+    @Param('id') id: string,
+    @UploadedFiles() files: Express.Multer.File[],
+    @Req() request: AuthenticatedRequest,
+    @Query('photoType') photoType?: string,
+  ) {
+    if (!files?.length) throw new BadRequestException('Dosya gelmedi');
+    const results = [];
+    for (const file of files) {
+      results.push(await this.sales.saveWebOrderProofAndMarkReady(Number(id), file, request.user!.id, photoType));
     }
     return { uploaded: results.length, results };
   }

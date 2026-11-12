@@ -713,27 +713,88 @@ export class SalesService {
   }
 
   async saveProofPhotoAndMarkReady(id: number, file: { filename: string; path?: string }, userId: number, photoType = 'BARCODE') {
-    const rawPath = file.path ?? join(process.cwd(), 'uploads', 'proof-photos', file.filename);
-    const { videoPath: finalPath, thumbPath } = await compressVideoIfNeeded(rawPath);
-    const imagePath = 'uploads/proof-photos/' + finalPath.split(/[\\/]/).pop();
-    const thumbnailPath = thumbPath ? 'uploads/proof-photos/' + thumbPath.split(/[\\/]/).pop() : null;
-    const expiresAt = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000); // 90 gün
-    const safeType = ['BARCODE', 'PACKAGE'].includes(photoType) ? photoType : 'BARCODE';
-    await this.prisma.$executeRaw`
-      INSERT INTO retail_sale_proof_photos (sale_id, image_path, thumbnail_path, photo_type, expires_at, taken_by_id)
-      VALUES (${id}, ${imagePath}, ${thumbnailPath}, ${safeType}, ${expiresAt}, ${userId})
-    `;
-
-    // Retail sale statüsünü READY yap
-    const currentStatus = await this.prisma.$queryRaw<{ status: string }[]>`
+    const exists = await this.prisma.$queryRaw<{ status: string }[]>`
       SELECT status FROM retail_sales WHERE id = ${id}
     `;
-    const alreadyReady = currentStatus[0]?.status === 'READY' || currentStatus[0]?.status === 'COMPLETED';
+    if (!exists[0]) {
+      this.discardUpload(file);
+      throw new NotFoundException(`Satış bulunamadı: ${id}`);
+    }
+    const safeType = ['BARCODE', 'PACKAGE'].includes(photoType) ? photoType : 'BARCODE';
+    await this.insertProofMedia(file, userId, safeType, { saleId: id });
+
+    // Retail sale statüsünü READY yap
+    const alreadyReady = exists[0].status === 'READY' || exists[0].status === 'COMPLETED';
     if (!alreadyReady) {
       await this.updateStatus(id, { status: 'READY', note: 'Ürün hazırlandı — fotoğraf yüklendi.' }, userId);
       await this.deductSaleStockOnReady(id, userId);
     }
     return { uploaded: true, photoType: safeType, readyTriggered: !alreadyReady };
+  }
+
+  /** Web sitesi siparişi (web_orders) için kanıt videosu/fotoğrafı — retail_sales ile karışmaz. */
+  async saveWebOrderProofAndMarkReady(webOrderId: number, file: { filename: string; path?: string }, userId: number, photoType = 'PACKAGE') {
+    const rows = await this.prisma.$queryRaw<{ status: string }[]>`
+      SELECT status::text AS status FROM web_orders WHERE id = ${webOrderId}
+    `;
+    if (!rows[0]) {
+      this.discardUpload(file);
+      throw new NotFoundException(`Web siparişi bulunamadı: ${webOrderId}`);
+    }
+    const safeType = ['BARCODE', 'PACKAGE'].includes(photoType) ? photoType : 'PACKAGE';
+    await this.insertProofMedia(file, userId, safeType, { webOrderId });
+    const readyTriggered = ['PENDING', 'CONFIRMED', 'PREPARING'].includes(rows[0].status);
+    if (readyTriggered) {
+      await this.prisma.$executeRaw`
+        UPDATE web_orders SET status = 'READY'::"WebOrderStatus", updated_at = NOW()
+        WHERE id = ${webOrderId} AND status IN ('PENDING', 'CONFIRMED', 'PREPARING')
+      `;
+    }
+    return { uploaded: true, photoType: safeType, readyTriggered };
+  }
+
+  private discardUpload(file: { filename: string; path?: string }) {
+    const rawPath = file.path ?? join(process.cwd(), 'uploads', 'proof-photos', file.filename);
+    try { if (existsSync(rawPath)) unlinkSync(rawPath); } catch { /* yoksay */ }
+  }
+
+  /**
+   * Dosyayı hemen kaydeder (istek hızlı döner, telefon uzun süre beklemez),
+   * video sıkıştırma + küçük resim arka planda yapılıp kayıt güncellenir.
+   */
+  private async insertProofMedia(
+    file: { filename: string; path?: string },
+    userId: number,
+    photoType: string,
+    owner: { saleId?: number; webOrderId?: number },
+  ) {
+    const rawPath = file.path ?? join(process.cwd(), 'uploads', 'proof-photos', file.filename);
+    const imagePath = 'uploads/proof-photos/' + rawPath.split(/[\\/]/).pop();
+    const expiresAt = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000); // 90 gün
+    const inserted = await this.prisma.$queryRaw<{ id: number }[]>`
+      INSERT INTO retail_sale_proof_photos (sale_id, web_order_id, image_path, photo_type, expires_at, taken_by_id)
+      VALUES (${owner.saleId ?? null}, ${owner.webOrderId ?? null}, ${imagePath}, ${photoType}, ${expiresAt}, ${userId})
+      RETURNING id
+    `;
+    const photoId = inserted[0]?.id;
+    if (photoId && VIDEO_EXTENSIONS.has(extname(rawPath).toLowerCase())) {
+      void this.compressProofVideo(photoId, rawPath);
+    }
+    return photoId;
+  }
+
+  private async compressProofVideo(photoId: number, rawPath: string) {
+    try {
+      const { videoPath, thumbPath } = await compressVideoIfNeeded(rawPath);
+      const imagePath = 'uploads/proof-photos/' + videoPath.split(/[\\/]/).pop();
+      const thumbnailPath = thumbPath ? 'uploads/proof-photos/' + thumbPath.split(/[\\/]/).pop() : null;
+      await this.prisma.$executeRaw`
+        UPDATE retail_sale_proof_photos SET image_path = ${imagePath}, thumbnail_path = ${thumbnailPath}
+        WHERE id = ${photoId}
+      `;
+    } catch (error) {
+      this.logger.warn(`Kanıt videosu sıkıştırılamadı (#${photoId}): ${error instanceof Error ? error.message : error}`);
+    }
   }
 
   private async deductSaleStockOnReady(saleId: number, userId: number) {
@@ -1621,22 +1682,38 @@ export class SalesService {
       expires_at: Date;
       product_names: string;
     }>>`
-      SELECT p.id, p.sale_id, rs.sale_number, rc.display_name AS customer_name, rs.channel::text AS channel,
+      SELECT p.id, p.sale_id, x.sale_number, x.customer_name, x.channel,
              p.image_path, p.thumbnail_path, p.photo_type, p.taken_at AS created_at, p.expires_at,
-             STRING_AGG(DISTINCT rsi.product_name_snapshot, ', ') AS product_names
+             x.product_names
       FROM retail_sale_proof_photos p
-      JOIN retail_sales rs ON rs.id = p.sale_id
-      JOIN retail_customers rc ON rc.id = rs.customer_id
-      LEFT JOIN retail_sale_items rsi ON rsi.sale_id = rs.id
+      JOIN LATERAL (
+        SELECT rs.sale_number, rc.display_name AS customer_name, rs.channel::text AS channel,
+               STRING_AGG(DISTINCT rsi.product_name_snapshot, ', ') AS product_names,
+               BOOL_OR(${productFilter}::text IS NULL OR rsi.product_name_snapshot ILIKE ${productFilter}) AS product_ok,
+               BOOL_OR(${barcodeFilter}::text IS NULL OR rsi.barcode ILIKE ${barcodeFilter}) AS barcode_ok
+        FROM retail_sales rs
+        JOIN retail_customers rc ON rc.id = rs.customer_id
+        LEFT JOIN retail_sale_items rsi ON rsi.sale_id = rs.id
+        WHERE rs.id = p.sale_id
+        GROUP BY rs.sale_number, rc.display_name, rs.channel
+        UNION ALL
+        SELECT wo.order_number, wo.customer_name, 'WEBSITE',
+               STRING_AGG(DISTINCT woi.product_name, ', '),
+               BOOL_OR(${productFilter}::text IS NULL OR woi.product_name ILIKE ${productFilter}),
+               ${barcodeFilter}::text IS NULL
+        FROM web_orders wo
+        LEFT JOIN web_order_items woi ON woi.order_id = wo.id
+        WHERE wo.id = p.web_order_id
+        GROUP BY wo.order_number, wo.customer_name
+      ) x ON TRUE
       WHERE p.expires_at > NOW()
-        AND rc.display_name ILIKE ${nameFilter}
-        AND rs.sale_number ILIKE ${saleFilter}
+        AND x.customer_name ILIKE ${nameFilter}
+        AND x.sale_number ILIKE ${saleFilter}
         AND p.taken_at >= ${dateFrom}
         AND p.taken_at <= ${dateTo}
-        AND (${productFilter}::text IS NULL OR rsi.product_name_snapshot ILIKE ${productFilter})
-        AND (${barcodeFilter}::text IS NULL OR rsi.barcode ILIKE ${barcodeFilter})
-        AND (${channelFilter}::text IS NULL OR rs.channel::text = ${channelFilter})
-      GROUP BY p.id, p.taken_at, rs.sale_number, rc.display_name, rs.channel
+        AND x.product_ok IS NOT FALSE
+        AND x.barcode_ok IS NOT FALSE
+        AND (${channelFilter}::text IS NULL OR x.channel = ${channelFilter})
       ORDER BY p.taken_at DESC
       LIMIT ${limit}
     `;

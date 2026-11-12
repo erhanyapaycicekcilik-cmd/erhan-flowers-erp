@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { RefreshCw, Package, Clock, ExternalLink, Video, Printer, ChevronDown, ChevronUp, Phone, MapPin, CheckCircle } from 'lucide-react';
 import { AdminShell } from '@/components/AdminShell';
-import { api, apiFileUrl, apiBaseUrl } from '@/lib/api';
+import { api, apiFileUrl, apiBaseUrl, getStoredToken } from '@/lib/api';
 
 type OrderItem = {
   id?: number;
@@ -220,7 +220,7 @@ export default function StaffOrdersPage() {
     }
     setOrders(prev => prev.map(o => o.id === id ? { ...o, status } : o));
     if (status === 'READY') {
-      setToastMsg('✅ Video yüklendi! Sipariş Kargo Bekleniyor bölümüne taşındı.');
+      setToastMsg('✅ Sipariş hazır — Kargo Bekleniyor bölümüne taşındı.');
       setTimeout(() => setToastMsg(''), 4000);
       setTimeout(() => readySectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150);
     }
@@ -231,7 +231,7 @@ export default function StaffOrdersPage() {
     try {
       const [erpOrders, webOrders] = await Promise.all([
         api<OrderRow[]>('/integrations/orders?limit=200&status=CONFIRMED,PREPARING,IN_PRODUCTION,READY'),
-        api<OrderRow[]>('/integrations/web-orders?limit=200&status=CONFIRMED,PREPARING'),
+        api<OrderRow[]>('/integrations/web-orders?limit=200&status=CONFIRMED,PREPARING,READY'),
       ]);
       const combined = [
         ...(Array.isArray(erpOrders) ? erpOrders : []),
@@ -573,35 +573,77 @@ function OrderCard({ order, onStatusChange, readySection, category }: { order: O
 
   const isReady = order.status === 'READY' || order.status === 'Kargoya Hazır';
 
-  async function markReadyWithPhotos(files: FileList | File[]) {
-    setUploading(true);
-    const token = typeof window !== 'undefined'
-      ? (localStorage.getItem(`auth_token_${window.location.hostname}_${window.location.port || 'default'}`) ?? localStorage.getItem('auth_token'))
-      : null;
+  const isWebOrder = order.platform === 'WEBSITE';
+  const [uploadPct, setUploadPct] = useState<number | null>(null);
 
-    // Önce siparişi hemen READY yap — video upload arka planda gitsin
-    try {
-      await api(`/sales/${order.id}/status`, { method: 'POST', json: { status: 'READY', note: 'Video yükleniyor.' } });
-    } catch { /* devam et */ }
-    if (videoRef.current) videoRef.current.value = '';
-    onStatusChange(order.id, 'READY');
-    setUploading(false);
+  /** Web siparişleri web_orders tablosunda; retail_sales (/sales) uçlarına gitmemeli. */
+  async function setOrderStatus(status: 'READY' | 'DELIVERED', note: string) {
+    if (isWebOrder) {
+      await api(`/web-orders/${order.id}/status`, { method: 'PATCH', json: { status } });
+    } else {
+      await api(`/sales/${order.id}/status`, { method: 'POST', json: { status, note } });
+    }
+  }
 
-    // Video upload arka planda
+  function uploadProofFiles(files: File[]): Promise<void> {
     const form = new FormData();
-    Array.from(files).forEach((f) => form.append('files', f));
-    fetch(`${apiBaseUrl}/sales/${order.id}/proof-photos?photoType=PACKAGE`, {
-      method: 'POST',
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-      body: form,
-    }).catch(() => null);
+    files.forEach((f) => form.append('files', f));
+    const url = isWebOrder
+      ? `${apiBaseUrl}/sales/web-orders/${order.id}/proof-photos?photoType=PACKAGE`
+      : `${apiBaseUrl}/sales/${order.id}/proof-photos?photoType=PACKAGE`;
+    const token = getStoredToken();
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', url);
+      xhr.withCredentials = true;
+      if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+      xhr.upload.onprogress = (ev) => {
+        if (ev.lengthComputable) setUploadPct(Math.round((ev.loaded / ev.total) * 100));
+      };
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) return resolve();
+        let msg = `Sunucu hatası (${xhr.status})`;
+        if (xhr.status === 413) msg = 'Video çok büyük (en fazla 200 MB). Daha kısa çekin.';
+        else if (xhr.status === 401) msg = 'Oturum süresi dolmuş, tekrar giriş yapın.';
+        else {
+          try { const body = JSON.parse(xhr.responseText); if (body?.message) msg = String(body.message); } catch { /* yoksay */ }
+        }
+        reject(new Error(msg));
+      };
+      xhr.onerror = () => reject(new Error('Bağlantı koptu. İnternet bağlantısını kontrol edin.'));
+      xhr.ontimeout = () => reject(new Error('Yükleme zaman aşımına uğradı.'));
+      xhr.send(form);
+    });
+  }
+
+  async function markReadyWithPhotos(files: File[]) {
+    setUploading(true);
+    setUploadPct(0);
+    try {
+      // Yükleme bitene kadar bekle — önceden arka planda gidiyordu, hata olursa sessizce kayboluyordu
+      for (let attempt = 1; ; attempt++) {
+        try {
+          await uploadProofFiles(files);
+          break;
+        } catch (error) {
+          const msg = error instanceof Error ? error.message : 'Bilinmeyen hata';
+          if (!confirm(`❌ Video kaydedilemedi: ${msg}\n\nTekrar denensin mi? (Deneme ${attempt})`)) return;
+          setUploadPct(0);
+        }
+      }
+      onStatusChange(order.id, 'READY');
+    } finally {
+      if (videoRef.current) videoRef.current.value = '';
+      setUploading(false);
+      setUploadPct(null);
+    }
   }
 
   async function markReadyWithoutPhoto() {
     if (!confirm('Fotoğrafsız olarak hazır işaretlensin mi?')) return;
     setUploading(true);
     try {
-      await api(`/sales/${order.id}/status`, { method: 'POST', json: { status: 'READY', note: 'Ürün hazırlandı.' } });
+      await setOrderStatus('READY', 'Ürün hazırlandı.');
       onStatusChange(order.id, 'READY');
     } catch {
       alert('İşlem başarısız, tekrar deneyin.');
@@ -611,8 +653,9 @@ function OrderCard({ order, onStatusChange, readySection, category }: { order: O
   }
 
   async function handlePhoto(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
+    // FileList, input temizlenince boşalır — önce diziye kopyala
+    const files = e.target.files ? Array.from(e.target.files) : [];
+    if (files.length === 0) return;
     await markReadyWithPhotos(files);
   }
 
@@ -620,7 +663,7 @@ function OrderCard({ order, onStatusChange, readySection, category }: { order: O
     if (!confirm('Bu sipariş kargoya verildi olarak işaretlensin mi? Listeden kalkacak.')) return;
     setMarkingDelivered(true);
     try {
-      await api(`/sales/${order.id}/status`, { method: 'POST', json: { status: 'DELIVERED', note: 'Kargoya verildi.' } });
+      await setOrderStatus('DELIVERED', 'Kargoya verildi.');
       onStatusChange(order.id, 'DELIVERED');
     } catch {
       alert('İşlem başarısız, tekrar deneyin.');
@@ -630,7 +673,7 @@ function OrderCard({ order, onStatusChange, readySection, category }: { order: O
   }
 
   async function saveStaffNote() {
-    if (savingNote) return;
+    if (savingNote || isWebOrder) return;
     setSavingNote(true);
     try {
       await api(`/sales/${order.id}/staff-note`, { method: 'PATCH', json: { note: staffNote } });
@@ -789,8 +832,8 @@ function OrderCard({ order, onStatusChange, readySection, category }: { order: O
                 <div key={i} className="text-slate-400">Barkod: {item.barcode}</div>
               ) : null
             ))}
-            {/* Personel notu */}
-            <div className="pt-1">
+            {/* Personel notu (web siparişlerinde retail_sales kaydı yok) */}
+            {!isWebOrder && <div className="pt-1">
               <textarea
                 value={staffNote}
                 onChange={(e) => setStaffNote(e.target.value)}
@@ -800,7 +843,7 @@ function OrderCard({ order, onStatusChange, readySection, category }: { order: O
                 className="w-full text-xs rounded border border-slate-300 p-2 resize-none focus:outline-none focus:border-indigo-400"
               />
               {savingNote && <span className="text-[10px] text-slate-400">Kaydediliyor...</span>}
-            </div>
+            </div>}
           </div>
         )}
 
@@ -822,7 +865,7 @@ function OrderCard({ order, onStatusChange, readySection, category }: { order: O
               <button onClick={() => videoRef.current?.click()} disabled={uploading}
                 title="Ek video çek"
                 className="flex items-center justify-center gap-1 text-xs px-2 py-2 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-100 transition disabled:opacity-60">
-                <Video size={13} /> {uploading ? '…' : 'Video'}
+                <Video size={13} /> {uploading ? (uploadPct !== null ? `%${uploadPct}` : '…') : 'Video'}
               </button>
             </>
           ) : (
@@ -834,7 +877,7 @@ function OrderCard({ order, onStatusChange, readySection, category }: { order: O
               </button>
               <button onClick={() => videoRef.current?.click()} disabled={uploading}
                 className="flex-1 flex items-center justify-center gap-1 text-sm px-3 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition disabled:opacity-60 font-bold">
-                <Video size={14} /> {uploading ? 'Yükleniyor...' : '🎥 Video Çek + Hazır'}
+                <Video size={14} /> {uploading ? (uploadPct !== null ? (uploadPct >= 100 ? 'Kaydediliyor…' : `Yükleniyor %${uploadPct}`) : 'Yükleniyor...') : '🎥 Video Çek + Hazır'}
               </button>
             </>
           )}
