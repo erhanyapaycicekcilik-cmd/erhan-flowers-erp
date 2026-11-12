@@ -42,6 +42,7 @@ import { ReturnsModule } from './returns/returns.module';
 import { MailModule } from './mail/mail.module'
 import { WebCustomersModule } from './web-customers/web-customers.module';
 import { EInvoicesModule } from './e-invoices/e-invoices.module';
+import { PersonnelModule } from './personnel/personnel.module';
 
 @Module({
   imports: [
@@ -94,6 +95,7 @@ import { EInvoicesModule } from './e-invoices/e-invoices.module';
     MailModule,
     WebCustomersModule,
     EInvoicesModule,
+    PersonnelModule,
   ],
   controllers: [AppController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

@@ -62,6 +62,15 @@ async function bootstrap() {
     allowedHeaders: 'Content-Type, Accept, Authorization, x-admin-token',
   });
 
+  // Personel özlük dosyaları uploads/.personel altında: statik servis (/uploads, /stock-images) bunları ASLA vermemeli.
+  // Sadece yetkili /personnel uçlarından okunur.
+  app.use((req: { path: string }, res: { status: (c: number) => { end: () => void } }, next: () => void) => {
+    let path = req.path;
+    try { path = decodeURIComponent(path); } catch { /* bozuk kodlama: ham yol */ }
+    if (/\/\.personel(\/|$)/i.test(path)) return res.status(404).end();
+    next();
+  });
+
   // Statik dosyalar
   const imageRoot = stockImageRoot();
   fs.mkdirSync(imageRoot, { recursive: true });
