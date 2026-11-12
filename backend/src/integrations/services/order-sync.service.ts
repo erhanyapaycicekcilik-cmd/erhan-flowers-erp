@@ -91,6 +91,20 @@ export class OrderSyncService {
     try { await this.runIdefixSync(); } catch (err) {
       this.logger.error('Idefix sync hatasi', err instanceof Error ? err.message : String(err));
     }
+    // API bağımsız temizleme: 3+ günlük marketplace siparişleri DELIVERED say
+    // HB API erişilemez olsa bile eski siparişler personel ekranında birikmez
+    try {
+      const cleaned = await this.prisma.$executeRaw`
+        UPDATE retail_sales
+        SET status = 'DELIVERED'::"RetailSaleStatus", updated_at = NOW()
+        WHERE channel IN ('HEPSIBURADA'::"RetailSaleChannel", 'N11'::"RetailSaleChannel", 'TRENDYOL'::"RetailSaleChannel", 'TRENDYOL_FLORA'::"RetailSaleChannel")
+          AND status IN ('CONFIRMED'::"RetailSaleStatus", 'PREPARING'::"RetailSaleStatus", 'IN_PRODUCTION'::"RetailSaleStatus")
+          AND created_at < NOW() - INTERVAL '3 days'
+      `;
+      if (Number(cleaned) > 0) this.logger.log(`[CRON] ${cleaned} eski marketplace siparisi DELIVERED yapildi.`);
+    } catch (err) {
+      this.logger.warn('Eski siparis temizleme hatasi: ' + String(err));
+    }
   }
 
   async runSync(): Promise<{ processed: number; newOrders: number; stockDeductions: number }> {
