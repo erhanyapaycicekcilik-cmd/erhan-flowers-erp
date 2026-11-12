@@ -128,9 +128,12 @@ export async function getProductGroup(slug: string): Promise<ProductGroup | null
   }
 }
 
-export async function getProductGroups(category?: string): Promise<ProductGroup[]> {
+export async function getProductGroups(category?: string, subcategory?: string): Promise<ProductGroup[]> {
   try {
-    const qs = category ? `?category=${encodeURIComponent(category)}` : ''
+    const params = new URLSearchParams()
+    if (category) params.set('category', category)
+    if (subcategory) params.set('subcategory', subcategory)
+    const qs = params.toString() ? `?${params}` : ''
     return await apiFetch<ProductGroup[]>(`/public/catalog/groups${qs}`)
   } catch {
     return []

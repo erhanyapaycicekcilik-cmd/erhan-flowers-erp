@@ -24,8 +24,8 @@ function WhatsAppIcon({ className }: { className?: string }) {
 /** Ürün kartlarında fiyat + sepet butonu yerine */
 export function PriceOnRequestInline({ productName, slug }: { productName: string; slug: string }) {
   return (
-    <div className="flex items-center justify-between gap-2">
-      <Link href={`/urun/${slug}`} className="text-xs font-semibold text-[#0D1510] leading-tight">
+    <div className="flex flex-col items-start gap-2">
+      <Link href={`/urun/${slug}`} className="text-sm font-semibold text-[#0D1510] leading-tight">
         Fiyat için iletişime geçin
       </Link>
       <a

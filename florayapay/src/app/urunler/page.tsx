@@ -63,7 +63,7 @@ export default async function ProductsPage({ searchParams }: PageProps) {
       sort: searchParams.sirala,
     }),
     // Grupları sadece arama olmadığında getir
-    !searchParams.q ? getProductGroups(searchParams.kategori) : Promise.resolve([]),
+    !searchParams.q ? getProductGroups(searchParams.kategori, searchParams.altkategori) : Promise.resolve([]),
   ])
 
   const breadcrumbs = [
