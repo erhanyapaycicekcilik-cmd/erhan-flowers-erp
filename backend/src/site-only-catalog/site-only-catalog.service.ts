@@ -3,13 +3,18 @@ import { PrismaService } from '../prisma/prisma.service';
 import { SITE_ONLY_MODEL_PREFIX } from '../common/site-only';
 import { BOSTANN_SERIES } from './bostann-pots.data';
 import { FIBER_POTS } from './fiber-pots.data';
+import { CACTUS_REEDS } from './cactus-reeds.data';
 import type { SiteOnlySeries, SiteOnlySimpleProduct } from './site-only-catalog.types';
 
 const CATEGORY_NAME = 'Saksı';
 const CATALOG_CATEGORY = 'Saksılar';
 const DEFAULT_STOCK = 100;
 // Bu adresle başlayan görseller bu servisin koyduğu görsellerdir; ERP'den elle değiştirilmediyse güncellenebilir
-const MANAGED_IMAGE_BASES = ['https://www.erhanflowers.com/bostann/', 'https://www.erhanflowers.com/fiber-saksi/'];
+const MANAGED_IMAGE_BASES = [
+  'https://www.erhanflowers.com/bostann/',
+  'https://www.erhanflowers.com/fiber-saksi/',
+  'https://www.erhanflowers.com/kaktus-sazlik/',
+];
 
 function isManagedImage(url: unknown): boolean {
   return typeof url === 'string' && MANAGED_IMAGE_BASES.some((base) => url.startsWith(base));
@@ -41,6 +46,7 @@ export class SiteOnlyCatalogService implements OnApplicationBootstrap {
     void (async () => {
       await this.seed(BOSTANN_SERIES);
       await this.seedSimple(FIBER_POTS);
+      await this.seedSimple(CACTUS_REEDS);
     })().catch((err: unknown) => {
       this.logger.error(`Site ürünleri eklenemedi: ${err instanceof Error ? err.message : String(err)}`);
     });
@@ -193,7 +199,7 @@ export class SiteOnlyCatalogService implements OnApplicationBootstrap {
         const category =
           (await this.prisma.category.findUnique({ where: { name: item.categoryName } })) ??
           (await this.prisma.category.create({
-            data: { name: item.categoryName, codePrefix: 'SKS', startCode: 1, currentCode: 1 },
+            data: { name: item.categoryName, codePrefix: item.categoryCodePrefix ?? 'SKS', startCode: 1, currentCode: 1 },
           }));
         categoryId = category.id;
         categoryIds.set(item.categoryName, categoryId);
