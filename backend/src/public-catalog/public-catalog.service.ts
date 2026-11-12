@@ -259,7 +259,9 @@ export class PublicCatalogService {
       delete productWhere['OR'];
     }
     if (params.modelCode?.trim()) {
-      productWhere['modelCode'] = params.modelCode.trim();
+      // FL- ön eki Flora siparişlerinde gelir; products tablosunda ön eksiz kayıtlı
+      const mc = params.modelCode.trim().replace(/^FL-/i, '');
+      productWhere['modelCode'] = mc;
       delete productWhere['status'];
       delete productWhere['stockQuantity'];
       delete productWhere['OR'];
@@ -294,6 +296,14 @@ export class PublicCatalogService {
       variantWhere['barcode'] = params.barcode.trim();
       delete variantWhere['stockQuantity'];
       delete variantWhere['trendyolSalePrice'];
+      delete variantWhere['productId'];
+    }
+    if (params.modelCode?.trim()) {
+      const mc = params.modelCode.trim().replace(/^FL-/i, '');
+      variantWhere['OR'] = [{ currentModelCode: mc }, { supplierStockCode: mc }];
+      delete variantWhere['stockQuantity'];
+      delete variantWhere['trendyolSalePrice'];
+      delete variantWhere['productId'];
     }
     if (params.search?.trim()) {
       const term = params.search.trim();
@@ -303,27 +313,28 @@ export class PublicCatalogService {
     const [productCount, productRows, variantRows] = await Promise.all([
       this.prisma.product.count({ where: productWhere as any }),
       this.prisma.product.findMany({ where: productWhere as any, select: SAFE_SELECT, orderBy: orderBy as any, skip, take: limit }),
-      // Varyantları sadece barcode/modelCode/search filtresi olmadığında getir (tam liste için)
-      (!params.barcode && !params.modelCode)
-        ? this.prisma.trendyolProductVariant.findMany({
-            where: variantWhere as any,
-            select: {
-              id: true,
-              productName: true,
-              currentModelCode: true,
-              barcode: true,
-              trendyolSalePrice: true,
-              stockQuantity: true,
-              catalogCategory: true,
-              catalogSubCategory: true,
-              images: true,
-              brand: true,
-              productDescription: true,
-              productColor: true,
-            },
-            orderBy: { id: 'desc' },
-          })
-        : Promise.resolve([]),
+      // Barcode/modelCode aramasında da variant tablosuna bak (HB, Flora siparişlerinde barkod match için)
+      // Sadece tam liste için barcode/modelCode/search filtresi olmadığında büyük sorgu çalıştır
+      this.prisma.trendyolProductVariant.findMany({
+        where: variantWhere as any,
+        select: {
+          id: true,
+          productName: true,
+          currentModelCode: true,
+          barcode: true,
+          trendyolSalePrice: true,
+          stockQuantity: true,
+          catalogCategory: true,
+          catalogSubCategory: true,
+          images: true,
+          brand: true,
+          productDescription: true,
+          productColor: true,
+        },
+        orderBy: { id: 'desc' },
+        // Barcode/modelCode aramasında limit 1 yeterli; tam listede sayfalama üst çerçevesine bırak
+        take: (params.barcode || params.modelCode) ? 1 : undefined,
+      }),
     ]);
 
     const variantProducts = variantRows.map((v) => this.variantToPublicProduct(v));
