@@ -123,6 +123,9 @@ Sonra tarayıcıda: **http://localhost:3200**
 - Bostann saksıları: `backend/src/site-only-catalog/` — backend açılışında eksikse eklenir (var olan kayda dokunmaz). 14 seri = 14 ürün grubu (`/urun-grubu/bostann-…-serisi-saksi`), her boyut×renk ayrı ürün (`WEB-BST-LUMEN140-BEJ`). Görseller `florayapay/public/bostann/`
 - `WEB-BST-` ürünleri sitede düz listede gizli, sadece grup sayfasında (Boy + Renk seçimi) ve aramada görünür
 - Kapatmak için: `SITE_ONLY_CATALOG_SEED=false` (yeni ekleme yapmaz) + ERP'den ürünleri/grupları pasif yap
+- Fiber saksılar (`fiber-pots.data.ts`, `WEB-SRN-FBR…`): 69 ürün, Saksılar → Fiber Saksılar, site fiyatı 0 = **"Fiyat için iletişime geçin"** (API `priceOnRequest`, sepete eklenmez, WhatsApp'tan fiyat sor). ERP'den site fiyatı girilince normal satışa açılır. Görseller `florayapay/public/fiber-saksi/`
+- Kayıt servisi görselleri sadece hâlâ `www.erhanflowers.com/bostann|fiber-saksi/` altındaysa günceller; elle değiştirilen görsele dokunmaz
+- Web siparişinde fiyatı 0 olan kalem varsa sipariş reddedilir (`WebOrdersService.create`)
 
 ## Veritabanı
 
