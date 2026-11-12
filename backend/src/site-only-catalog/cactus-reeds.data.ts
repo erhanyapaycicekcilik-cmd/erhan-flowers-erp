@@ -1,5 +1,5 @@
 // Yapay kaktüs ve sazlıklar — SADECE kendi sitemizde, fiyatsız ("Fiyat için iletişime geçin").
-// Kaynak: Kaktüs & Sazlık 2026 fiyat teklifi (PDF). Ağaçlar > Kaktüs ve Sazlıklar.
+// Kaynak: Kaktüs & Sazlık 2026 fiyat teklifi (PDF). Kategori: Kaktüs ve Sazlıklar (Kaktüsler / Sazlıklar).
 // Görseller: florayapay/public/kaktus-sazlik/ (beyaz zemin, %12 kenar boşluğu). Otomatik üretildi.
 import type { SiteOnlySimpleProduct } from './site-only-catalog.types';
 
@@ -12,8 +12,12 @@ export const CACTUS_REEDS: SiteOnlySimpleProduct[] = [
       "https://www.erhanflowers.com/kaktus-sazlik/ag2054-005.jpg"
     ],
     "sitePrice": 0,
-    "catalogCategory": "Ağaçlar",
-    "catalogSubCategory": "Kaktüs ve Sazlıklar",
+    "catalogCategory": "Kaktüs ve Sazlıklar",
+    "catalogSubCategory": "Kaktüsler",
+    "previousCatalog": {
+      "catalogCategory": "Ağaçlar",
+      "catalogSubCategory": "Kaktüs ve Sazlıklar"
+    },
     "categoryName": "Yapay Ağaç",
     "categoryCodePrefix": "YA",
     "productHeight": "85 cm",
@@ -27,8 +31,12 @@ export const CACTUS_REEDS: SiteOnlySimpleProduct[] = [
       "https://www.erhanflowers.com/kaktus-sazlik/ag2055-001.jpg"
     ],
     "sitePrice": 0,
-    "catalogCategory": "Ağaçlar",
-    "catalogSubCategory": "Kaktüs ve Sazlıklar",
+    "catalogCategory": "Kaktüs ve Sazlıklar",
+    "catalogSubCategory": "Kaktüsler",
+    "previousCatalog": {
+      "catalogCategory": "Ağaçlar",
+      "catalogSubCategory": "Kaktüs ve Sazlıklar"
+    },
     "categoryName": "Yapay Ağaç",
     "categoryCodePrefix": "YA",
     "productHeight": "150 cm",
@@ -42,8 +50,12 @@ export const CACTUS_REEDS: SiteOnlySimpleProduct[] = [
       "https://www.erhanflowers.com/kaktus-sazlik/ag2515-001.jpg"
     ],
     "sitePrice": 0,
-    "catalogCategory": "Ağaçlar",
-    "catalogSubCategory": "Kaktüs ve Sazlıklar",
+    "catalogCategory": "Kaktüs ve Sazlıklar",
+    "catalogSubCategory": "Kaktüsler",
+    "previousCatalog": {
+      "catalogCategory": "Ağaçlar",
+      "catalogSubCategory": "Kaktüs ve Sazlıklar"
+    },
     "categoryName": "Yapay Ağaç",
     "categoryCodePrefix": "YA",
     "productHeight": "160 cm",
@@ -57,8 +69,12 @@ export const CACTUS_REEDS: SiteOnlySimpleProduct[] = [
       "https://www.erhanflowers.com/kaktus-sazlik/3647.jpg"
     ],
     "sitePrice": 0,
-    "catalogCategory": "Ağaçlar",
-    "catalogSubCategory": "Kaktüs ve Sazlıklar",
+    "catalogCategory": "Kaktüs ve Sazlıklar",
+    "catalogSubCategory": "Kaktüsler",
+    "previousCatalog": {
+      "catalogCategory": "Ağaçlar",
+      "catalogSubCategory": "Kaktüs ve Sazlıklar"
+    },
     "categoryName": "Yapay Ağaç",
     "categoryCodePrefix": "YA",
     "productHeight": "75 cm",
@@ -72,8 +88,12 @@ export const CACTUS_REEDS: SiteOnlySimpleProduct[] = [
       "https://www.erhanflowers.com/kaktus-sazlik/ag3648-001.jpg"
     ],
     "sitePrice": 0,
-    "catalogCategory": "Ağaçlar",
-    "catalogSubCategory": "Kaktüs ve Sazlıklar",
+    "catalogCategory": "Kaktüs ve Sazlıklar",
+    "catalogSubCategory": "Kaktüsler",
+    "previousCatalog": {
+      "catalogCategory": "Ağaçlar",
+      "catalogSubCategory": "Kaktüs ve Sazlıklar"
+    },
     "categoryName": "Yapay Ağaç",
     "categoryCodePrefix": "YA",
     "productHeight": "110 cm",
@@ -87,8 +107,12 @@ export const CACTUS_REEDS: SiteOnlySimpleProduct[] = [
       "https://www.erhanflowers.com/kaktus-sazlik/ag2169-001.jpg"
     ],
     "sitePrice": 0,
-    "catalogCategory": "Ağaçlar",
-    "catalogSubCategory": "Kaktüs ve Sazlıklar",
+    "catalogCategory": "Kaktüs ve Sazlıklar",
+    "catalogSubCategory": "Kaktüsler",
+    "previousCatalog": {
+      "catalogCategory": "Ağaçlar",
+      "catalogSubCategory": "Kaktüs ve Sazlıklar"
+    },
     "categoryName": "Yapay Ağaç",
     "categoryCodePrefix": "YA",
     "productHeight": "120 cm",
@@ -102,8 +126,12 @@ export const CACTUS_REEDS: SiteOnlySimpleProduct[] = [
       "https://www.erhanflowers.com/kaktus-sazlik/2225.jpg"
     ],
     "sitePrice": 0,
-    "catalogCategory": "Ağaçlar",
-    "catalogSubCategory": "Kaktüs ve Sazlıklar",
+    "catalogCategory": "Kaktüs ve Sazlıklar",
+    "catalogSubCategory": "Kaktüsler",
+    "previousCatalog": {
+      "catalogCategory": "Ağaçlar",
+      "catalogSubCategory": "Kaktüs ve Sazlıklar"
+    },
     "categoryName": "Yapay Ağaç",
     "categoryCodePrefix": "YA",
     "productHeight": "168 cm",
@@ -117,8 +145,12 @@ export const CACTUS_REEDS: SiteOnlySimpleProduct[] = [
       "https://www.erhanflowers.com/kaktus-sazlik/2226.jpg"
     ],
     "sitePrice": 0,
-    "catalogCategory": "Ağaçlar",
-    "catalogSubCategory": "Kaktüs ve Sazlıklar",
+    "catalogCategory": "Kaktüs ve Sazlıklar",
+    "catalogSubCategory": "Kaktüsler",
+    "previousCatalog": {
+      "catalogCategory": "Ağaçlar",
+      "catalogSubCategory": "Kaktüs ve Sazlıklar"
+    },
     "categoryName": "Yapay Ağaç",
     "categoryCodePrefix": "YA",
     "productHeight": "165 cm",
@@ -132,8 +164,12 @@ export const CACTUS_REEDS: SiteOnlySimpleProduct[] = [
       "https://www.erhanflowers.com/kaktus-sazlik/ag2227-001.jpg"
     ],
     "sitePrice": 0,
-    "catalogCategory": "Ağaçlar",
-    "catalogSubCategory": "Kaktüs ve Sazlıklar",
+    "catalogCategory": "Kaktüs ve Sazlıklar",
+    "catalogSubCategory": "Kaktüsler",
+    "previousCatalog": {
+      "catalogCategory": "Ağaçlar",
+      "catalogSubCategory": "Kaktüs ve Sazlıklar"
+    },
     "categoryName": "Yapay Ağaç",
     "categoryCodePrefix": "YA",
     "productHeight": "160 cm",
@@ -147,8 +183,12 @@ export const CACTUS_REEDS: SiteOnlySimpleProduct[] = [
       "https://www.erhanflowers.com/kaktus-sazlik/ag2228-001.jpg"
     ],
     "sitePrice": 0,
-    "catalogCategory": "Ağaçlar",
-    "catalogSubCategory": "Kaktüs ve Sazlıklar",
+    "catalogCategory": "Kaktüs ve Sazlıklar",
+    "catalogSubCategory": "Kaktüsler",
+    "previousCatalog": {
+      "catalogCategory": "Ağaçlar",
+      "catalogSubCategory": "Kaktüs ve Sazlıklar"
+    },
     "categoryName": "Yapay Ağaç",
     "categoryCodePrefix": "YA",
     "productHeight": "143 cm",
@@ -162,8 +202,12 @@ export const CACTUS_REEDS: SiteOnlySimpleProduct[] = [
       "https://www.erhanflowers.com/kaktus-sazlik/ag2229-001.jpg"
     ],
     "sitePrice": 0,
-    "catalogCategory": "Ağaçlar",
-    "catalogSubCategory": "Kaktüs ve Sazlıklar",
+    "catalogCategory": "Kaktüs ve Sazlıklar",
+    "catalogSubCategory": "Kaktüsler",
+    "previousCatalog": {
+      "catalogCategory": "Ağaçlar",
+      "catalogSubCategory": "Kaktüs ve Sazlıklar"
+    },
     "categoryName": "Yapay Ağaç",
     "categoryCodePrefix": "YA",
     "productHeight": "98 cm",
@@ -177,8 +221,12 @@ export const CACTUS_REEDS: SiteOnlySimpleProduct[] = [
       "https://www.erhanflowers.com/kaktus-sazlik/ag2230-001.jpg"
     ],
     "sitePrice": 0,
-    "catalogCategory": "Ağaçlar",
-    "catalogSubCategory": "Kaktüs ve Sazlıklar",
+    "catalogCategory": "Kaktüs ve Sazlıklar",
+    "catalogSubCategory": "Kaktüsler",
+    "previousCatalog": {
+      "catalogCategory": "Ağaçlar",
+      "catalogSubCategory": "Kaktüs ve Sazlıklar"
+    },
     "categoryName": "Yapay Ağaç",
     "categoryCodePrefix": "YA",
     "productHeight": "100 cm",
@@ -192,8 +240,12 @@ export const CACTUS_REEDS: SiteOnlySimpleProduct[] = [
       "https://www.erhanflowers.com/kaktus-sazlik/ag2231-001.jpg"
     ],
     "sitePrice": 0,
-    "catalogCategory": "Ağaçlar",
-    "catalogSubCategory": "Kaktüs ve Sazlıklar",
+    "catalogCategory": "Kaktüs ve Sazlıklar",
+    "catalogSubCategory": "Kaktüsler",
+    "previousCatalog": {
+      "catalogCategory": "Ağaçlar",
+      "catalogSubCategory": "Kaktüs ve Sazlıklar"
+    },
     "categoryName": "Yapay Ağaç",
     "categoryCodePrefix": "YA",
     "productHeight": "145 cm",
@@ -207,8 +259,12 @@ export const CACTUS_REEDS: SiteOnlySimpleProduct[] = [
       "https://www.erhanflowers.com/kaktus-sazlik/ag6115-001.jpg"
     ],
     "sitePrice": 0,
-    "catalogCategory": "Ağaçlar",
-    "catalogSubCategory": "Kaktüs ve Sazlıklar",
+    "catalogCategory": "Kaktüs ve Sazlıklar",
+    "catalogSubCategory": "Kaktüsler",
+    "previousCatalog": {
+      "catalogCategory": "Ağaçlar",
+      "catalogSubCategory": "Kaktüs ve Sazlıklar"
+    },
     "categoryName": "Yapay Ağaç",
     "categoryCodePrefix": "YA",
     "productHeight": "130 cm",
@@ -222,8 +278,12 @@ export const CACTUS_REEDS: SiteOnlySimpleProduct[] = [
       "https://www.erhanflowers.com/kaktus-sazlik/ag3661-001.jpg"
     ],
     "sitePrice": 0,
-    "catalogCategory": "Ağaçlar",
-    "catalogSubCategory": "Kaktüs ve Sazlıklar",
+    "catalogCategory": "Kaktüs ve Sazlıklar",
+    "catalogSubCategory": "Kaktüsler",
+    "previousCatalog": {
+      "catalogCategory": "Ağaçlar",
+      "catalogSubCategory": "Kaktüs ve Sazlıklar"
+    },
     "categoryName": "Yapay Ağaç",
     "categoryCodePrefix": "YA",
     "productHeight": "155 cm",
@@ -237,8 +297,12 @@ export const CACTUS_REEDS: SiteOnlySimpleProduct[] = [
       "https://www.erhanflowers.com/kaktus-sazlik/ag3662-001.jpg"
     ],
     "sitePrice": 0,
-    "catalogCategory": "Ağaçlar",
-    "catalogSubCategory": "Kaktüs ve Sazlıklar",
+    "catalogCategory": "Kaktüs ve Sazlıklar",
+    "catalogSubCategory": "Kaktüsler",
+    "previousCatalog": {
+      "catalogCategory": "Ağaçlar",
+      "catalogSubCategory": "Kaktüs ve Sazlıklar"
+    },
     "categoryName": "Yapay Ağaç",
     "categoryCodePrefix": "YA",
     "productHeight": "95 cm",
@@ -252,8 +316,12 @@ export const CACTUS_REEDS: SiteOnlySimpleProduct[] = [
       "https://www.erhanflowers.com/kaktus-sazlik/ag3663-001.jpg"
     ],
     "sitePrice": 0,
-    "catalogCategory": "Ağaçlar",
-    "catalogSubCategory": "Kaktüs ve Sazlıklar",
+    "catalogCategory": "Kaktüs ve Sazlıklar",
+    "catalogSubCategory": "Kaktüsler",
+    "previousCatalog": {
+      "catalogCategory": "Ağaçlar",
+      "catalogSubCategory": "Kaktüs ve Sazlıklar"
+    },
     "categoryName": "Yapay Ağaç",
     "categoryCodePrefix": "YA",
     "productHeight": "98 cm",
@@ -267,8 +335,12 @@ export const CACTUS_REEDS: SiteOnlySimpleProduct[] = [
       "https://www.erhanflowers.com/kaktus-sazlik/ag3657-001.jpg"
     ],
     "sitePrice": 0,
-    "catalogCategory": "Ağaçlar",
-    "catalogSubCategory": "Kaktüs ve Sazlıklar",
+    "catalogCategory": "Kaktüs ve Sazlıklar",
+    "catalogSubCategory": "Kaktüsler",
+    "previousCatalog": {
+      "catalogCategory": "Ağaçlar",
+      "catalogSubCategory": "Kaktüs ve Sazlıklar"
+    },
     "categoryName": "Yapay Ağaç",
     "categoryCodePrefix": "YA",
     "productHeight": "108 cm",
@@ -282,8 +354,12 @@ export const CACTUS_REEDS: SiteOnlySimpleProduct[] = [
       "https://www.erhanflowers.com/kaktus-sazlik/ag3658-001.jpg"
     ],
     "sitePrice": 0,
-    "catalogCategory": "Ağaçlar",
-    "catalogSubCategory": "Kaktüs ve Sazlıklar",
+    "catalogCategory": "Kaktüs ve Sazlıklar",
+    "catalogSubCategory": "Kaktüsler",
+    "previousCatalog": {
+      "catalogCategory": "Ağaçlar",
+      "catalogSubCategory": "Kaktüs ve Sazlıklar"
+    },
     "categoryName": "Yapay Ağaç",
     "categoryCodePrefix": "YA",
     "productHeight": "120 cm",
@@ -297,8 +373,12 @@ export const CACTUS_REEDS: SiteOnlySimpleProduct[] = [
       "https://www.erhanflowers.com/kaktus-sazlik/ag3659-001.jpg"
     ],
     "sitePrice": 0,
-    "catalogCategory": "Ağaçlar",
-    "catalogSubCategory": "Kaktüs ve Sazlıklar",
+    "catalogCategory": "Kaktüs ve Sazlıklar",
+    "catalogSubCategory": "Kaktüsler",
+    "previousCatalog": {
+      "catalogCategory": "Ağaçlar",
+      "catalogSubCategory": "Kaktüs ve Sazlıklar"
+    },
     "categoryName": "Yapay Ağaç",
     "categoryCodePrefix": "YA",
     "productHeight": "192 cm",
@@ -312,8 +392,12 @@ export const CACTUS_REEDS: SiteOnlySimpleProduct[] = [
       "https://www.erhanflowers.com/kaktus-sazlik/ag3660-001.jpg"
     ],
     "sitePrice": 0,
-    "catalogCategory": "Ağaçlar",
-    "catalogSubCategory": "Kaktüs ve Sazlıklar",
+    "catalogCategory": "Kaktüs ve Sazlıklar",
+    "catalogSubCategory": "Kaktüsler",
+    "previousCatalog": {
+      "catalogCategory": "Ağaçlar",
+      "catalogSubCategory": "Kaktüs ve Sazlıklar"
+    },
     "categoryName": "Yapay Ağaç",
     "categoryCodePrefix": "YA",
     "productHeight": "109 cm",
@@ -327,8 +411,12 @@ export const CACTUS_REEDS: SiteOnlySimpleProduct[] = [
       "https://www.erhanflowers.com/kaktus-sazlik/ag6108-001.jpg"
     ],
     "sitePrice": 0,
-    "catalogCategory": "Ağaçlar",
-    "catalogSubCategory": "Kaktüs ve Sazlıklar",
+    "catalogCategory": "Kaktüs ve Sazlıklar",
+    "catalogSubCategory": "Kaktüsler",
+    "previousCatalog": {
+      "catalogCategory": "Ağaçlar",
+      "catalogSubCategory": "Kaktüs ve Sazlıklar"
+    },
     "categoryName": "Yapay Ağaç",
     "categoryCodePrefix": "YA",
     "productHeight": "110 cm",
@@ -342,8 +430,12 @@ export const CACTUS_REEDS: SiteOnlySimpleProduct[] = [
       "https://www.erhanflowers.com/kaktus-sazlik/2523.jpg"
     ],
     "sitePrice": 0,
-    "catalogCategory": "Ağaçlar",
-    "catalogSubCategory": "Kaktüs ve Sazlıklar",
+    "catalogCategory": "Kaktüs ve Sazlıklar",
+    "catalogSubCategory": "Kaktüsler",
+    "previousCatalog": {
+      "catalogCategory": "Ağaçlar",
+      "catalogSubCategory": "Kaktüs ve Sazlıklar"
+    },
     "categoryName": "Yapay Ağaç",
     "categoryCodePrefix": "YA",
     "productHeight": "75 cm",
@@ -357,8 +449,12 @@ export const CACTUS_REEDS: SiteOnlySimpleProduct[] = [
       "https://www.erhanflowers.com/kaktus-sazlik/ag6105-001.jpg"
     ],
     "sitePrice": 0,
-    "catalogCategory": "Ağaçlar",
-    "catalogSubCategory": "Kaktüs ve Sazlıklar",
+    "catalogCategory": "Kaktüs ve Sazlıklar",
+    "catalogSubCategory": "Kaktüsler",
+    "previousCatalog": {
+      "catalogCategory": "Ağaçlar",
+      "catalogSubCategory": "Kaktüs ve Sazlıklar"
+    },
     "categoryName": "Yapay Ağaç",
     "categoryCodePrefix": "YA",
     "productHeight": "80 cm",
@@ -372,8 +468,12 @@ export const CACTUS_REEDS: SiteOnlySimpleProduct[] = [
       "https://www.erhanflowers.com/kaktus-sazlik/ag6106-001.jpg"
     ],
     "sitePrice": 0,
-    "catalogCategory": "Ağaçlar",
-    "catalogSubCategory": "Kaktüs ve Sazlıklar",
+    "catalogCategory": "Kaktüs ve Sazlıklar",
+    "catalogSubCategory": "Kaktüsler",
+    "previousCatalog": {
+      "catalogCategory": "Ağaçlar",
+      "catalogSubCategory": "Kaktüs ve Sazlıklar"
+    },
     "categoryName": "Yapay Ağaç",
     "categoryCodePrefix": "YA",
     "productHeight": "155 cm",
@@ -387,8 +487,12 @@ export const CACTUS_REEDS: SiteOnlySimpleProduct[] = [
       "https://www.erhanflowers.com/kaktus-sazlik/ag6107-001.jpg"
     ],
     "sitePrice": 0,
-    "catalogCategory": "Ağaçlar",
-    "catalogSubCategory": "Kaktüs ve Sazlıklar",
+    "catalogCategory": "Kaktüs ve Sazlıklar",
+    "catalogSubCategory": "Kaktüsler",
+    "previousCatalog": {
+      "catalogCategory": "Ağaçlar",
+      "catalogSubCategory": "Kaktüs ve Sazlıklar"
+    },
     "categoryName": "Yapay Ağaç",
     "categoryCodePrefix": "YA",
     "productHeight": "105 cm",
@@ -402,8 +506,12 @@ export const CACTUS_REEDS: SiteOnlySimpleProduct[] = [
       "https://www.erhanflowers.com/kaktus-sazlik/2232.jpg"
     ],
     "sitePrice": 0,
-    "catalogCategory": "Ağaçlar",
-    "catalogSubCategory": "Kaktüs ve Sazlıklar",
+    "catalogCategory": "Kaktüs ve Sazlıklar",
+    "catalogSubCategory": "Kaktüsler",
+    "previousCatalog": {
+      "catalogCategory": "Ağaçlar",
+      "catalogSubCategory": "Kaktüs ve Sazlıklar"
+    },
     "categoryName": "Yapay Ağaç",
     "categoryCodePrefix": "YA",
     "productHeight": "30 cm",
@@ -417,8 +525,12 @@ export const CACTUS_REEDS: SiteOnlySimpleProduct[] = [
       "https://www.erhanflowers.com/kaktus-sazlik/2233.jpg"
     ],
     "sitePrice": 0,
-    "catalogCategory": "Ağaçlar",
-    "catalogSubCategory": "Kaktüs ve Sazlıklar",
+    "catalogCategory": "Kaktüs ve Sazlıklar",
+    "catalogSubCategory": "Kaktüsler",
+    "previousCatalog": {
+      "catalogCategory": "Ağaçlar",
+      "catalogSubCategory": "Kaktüs ve Sazlıklar"
+    },
     "categoryName": "Yapay Ağaç",
     "categoryCodePrefix": "YA",
     "productHeight": "36 cm",
@@ -432,8 +544,12 @@ export const CACTUS_REEDS: SiteOnlySimpleProduct[] = [
       "https://www.erhanflowers.com/kaktus-sazlik/2254.jpg"
     ],
     "sitePrice": 0,
-    "catalogCategory": "Ağaçlar",
-    "catalogSubCategory": "Kaktüs ve Sazlıklar",
+    "catalogCategory": "Kaktüs ve Sazlıklar",
+    "catalogSubCategory": "Kaktüsler",
+    "previousCatalog": {
+      "catalogCategory": "Ağaçlar",
+      "catalogSubCategory": "Kaktüs ve Sazlıklar"
+    },
     "categoryName": "Yapay Ağaç",
     "categoryCodePrefix": "YA",
     "productHeight": "45 cm",
@@ -447,8 +563,12 @@ export const CACTUS_REEDS: SiteOnlySimpleProduct[] = [
       "https://www.erhanflowers.com/kaktus-sazlik/2255.jpg"
     ],
     "sitePrice": 0,
-    "catalogCategory": "Ağaçlar",
-    "catalogSubCategory": "Kaktüs ve Sazlıklar",
+    "catalogCategory": "Kaktüs ve Sazlıklar",
+    "catalogSubCategory": "Kaktüsler",
+    "previousCatalog": {
+      "catalogCategory": "Ağaçlar",
+      "catalogSubCategory": "Kaktüs ve Sazlıklar"
+    },
     "categoryName": "Yapay Ağaç",
     "categoryCodePrefix": "YA",
     "productHeight": "33 cm",
@@ -462,8 +582,12 @@ export const CACTUS_REEDS: SiteOnlySimpleProduct[] = [
       "https://www.erhanflowers.com/kaktus-sazlik/2050.jpg"
     ],
     "sitePrice": 0,
-    "catalogCategory": "Ağaçlar",
-    "catalogSubCategory": "Kaktüs ve Sazlıklar",
+    "catalogCategory": "Kaktüs ve Sazlıklar",
+    "catalogSubCategory": "Kaktüsler",
+    "previousCatalog": {
+      "catalogCategory": "Ağaçlar",
+      "catalogSubCategory": "Kaktüs ve Sazlıklar"
+    },
     "categoryName": "Yapay Ağaç",
     "categoryCodePrefix": "YA",
     "productHeight": "40 cm",
@@ -477,8 +601,12 @@ export const CACTUS_REEDS: SiteOnlySimpleProduct[] = [
       "https://www.erhanflowers.com/kaktus-sazlik/2165.jpg"
     ],
     "sitePrice": 0,
-    "catalogCategory": "Ağaçlar",
-    "catalogSubCategory": "Kaktüs ve Sazlıklar",
+    "catalogCategory": "Kaktüs ve Sazlıklar",
+    "catalogSubCategory": "Kaktüsler",
+    "previousCatalog": {
+      "catalogCategory": "Ağaçlar",
+      "catalogSubCategory": "Kaktüs ve Sazlıklar"
+    },
     "categoryName": "Yapay Ağaç",
     "categoryCodePrefix": "YA",
     "productHeight": "35 cm",
@@ -492,8 +620,12 @@ export const CACTUS_REEDS: SiteOnlySimpleProduct[] = [
       "https://www.erhanflowers.com/kaktus-sazlik/2166.jpg"
     ],
     "sitePrice": 0,
-    "catalogCategory": "Ağaçlar",
-    "catalogSubCategory": "Kaktüs ve Sazlıklar",
+    "catalogCategory": "Kaktüs ve Sazlıklar",
+    "catalogSubCategory": "Kaktüsler",
+    "previousCatalog": {
+      "catalogCategory": "Ağaçlar",
+      "catalogSubCategory": "Kaktüs ve Sazlıklar"
+    },
     "categoryName": "Yapay Ağaç",
     "categoryCodePrefix": "YA",
     "productHeight": "25 cm",
@@ -507,8 +639,12 @@ export const CACTUS_REEDS: SiteOnlySimpleProduct[] = [
       "https://www.erhanflowers.com/kaktus-sazlik/2167.jpg"
     ],
     "sitePrice": 0,
-    "catalogCategory": "Ağaçlar",
-    "catalogSubCategory": "Kaktüs ve Sazlıklar",
+    "catalogCategory": "Kaktüs ve Sazlıklar",
+    "catalogSubCategory": "Kaktüsler",
+    "previousCatalog": {
+      "catalogCategory": "Ağaçlar",
+      "catalogSubCategory": "Kaktüs ve Sazlıklar"
+    },
     "categoryName": "Yapay Ağaç",
     "categoryCodePrefix": "YA",
     "productHeight": "18 cm",
@@ -522,8 +658,12 @@ export const CACTUS_REEDS: SiteOnlySimpleProduct[] = [
       "https://www.erhanflowers.com/kaktus-sazlik/5513.jpg"
     ],
     "sitePrice": 0,
-    "catalogCategory": "Ağaçlar",
-    "catalogSubCategory": "Kaktüs ve Sazlıklar",
+    "catalogCategory": "Kaktüs ve Sazlıklar",
+    "catalogSubCategory": "Sazlıklar",
+    "previousCatalog": {
+      "catalogCategory": "Ağaçlar",
+      "catalogSubCategory": "Kaktüs ve Sazlıklar"
+    },
     "categoryName": "Yapay Ağaç",
     "categoryCodePrefix": "YA",
     "productHeight": "68 cm",
@@ -537,8 +677,12 @@ export const CACTUS_REEDS: SiteOnlySimpleProduct[] = [
       "https://www.erhanflowers.com/kaktus-sazlik/5514.jpg"
     ],
     "sitePrice": 0,
-    "catalogCategory": "Ağaçlar",
-    "catalogSubCategory": "Kaktüs ve Sazlıklar",
+    "catalogCategory": "Kaktüs ve Sazlıklar",
+    "catalogSubCategory": "Sazlıklar",
+    "previousCatalog": {
+      "catalogCategory": "Ağaçlar",
+      "catalogSubCategory": "Kaktüs ve Sazlıklar"
+    },
     "categoryName": "Yapay Ağaç",
     "categoryCodePrefix": "YA",
     "productHeight": "88 cm",
@@ -552,8 +696,12 @@ export const CACTUS_REEDS: SiteOnlySimpleProduct[] = [
       "https://www.erhanflowers.com/kaktus-sazlik/5515.jpg"
     ],
     "sitePrice": 0,
-    "catalogCategory": "Ağaçlar",
-    "catalogSubCategory": "Kaktüs ve Sazlıklar",
+    "catalogCategory": "Kaktüs ve Sazlıklar",
+    "catalogSubCategory": "Sazlıklar",
+    "previousCatalog": {
+      "catalogCategory": "Ağaçlar",
+      "catalogSubCategory": "Kaktüs ve Sazlıklar"
+    },
     "categoryName": "Yapay Ağaç",
     "categoryCodePrefix": "YA",
     "productHeight": "124 cm",
@@ -567,8 +715,12 @@ export const CACTUS_REEDS: SiteOnlySimpleProduct[] = [
       "https://www.erhanflowers.com/kaktus-sazlik/5522.jpg"
     ],
     "sitePrice": 0,
-    "catalogCategory": "Ağaçlar",
-    "catalogSubCategory": "Kaktüs ve Sazlıklar",
+    "catalogCategory": "Kaktüs ve Sazlıklar",
+    "catalogSubCategory": "Sazlıklar",
+    "previousCatalog": {
+      "catalogCategory": "Ağaçlar",
+      "catalogSubCategory": "Kaktüs ve Sazlıklar"
+    },
     "categoryName": "Yapay Ağaç",
     "categoryCodePrefix": "YA",
     "productHeight": "150 cm",
@@ -582,8 +734,12 @@ export const CACTUS_REEDS: SiteOnlySimpleProduct[] = [
       "https://www.erhanflowers.com/kaktus-sazlik/5521.jpg"
     ],
     "sitePrice": 0,
-    "catalogCategory": "Ağaçlar",
-    "catalogSubCategory": "Kaktüs ve Sazlıklar",
+    "catalogCategory": "Kaktüs ve Sazlıklar",
+    "catalogSubCategory": "Sazlıklar",
+    "previousCatalog": {
+      "catalogCategory": "Ağaçlar",
+      "catalogSubCategory": "Kaktüs ve Sazlıklar"
+    },
     "categoryName": "Yapay Ağaç",
     "categoryCodePrefix": "YA",
     "productHeight": "182 cm",
@@ -597,8 +753,12 @@ export const CACTUS_REEDS: SiteOnlySimpleProduct[] = [
       "https://www.erhanflowers.com/kaktus-sazlik/5520.jpg"
     ],
     "sitePrice": 0,
-    "catalogCategory": "Ağaçlar",
-    "catalogSubCategory": "Kaktüs ve Sazlıklar",
+    "catalogCategory": "Kaktüs ve Sazlıklar",
+    "catalogSubCategory": "Sazlıklar",
+    "previousCatalog": {
+      "catalogCategory": "Ağaçlar",
+      "catalogSubCategory": "Kaktüs ve Sazlıklar"
+    },
     "categoryName": "Yapay Ağaç",
     "categoryCodePrefix": "YA",
     "productHeight": "215 cm",
@@ -612,8 +772,12 @@ export const CACTUS_REEDS: SiteOnlySimpleProduct[] = [
       "https://www.erhanflowers.com/kaktus-sazlik/5516.jpg"
     ],
     "sitePrice": 0,
-    "catalogCategory": "Ağaçlar",
-    "catalogSubCategory": "Kaktüs ve Sazlıklar",
+    "catalogCategory": "Kaktüs ve Sazlıklar",
+    "catalogSubCategory": "Sazlıklar",
+    "previousCatalog": {
+      "catalogCategory": "Ağaçlar",
+      "catalogSubCategory": "Kaktüs ve Sazlıklar"
+    },
     "categoryName": "Yapay Ağaç",
     "categoryCodePrefix": "YA",
     "productHeight": "56 cm",
@@ -627,8 +791,12 @@ export const CACTUS_REEDS: SiteOnlySimpleProduct[] = [
       "https://www.erhanflowers.com/kaktus-sazlik/5517.jpg"
     ],
     "sitePrice": 0,
-    "catalogCategory": "Ağaçlar",
-    "catalogSubCategory": "Kaktüs ve Sazlıklar",
+    "catalogCategory": "Kaktüs ve Sazlıklar",
+    "catalogSubCategory": "Sazlıklar",
+    "previousCatalog": {
+      "catalogCategory": "Ağaçlar",
+      "catalogSubCategory": "Kaktüs ve Sazlıklar"
+    },
     "categoryName": "Yapay Ağaç",
     "categoryCodePrefix": "YA",
     "productHeight": "80 cm",
@@ -642,8 +810,12 @@ export const CACTUS_REEDS: SiteOnlySimpleProduct[] = [
       "https://www.erhanflowers.com/kaktus-sazlik/5518.jpg"
     ],
     "sitePrice": 0,
-    "catalogCategory": "Ağaçlar",
-    "catalogSubCategory": "Kaktüs ve Sazlıklar",
+    "catalogCategory": "Kaktüs ve Sazlıklar",
+    "catalogSubCategory": "Sazlıklar",
+    "previousCatalog": {
+      "catalogCategory": "Ağaçlar",
+      "catalogSubCategory": "Kaktüs ve Sazlıklar"
+    },
     "categoryName": "Yapay Ağaç",
     "categoryCodePrefix": "YA",
     "productHeight": "120 cm",
@@ -657,8 +829,12 @@ export const CACTUS_REEDS: SiteOnlySimpleProduct[] = [
       "https://www.erhanflowers.com/kaktus-sazlik/5519.jpg"
     ],
     "sitePrice": 0,
-    "catalogCategory": "Ağaçlar",
-    "catalogSubCategory": "Kaktüs ve Sazlıklar",
+    "catalogCategory": "Kaktüs ve Sazlıklar",
+    "catalogSubCategory": "Sazlıklar",
+    "previousCatalog": {
+      "catalogCategory": "Ağaçlar",
+      "catalogSubCategory": "Kaktüs ve Sazlıklar"
+    },
     "categoryName": "Yapay Ağaç",
     "categoryCodePrefix": "YA",
     "productHeight": "150 cm",
@@ -672,8 +848,12 @@ export const CACTUS_REEDS: SiteOnlySimpleProduct[] = [
       "https://www.erhanflowers.com/kaktus-sazlik/5532.jpg"
     ],
     "sitePrice": 0,
-    "catalogCategory": "Ağaçlar",
-    "catalogSubCategory": "Kaktüs ve Sazlıklar",
+    "catalogCategory": "Kaktüs ve Sazlıklar",
+    "catalogSubCategory": "Sazlıklar",
+    "previousCatalog": {
+      "catalogCategory": "Ağaçlar",
+      "catalogSubCategory": "Kaktüs ve Sazlıklar"
+    },
     "categoryName": "Yapay Ağaç",
     "categoryCodePrefix": "YA",
     "productHeight": "88 cm",
@@ -687,8 +867,12 @@ export const CACTUS_REEDS: SiteOnlySimpleProduct[] = [
       "https://www.erhanflowers.com/kaktus-sazlik/5533.jpg"
     ],
     "sitePrice": 0,
-    "catalogCategory": "Ağaçlar",
-    "catalogSubCategory": "Kaktüs ve Sazlıklar",
+    "catalogCategory": "Kaktüs ve Sazlıklar",
+    "catalogSubCategory": "Sazlıklar",
+    "previousCatalog": {
+      "catalogCategory": "Ağaçlar",
+      "catalogSubCategory": "Kaktüs ve Sazlıklar"
+    },
     "categoryName": "Yapay Ağaç",
     "categoryCodePrefix": "YA",
     "productHeight": "88 cm",
@@ -702,8 +886,12 @@ export const CACTUS_REEDS: SiteOnlySimpleProduct[] = [
       "https://www.erhanflowers.com/kaktus-sazlik/ag2240-002.jpg"
     ],
     "sitePrice": 0,
-    "catalogCategory": "Ağaçlar",
-    "catalogSubCategory": "Kaktüs ve Sazlıklar",
+    "catalogCategory": "Kaktüs ve Sazlıklar",
+    "catalogSubCategory": "Sazlıklar",
+    "previousCatalog": {
+      "catalogCategory": "Ağaçlar",
+      "catalogSubCategory": "Kaktüs ve Sazlıklar"
+    },
     "categoryName": "Yapay Ağaç",
     "categoryCodePrefix": "YA",
     "productHeight": "120 cm",
@@ -717,8 +905,12 @@ export const CACTUS_REEDS: SiteOnlySimpleProduct[] = [
       "https://www.erhanflowers.com/kaktus-sazlik/ag2241-002.jpg"
     ],
     "sitePrice": 0,
-    "catalogCategory": "Ağaçlar",
-    "catalogSubCategory": "Kaktüs ve Sazlıklar",
+    "catalogCategory": "Kaktüs ve Sazlıklar",
+    "catalogSubCategory": "Sazlıklar",
+    "previousCatalog": {
+      "catalogCategory": "Ağaçlar",
+      "catalogSubCategory": "Kaktüs ve Sazlıklar"
+    },
     "categoryName": "Yapay Ağaç",
     "categoryCodePrefix": "YA",
     "productHeight": "95 cm",
@@ -732,8 +924,12 @@ export const CACTUS_REEDS: SiteOnlySimpleProduct[] = [
       "https://www.erhanflowers.com/kaktus-sazlik/ag2242-002.jpg"
     ],
     "sitePrice": 0,
-    "catalogCategory": "Ağaçlar",
-    "catalogSubCategory": "Kaktüs ve Sazlıklar",
+    "catalogCategory": "Kaktüs ve Sazlıklar",
+    "catalogSubCategory": "Sazlıklar",
+    "previousCatalog": {
+      "catalogCategory": "Ağaçlar",
+      "catalogSubCategory": "Kaktüs ve Sazlıklar"
+    },
     "categoryName": "Yapay Ağaç",
     "categoryCodePrefix": "YA",
     "productHeight": "110 cm",
@@ -747,8 +943,12 @@ export const CACTUS_REEDS: SiteOnlySimpleProduct[] = [
       "https://www.erhanflowers.com/kaktus-sazlik/5525.jpg"
     ],
     "sitePrice": 0,
-    "catalogCategory": "Ağaçlar",
-    "catalogSubCategory": "Kaktüs ve Sazlıklar",
+    "catalogCategory": "Kaktüs ve Sazlıklar",
+    "catalogSubCategory": "Sazlıklar",
+    "previousCatalog": {
+      "catalogCategory": "Ağaçlar",
+      "catalogSubCategory": "Kaktüs ve Sazlıklar"
+    },
     "categoryName": "Yapay Ağaç",
     "categoryCodePrefix": "YA",
     "productHeight": "120 cm",
@@ -762,8 +962,12 @@ export const CACTUS_REEDS: SiteOnlySimpleProduct[] = [
       "https://www.erhanflowers.com/kaktus-sazlik/5524.jpg"
     ],
     "sitePrice": 0,
-    "catalogCategory": "Ağaçlar",
-    "catalogSubCategory": "Kaktüs ve Sazlıklar",
+    "catalogCategory": "Kaktüs ve Sazlıklar",
+    "catalogSubCategory": "Sazlıklar",
+    "previousCatalog": {
+      "catalogCategory": "Ağaçlar",
+      "catalogSubCategory": "Kaktüs ve Sazlıklar"
+    },
     "categoryName": "Yapay Ağaç",
     "categoryCodePrefix": "YA",
     "productHeight": "150 cm",
@@ -777,8 +981,12 @@ export const CACTUS_REEDS: SiteOnlySimpleProduct[] = [
       "https://www.erhanflowers.com/kaktus-sazlik/5528.jpg"
     ],
     "sitePrice": 0,
-    "catalogCategory": "Ağaçlar",
-    "catalogSubCategory": "Kaktüs ve Sazlıklar",
+    "catalogCategory": "Kaktüs ve Sazlıklar",
+    "catalogSubCategory": "Sazlıklar",
+    "previousCatalog": {
+      "catalogCategory": "Ağaçlar",
+      "catalogSubCategory": "Kaktüs ve Sazlıklar"
+    },
     "categoryName": "Yapay Ağaç",
     "categoryCodePrefix": "YA",
     "productHeight": "90 cm",
@@ -792,8 +1000,12 @@ export const CACTUS_REEDS: SiteOnlySimpleProduct[] = [
       "https://www.erhanflowers.com/kaktus-sazlik/5529.jpg"
     ],
     "sitePrice": 0,
-    "catalogCategory": "Ağaçlar",
-    "catalogSubCategory": "Kaktüs ve Sazlıklar",
+    "catalogCategory": "Kaktüs ve Sazlıklar",
+    "catalogSubCategory": "Sazlıklar",
+    "previousCatalog": {
+      "catalogCategory": "Ağaçlar",
+      "catalogSubCategory": "Kaktüs ve Sazlıklar"
+    },
     "categoryName": "Yapay Ağaç",
     "categoryCodePrefix": "YA",
     "productHeight": "90 cm",
@@ -807,8 +1019,12 @@ export const CACTUS_REEDS: SiteOnlySimpleProduct[] = [
       "https://www.erhanflowers.com/kaktus-sazlik/5526.jpg"
     ],
     "sitePrice": 0,
-    "catalogCategory": "Ağaçlar",
-    "catalogSubCategory": "Kaktüs ve Sazlıklar",
+    "catalogCategory": "Kaktüs ve Sazlıklar",
+    "catalogSubCategory": "Sazlıklar",
+    "previousCatalog": {
+      "catalogCategory": "Ağaçlar",
+      "catalogSubCategory": "Kaktüs ve Sazlıklar"
+    },
     "categoryName": "Yapay Ağaç",
     "categoryCodePrefix": "YA",
     "productHeight": "152 cm",
@@ -822,8 +1038,12 @@ export const CACTUS_REEDS: SiteOnlySimpleProduct[] = [
       "https://www.erhanflowers.com/kaktus-sazlik/5527.jpg"
     ],
     "sitePrice": 0,
-    "catalogCategory": "Ağaçlar",
-    "catalogSubCategory": "Kaktüs ve Sazlıklar",
+    "catalogCategory": "Kaktüs ve Sazlıklar",
+    "catalogSubCategory": "Sazlıklar",
+    "previousCatalog": {
+      "catalogCategory": "Ağaçlar",
+      "catalogSubCategory": "Kaktüs ve Sazlıklar"
+    },
     "categoryName": "Yapay Ağaç",
     "categoryCodePrefix": "YA",
     "productHeight": "182 cm",
@@ -837,8 +1057,12 @@ export const CACTUS_REEDS: SiteOnlySimpleProduct[] = [
       "https://www.erhanflowers.com/kaktus-sazlik/5530.jpg"
     ],
     "sitePrice": 0,
-    "catalogCategory": "Ağaçlar",
-    "catalogSubCategory": "Kaktüs ve Sazlıklar",
+    "catalogCategory": "Kaktüs ve Sazlıklar",
+    "catalogSubCategory": "Sazlıklar",
+    "previousCatalog": {
+      "catalogCategory": "Ağaçlar",
+      "catalogSubCategory": "Kaktüs ve Sazlıklar"
+    },
     "categoryName": "Yapay Ağaç",
     "categoryCodePrefix": "YA",
     "productHeight": "100 cm",
@@ -852,8 +1076,12 @@ export const CACTUS_REEDS: SiteOnlySimpleProduct[] = [
       "https://www.erhanflowers.com/kaktus-sazlik/5531.jpg"
     ],
     "sitePrice": 0,
-    "catalogCategory": "Ağaçlar",
-    "catalogSubCategory": "Kaktüs ve Sazlıklar",
+    "catalogCategory": "Kaktüs ve Sazlıklar",
+    "catalogSubCategory": "Sazlıklar",
+    "previousCatalog": {
+      "catalogCategory": "Ağaçlar",
+      "catalogSubCategory": "Kaktüs ve Sazlıklar"
+    },
     "categoryName": "Yapay Ağaç",
     "categoryCodePrefix": "YA",
     "productHeight": "120 cm",

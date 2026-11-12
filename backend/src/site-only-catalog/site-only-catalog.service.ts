@@ -176,6 +176,7 @@ export class SiteOnlyCatalogService implements OnApplicationBootstrap {
   async seedSimple(products: SiteOnlySimpleProduct[]) {
     let created = 0;
     let imagesUpdated = 0;
+    let moved = 0;
     const categoryIds = new Map<string, number>();
 
     for (const item of products) {
@@ -185,9 +186,21 @@ export class SiteOnlyCatalogService implements OnApplicationBootstrap {
       }
       const existing = await this.prisma.product.findUnique({
         where: { modelCode: item.modelCode },
-        select: { id: true, imageUrls: true },
+        select: { id: true, imageUrls: true, catalogCategory: true, catalogSubCategory: true },
       });
       if (existing) {
+        const prev = item.previousCatalog;
+        if (
+          prev &&
+          existing.catalogCategory === prev.catalogCategory &&
+          (existing.catalogSubCategory ?? null) === prev.catalogSubCategory
+        ) {
+          await this.prisma.product.update({
+            where: { id: existing.id },
+            data: { catalogCategory: item.catalogCategory, catalogSubCategory: item.catalogSubCategory ?? null },
+          });
+          moved++;
+        }
         const current = existing.imageUrls;
         const managed = Array.isArray(current) && current.length > 0 && current.every(isManagedImage);
         if (managed && !sameList(current, item.images)) {
@@ -233,9 +246,9 @@ export class SiteOnlyCatalogService implements OnApplicationBootstrap {
       created++;
     }
 
-    if (created || imagesUpdated) {
-      this.logger.log(`Tekil site ürünleri: ${created} eklendi, ${imagesUpdated} görsel güncellendi`);
+    if (created || imagesUpdated || moved) {
+      this.logger.log(`Tekil site ürünleri: ${created} eklendi, ${imagesUpdated} görsel güncellendi, ${moved} kategorisi taşındı`);
     }
-    return { created, imagesUpdated };
+    return { created, imagesUpdated, moved };
   }
 }
