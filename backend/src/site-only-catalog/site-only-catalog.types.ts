@@ -13,6 +13,7 @@ export interface SiteOnlySize {
   height: string; // yükseklik (cm)
   volume: string; // "125 L"
   price: number; // site satış fiyatı (KDV dahil, TL)
+  cover?: string; // Bostann'ın bu boy için kapak fotoğrafı
   description: string;
   colors: SiteOnlyColor[];
 }
@@ -21,6 +22,22 @@ export interface SiteOnlySeries {
   name: string;
   slug: string;
   sortOrder: number;
+  cover?: string; // sitede seri kartı görseli
   description: string;
   sizes: SiteOnlySize[];
+}
+
+/** Gruba bağlı olmayan tekil site ürünü (ör. "fiyat için iletişime geçin" fiber saksılar) */
+export interface SiteOnlySimpleProduct {
+  modelCode: string; // WEB- ile başlamalı
+  name: string;
+  description: string;
+  images: string[];
+  sitePrice: number; // 0 = fiyat için iletişime geçin
+  catalogCategory: string;
+  catalogSubCategory?: string | null;
+  categoryName: string; // ERP kategori adı
+  brand?: string;
+  productHeight?: string | null;
+  potSize?: string | null;
 }

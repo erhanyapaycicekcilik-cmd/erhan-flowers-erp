@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException, UnauthorizedException } from '@nestjs/common'
+import { BadRequestException, Injectable, Logger, NotFoundException, UnauthorizedException } from '@nestjs/common'
 import { createHmac, timingSafeEqual } from 'crypto'
 import { PrismaService } from '../prisma/prisma.service'
 import { MailService } from '../mail/mail.service'
@@ -14,6 +14,10 @@ export class WebOrdersService {
   ) {}
 
   async create(dto: CreateWebOrderDto) {
+    // Fiyatı olmayan ("fiyat için iletişime geçin") ürünler siteden sipariş edilemez
+    if (!dto.items?.length || dto.items.some((i) => !(Number(i.unitPrice) > 0) || !(Number(i.quantity) > 0))) {
+      throw new BadRequestException('Sepette fiyatı olmayan ürün var. Bu ürünler için lütfen bizimle iletişime geçin.')
+    }
     const subtotal = dto.items.reduce((s, i) => s + i.unitPrice * i.quantity, 0)
     const grandTotal = dto.paymentMethod === 'EFT' ? subtotal * 0.97 : subtotal
     const orderNumber = 'WEB-' + Date.now().toString(36).toUpperCase()

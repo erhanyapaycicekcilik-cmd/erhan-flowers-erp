@@ -8,6 +8,8 @@ export interface PublicProduct {
   category: string | null
   categorySlug: string | null
   sitePrice: number
+  /** Fiyatı olmayan site ürünü: sepete eklenmez, "Fiyat için iletişime geçin" gösterilir */
+  priceOnRequest?: boolean
   originalPrice: number | null
   brand: string
   description: string | null
@@ -126,9 +128,12 @@ export async function getProductGroup(slug: string): Promise<ProductGroup | null
   }
 }
 
-export async function getProductGroups(category?: string): Promise<ProductGroup[]> {
+export async function getProductGroups(category?: string, subcategory?: string): Promise<ProductGroup[]> {
   try {
-    const qs = category ? `?category=${encodeURIComponent(category)}` : ''
+    const params = new URLSearchParams()
+    if (category) params.set('category', category)
+    if (subcategory) params.set('subcategory', subcategory)
+    const qs = params.toString() ? `?${params}` : ''
     return await apiFetch<ProductGroup[]>(`/public/catalog/groups${qs}`)
   } catch {
     return []

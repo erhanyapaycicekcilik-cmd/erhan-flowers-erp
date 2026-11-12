@@ -4,6 +4,7 @@ import Image from 'next/image'
 import { Header } from '@/components/layout/Header'
 import { Footer } from '@/components/layout/Footer'
 import { AddToCartButton } from '@/components/product/AddToCartButton'
+import { PriceOnRequestInline } from '@/components/product/PriceOnRequest'
 import { getCategories, getSubCategories, getProducts, getProductGroups, getImageUrl } from '@/lib/api/catalog'
 import { formatPrice } from '@/lib/utils/format'
 import { JsonLd } from '@/components/seo/JsonLd'
@@ -62,7 +63,7 @@ export default async function ProductsPage({ searchParams }: PageProps) {
       sort: searchParams.sirala,
     }),
     // Grupları sadece arama olmadığında getir
-    !searchParams.q ? getProductGroups(searchParams.kategori) : Promise.resolve([]),
+    !searchParams.q ? getProductGroups(searchParams.kategori, searchParams.altkategori) : Promise.resolve([]),
   ])
 
   const breadcrumbs = [
@@ -289,6 +290,11 @@ export default async function ProductsPage({ searchParams }: PageProps) {
                             {product.name}
                           </h3>
                         </Link>
+                        {product.priceOnRequest ? (
+                          <div className="mt-2.5">
+                            <PriceOnRequestInline productName={product.name} slug={product.slug} />
+                          </div>
+                        ) : (
                         <div className="mt-2.5 flex items-center justify-between gap-2">
                           <p className="font-semibold text-[#0D1510]">{formatPrice(product.sitePrice)}</p>
                           <AddToCartButton
@@ -302,6 +308,7 @@ export default async function ProductsPage({ searchParams }: PageProps) {
                             disabled={!product.inStock}
                           />
                         </div>
+                        )}
                       </div>
                     </article>
                   </li>

@@ -11,8 +11,8 @@ export class ProductGroupsController {
   // ─── Public ───────────────────────────────────────────────────────────────
 
   @Get()
-  listGroups(@Query('category') category?: string) {
-    return this.svc.listGroups(category);
+  listGroups(@Query('category') category?: string, @Query('subcategory') subcategory?: string) {
+    return this.svc.listGroups(category, subcategory);
   }
 
   @Get(':slug')
