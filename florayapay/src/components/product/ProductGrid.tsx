@@ -4,6 +4,7 @@ import type { PublicProduct } from '@/lib/api/catalog'
 import { getImageUrl } from '@/lib/api/catalog'
 import { formatPrice } from '@/lib/utils/format'
 import { AddToCartButton } from './AddToCartButton'
+import { PriceOnRequestInline } from './PriceOnRequest'
 
 interface Props {
   products: PublicProduct[]
@@ -117,6 +118,11 @@ function ProductCard({ product }: { product: PublicProduct }) {
           )}
         </Link>
 
+        {product.priceOnRequest ? (
+          <div className="mt-3">
+            <PriceOnRequestInline productName={product.name} slug={product.slug} />
+          </div>
+        ) : (
         <div className="mt-3 flex items-end justify-between gap-2">
           <div>
             <p className="font-bold text-lg text-gray-900 leading-none">
@@ -140,6 +146,7 @@ function ProductCard({ product }: { product: PublicProduct }) {
             disabled={!product.inStock}
           />
         </div>
+        )}
       </div>
     </article>
   )

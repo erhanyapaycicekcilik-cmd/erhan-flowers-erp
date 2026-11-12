@@ -2,16 +2,17 @@ import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { SITE_ONLY_MODEL_PREFIX } from '../common/site-only';
 import { BOSTANN_SERIES } from './bostann-pots.data';
-import type { SiteOnlySeries } from './site-only-catalog.types';
+import { FIBER_POTS } from './fiber-pots.data';
+import type { SiteOnlySeries, SiteOnlySimpleProduct } from './site-only-catalog.types';
 
 const CATEGORY_NAME = 'Saksı';
 const CATALOG_CATEGORY = 'Saksılar';
 const DEFAULT_STOCK = 100;
 // Bu adresle başlayan görseller bu servisin koyduğu görsellerdir; ERP'den elle değiştirilmediyse güncellenebilir
-const MANAGED_IMAGE_BASE = 'https://www.erhanflowers.com/bostann/';
+const MANAGED_IMAGE_BASES = ['https://www.erhanflowers.com/bostann/', 'https://www.erhanflowers.com/fiber-saksi/'];
 
 function isManagedImage(url: unknown): boolean {
-  return typeof url === 'string' && url.startsWith(MANAGED_IMAGE_BASE);
+  return typeof url === 'string' && MANAGED_IMAGE_BASES.some((base) => url.startsWith(base));
 }
 
 function sameList(a: unknown, b: string[]): boolean {
@@ -25,7 +26,7 @@ function sameList(a: unknown, b: string[]): boolean {
  *   boyut/renk olduğu bilgisiyle gelir.
  * - Her seri sitede bir ürün grubudur: müşteri boyutu ve rengi seçer.
  * - Var olan kayıtların fiyat/stok/ad/açıklamasına DOKUNMAZ (ERP'den değiştirilirse ezilmez).
- *   Sadece görseller hâlâ bu servisin koyduğu görsellerse (MANAGED_IMAGE_BASE) güncel listeye çekilir.
+ *   Sadece görseller hâlâ bu servisin koyduğu görsellerse (MANAGED_IMAGE_BASES) güncel listeye çekilir.
  * - Hata verirse sadece log yazar; backend'in açılmasını engellemez.
  */
 @Injectable()
@@ -37,7 +38,10 @@ export class SiteOnlyCatalogService implements OnApplicationBootstrap {
   onApplicationBootstrap() {
     if (process.env.SITE_ONLY_CATALOG_SEED === 'false') return;
     // Açılışı bekletmemek için arka planda çalıştır
-    void this.seed(BOSTANN_SERIES).catch((err: unknown) => {
+    void (async () => {
+      await this.seed(BOSTANN_SERIES);
+      await this.seedSimple(FIBER_POTS);
+    })().catch((err: unknown) => {
       this.logger.error(`Site ürünleri eklenemedi: ${err instanceof Error ? err.message : String(err)}`);
     });
   }
@@ -157,5 +161,72 @@ export class SiteOnlyCatalogService implements OnApplicationBootstrap {
       );
     }
     return { productsCreated, groupsCreated, variantsCreated, imagesUpdated };
+  }
+
+  /** Tekil site ürünlerini ekler; var olanın sadece (bizim koyduğumuz) görsellerini günceller */
+  async seedSimple(products: SiteOnlySimpleProduct[]) {
+    let created = 0;
+    let imagesUpdated = 0;
+    const categoryIds = new Map<string, number>();
+
+    for (const item of products) {
+      if (!item.modelCode.startsWith(SITE_ONLY_MODEL_PREFIX)) {
+        this.logger.warn(`Atlandı, WEB- ön eki yok: ${item.modelCode}`);
+        continue;
+      }
+      const existing = await this.prisma.product.findUnique({
+        where: { modelCode: item.modelCode },
+        select: { id: true, imageUrls: true },
+      });
+      if (existing) {
+        const current = existing.imageUrls;
+        const managed = Array.isArray(current) && current.length > 0 && current.every(isManagedImage);
+        if (managed && !sameList(current, item.images)) {
+          await this.prisma.product.update({ where: { id: existing.id }, data: { imageUrls: item.images } });
+          imagesUpdated++;
+        }
+        continue;
+      }
+
+      let categoryId = categoryIds.get(item.categoryName);
+      if (!categoryId) {
+        const category =
+          (await this.prisma.category.findUnique({ where: { name: item.categoryName } })) ??
+          (await this.prisma.category.create({
+            data: { name: item.categoryName, codePrefix: 'SKS', startCode: 1, currentCode: 1 },
+          }));
+        categoryId = category.id;
+        categoryIds.set(item.categoryName, categoryId);
+      }
+
+      await this.prisma.product.create({
+        data: {
+          productName: item.name,
+          modelCode: item.modelCode,
+          categoryId,
+          stockQuantity: DEFAULT_STOCK,
+          sitePrice: item.sitePrice,
+          marketPrice: 0,
+          listPrice: 0,
+          shopPrice: 0,
+          costPrice: 0,
+          imageUrls: item.images,
+          brand: item.brand ?? 'Erhan Flowers',
+          vatRate: 20,
+          productHeight: item.productHeight ?? null,
+          potSize: item.potSize ?? null,
+          catalogCategory: item.catalogCategory,
+          catalogSubCategory: item.catalogSubCategory ?? null,
+          status: 'ACTIVE',
+          description: item.description,
+        },
+      });
+      created++;
+    }
+
+    if (created || imagesUpdated) {
+      this.logger.log(`Tekil site ürünleri: ${created} eklendi, ${imagesUpdated} görsel güncellendi`);
+    }
+    return { created, imagesUpdated };
   }
 }

@@ -8,6 +8,8 @@ export interface PublicProduct {
   category: string | null
   categorySlug: string | null
   sitePrice: number
+  /** Fiyatı olmayan site ürünü: sepete eklenmez, "Fiyat için iletişime geçin" gösterilir */
+  priceOnRequest?: boolean
   originalPrice: number | null
   brand: string
   description: string | null
