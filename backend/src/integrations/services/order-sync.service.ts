@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import * as XLSX from 'xlsx';
 import { PrismaService } from '../../prisma/prisma.service';
+import { Prisma } from '@prisma/client';
 import { CredentialVaultService } from './credential-vault.service';
 import { IntegrationsService } from '../integrations.service';
 
@@ -706,9 +707,24 @@ export class OrderSyncService {
     });
 
     const fetchedHbIds = allOrders.map((o) => String(o.id ?? o.orderNumber ?? '')).filter(Boolean);
-    // hbApiSucceeded: API başarıyla yanıt verdiyse eski siparişleri temizle
-    // 0 sipariş = hepsi kargoya verildi demek — boş liste dönmesi API hatası değil, gerçek sonuç
     await this.markMissingAsDelivered('HEPSIBURADA', fetchedHbIds, hbApiSucceeded);
+
+    // Doğrudan temizleme: external_order_id NULL olan veya API'de görünmeyen 2+ günlük HB siparişleri → DELIVERED
+    // markMissingAsDelivered'daki IS NOT NULL filtresi bunları atladığı için ek güvence
+    if (hbApiSucceeded) {
+      const cleaned = await this.prisma.$executeRaw`
+        UPDATE retail_sales
+        SET status = 'DELIVERED'::"RetailSaleStatus", updated_at = NOW()
+        WHERE channel = 'HEPSIBURADA'::"RetailSaleChannel"
+          AND status IN ('CONFIRMED'::"RetailSaleStatus", 'PREPARING'::"RetailSaleStatus", 'IN_PRODUCTION'::"RetailSaleStatus", 'READY'::"RetailSaleStatus")
+          AND created_at < NOW() - INTERVAL '2 days'
+          AND (
+            external_order_id IS NULL
+            OR external_order_id NOT IN (${fetchedHbIds.length > 0 ? Prisma.join(fetchedHbIds) : Prisma.sql`NULL`})
+          )
+      `;
+      if (cleaned > 0) this.logger.log(`[HEPSIBURADA] ${cleaned} eski siparis DELIVERED yapildi (dogrudan temizleme).`);
+    }
 
     this.logger.log(`Hepsiburada sync tamamlandi: ${newOrders} yeni siparis, ${stockDeductions} stok dusumu.`);
     return { processed: allOrders.length, newOrders, stockDeductions };
