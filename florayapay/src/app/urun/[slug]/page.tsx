@@ -219,7 +219,8 @@ export default async function ProductDetailPage({ params }: PageProps) {
                 />
               )}
 
-              {/* Güven göstergeleri */}
+              {/* Güven göstergeleri (fiyatsız/siparişe özel üründe gösterilmez) */}
+              {!priceOnRequest && (
               <div className="mt-5 grid grid-cols-3 gap-3">
                 {[
                   { icon: '🚚', text: '2 İş Günü Kargo' },
@@ -232,6 +233,7 @@ export default async function ProductDetailPage({ params }: PageProps) {
                   </div>
                 ))}
               </div>
+              )}
 
               {/* Ürün detayları */}
               <div className="mt-8 space-y-3">
