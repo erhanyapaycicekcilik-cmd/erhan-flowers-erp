@@ -1147,6 +1147,24 @@ export class SalesService {
     if (!fullAddress) throw new BadRequestException('Açık adres zorunludur.');
 
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(${1700170200 + customerId})`;
+    // Aynı adres tekrar girildiyse yeni kayıt açma (adres çıktısı / satış her seferinde kopyalamasın)
+    const same = await tx.$queryRaw<Array<Record<string, unknown>>>`
+      SELECT id, customer_id AS "customerId", title, recipient_name AS "recipientName", full_address AS "fullAddress", is_default AS "isDefault"
+      FROM retail_customer_addresses
+      WHERE customer_id = ${customerId} AND is_active = true
+        AND lower(btrim(full_address)) = lower(${fullAddress})
+        AND COALESCE(lower(btrim(city)), '') = lower(${this.text(body.city)})
+        AND COALESCE(lower(btrim(district)), '') = lower(${this.text(body.district)})
+      ORDER BY id DESC LIMIT 1
+    `;
+    if (same[0]) {
+      await tx.$executeRaw`
+        UPDATE retail_customer_addresses SET recipient_name = ${recipientName},
+          recipient_phone = COALESCE(${this.text(body.recipientPhone) || null}, recipient_phone), updated_at = NOW()
+        WHERE id = ${Number(same[0].id)}
+      `;
+      return same[0];
+    }
     const hasDefault = await tx.$queryRaw<Array<{ exists: boolean }>>`
       SELECT EXISTS(SELECT 1 FROM retail_customer_addresses WHERE customer_id = ${customerId} AND is_default = true AND is_active = true) AS exists
     `;
