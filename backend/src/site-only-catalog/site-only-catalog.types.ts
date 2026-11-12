@@ -13,6 +13,7 @@ export interface SiteOnlySize {
   height: string; // yükseklik (cm)
   volume: string; // "125 L"
   price: number; // site satış fiyatı (KDV dahil, TL)
+  cover?: string; // Bostann'ın bu boy için kapak fotoğrafı
   description: string;
   colors: SiteOnlyColor[];
 }
@@ -21,6 +22,7 @@ export interface SiteOnlySeries {
   name: string;
   slug: string;
   sortOrder: number;
+  cover?: string; // sitede seri kartı görseli
   description: string;
   sizes: SiteOnlySize[];
 }

@@ -7,6 +7,16 @@ import type { SiteOnlySeries } from './site-only-catalog.types';
 const CATEGORY_NAME = 'Saksı';
 const CATALOG_CATEGORY = 'Saksılar';
 const DEFAULT_STOCK = 100;
+// Bu adresle başlayan görseller bu servisin koyduğu görsellerdir; ERP'den elle değiştirilmediyse güncellenebilir
+const MANAGED_IMAGE_BASE = 'https://www.erhanflowers.com/bostann/';
+
+function isManagedImage(url: unknown): boolean {
+  return typeof url === 'string' && url.startsWith(MANAGED_IMAGE_BASE);
+}
+
+function sameList(a: unknown, b: string[]): boolean {
+  return Array.isArray(a) && a.length === b.length && a.every((v, i) => v === b[i]);
+}
 
 /**
  * Sadece kendi sitemizde satılan ürün serilerini ERP'ye ekler (pazaryerlerine gitmez).
@@ -14,7 +24,8 @@ const DEFAULT_STOCK = 100;
  * - Her boyut × renk ayrı ERP ürünü olur (model kodu WEB-BST-…), böylece sipariş hangi
  *   boyut/renk olduğu bilgisiyle gelir.
  * - Her seri sitede bir ürün grubudur: müşteri boyutu ve rengi seçer.
- * - Var olan kayıtlara DOKUNMAZ: fiyat/stok/görsel ERP'den değiştirilirse sonraki açılışta ezilmez.
+ * - Var olan kayıtların fiyat/stok/ad/açıklamasına DOKUNMAZ (ERP'den değiştirilirse ezilmez).
+ *   Sadece görseller hâlâ bu servisin koyduğu görsellerse (MANAGED_IMAGE_BASE) güncel listeye çekilir.
  * - Hata verirse sadece log yazar; backend'in açılmasını engellemez.
  */
 @Injectable()
@@ -42,11 +53,16 @@ export class SiteOnlyCatalogService implements OnApplicationBootstrap {
     let productsCreated = 0;
     let groupsCreated = 0;
     let variantsCreated = 0;
+    let imagesUpdated = 0;
 
     for (const series of seriesList) {
       let group = await this.prisma.productGroup.findUnique({ where: { slug: series.slug } });
+      const firstImage = series.cover ?? series.sizes[0]?.colors[0]?.images[0] ?? null;
+      if (group && firstImage && group.mainImage !== firstImage && (!group.mainImage || isManagedImage(group.mainImage))) {
+        group = await this.prisma.productGroup.update({ where: { id: group.id }, data: { mainImage: firstImage } });
+        imagesUpdated++;
+      }
       if (!group) {
-        const firstImage = series.sizes[0]?.colors[0]?.images[0] ?? null;
         group = await this.prisma.productGroup.create({
           data: {
             name: `Bostann ${series.name} Serisi Dekoratif Saksı`,
@@ -67,7 +83,15 @@ export class SiteOnlyCatalogService implements OnApplicationBootstrap {
         for (const [colorIndex, color] of size.colors.entries()) {
           const modelCode = `${SITE_ONLY_MODEL_PREFIX}BST-${size.key}-${color.key}`;
 
-          let product = await this.prisma.product.findUnique({ where: { modelCode }, select: { id: true } });
+          let product = await this.prisma.product.findUnique({ where: { modelCode }, select: { id: true, imageUrls: true } });
+          if (product) {
+            const current = product.imageUrls;
+            const managed = Array.isArray(current) && current.length > 0 && current.every(isManagedImage);
+            if (managed && !sameList(current, color.images)) {
+              await this.prisma.product.update({ where: { id: product.id }, data: { imageUrls: color.images } });
+              imagesUpdated++;
+            }
+          }
           if (!product) {
             product = await this.prisma.product.create({
               data: {
@@ -95,15 +119,20 @@ export class SiteOnlyCatalogService implements OnApplicationBootstrap {
                   `Ölçüler: üst ${size.top} cm, iç ${size.inner} cm, taban ${size.base} cm, yükseklik ${size.height} cm. ` +
                   `İç hacim: ${size.volume}.\nİç ve dış mekânda, salon, balkon ve bahçede kullanıma uygundur.`,
               },
-              select: { id: true },
+              select: { id: true, imageUrls: true },
             });
             productsCreated++;
           }
 
           const existingVariant = await this.prisma.productGroupVariant.findFirst({
             where: { groupId: group.id, productId: product.id },
-            select: { id: true },
+            select: { id: true, potImage: true },
           });
+          const potImage = color.images[0] ?? null;
+          if (existingVariant && potImage && existingVariant.potImage !== potImage && (!existingVariant.potImage || isManagedImage(existingVariant.potImage))) {
+            await this.prisma.productGroupVariant.update({ where: { id: existingVariant.id }, data: { potImage } });
+            imagesUpdated++;
+          }
           if (!existingVariant) {
             await this.prisma.productGroupVariant.create({
               data: {
@@ -111,7 +140,7 @@ export class SiteOnlyCatalogService implements OnApplicationBootstrap {
                 productId: product.id,
                 sizeLabel: `${size.code} · ${size.top} cm · ${size.volume}`,
                 potLabel: color.name,
-                potImage: color.images[0] ?? null,
+                potImage,
                 isActive: true,
                 sortOrder: sizeIndex * 10 + colorIndex,
               },
@@ -122,9 +151,11 @@ export class SiteOnlyCatalogService implements OnApplicationBootstrap {
       }
     }
 
-    if (productsCreated || groupsCreated || variantsCreated) {
-      this.logger.log(`Site ürünleri eklendi: ${productsCreated} ürün, ${groupsCreated} grup, ${variantsCreated} varyant`);
+    if (productsCreated || groupsCreated || variantsCreated || imagesUpdated) {
+      this.logger.log(
+        `Site ürünleri: ${productsCreated} ürün, ${groupsCreated} grup, ${variantsCreated} varyant eklendi; ${imagesUpdated} görsel güncellendi`,
+      );
     }
-    return { productsCreated, groupsCreated, variantsCreated };
+    return { productsCreated, groupsCreated, variantsCreated, imagesUpdated };
   }
 }
