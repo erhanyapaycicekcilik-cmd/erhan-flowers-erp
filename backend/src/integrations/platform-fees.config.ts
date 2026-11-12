@@ -10,6 +10,7 @@ export const PLATFORM_FEES: Record<string, { commission: number; buffer: number 
   PAZARAMA:      { commission: 0, buffer: 0 },
   IDEFIX:        { commission: 0, buffer: 0 },
   TRENDRUM:      { commission: 0, buffer: 0 },
+  AMAZON:        { commission: 0, buffer: 0 },
 };
 
 /**

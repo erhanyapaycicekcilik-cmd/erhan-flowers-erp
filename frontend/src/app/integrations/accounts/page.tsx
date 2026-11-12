@@ -35,6 +35,16 @@ const FIELD_LABELS: Record<string, string> = {
   TOKEN: 'Token',
 };
 
+// Amazon SP-API alanları farklı adlarla geçer — kullanıcıya Seller Central'daki adlarıyla göster
+const PLATFORM_FIELD_LABELS: Record<string, Record<string, string>> = {
+  AMAZON: {
+    MERCHANT_ID: 'Satıcı ID',
+    API_KEY: 'LWA Client ID',
+    API_SECRET: 'LWA Client Secret',
+    TOKEN: 'Refresh Token',
+  },
+};
+
 type CredentialEntry = { maskedValue?: string; updatedAt?: string };
 
 type PlatformSetting = {
@@ -152,7 +162,7 @@ function PlatformCard({ setting, company, onSaved }: { setting: PlatformSetting;
               const existing = setting.credentials[FIELD_LABELS[field] ?? field];
               return (
                 <div key={field} className="flex items-center gap-2">
-                  <label className="text-xs text-slate-500 w-28 shrink-0">{FIELD_LABELS[field] ?? field}</label>
+                  <label className="text-xs text-slate-500 w-28 shrink-0">{PLATFORM_FIELD_LABELS[setting.platform]?.[field] ?? FIELD_LABELS[field] ?? field}</label>
                   <div className="relative flex-1">
                     <input
                       type={show[field] ? 'text' : 'password'}
