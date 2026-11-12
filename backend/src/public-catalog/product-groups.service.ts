@@ -17,8 +17,9 @@ export class ProductGroupsService {
   // ─── Public API ───────────────────────────────────────────────────────────
 
   async listGroups(category?: string) {
-    const groups = await this.prisma.productGroup.findMany({
-      where: { isActive: true, ...(category ? { category } : {}) },
+    // Site kategori filtresini slug ile gönderir ("saksilar"); grupta ad tutulur ("Saksılar")
+    const groupsAll = await this.prisma.productGroup.findMany({
+      where: { isActive: true },
       orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
       select: {
         id: true, name: true, slug: true, mainImage: true,
@@ -33,6 +34,11 @@ export class ProductGroupsService {
         },
       },
     });
+
+    const wanted = category?.trim();
+    const groups = wanted
+      ? groupsAll.filter((g) => g.category === wanted || (g.category && slugify(g.category) === slugify(wanted)))
+      : groupsAll;
 
     // Her varyant için fiyatı çek (priceOverride yoksa ürün fiyatı)
     return Promise.all(

@@ -116,6 +116,14 @@ Sonra tarayıcıda: **http://localhost:3200**
 - TEST ortamında kesilenler `provider = TRENDYOL_EFATURAM_TEST`: satışı "faturalandı" yapmaz, canlıda tekrar listelenir. Otomatik kesim sadece CANLI'da
 - 15 dk cron (`autoIssue`): aktif + otomatik açık + CANLI ise son 7 günün faturasızlarını keser (3 hatalı denemeden sonra durur)
 
+## Sadece Sitede Satılan Ürünler (`WEB-` model kodu)
+
+- Model kodu `WEB-` ile başlayan ürünler **sadece www.erhanflowers.com'da** satılır (`backend/src/common/site-only.ts`)
+- Pazaryerlerine gönderilmez (`broadcastPriceStock`, `broadcastAll`, görsel yayını, platform Excel'i atlar) ve Trendyol ürün senkronu bunları PASİF yapmaz
+- Bostann saksıları: `backend/src/site-only-catalog/` — backend açılışında eksikse eklenir (var olan kayda dokunmaz). 14 seri = 14 ürün grubu (`/urun-grubu/bostann-…-serisi-saksi`), her boyut×renk ayrı ürün (`WEB-BST-LUMEN140-BEJ`). Görseller `florayapay/public/bostann/`
+- `WEB-BST-` ürünleri sitede düz listede gizli, sadece grup sayfasında (Boy + Renk seçimi) ve aramada görünür
+- Kapatmak için: `SITE_ONLY_CATALOG_SEED=false` (yeni ekleme yapmaz) + ERP'den ürünleri/grupları pasif yap
+
 ## Veritabanı
 
 - **PostgreSQL 16** Docker container'da (`erhan-flowers-postgres-prod`)

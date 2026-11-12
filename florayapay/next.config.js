@@ -150,6 +150,10 @@ const nextConfig = {
         protocol: 'https',
         hostname: 'erhanflowers.com',
       },
+      {
+        protocol: 'https',
+        hostname: 'www.erhanflowers.com',
+      },
       // Trendyol CDN
       {
         protocol: 'https',

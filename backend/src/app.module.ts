@@ -29,6 +29,7 @@ import { ProductCenterModule } from './product-center/product-center.module';
 import { MarketIntelligenceModule } from './market-intelligence/market-intelligence.module';
 import { CatalogStrategyModule } from './catalog-strategy/catalog-strategy.module';
 import { PublicCatalogModule } from './public-catalog/public-catalog.module';
+import { SiteOnlyCatalogModule } from './site-only-catalog/site-only-catalog.module';
 import { SiteSettingsModule } from './site-settings/site-settings.module';
 import { WebOrdersModule } from './web-orders/web-orders.module';
 import { SuppliersModule } from './suppliers/suppliers.module';
@@ -82,6 +83,7 @@ import { PersonnelModule } from './personnel/personnel.module';
     MarketIntelligenceModule,
     CatalogStrategyModule,
     PublicCatalogModule,
+    SiteOnlyCatalogModule,
     SiteSettingsModule,
     WebOrdersModule,
     SuppliersModule,
