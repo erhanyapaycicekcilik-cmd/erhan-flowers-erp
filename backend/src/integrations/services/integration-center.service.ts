@@ -10,6 +10,7 @@ import { TrendyolAdapter } from '../adapters/trendyol.adapter';
 import { TrendrumAdapter } from '../adapters/trendrum.adapter';
 import { PazaramaAdapter } from '../adapters/pazarama.adapter';
 import { IdefixAdapter } from '../adapters/idefix.adapter';
+import { AmazonAdapter } from '../adapters/amazon.adapter';
 import { MockMarketplaceAdapter } from '../adapters/mock/mock-marketplace.adapter';
 import { CredentialVaultService } from './credential-vault.service';
 import { resolveGeminiModel } from '../../common/gemini-model';
@@ -79,7 +80,8 @@ const platformCredentialFields: Record<string, string[]> = {
   HEPSIBURADA: ['MERCHANT_ID', 'API_KEY', 'API_SECRET', 'USER_AGENT'],
   N11: ['MERCHANT_ID', 'API_KEY', 'API_SECRET'],
   TICIMAX: ['UYE_KODU', 'API_KEY', 'API_SECRET'],
-  AMAZON: ['MERCHANT_ID', 'API_KEY', 'API_SECRET'],
+  // Amazon SP-API: MERCHANT_ID = Satıcı ID, API_KEY = LWA Client ID, API_SECRET = LWA Client Secret, TOKEN = Refresh Token
+  AMAZON: ['MERCHANT_ID', 'API_KEY', 'API_SECRET', 'TOKEN'],
   PAZARAMA: ['API_KEY', 'API_SECRET'],
   IDEFIX: ['SUPPLIER_ID', 'API_KEY'],
   TEKLIKLE: ['API_KEY', 'API_SECRET'],
@@ -699,7 +701,7 @@ export class IntegrationCenterService {
   }
 
   private displayCredentialField(platform: string, credentialType: string) {
-    if ((platform === 'HEPSIBURADA' || platform === 'N11') && credentialType === 'SUPPLIER_ID') return 'MERCHANT_ID';
+    if ((platform === 'HEPSIBURADA' || platform === 'N11' || platform === 'AMAZON') && credentialType === 'SUPPLIER_ID') return 'MERCHANT_ID';
     if (platform === 'HEPSIBURADA' && credentialType === 'OTHER') return 'USER_AGENT';
     return credentialType;
   }
@@ -873,6 +875,7 @@ export class IntegrationCenterService {
     if (platform === 'TRENDRUM') return new TrendrumAdapter(await this.runtimeCredentials(platform));
     if (platform === 'PAZARAMA') return new PazaramaAdapter(await this.runtimeCredentials(platform));
     if (platform === 'IDEFIX') return new IdefixAdapter(await this.runtimeCredentials(platform));
+    if (platform === 'AMAZON') return new AmazonAdapter(await this.runtimeCredentials(platform));
     throw new BadRequestException('Platform desteklenmiyor.');
   }
 

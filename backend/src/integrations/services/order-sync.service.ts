@@ -3,6 +3,7 @@ import { Cron } from '@nestjs/schedule';
 import * as XLSX from 'xlsx';
 import { PrismaService } from '../../prisma/prisma.service';
 import { Prisma } from '../../generated/prisma-client';
+import { AmazonAdapter } from '../adapters/amazon.adapter';
 import { CredentialVaultService } from './credential-vault.service';
 import { IntegrationsService } from '../integrations.service';
 
@@ -90,6 +91,13 @@ export class OrderSyncService {
     }
     try { await this.runIdefixSync(); } catch (err) {
       this.logger.error('Idefix sync hatasi', err instanceof Error ? err.message : String(err));
+    }
+    try {
+      const amazon = await this.runAmazonSync();
+      // Amazon siparişlerini retail_sales'e de aktar (personel ekranında görünsün)
+      if (owner && amazon.configured) await this.integrations.syncOrders('AMAZON', owner.id);
+    } catch (err) {
+      this.logger.error('Amazon sync hatasi', err instanceof Error ? err.message : String(err));
     }
     // Tüm platformlar: 7 günden eski CONFIRMED siparişler → DELIVERED
     // HB openorders'da takılı kalan gerçek eskiler + diğer platformlar
@@ -1624,5 +1632,95 @@ export class OrderSyncService {
 
     this.logger.log(`Idefix sync tamamlandi: ${newOrders} yeni siparis.`);
     return { processed: allOrders.length, newOrders };
+  }
+
+  async runAmazonSync(): Promise<{ configured: boolean; processed: number; newOrders: number }> {
+    const creds: Record<string, string> = {};
+    try {
+      const rows = await this.prisma.$queryRaw<Array<{ credentialType: string; encryptedValue: string }>>`
+        SELECT cc.credential_type AS "credentialType", cc.encrypted_value AS "encryptedValue"
+        FROM channel_credentials cc
+        JOIN channel_accounts ca ON cc.channel_account_id = ca.id
+        JOIN sales_channels sc ON ca.sales_channel_id = sc.id
+        JOIN companies co ON ca.company_id = co.id
+        WHERE sc.code = 'AMAZON' AND co.code = 'ERHAN' AND ca.is_active = true AND cc.is_active = true
+      `;
+      for (const row of rows) {
+        try { creds[row.credentialType] = this.credentialVault.decrypt(row.encryptedValue); } catch { /* skip */ }
+      }
+    } catch { /* skip */ }
+
+    const adapter = new AmazonAdapter(creds);
+    const test = await adapter.testConnection();
+    if (test.status === 'MISSING_CREDENTIALS' && test.missingKeys?.length) {
+      // API bilgisi girilmemiş — sessizce atla
+      return { configured: false, processed: 0, newOrders: 0 };
+    }
+    if (!test.ok) {
+      this.logger.warn(`Amazon baglantisi basarisiz: ${test.message}`);
+      return { configured: false, processed: 0, newOrders: 0 };
+    }
+
+    const rawOrders = await adapter.fetchRawOrders(this.lookbackDays);
+    this.logger.log(`Amazon'dan ${rawOrders.length} siparis cekildi.`);
+    let newOrders = 0;
+
+    for (const { order, items } of rawOrders) {
+      const externalOrderId = String(order.AmazonOrderId ?? '');
+      if (!externalOrderId) continue;
+      const status = String(order.OrderStatus ?? '');
+      const existing = await this.prisma.marketplaceOrder.findUnique({
+        where: { platform_externalOrderId: { platform: 'AMAZON', externalOrderId } },
+      });
+      if (existing) {
+        if (status && existing.status !== status) {
+          await this.prisma.marketplaceOrder.update({ where: { id: existing.id }, data: { status } });
+        }
+        continue;
+      }
+      const shipping = items.reduce((sum, i) => sum + Number(i.ShippingPrice?.Amount ?? 0), 0);
+      const saved = await this.prisma.marketplaceOrder.create({
+        data: {
+          platform: 'AMAZON',
+          externalOrderId,
+          orderNumber: externalOrderId,
+          status: status || 'Pending',
+          customerName: String(order.ShippingAddress?.Name ?? order.BuyerInfo?.BuyerName ?? 'Amazon Müşterisi'),
+          totalAmount: Number(order.OrderTotal?.Amount ?? 0),
+          cargoAmount: shipping,
+          currency: String(order.OrderTotal?.CurrencyCode ?? 'TRY'),
+          orderDate: order.PurchaseDate ? new Date(String(order.PurchaseDate)) : null,
+          rawPayload: { ...order, OrderItems: items } as object,
+        },
+      });
+      newOrders++;
+
+      // Kalemler satış analizleri (katalog stratejisi, maliyet) için. Stok düşümü retail_sales aktarımında yapılır.
+      for (const item of items) {
+        const sku = item.SellerSKU ? String(item.SellerSKU) : null;
+        const qty = Number(item.QuantityOrdered ?? 1) || 1;
+        const lineTotal = Number(item.ItemPrice?.Amount ?? 0);
+        let stockCardId: number | null = null;
+        if (sku) {
+          const card = await this.prisma.stockCard.findFirst({ where: { OR: [{ barcode: sku }, { sku }], status: 'ACTIVE' }, select: { id: true } });
+          stockCardId = card?.id ?? null;
+        }
+        await this.prisma.marketplaceOrderItem.create({
+          data: {
+            orderId: saved.id,
+            productName: String(item.Title ?? sku ?? 'Amazon ürünü'),
+            sku,
+            barcode: sku,
+            quantity: qty,
+            unitPrice: Math.round((lineTotal / qty) * 100) / 100,
+            totalPrice: lineTotal,
+            stockCardId,
+          },
+        });
+      }
+    }
+
+    this.logger.log(`Amazon sync tamamlandi: ${newOrders} yeni siparis.`);
+    return { configured: true, processed: rawOrders.length, newOrders };
   }
 }

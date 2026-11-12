@@ -83,6 +83,7 @@ Sonra tarayıcıda: **http://localhost:3200**
 | Trendyol | Aktif | pushPrice: barcode veya modelCode |
 | N11 | Aktif | pushPrice: product-create endpoint'i kullanır |
 | Hepsiburada | Aktif | pushPrice: hepsiburadaSku = barcode ?? modelCode |
+| Amazon (TR) | Kod hazır, API bilgisi bekleniyor | SP-API (`adapters/amazon.adapter.ts`), EU endpoint, pazaryeri `A33AVAJ2PDY3EV`. Bilgiler: MERCHANT_ID=Satıcı ID, API_KEY=LWA Client ID, API_SECRET=LWA Client Secret, TOKEN=Refresh Token. pushPrice/pushProduct = Listings PATCH (SKU = barcode, yoksa modelCode; ilan Amazon'da önceden açılmış olmalı). Siparişler 15dk cron `runAmazonSync` → marketplace_orders + retail_sales |
 
 ## Fiyat/Stok Senkronizasyonu
 
