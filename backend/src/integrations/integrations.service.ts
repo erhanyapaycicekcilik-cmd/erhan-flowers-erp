@@ -544,7 +544,11 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
                 sc.external_image_url,
                 i.external_image_url,
                 (SELECT img->>'url' FROM jsonb_array_elements(CASE WHEN jsonb_typeof(tpv.images) = 'array' THEN tpv.images ELSE '[]'::jsonb END) AS img WHERE img->>'url' IS NOT NULL AND img->>'url' <> '' LIMIT 1),
-                (SELECT url FROM products p, jsonb_array_elements_text(CASE WHEN jsonb_typeof(p.image_urls) = 'array' THEN p.image_urls ELSE '[]'::jsonb END) AS url WHERE ((i.barcode IS NOT NULL AND p.barcode = i.barcode) OR (i.model_code IS NOT NULL AND p.model_code = i.model_code)) LIMIT 1)
+                (SELECT url FROM products p, jsonb_array_elements_text(CASE WHEN jsonb_typeof(p.image_urls) = 'array' THEN p.image_urls ELSE '[]'::jsonb END) AS url WHERE ((i.barcode IS NOT NULL AND p.barcode = i.barcode) OR (i.model_code IS NOT NULL AND p.model_code = i.model_code)) LIMIT 1),
+                -- HB/N11/Amazon satıcı stok kodu (ör. SD-3030) Trendyol barkodundan farklı olabilir:
+                -- Trendyol varyantının stok/model koduyla ve stok kartının sku/model/eski model koduyla da ara
+                (SELECT img->>'url' FROM trendyol_product_variants v2, jsonb_array_elements(CASE WHEN jsonb_typeof(v2.images) = 'array' THEN v2.images ELSE '[]'::jsonb END) AS img WHERE i.model_code IS NOT NULL AND i.model_code <> '' AND (UPPER(v2.supplier_stock_code) = UPPER(REGEXP_REPLACE(i.model_code, '^FL-', '')) OR UPPER(v2.current_model_code) = UPPER(REGEXP_REPLACE(i.model_code, '^FL-', ''))) AND img->>'url' IS NOT NULL AND img->>'url' <> '' LIMIT 1),
+                (SELECT sc2.image_path FROM stock_cards sc2 WHERE i.model_code IS NOT NULL AND i.model_code <> '' AND (UPPER(sc2.sku) = UPPER(i.model_code) OR UPPER(sc2.model) = UPPER(i.model_code) OR UPPER(sc2.old_model_code) = UPPER(i.model_code)) AND sc2.image_path IS NOT NULL AND sc2.image_path <> '' LIMIT 1)
               ),
               'color', sc.color,
               'trendyolUrl', tpv.trendyol_product_url
@@ -637,6 +641,7 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
                 (SELECT p.image_url FROM products p WHERE ((moi.barcode IS NOT NULL AND p.barcode = moi.barcode) OR (moi.sku IS NOT NULL AND p.model_code = moi.sku) OR (moi.sku IS NOT NULL AND p.model_code = REGEXP_REPLACE(moi.sku, '^FL-', ''))) AND p.image_url IS NOT NULL AND p.image_url <> '' LIMIT 1),
                 (SELECT url FROM products p, jsonb_array_elements_text(CASE WHEN jsonb_typeof(p.image_urls) = 'array' THEN p.image_urls ELSE '[]'::jsonb END) AS url WHERE ((moi.barcode IS NOT NULL AND p.barcode = moi.barcode) OR (moi.sku IS NOT NULL AND p.model_code = moi.sku) OR (moi.sku IS NOT NULL AND p.model_code = REGEXP_REPLACE(moi.sku, '^FL-', ''))) AND url IS NOT NULL AND url <> '' LIMIT 1),
                 (SELECT sc2.image_path FROM stock_cards sc2 WHERE (sc2.barcode = moi.barcode OR sc2.sku = moi.sku OR (moi.sku IS NOT NULL AND sc2.sku = REGEXP_REPLACE(moi.sku, '^FL-', ''))) AND sc2.image_path IS NOT NULL AND sc2.image_path <> '' LIMIT 1),
+                (SELECT img->>'url' FROM trendyol_product_variants v2, jsonb_array_elements(CASE WHEN jsonb_typeof(v2.images) = 'array' THEN v2.images ELSE '[]'::jsonb END) AS img WHERE moi.sku IS NOT NULL AND moi.sku <> '' AND (UPPER(v2.supplier_stock_code) = UPPER(REGEXP_REPLACE(moi.sku, '^FL-', '')) OR UPPER(v2.current_model_code) = UPPER(REGEXP_REPLACE(moi.sku, '^FL-', ''))) AND img->>'url' IS NOT NULL AND img->>'url' <> '' LIMIT 1),
                 (SELECT sci2.file_path FROM stock_cards sc2, stock_card_images sci2 WHERE (sc2.barcode = moi.barcode OR sc2.sku = moi.sku OR (moi.sku IS NOT NULL AND sc2.sku = REGEXP_REPLACE(moi.sku, '^FL-', ''))) AND sci2.stock_card_id = sc2.id ORDER BY sci2.is_main DESC, sci2.id LIMIT 1),
                 (SELECT COALESCE(
                   line_item->>'productImage',
