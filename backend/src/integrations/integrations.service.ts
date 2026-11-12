@@ -894,10 +894,8 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
         await tx.$executeRaw`
           UPDATE retail_sales
           SET status = CASE
-                WHEN status::text IN ('READY','OUT_FOR_DELIVERY','COMPLETED','CANCELLED')
+                WHEN status::text IN ('READY','OUT_FOR_DELIVERY','DELIVERED','COMPLETED','CANCELLED')
                 THEN status
-                WHEN status::text = 'DELIVERED' AND ${status} IN ('CONFIRMED','PREPARING')
-                THEN ${status}::"RetailSaleStatus"
                 ELSE COALESCE(${status}::"RetailSaleStatus", status)
               END,
               invoice_status = COALESCE(${invoiceStatus}::"RetailInvoiceStatus", invoice_status),
