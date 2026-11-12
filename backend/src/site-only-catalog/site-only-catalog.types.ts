@@ -38,6 +38,8 @@ export interface SiteOnlySimpleProduct {
   catalogSubCategory?: string | null;
   categoryName: string; // ERP kategori adı
   categoryCodePrefix?: string; // kategori yoksa açılırken kullanılacak kod ön eki
+  /** Daha önce bu kategoriyle eklendiyse (ve elle değiştirilmediyse) yeni kategoriye taşınır */
+  previousCatalog?: { catalogCategory: string; catalogSubCategory: string | null };
   brand?: string;
   productHeight?: string | null;
   potSize?: string | null;

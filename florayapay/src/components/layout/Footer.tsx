@@ -31,6 +31,7 @@ export function Footer() {
                 { href: '/urunler?kategori=cicekler', label: 'Yapay Çiçekler' },
                 { href: '/urunler?kategori=dikey-bahce', label: 'Dikey Bahçe' },
                 { href: '/urunler?kategori=saksilar', label: 'Saksılar' },
+                { href: '/urunler?kategori=kaktus-ve-sazliklar', label: 'Kaktüs ve Sazlıklar' },
                 { href: '/urunler?kategori=bambu', label: 'Bambu' },
               ].map((link) => (
                 <li key={link.href}>
