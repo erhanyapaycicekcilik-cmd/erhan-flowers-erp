@@ -4,6 +4,7 @@ import { SITE_ONLY_MODEL_PREFIX } from '../common/site-only';
 import { BOSTANN_SERIES } from './bostann-pots.data';
 import { FIBER_POTS } from './fiber-pots.data';
 import { CACTUS_REEDS } from './cactus-reeds.data';
+import { METAL_POTS } from './metal-pots.data';
 import type { SiteOnlySeries, SiteOnlySimpleProduct } from './site-only-catalog.types';
 
 const CATEGORY_NAME = 'Saksı';
@@ -14,6 +15,7 @@ const MANAGED_IMAGE_BASES = [
   'https://www.erhanflowers.com/bostann/',
   'https://www.erhanflowers.com/fiber-saksi/',
   'https://www.erhanflowers.com/kaktus-sazlik/',
+  'https://www.erhanflowers.com/metal-saksi/',
 ];
 
 function isManagedImage(url: unknown): boolean {
@@ -47,6 +49,7 @@ export class SiteOnlyCatalogService implements OnApplicationBootstrap {
       await this.seed(BOSTANN_SERIES);
       await this.seedSimple(FIBER_POTS);
       await this.seedSimple(CACTUS_REEDS);
+      await this.seedSimple(METAL_POTS);
     })().catch((err: unknown) => {
       this.logger.error(`Site ürünleri eklenemedi: ${err instanceof Error ? err.message : String(err)}`);
     });
