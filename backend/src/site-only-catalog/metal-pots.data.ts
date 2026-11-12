@@ -1,5 +1,5 @@
 // Metal saksı / vazo / şamdan / aranjmanlar — SADECE kendi sitemizde, normal satış.
-// Kaynak: OOVV fiyat listesi (PDF). Site fiyatı = listedeki fiyat x 3. Saksılar > Metal Saksılar.
+// Kaynak: OOVV fiyat listesi (PDF). Site fiyatı = listedeki fiyat x 3. Saksılar > Metal Saksılar; şamdan/vazolar: Vazo ve Şamdanlar.
 // Görseller: florayapay/public/metal-saksi/ (tek ürün, beyaz zemin). Otomatik üretildi.
 import type { SiteOnlySimpleProduct } from './site-only-catalog.types';
 
@@ -12,9 +12,13 @@ export const METAL_POTS: SiteOnlySimpleProduct[] = [
       "https://www.erhanflowers.com/metal-saksi/oovv-00.jpg"
     ],
     "sitePrice": 2100,
-    "catalogCategory": "Saksılar",
-    "catalogSubCategory": "Metal Saksılar",
-    "categoryName": "Saksı"
+    "catalogCategory": "Vazo ve Şamdanlar",
+    "catalogSubCategory": "Şamdan ve Mumluklar",
+    "categoryName": "Saksı",
+    "previousCatalog": {
+      "catalogCategory": "Saksılar",
+      "catalogSubCategory": "Metal Saksılar"
+    }
   },
   {
     "modelCode": "WEB-OVV-OV-003",
@@ -72,9 +76,13 @@ export const METAL_POTS: SiteOnlySimpleProduct[] = [
       "https://www.erhanflowers.com/metal-saksi/oovv-03.jpg"
     ],
     "sitePrice": 3750,
-    "catalogCategory": "Saksılar",
-    "catalogSubCategory": "Metal Saksılar",
-    "categoryName": "Saksı"
+    "catalogCategory": "Vazo ve Şamdanlar",
+    "catalogSubCategory": "Şamdan ve Mumluklar",
+    "categoryName": "Saksı",
+    "previousCatalog": {
+      "catalogCategory": "Saksılar",
+      "catalogSubCategory": "Metal Saksılar"
+    }
   },
   {
     "modelCode": "WEB-OVV-OV-009",
@@ -96,9 +104,13 @@ export const METAL_POTS: SiteOnlySimpleProduct[] = [
       "https://www.erhanflowers.com/metal-saksi/oovv-05.jpg"
     ],
     "sitePrice": 3000,
-    "catalogCategory": "Saksılar",
-    "catalogSubCategory": "Metal Saksılar",
-    "categoryName": "Saksı"
+    "catalogCategory": "Vazo ve Şamdanlar",
+    "catalogSubCategory": "Vazolar",
+    "categoryName": "Saksı",
+    "previousCatalog": {
+      "catalogCategory": "Saksılar",
+      "catalogSubCategory": "Metal Saksılar"
+    }
   },
   {
     "modelCode": "WEB-OVV-OV-011",
@@ -120,9 +132,13 @@ export const METAL_POTS: SiteOnlySimpleProduct[] = [
       "https://www.erhanflowers.com/metal-saksi/oovv-07.jpg"
     ],
     "sitePrice": 450,
-    "catalogCategory": "Saksılar",
-    "catalogSubCategory": "Metal Saksılar",
-    "categoryName": "Saksı"
+    "catalogCategory": "Vazo ve Şamdanlar",
+    "catalogSubCategory": "Şamdan ve Mumluklar",
+    "categoryName": "Saksı",
+    "previousCatalog": {
+      "catalogCategory": "Saksılar",
+      "catalogSubCategory": "Metal Saksılar"
+    }
   },
   {
     "modelCode": "WEB-OVV-OV-16-B",
@@ -180,9 +196,13 @@ export const METAL_POTS: SiteOnlySimpleProduct[] = [
       "https://www.erhanflowers.com/metal-saksi/oovv-12.jpg"
     ],
     "sitePrice": 600,
-    "catalogCategory": "Saksılar",
-    "catalogSubCategory": "Metal Saksılar",
-    "categoryName": "Saksı"
+    "catalogCategory": "Vazo ve Şamdanlar",
+    "catalogSubCategory": "Vazolar",
+    "categoryName": "Saksı",
+    "previousCatalog": {
+      "catalogCategory": "Saksılar",
+      "catalogSubCategory": "Metal Saksılar"
+    }
   },
   {
     "modelCode": "WEB-OVV-OV-024-B",
@@ -192,9 +212,13 @@ export const METAL_POTS: SiteOnlySimpleProduct[] = [
       "https://www.erhanflowers.com/metal-saksi/oovv-13.jpg"
     ],
     "sitePrice": 750,
-    "catalogCategory": "Saksılar",
-    "catalogSubCategory": "Metal Saksılar",
-    "categoryName": "Saksı"
+    "catalogCategory": "Vazo ve Şamdanlar",
+    "catalogSubCategory": "Vazolar",
+    "categoryName": "Saksı",
+    "previousCatalog": {
+      "catalogCategory": "Saksılar",
+      "catalogSubCategory": "Metal Saksılar"
+    }
   },
   {
     "modelCode": "WEB-OVV-OV-024-K",
@@ -204,9 +228,13 @@ export const METAL_POTS: SiteOnlySimpleProduct[] = [
       "https://www.erhanflowers.com/metal-saksi/oovv-14.jpg"
     ],
     "sitePrice": 810,
-    "catalogCategory": "Saksılar",
-    "catalogSubCategory": "Metal Saksılar",
-    "categoryName": "Saksı"
+    "catalogCategory": "Vazo ve Şamdanlar",
+    "catalogSubCategory": "Vazolar",
+    "categoryName": "Saksı",
+    "previousCatalog": {
+      "catalogCategory": "Saksılar",
+      "catalogSubCategory": "Metal Saksılar"
+    }
   },
   {
     "modelCode": "WEB-OVV-OV-025",
@@ -216,9 +244,13 @@ export const METAL_POTS: SiteOnlySimpleProduct[] = [
       "https://www.erhanflowers.com/metal-saksi/oovv-15.jpg"
     ],
     "sitePrice": 810,
-    "catalogCategory": "Saksılar",
-    "catalogSubCategory": "Metal Saksılar",
-    "categoryName": "Saksı"
+    "catalogCategory": "Vazo ve Şamdanlar",
+    "catalogSubCategory": "Vazolar",
+    "categoryName": "Saksı",
+    "previousCatalog": {
+      "catalogCategory": "Saksılar",
+      "catalogSubCategory": "Metal Saksılar"
+    }
   },
   {
     "modelCode": "WEB-OVV-OV-026",
@@ -228,9 +260,13 @@ export const METAL_POTS: SiteOnlySimpleProduct[] = [
       "https://www.erhanflowers.com/metal-saksi/oovv-16.jpg"
     ],
     "sitePrice": 1050,
-    "catalogCategory": "Saksılar",
-    "catalogSubCategory": "Metal Saksılar",
-    "categoryName": "Saksı"
+    "catalogCategory": "Vazo ve Şamdanlar",
+    "catalogSubCategory": "Vazolar",
+    "categoryName": "Saksı",
+    "previousCatalog": {
+      "catalogCategory": "Saksılar",
+      "catalogSubCategory": "Metal Saksılar"
+    }
   },
   {
     "modelCode": "WEB-OVV-OV-027",
@@ -240,9 +276,13 @@ export const METAL_POTS: SiteOnlySimpleProduct[] = [
       "https://www.erhanflowers.com/metal-saksi/oovv-17.jpg"
     ],
     "sitePrice": 1200,
-    "catalogCategory": "Saksılar",
-    "catalogSubCategory": "Metal Saksılar",
-    "categoryName": "Saksı"
+    "catalogCategory": "Vazo ve Şamdanlar",
+    "catalogSubCategory": "Vazolar",
+    "categoryName": "Saksı",
+    "previousCatalog": {
+      "catalogCategory": "Saksılar",
+      "catalogSubCategory": "Metal Saksılar"
+    }
   },
   {
     "modelCode": "WEB-OVV-OV-028",
@@ -252,9 +292,13 @@ export const METAL_POTS: SiteOnlySimpleProduct[] = [
       "https://www.erhanflowers.com/metal-saksi/oovv-18.jpg"
     ],
     "sitePrice": 960,
-    "catalogCategory": "Saksılar",
-    "catalogSubCategory": "Metal Saksılar",
-    "categoryName": "Saksı"
+    "catalogCategory": "Vazo ve Şamdanlar",
+    "catalogSubCategory": "Vazolar",
+    "categoryName": "Saksı",
+    "previousCatalog": {
+      "catalogCategory": "Saksılar",
+      "catalogSubCategory": "Metal Saksılar"
+    }
   },
   {
     "modelCode": "WEB-OVV-OV-033",
@@ -288,9 +332,13 @@ export const METAL_POTS: SiteOnlySimpleProduct[] = [
       "https://www.erhanflowers.com/metal-saksi/oovv-21.jpg"
     ],
     "sitePrice": 990,
-    "catalogCategory": "Saksılar",
-    "catalogSubCategory": "Metal Saksılar",
-    "categoryName": "Saksı"
+    "catalogCategory": "Vazo ve Şamdanlar",
+    "catalogSubCategory": "Vazolar",
+    "categoryName": "Saksı",
+    "previousCatalog": {
+      "catalogCategory": "Saksılar",
+      "catalogSubCategory": "Metal Saksılar"
+    }
   },
   {
     "modelCode": "WEB-OVV-OV-041",
@@ -300,9 +348,13 @@ export const METAL_POTS: SiteOnlySimpleProduct[] = [
       "https://www.erhanflowers.com/metal-saksi/oovv-22.jpg"
     ],
     "sitePrice": 3300,
-    "catalogCategory": "Saksılar",
-    "catalogSubCategory": "Metal Saksılar",
-    "categoryName": "Saksı"
+    "catalogCategory": "Vazo ve Şamdanlar",
+    "catalogSubCategory": "Vazolar",
+    "categoryName": "Saksı",
+    "previousCatalog": {
+      "catalogCategory": "Saksılar",
+      "catalogSubCategory": "Metal Saksılar"
+    }
   },
   {
     "modelCode": "WEB-OVV-OV-043",
@@ -336,9 +388,13 @@ export const METAL_POTS: SiteOnlySimpleProduct[] = [
       "https://www.erhanflowers.com/metal-saksi/oovv-25.jpg"
     ],
     "sitePrice": 660,
-    "catalogCategory": "Saksılar",
-    "catalogSubCategory": "Metal Saksılar",
-    "categoryName": "Saksı"
+    "catalogCategory": "Vazo ve Şamdanlar",
+    "catalogSubCategory": "Vazolar",
+    "categoryName": "Saksı",
+    "previousCatalog": {
+      "catalogCategory": "Saksılar",
+      "catalogSubCategory": "Metal Saksılar"
+    }
   },
   {
     "modelCode": "WEB-OVV-OV-046",
@@ -612,9 +668,13 @@ export const METAL_POTS: SiteOnlySimpleProduct[] = [
       "https://www.erhanflowers.com/metal-saksi/oovv-46.jpg"
     ],
     "sitePrice": 1500,
-    "catalogCategory": "Saksılar",
-    "catalogSubCategory": "Metal Saksılar",
-    "categoryName": "Saksı"
+    "catalogCategory": "Vazo ve Şamdanlar",
+    "catalogSubCategory": "Vazolar",
+    "categoryName": "Saksı",
+    "previousCatalog": {
+      "catalogCategory": "Saksılar",
+      "catalogSubCategory": "Metal Saksılar"
+    }
   },
   {
     "modelCode": "WEB-OVV-OV-MS-001",

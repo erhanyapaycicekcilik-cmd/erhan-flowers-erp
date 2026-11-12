@@ -161,7 +161,7 @@ export class PublicCatalogService {
     }
 
     // Kategori sırası — kullanıcının atama sayfasındaki sırayla aynı
-    const CAT_ORDER = ['Ağaçlar', 'Bambu', 'Yapay Çiçekler', 'Buketler', 'Dikey Bahçeler', 'Sarmaşıklar', 'Bonsai ve Zeytin Ağaçları', 'Saksı Aranjmanları', 'Yapay Bitkiler', 'Kaktüs ve Sazlıklar', 'Saksılar'];
+    const CAT_ORDER = ['Ağaçlar', 'Bambu', 'Yapay Çiçekler', 'Buketler', 'Dikey Bahçeler', 'Sarmaşıklar', 'Bonsai ve Zeytin Ağaçları', 'Saksı Aranjmanları', 'Yapay Bitkiler', 'Kaktüs ve Sazlıklar', 'Saksılar', 'Vazo ve Şamdanlar'];
 
     return Array.from(counts.entries())
       .filter(([, count]) => count > 0)
@@ -182,7 +182,7 @@ export class PublicCatalogService {
   }
 
   async listSubCategories(categorySlug: string): Promise<{ name: string; slug: string; count: number }[]> {
-    const CAT_NAMES = ['Ağaçlar', 'Bambu', 'Yapay Çiçekler', 'Buketler', 'Dikey Bahçeler', 'Sarmaşıklar', 'Bonsai ve Zeytin Ağaçları', 'Saksı Aranjmanları', 'Yapay Bitkiler', 'Kaktüs ve Sazlıklar', 'Saksılar'];
+    const CAT_NAMES = ['Ağaçlar', 'Bambu', 'Yapay Çiçekler', 'Buketler', 'Dikey Bahçeler', 'Sarmaşıklar', 'Bonsai ve Zeytin Ağaçları', 'Saksı Aranjmanları', 'Yapay Bitkiler', 'Kaktüs ve Sazlıklar', 'Saksılar', 'Vazo ve Şamdanlar'];
     const matched = CAT_NAMES.find((n) => slugify(n) === categorySlug);
     if (!matched) return [];
 
@@ -221,7 +221,7 @@ export class PublicCatalogService {
     const limit = Math.min(2000, Math.max(1, params.limit ?? 48));
     const skip = (page - 1) * limit;
 
-    const CAT_NAMES = ['Ağaçlar', 'Bambu', 'Yapay Çiçekler', 'Buketler', 'Dikey Bahçeler', 'Sarmaşıklar', 'Bonsai ve Zeytin Ağaçları', 'Saksı Aranjmanları', 'Yapay Bitkiler', 'Kaktüs ve Sazlıklar', 'Saksılar'];
+    const CAT_NAMES = ['Ağaçlar', 'Bambu', 'Yapay Çiçekler', 'Buketler', 'Dikey Bahçeler', 'Sarmaşıklar', 'Bonsai ve Zeytin Ağaçları', 'Saksı Aranjmanları', 'Yapay Bitkiler', 'Kaktüs ve Sazlıklar', 'Saksılar', 'Vazo ve Şamdanlar'];
 
     // Kategori/alt kategori slug'ı gerçek isime çevir
     let matchedCategory: string | undefined;

@@ -59,6 +59,7 @@ const navLinks = [
   { href: '/urunler?kategori=yapay-bitkiler', label: 'Yapay Bitkiler', emoji: '🌱' },
   { href: '/urunler?kategori=kaktus-ve-sazliklar', label: 'Kaktüs & Sazlık', emoji: '🌵' },
   { href: '/urunler?kategori=saksilar', label: 'Saksılar', emoji: '🪣' },
+  { href: '/urunler?kategori=vazo-ve-samdanlar', label: 'Vazo & Şamdan', emoji: '🕯️' },
 ]
 
 const extraLinks = [
