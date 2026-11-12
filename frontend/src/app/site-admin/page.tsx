@@ -447,7 +447,7 @@ export default function SiteAdminPage() {
         <div className="mt-5 space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex gap-2">
-              {['ALL', 'PENDING', 'CONFIRMED', 'PREPARING', 'SHIPPED', 'DELIVERED', 'CANCELLED'].map((s) => (
+              {['ALL', 'PENDING', 'CONFIRMED', 'PREPARING', 'READY', 'SHIPPED', 'DELIVERED', 'CANCELLED'].map((s) => (
                 <button
                   key={s}
                   onClick={() => setOrderFilter(s)}
@@ -455,7 +455,7 @@ export default function SiteAdminPage() {
                     orderFilter === s ? 'bg-brand text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                   }`}
                 >
-                  {s === 'ALL' ? 'Tümü' : s === 'PENDING' ? 'Bekliyor' : s === 'CONFIRMED' ? 'Onaylandı' : s === 'PREPARING' ? 'Hazırlanıyor' : s === 'SHIPPED' ? 'Kargoda' : s === 'DELIVERED' ? 'Teslim' : 'İptal'}
+                  {s === 'ALL' ? 'Tümü' : s === 'PENDING' ? 'Bekliyor' : s === 'CONFIRMED' ? 'Onaylandı' : s === 'PREPARING' ? 'Hazırlanıyor' : s === 'READY' ? 'Kargoya Hazır' : s === 'SHIPPED' ? 'Kargoda' : s === 'DELIVERED' ? 'Teslim' : 'İptal'}
                 </button>
               ))}
             </div>
