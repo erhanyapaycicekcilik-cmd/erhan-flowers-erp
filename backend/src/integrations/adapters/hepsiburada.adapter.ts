@@ -73,7 +73,77 @@ export class HepsiburadaAdapter extends HttpMarketplaceOrderAdapter {
     }
 
     // Tekrarlananları kaldır
-    return Array.from(new Map(allOrders.map((o) => [o.externalOrderId, o])).values());
+    const deduped = Array.from(new Map(allOrders.map((o) => [o.externalOrderId, o])).values());
+
+    // Görseli olmayan item'lar için HB listing API'den resim çek
+    await this.enrichImagesFromListing(deduped, merchantId, username, password);
+
+    return deduped;
+  }
+
+  // HB listing API'den ürün görseli çek ve item'lara ekle
+  private async enrichImagesFromListing(
+    orders: ExternalOrder[],
+    merchantId: string,
+    username: string,
+    password: string,
+  ): Promise<void> {
+    const auth = Buffer.from(`${username}:${password}`).toString('base64');
+    const userAgent = this.env('USER_AGENT') || 'ErhanFlowersERP-HB';
+    const headers = { Accept: 'application/json', Authorization: `Basic ${auth}`, 'User-Agent': userAgent };
+    const listingBase = 'https://listing-external.hepsiburada.com';
+
+    // Görselsiz item'ların benzersiz SKU listesi
+    const skuToItems = new Map<string, Array<ExternalOrder['items'][0]>>();
+    for (const order of orders) {
+      for (const item of order.items) {
+        if (!item.imageUrl && item.sku) {
+          if (!skuToItems.has(item.sku)) skuToItems.set(item.sku, []);
+          skuToItems.get(item.sku)!.push(item);
+        }
+      }
+    }
+    if (!skuToItems.size) return;
+
+    // Her benzersiz SKU için listing API'ye istek at (paralel, max 5 eşzamanlı)
+    const skus = Array.from(skuToItems.keys());
+    const fetchImage = async (sku: string): Promise<void> => {
+      try {
+        const url = `${listingBase}/listings/merchantid/${encodeURIComponent(merchantId)}/sku/${encodeURIComponent(sku)}`;
+        const res = await fetch(url, { method: 'GET', headers, signal: AbortSignal.timeout(5000) });
+        if (!res.ok) return;
+        const data = await res.json().catch(() => null) as Record<string, unknown> | null;
+        if (!data) return;
+
+        // HB listing yanıtındaki olası görsel alanları
+        const imgUrl = this.extractFirstImageUrl(data);
+        if (imgUrl) {
+          skuToItems.get(sku)?.forEach((item) => { item.imageUrl = imgUrl; });
+        }
+      } catch {
+        // Görsel çekme hatası sessizce geçilir, sipariş yine de işlenir
+      }
+    };
+
+    // 5'li gruplar halinde paralel çek
+    for (let i = 0; i < skus.length; i += 5) {
+      await Promise.all(skus.slice(i, i + 5).map(fetchImage));
+    }
+  }
+
+  private extractFirstImageUrl(data: Record<string, unknown>): string | null {
+    // HB listing yanıtında olası görsel alanları
+    if (Array.isArray(data.images) && data.images.length) {
+      const first = data.images[0];
+      if (typeof first === 'string' && first.startsWith('http')) return first;
+      if (typeof first === 'object' && first !== null) {
+        const obj = first as Record<string, unknown>;
+        const url = String(obj.url ?? obj.imageUrl ?? obj.src ?? '');
+        if (url.startsWith('http')) return url;
+      }
+    }
+    const direct = String(data.imageUrl ?? data.productImageUrl ?? data.image ?? data.mainImage ?? '');
+    return direct.startsWith('http') ? direct : null;
   }
 
   private mapHepsiburadaOrder(order: Record<string, unknown>): ExternalOrder | null {
