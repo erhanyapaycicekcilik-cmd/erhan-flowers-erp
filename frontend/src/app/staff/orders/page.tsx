@@ -44,7 +44,13 @@ const PLATFORMS = [
   { key: 'N11', label: 'N11', printKey: 'N11' },
   { key: 'HEPSIBURADA', label: 'Hepsiburada', printKey: 'HEPSIBURADA' },
   { key: 'WEBSITE', label: '🌐 Web Sitesi', printKey: 'WEBSITE' },
+  { key: 'WHATSAPP', label: '💬 WhatsApp', printKey: 'WHATSAPP' },
+  { key: 'PHONE', label: '📞 Telefon', printKey: 'PHONE' },
+  { key: 'STORE', label: '🏪 Dükkan', printKey: 'STORE' },
+  { key: 'INSTAGRAM', label: '📷 Instagram', printKey: 'INSTAGRAM' },
 ];
+
+const RETAIL_CHANNELS = ['STORE', 'PHONE', 'WHATSAPP', 'INSTAGRAM', 'OTHER'];
 
 function matchesPlatform(order: OrderRow, platformKey: string): boolean {
   if (platformKey === 'all') return true;
@@ -229,13 +235,15 @@ export default function StaffOrdersPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [erpOrders, webOrders] = await Promise.all([
+      const [erpOrders, webOrders, retailOrders] = await Promise.all([
         api<OrderRow[]>('/integrations/orders?limit=200&status=CONFIRMED,PREPARING,IN_PRODUCTION,READY'),
-        api<OrderRow[]>('/integrations/web-orders?limit=200&status=CONFIRMED,PREPARING,READY'),
+        api<OrderRow[]>('/integrations/web-orders?limit=200&status=PENDING,CONFIRMED,PREPARING,READY'),
+        api<OrderRow[]>('/integrations/retail-orders?limit=200&status=CONFIRMED,PREPARING,IN_PRODUCTION,READY'),
       ]);
       const combined = [
         ...(Array.isArray(erpOrders) ? erpOrders : []),
         ...(Array.isArray(webOrders) ? webOrders : []),
+        ...(Array.isArray(retailOrders) ? retailOrders : []),
       ];
       setOrders(combined);
     } finally {
@@ -574,10 +582,10 @@ function OrderCard({ order, onStatusChange, readySection, category }: { order: O
   const isReady = order.status === 'READY' || order.status === 'Kargoya Hazır';
 
   const isWebOrder = order.platform === 'WEBSITE';
+  const isRetailOrder = RETAIL_CHANNELS.includes(order.platform);
   const [uploadPct, setUploadPct] = useState<number | null>(null);
 
-  /** Web siparişleri web_orders tablosunda; retail_sales (/sales) uçlarına gitmemeli. */
-  async function setOrderStatus(status: 'READY' | 'DELIVERED', note: string) {
+  async function setOrderStatus(status: 'READY' | 'DELIVERED' | 'PREPARING' | 'CONFIRMED', note: string) {
     if (isWebOrder) {
       await api(`/web-orders/${order.id}/status`, { method: 'PATCH', json: { status } });
     } else {
@@ -741,8 +749,20 @@ function OrderCard({ order, onStatusChange, readySection, category }: { order: O
         )}
         {(order.platform === 'WEBSITE' || order.companyCode === 'FLORA') && (
           <span className="absolute bottom-2 left-2 text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-600 text-white shadow">
-            🌐 florayapaycicek.com
+            🌐 Web Sitesi
           </span>
+        )}
+        {order.platform === 'WHATSAPP' && (
+          <span className="absolute bottom-2 left-2 text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-600 text-white shadow">💬 WhatsApp</span>
+        )}
+        {order.platform === 'PHONE' && (
+          <span className="absolute bottom-2 left-2 text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-600 text-white shadow">📞 Telefon</span>
+        )}
+        {order.platform === 'INSTAGRAM' && (
+          <span className="absolute bottom-2 left-2 text-[10px] font-bold px-2 py-0.5 rounded-full bg-pink-600 text-white shadow">📷 Instagram</span>
+        )}
+        {order.platform === 'STORE' && (
+          <span className="absolute bottom-2 left-2 text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-700 text-white shadow">🏪 Dükkan</span>
         )}
       </div>
 
