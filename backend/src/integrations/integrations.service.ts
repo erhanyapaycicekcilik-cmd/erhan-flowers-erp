@@ -702,7 +702,7 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
     const take = Math.min(Number(query.limit ?? 200), 500);
     const page = Math.max(1, Number(query.page ?? 1));
     const offset = (page - 1) * take;
-    const statusFilter = this.text(query.status ?? 'CONFIRMED,PREPARING,IN_PRODUCTION,READY');
+    const statusFilter = this.text(query.status ?? 'PAYMENT_PENDING,CONFIRMED,PREPARING,IN_PRODUCTION,READY');
 
     return this.prisma.$queryRaw<Array<Record<string, unknown>>>(Prisma.sql`
       SELECT
