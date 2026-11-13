@@ -339,6 +339,7 @@ export default function AddressPrintPage() {
             clientRequestId: `adres-print-${Date.now()}-${Math.random().toString(36).slice(2)}`,
             channel,
             saleType: 'STORE_SALE',
+            status: 'CONFIRMED',
             delivery: {
               deliveryType: cargo.toLowerCase().includes('kurye') || cargo.toLowerCase().includes('elden') ? 'COURIER' : 'CARGO',
               note: [note.trim(), cargo.trim() ? `Kargo: ${cargo.trim()}` : ''].filter(Boolean).join(' | ') || undefined,
