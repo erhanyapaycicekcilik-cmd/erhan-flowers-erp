@@ -969,5 +969,117 @@ export const FIBER_POTS: SiteOnlySimpleProduct[] = [
     "categoryName": "Saksı",
     "productHeight": "30 cm",
     "potSize": "60x55 cm"
+  },
+  {
+    "modelCode": "WEB-SRN-FBR1056",
+    "name": "Fiber Küçük Dinozor Yumurtası Model Saksı 43x44 cm",
+    "description": "Fiber Küçük Dinozor Yumurtası Model Saksı 43x44 cm. Dinozor Yumurtası serisi fiberglass (fiber) saksı. Organik ve özgün tasarımıyla iç mekânlarda dekoratif bir görünüm sunar.\n\nÖlçüler: En 43 cm, yükseklik 44 cm.\nKatalog kodu: FBR 1056.\n\nFiyat, renk seçenekleri ve teslim süresi için bizimle iletişime geçin.",
+    "images": [
+      "https://www.erhanflowers.com/fiber-saksi/fbr-1056.jpg"
+    ],
+    "sitePrice": 0,
+    "catalogCategory": "Saksılar",
+    "catalogSubCategory": "Fiber Saksılar",
+    "categoryName": "Saksı",
+    "productHeight": "44 cm",
+    "potSize": "43 cm"
+  },
+  {
+    "modelCode": "WEB-SRN-FBR1068",
+    "name": "Fiber 40 CM İnce Damla Model Saksı 36x40 cm",
+    "description": "Fiber 40 CM İnce Damla Model Saksı 36x40 cm. Damla serisi fiberglass (fiber) saksı. Yüksek kaliteli fiber malzemeden üretilir; hafif ve dayanıklı yapısıyla iç ve dış mekânda kullanıma uygundur.\n\nÖlçüler: Çap 36 cm, yükseklik 40 cm.\nKatalog kodu: FBR 1068.\n\nFiyat, renk seçenekleri ve teslim süresi için bizimle iletişime geçin.",
+    "images": [
+      "https://www.erhanflowers.com/fiber-saksi/fbr-1068.jpg"
+    ],
+    "sitePrice": 0,
+    "catalogCategory": "Saksılar",
+    "catalogSubCategory": "Fiber Saksılar",
+    "categoryName": "Saksı",
+    "productHeight": "40 cm",
+    "potSize": "36 cm"
+  },
+  {
+    "modelCode": "WEB-SRN-FBR1069",
+    "name": "Fiber 50x60 Silindir Saksı 50x60 cm",
+    "description": "Fiber 50x60 Silindir Saksı 50x60 cm. Silindir serisi fiberglass (fiber) saksı. Yüksek kaliteli fiber malzemeden üretilir; hafif ve dayanıklı yapısıyla iç ve dış mekânda kullanıma uygundur.\n\nÖlçüler: Çap 50 cm, yükseklik 60 cm.\nKatalog kodu: FBR 1069.\n\nFiyat, renk seçenekleri ve teslim süresi için bizimle iletişime geçin.",
+    "images": [
+      "https://www.erhanflowers.com/fiber-saksi/fbr-1069.jpg"
+    ],
+    "sitePrice": 0,
+    "catalogCategory": "Saksılar",
+    "catalogSubCategory": "Fiber Saksılar",
+    "categoryName": "Saksı",
+    "productHeight": "60 cm",
+    "potSize": "50 cm"
+  },
+  {
+    "modelCode": "WEB-SRN-FBR1070",
+    "name": "Fiber Bonsai Mini Taş Model Saksı 22x35x10 cm",
+    "description": "Fiber Bonsai Mini Taş Model Saksı 22x35x10 cm. Bonsai serisi fiberglass (fiber) saksı. Taş dokusunu andıran speckle yüzeyi ve oval formuyla bonsai ve sukulent bitkiler için idealdir.\n\nÖlçüler: En 22 cm, boy 35 cm, yükseklik 10 cm.\nKatalog kodu: FBR 1070.\n\nFiyat, renk seçenekleri ve teslim süresi için bizimle iletişime geçin.",
+    "images": [
+      "https://www.erhanflowers.com/fiber-saksi/fbr-1070.jpg"
+    ],
+    "sitePrice": 0,
+    "catalogCategory": "Saksılar",
+    "catalogSubCategory": "Fiber Saksılar",
+    "categoryName": "Saksı",
+    "productHeight": "10 cm",
+    "potSize": "22x35 cm"
+  },
+  {
+    "modelCode": "WEB-SRN-FBR1071",
+    "name": "Fiber UFO Model Saksı 65x46 cm",
+    "description": "Fiber UFO Model Saksı 65x46 cm. UFO ve Deniz Taşı serisi fiberglass (fiber) saksı. Kendine özgü tasarımıyla iç mekânlara modern ve artistik bir hava katar.\n\nÖlçüler: Çap 65 cm, yükseklik 46 cm.\nKatalog kodu: FBR 1071.\n\nFiyat, renk seçenekleri ve teslim süresi için bizimle iletişime geçin.",
+    "images": [
+      "https://www.erhanflowers.com/fiber-saksi/fbr-1071.jpg"
+    ],
+    "sitePrice": 0,
+    "catalogCategory": "Saksılar",
+    "catalogSubCategory": "Fiber Saksılar",
+    "categoryName": "Saksı",
+    "productHeight": "46 cm",
+    "potSize": "65 cm"
+  },
+  {
+    "modelCode": "WEB-SRN-FBR1072",
+    "name": "Fiber Deniz Taşı Model Saksı 60x55x30 cm",
+    "description": "Fiber Deniz Taşı Model Saksı 60x55x30 cm. UFO ve Deniz Taşı serisi fiberglass (fiber) saksı. Yassı ve geniş formuyla alçak bitkiler ve bonsai düzenlemeleri için uygundur.\n\nÖlçüler: En 60 cm, boy 55 cm, yükseklik 30 cm.\nKatalog kodu: FBR 1072.\n\nFiyat, renk seçenekleri ve teslim süresi için bizimle iletişime geçin.",
+    "images": [
+      "https://www.erhanflowers.com/fiber-saksi/fbr-1072.jpg"
+    ],
+    "sitePrice": 0,
+    "catalogCategory": "Saksılar",
+    "catalogSubCategory": "Fiber Saksılar",
+    "categoryName": "Saksı",
+    "productHeight": "30 cm",
+    "potSize": "60x55 cm"
+  },
+  {
+    "modelCode": "WEB-SRN-FBR1073",
+    "name": "Fiber Kaya Model Seperatör Saksı 40x100x65 cm",
+    "description": "Fiber Kaya Model Seperatör Saksı 40x100x65 cm. Kaya Model serisi fiberglass (fiber) saksı. Dikdörtgen formu ve kaya dokulu yüzeyi ile mekan bölücü olarak da kullanılabilir.\n\nÖlçüler: En 40 cm, boy 100 cm, yükseklik 65 cm.\nKatalog kodu: FBR 1073.\n\nFiyat, renk seçenekleri ve teslim süresi için bizimle iletişime geçin.",
+    "images": [
+      "https://www.erhanflowers.com/fiber-saksi/fbr-1073.jpg"
+    ],
+    "sitePrice": 0,
+    "catalogCategory": "Saksılar",
+    "catalogSubCategory": "Fiber Saksılar",
+    "categoryName": "Saksı",
+    "productHeight": "65 cm",
+    "potSize": "40x100 cm"
+  },
+  {
+    "modelCode": "WEB-SRN-FBR1074",
+    "name": "Fiber Kaya Model Saksı 65x45 cm",
+    "description": "Fiber Kaya Model Saksı 65x45 cm. Kaya Model serisi fiberglass (fiber) saksı. Doğal kaya görünümündeki yüzey dokusu ile iç ve dış mekânlarda dekoratif bir etki yaratır.\n\nÖlçüler: Çap 65 cm, yükseklik 45 cm.\nKatalog kodu: FBR 1074.\n\nFiyat, renk seçenekleri ve teslim süresi için bizimle iletişime geçin.",
+    "images": [
+      "https://www.erhanflowers.com/fiber-saksi/fbr-1074.jpg"
+    ],
+    "sitePrice": 0,
+    "catalogCategory": "Saksılar",
+    "catalogSubCategory": "Fiber Saksılar",
+    "categoryName": "Saksı",
+    "productHeight": "45 cm",
+    "potSize": "65 cm"
   }
 ];
