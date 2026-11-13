@@ -32,6 +32,16 @@ const SIZE_INFO: Record<LabelSize, { label: string; page: string; width: string;
   A4: { label: 'A4', page: 'A4', width: '210mm', height: '297mm' },
 };
 
+type WebOrderItem = { productName: string; quantity: number; unitPrice: number };
+type WebOrderRow = {
+  id: number; orderNumber: string; status: string;
+  customerName: string; customerPhone?: string | null;
+  address?: string | null; district?: string | null; city?: string | null;
+  note?: string | null; paymentMethod: string; grandTotal: number;
+  createdAt: string;
+  items: WebOrderItem[];
+};
+
 type CustomerHit = { id: number; displayName: string; phone?: string | null; city?: string | null; saleCount?: number };
 type CustomerDetail = {
   id: number; firstName?: string; lastName?: string | null; displayName?: string; phone?: string | null;
@@ -160,10 +170,45 @@ export default function AddressPrintPage() {
   const [productSuggestions, setProductSuggestions] = useState<Record<number, ProductHit[]>>({});
   const [activeProductSearch, setActiveProductSearch] = useState<number | null>(null);
   const productSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [webOrders, setWebOrders] = useState<WebOrderRow[]>([]);
+  const [webOrdersLoading, setWebOrdersLoading] = useState(false);
 
   useEffect(() => {
     api<{ role?: string }>('/auth/me').then((u) => setIsOwner(u?.role === 'OWNER')).catch(() => null);
   }, []);
+
+  function loadWebOrders() {
+    setWebOrdersLoading(true);
+    api<{ orders: WebOrderRow[] }>('/web-orders?limit=50')
+      .then((res) => {
+        const active = (res.orders ?? []).filter((o) =>
+          ['CONFIRMED', 'PREPARING', 'READY'].includes(o.status),
+        );
+        setWebOrders(active);
+      })
+      .catch(() => null)
+      .finally(() => setWebOrdersLoading(false));
+  }
+
+  useEffect(() => { loadWebOrders(); }, []);
+
+  function fillFromWebOrder(o: WebOrderRow) {
+    setName(o.customerName ?? '');
+    setPhone(o.customerPhone ? formatPhone(o.customerPhone) : '');
+    setAddress(o.address ?? '');
+    setDistrict(o.district ?? '');
+    setCity(o.city ?? '');
+    setNote(o.note ?? '');
+    setRefCode(o.orderNumber);
+    setPayment(o.paymentMethod === 'KAPIDA' ? 'ODEMELI' : 'PESIN');
+    setCodAmount(o.paymentMethod === 'KAPIDA' ? String(Math.round(o.grandTotal)) : '');
+    setItems(
+      o.items.length
+        ? o.items.map((i) => ({ name: i.productName, qty: String(i.quantity), price: String(i.unitPrice) }))
+        : [{ name: '', qty: '1', price: '' }],
+    );
+    setMsg({ type: 'info', text: `Web siparişi yüklendi: ${o.orderNumber}` });
+  }
 
   // Müşteri arama (isim veya telefon)
   useEffect(() => {
@@ -504,6 +549,45 @@ export default function AddressPrintPage() {
 
       <div className="no-print mx-auto grid max-w-7xl gap-6 p-4 lg:grid-cols-[minmax(0,460px)_1fr]">
         <section className="space-y-4">
+          {/* Web Siparişleri */}
+          <Card title={
+            <div className="flex items-center justify-between w-full">
+              <span>Web Siparişleri {webOrders.length > 0 && <span className="ml-1 rounded-full bg-emerald-600 px-2 py-0.5 text-xs text-white">{webOrders.length}</span>}</span>
+              <button type="button" onClick={loadWebOrders} className="text-xs text-slate-400 hover:text-slate-700">↻ Yenile</button>
+            </div>
+          }>
+            {webOrdersLoading ? (
+              <div className="text-sm text-slate-400 py-2">Yükleniyor…</div>
+            ) : webOrders.length === 0 ? (
+              <div className="text-sm text-slate-400 py-2">Bekleyen web siparişi yok.</div>
+            ) : (
+              <div className="space-y-2 max-h-72 overflow-y-auto">
+                {webOrders.map((o) => (
+                  <button
+                    key={o.id}
+                    type="button"
+                    onClick={() => fillFromWebOrder(o)}
+                    className="block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-left hover:border-emerald-400 hover:bg-emerald-50 transition-colors"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-mono text-xs font-bold text-emerald-700">{o.orderNumber}</span>
+                      <span className={`rounded px-1.5 py-0.5 text-xs font-semibold ${
+                        o.status === 'READY' ? 'bg-blue-100 text-blue-700' :
+                        o.status === 'PREPARING' ? 'bg-amber-100 text-amber-700' :
+                        'bg-slate-100 text-slate-600'
+                      }`}>{o.status === 'READY' ? 'Hazır' : o.status === 'PREPARING' ? 'Hazırlanıyor' : 'Onaylandı'}</span>
+                    </div>
+                    <div className="mt-0.5 text-sm font-semibold text-slate-800">{o.customerName}</div>
+                    <div className="text-xs text-slate-500">
+                      {[o.customerPhone, o.city].filter(Boolean).join(' · ')}
+                      {' · '}{o.items.length} ürün · {Math.round(o.grandTotal).toLocaleString('tr-TR')} ₺
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </Card>
+
           {msg && (
             <div className={`rounded-lg border px-4 py-3 text-sm font-medium ${msg.type === 'ok' ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : msg.type === 'err' ? 'border-red-200 bg-red-50 text-red-700' : 'border-sky-200 bg-sky-50 text-sky-800'}`}>
               {msg.text}
@@ -799,7 +883,7 @@ export default function AddressPrintPage() {
   );
 }
 
-function Card({ title, action, children }: { title: string; action?: React.ReactNode; children: React.ReactNode }) {
+function Card({ title, action, children }: { title: React.ReactNode; action?: React.ReactNode; children: React.ReactNode }) {
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
       <div className="mb-3 flex items-center justify-between">
