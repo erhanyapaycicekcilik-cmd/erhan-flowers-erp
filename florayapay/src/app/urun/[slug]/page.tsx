@@ -11,6 +11,7 @@ import { getProductBySlug, getImageUrl } from '@/lib/api/catalog'
 import { formatPrice } from '@/lib/utils/format'
 import { ProductImageGallery } from '@/components/product/ProductImageGallery'
 import { AddToCartButton } from '@/components/product/AddToCartButton'
+import { PriceOnRequestPrice, PriceInquiryButtons } from '@/components/product/PriceOnRequest'
 import { ProductTracker } from '@/components/product/ProductTracker'
 import { UrgencyBar } from '@/components/product/UrgencyBar'
 import { DeliveryEstimate } from '@/components/product/DeliveryEstimate'
@@ -51,6 +52,7 @@ export default async function ProductDetailPage({ params }: PageProps) {
   if (!product) notFound()
 
   const images = product.images.length > 0 ? product.images : []
+  const priceOnRequest = Boolean(product.priceOnRequest)
   const discount = product.originalPrice
     ? Math.round((1 - product.sitePrice / product.originalPrice) * 100)
     : null
@@ -76,7 +78,8 @@ export default async function ProductDetailPage({ params }: PageProps) {
 
   return (
     <>
-      <JsonLd data={structured} />
+      {/* Fiyatsız ürün için Product/Offer şeması verilmez (fiyat 0 görünmesin) */}
+      {!priceOnRequest && <JsonLd data={structured} />}
       <JsonLd data={breadcrumbSchema(breadcrumbs)} />
       <Header />
 
@@ -148,6 +151,10 @@ export default async function ProductDetailPage({ params }: PageProps) {
 
               {/* Fiyat */}
               <div className="mt-5 pb-5 border-b border-[#E0DDD4]">
+                {priceOnRequest ? (
+                  <PriceOnRequestPrice />
+                ) : (
+                <>
                 <div className="flex items-baseline gap-3">
                   <span className="text-4xl font-semibold text-[#0D1510]">
                     {formatPrice(product.sitePrice)}
@@ -166,12 +173,19 @@ export default async function ProductDetailPage({ params }: PageProps) {
                 <p className="text-xs text-[#8C8A82] mt-1">
                   KDV dahil. Kargo bedava (1.000₺ ve üzeri).
                 </p>
+                </>
+                )}
               </div>
 
               {/* Aciliyet çubuğu */}
-              <UrgencyBar productId={String(product.id)} />
+              {!priceOnRequest && <UrgencyBar productId={String(product.id)} />}
 
-              {/* Sepete ekle */}
+              {/* Sepete ekle (fiyatsız üründe fiyat sorma butonları) */}
+              {priceOnRequest ? (
+                <div className="mt-2">
+                  <PriceInquiryButtons productName={product.name} slug={params.slug} />
+                </div>
+              ) : (
               <div className="mt-2 space-y-3">
                 <AddToCartButton
                   product={{
@@ -190,19 +204,23 @@ export default async function ProductDetailPage({ params }: PageProps) {
                   slug={params.slug}
                 />
               </div>
+              )}
 
               {/* Teslimat tahmini */}
               <div className="mt-4">
-                <DeliveryEstimate />
+                {!priceOnRequest && <DeliveryEstimate />}
               </div>
 
               {/* Sticky mobil CTA */}
-              <StickyMobileCTA
-                product={{ id: String(product.id), name: product.name, price: product.sitePrice, image: product.mainImage ?? '', slug: params.slug }}
-                inStock={product.inStock}
-              />
+              {!priceOnRequest && (
+                <StickyMobileCTA
+                  product={{ id: String(product.id), name: product.name, price: product.sitePrice, image: product.mainImage ?? '', slug: params.slug }}
+                  inStock={product.inStock}
+                />
+              )}
 
-              {/* Güven göstergeleri */}
+              {/* Güven göstergeleri (fiyatsız/siparişe özel üründe gösterilmez) */}
+              {!priceOnRequest && (
               <div className="mt-5 grid grid-cols-3 gap-3">
                 {[
                   { icon: '🚚', text: '2 İş Günü Kargo' },
@@ -215,6 +233,7 @@ export default async function ProductDetailPage({ params }: PageProps) {
                   </div>
                 ))}
               </div>
+              )}
 
               {/* Ürün detayları */}
               <div className="mt-8 space-y-3">

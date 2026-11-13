@@ -2,6 +2,10 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { resolveGeminiModel } from '../common/gemini-model';
+import { SITE_ONLY_MODEL_PREFIX, isSiteOnlyModelCode } from '../common/site-only';
+
+// Sadece ürün grubu sayfasında (boyut/renk seçimiyle) satılan site ürünleri
+const GROUP_ONLY_MODEL_PREFIX = 'WEB-BST-';
 
 // Müşteriye güvenli gösterilebilecek alanlar.
 // Maliyet alanları (costPrice, purchasePrice, supplierName vb.) KESİNLİKLE YOK —
@@ -157,7 +161,7 @@ export class PublicCatalogService {
     }
 
     // Kategori sırası — kullanıcının atama sayfasındaki sırayla aynı
-    const CAT_ORDER = ['Ağaçlar', 'Bambu', 'Yapay Çiçekler', 'Buketler', 'Dikey Bahçeler', 'Sarmaşıklar', 'Bonsai ve Zeytin Ağaçları', 'Saksı Aranjmanları', 'Yapay Bitkiler', 'Saksılar'];
+    const CAT_ORDER = ['Ağaçlar', 'Bambu', 'Yapay Çiçekler', 'Buketler', 'Dikey Bahçeler', 'Sarmaşıklar', 'Bonsai ve Zeytin Ağaçları', 'Saksı Aranjmanları', 'Yapay Bitkiler', 'Kaktüs ve Sazlıklar', 'Saksılar', 'Vazo ve Şamdanlar'];
 
     return Array.from(counts.entries())
       .filter(([, count]) => count > 0)
@@ -178,7 +182,7 @@ export class PublicCatalogService {
   }
 
   async listSubCategories(categorySlug: string): Promise<{ name: string; slug: string; count: number }[]> {
-    const CAT_NAMES = ['Ağaçlar', 'Bambu', 'Yapay Çiçekler', 'Buketler', 'Dikey Bahçeler', 'Sarmaşıklar', 'Bonsai ve Zeytin Ağaçları', 'Saksı Aranjmanları', 'Yapay Bitkiler', 'Saksılar'];
+    const CAT_NAMES = ['Ağaçlar', 'Bambu', 'Yapay Çiçekler', 'Buketler', 'Dikey Bahçeler', 'Sarmaşıklar', 'Bonsai ve Zeytin Ağaçları', 'Saksı Aranjmanları', 'Yapay Bitkiler', 'Kaktüs ve Sazlıklar', 'Saksılar', 'Vazo ve Şamdanlar'];
     const matched = CAT_NAMES.find((n) => slugify(n) === categorySlug);
     if (!matched) return [];
 
@@ -217,7 +221,7 @@ export class PublicCatalogService {
     const limit = Math.min(2000, Math.max(1, params.limit ?? 48));
     const skip = (page - 1) * limit;
 
-    const CAT_NAMES = ['Ağaçlar', 'Bambu', 'Yapay Çiçekler', 'Buketler', 'Dikey Bahçeler', 'Sarmaşıklar', 'Bonsai ve Zeytin Ağaçları', 'Saksı Aranjmanları', 'Yapay Bitkiler', 'Saksılar'];
+    const CAT_NAMES = ['Ağaçlar', 'Bambu', 'Yapay Çiçekler', 'Buketler', 'Dikey Bahçeler', 'Sarmaşıklar', 'Bonsai ve Zeytin Ağaçları', 'Saksı Aranjmanları', 'Yapay Bitkiler', 'Kaktüs ve Sazlıklar', 'Saksılar', 'Vazo ve Şamdanlar'];
 
     // Kategori/alt kategori slug'ı gerçek isime çevir
     let matchedCategory: string | undefined;
@@ -239,10 +243,21 @@ export class PublicCatalogService {
     const productWhere: Record<string, unknown> = {
       status: 'ACTIVE',
       stockQuantity: { gt: 0 },
-      OR: [{ sitePrice: { gt: 0 } }, { marketPrice: { gt: 0 } }, { shopPrice: { gt: 0 } }],
+      OR: [
+        { sitePrice: { gt: 0 } },
+        { marketPrice: { gt: 0 } },
+        { shopPrice: { gt: 0 } },
+        // Sadece sitede satılan, fiyatı girilmemiş ürünler "Fiyat için iletişime geçin" ile listelenir
+        { modelCode: { startsWith: SITE_ONLY_MODEL_PREFIX } },
+      ],
     };
     if (matchedCategory) productWhere['catalogCategory'] = matchedCategory;
     if (matchedSubCategory) productWhere['catalogSubCategory'] = matchedSubCategory;
+    // Ürün grubu varyantı olarak satılan site ürünleri (ör. Bostann saksı boyut×renk) düz listede
+    // tek tek gösterilmez; müşteri bunları grup sayfasından boyut/renk seçerek alır. Aramada görünürler.
+    if (!params.search?.trim()) {
+      productWhere['NOT'] = { modelCode: { startsWith: GROUP_ONLY_MODEL_PREFIX } };
+    }
 
     if (params.barcode?.trim()) {
       productWhere['barcode'] = params.barcode.trim();
@@ -333,7 +348,8 @@ export class PublicCatalogService {
     const allProducts = [...productRows.map((p) => this.toPublicProduct(p)), ...variantProducts];
 
     // Sort birleşik listeye uygula
-    if (params.sort === 'price_asc')  allProducts.sort((a, b) => a.sitePrice - b.sitePrice);
+    // Fiyatı olmayan ürünler (fiyat için iletişime geçin) artan sıralamada sona
+    if (params.sort === 'price_asc')  allProducts.sort((a, b) => (a.sitePrice || Infinity) - (b.sitePrice || Infinity));
     if (params.sort === 'price_desc') allProducts.sort((a, b) => b.sitePrice - a.sitePrice);
     if (params.sort === 'name')       allProducts.sort((a, b) => a.name.localeCompare(b.name, 'tr'));
 
@@ -787,7 +803,9 @@ export class PublicCatalogService {
       category: catName,
       categorySlug: catName ? slugify(catName) : null,
       sitePrice: price,
-      originalPrice: product.listPrice > price ? product.listPrice : null,
+      originalPrice: price > 0 && product.listPrice > price ? product.listPrice : null,
+      // Fiyatı olmayan site ürünü: sepete eklenmez, "Fiyat için iletişime geçin" gösterilir
+      priceOnRequest: !(price > 0) && isSiteOnlyModelCode(product.modelCode),
       brand: product.brand,
       description: product.description,
       colorVariant: product.colorVariant,

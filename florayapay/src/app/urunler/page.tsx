@@ -1,10 +1,11 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import Image from 'next/image'
-import { ShoppingCart, ChevronRight } from 'lucide-react'
+import { ChevronRight } from 'lucide-react'
 import { Header } from '@/components/layout/Header'
 import { Footer } from '@/components/layout/Footer'
 import { AddToCartButton } from '@/components/product/AddToCartButton'
+import { PriceOnRequestInline } from '@/components/product/PriceOnRequest'
 import { SidebarFilters } from '@/components/product/SidebarFilters'
 import { getCategories, getSubCategories, getProducts, getProductGroups, getImageUrl } from '@/lib/api/catalog'
 import { formatPrice } from '@/lib/utils/format'
@@ -61,19 +62,8 @@ export default async function ProductsPage({ searchParams }: PageProps) {
       limit: 24,
       sort: searchParams.sirala,
     }),
-    !searchParams.q ? getProductGroups(searchParams.kategori) : Promise.resolve([]),
+    !searchParams.q ? getProductGroups(searchParams.kategori, searchParams.altkategori) : Promise.resolve([]),
   ])
-
-  const breadcrumbs = [
-    { name: 'Ana Sayfa', url: '/' },
-    { name: 'Ürünler', url: '/urunler' },
-    ...(searchParams.kategori
-      ? [{ name: searchParams.kategori.replace(/-/g, ' '), url: `/urunler?kategori=${searchParams.kategori}` }]
-      : []),
-    ...(searchParams.altkategori
-      ? [{ name: searchParams.altkategori.replace(/-/g, ' '), url: `/urunler?kategori=${searchParams.kategori}&altkategori=${searchParams.altkategori}` }]
-      : []),
-  ]
 
   const activeCategory = searchParams.kategori
   const activeSubCategory = searchParams.altkategori
@@ -88,6 +78,17 @@ export default async function ProductsPage({ searchParams }: PageProps) {
   const pageTitle = searchParams.q
     ? `"${searchParams.q}" sonuçları`
     : activeSubCatName ?? activeCatName ?? 'Tüm Ürünler'
+
+  const breadcrumbs = [
+    { name: 'Ana Sayfa', url: '/' },
+    { name: 'Ürünler', url: '/urunler' },
+    ...(activeCatName
+      ? [{ name: activeCatName, url: `/urunler?kategori=${activeCategory}` }]
+      : []),
+    ...(activeSubCatName
+      ? [{ name: activeSubCatName, url: `/urunler?kategori=${activeCategory}&altkategori=${activeSubCategory}` }]
+      : []),
+  ]
 
   return (
     <>
@@ -105,7 +106,10 @@ export default async function ProductsPage({ searchParams }: PageProps) {
             {activeCatName && (
               <>
                 <ChevronRight size={12} />
-                <Link href={`/urunler?kategori=${activeCategory}`} className={activeSubCatName ? 'hover:text-[#5C7A62] transition-colors' : 'text-[#0D1510] font-medium'}>
+                <Link
+                  href={`/urunler?kategori=${activeCategory}`}
+                  className={activeSubCatName ? 'hover:text-[#5C7A62] transition-colors' : 'text-[#0D1510] font-medium'}
+                >
                   {activeCatName}
                 </Link>
               </>
@@ -142,10 +146,10 @@ export default async function ProductsPage({ searchParams }: PageProps) {
                 <div className="flex items-center gap-2 flex-wrap">
                   {(['price_asc', 'price_desc', 'newest', 'name'] as const).map(s => {
                     const labels: Record<string, string> = {
-                      price_asc: 'Fiyat: Düşük → Yüksek',
-                      price_desc: 'Fiyat: Yüksek → Düşük',
+                      price_asc: 'Fiyat ↑',
+                      price_desc: 'Fiyat ↓',
                       newest: 'En Yeni',
-                      name: 'İsme Göre',
+                      name: 'İsim',
                     }
                     const qs = new URLSearchParams({
                       ...(activeCategory ? { kategori: activeCategory } : {}),
@@ -212,7 +216,9 @@ export default async function ProductsPage({ searchParams }: PageProps) {
                                     </span>
                                   ))}
                                   {sizes.length > 3 && (
-                                    <span className="bg-white/90 backdrop-blur text-[#8C8A82] text-[9px] px-1.5 py-0.5 rounded-full shadow-sm">+{sizes.length - 3}</span>
+                                    <span className="bg-white/90 backdrop-blur text-[#8C8A82] text-[9px] px-1.5 py-0.5 rounded-full shadow-sm">
+                                      +{sizes.length - 3}
+                                    </span>
                                   )}
                                 </div>
                               )}
@@ -233,10 +239,16 @@ export default async function ProductsPage({ searchParams }: PageProps) {
                               </Link>
                               <div className="mt-2.5 flex items-center justify-between gap-2">
                                 <p className="font-semibold text-[#0D1510] text-sm">
-                                  {minPrice > 0 ? (minPrice === maxPrice ? formatPrice(minPrice) : `${formatPrice(minPrice)} – ${formatPrice(maxPrice)}`) : '—'}
+                                  {minPrice > 0
+                                    ? minPrice === maxPrice
+                                      ? formatPrice(minPrice)
+                                      : `${formatPrice(minPrice)} – ${formatPrice(maxPrice)}`
+                                    : '—'}
                                 </p>
-                                <Link href={`/urun-grubu/${group.slug}`}
-                                  className="flex items-center gap-1 bg-[#5C7A62] text-white text-xs px-2.5 py-1.5 rounded-xl font-medium hover:bg-[#4a6350] transition-colors whitespace-nowrap">
+                                <Link
+                                  href={`/urun-grubu/${group.slug}`}
+                                  className="flex items-center gap-1 bg-[#5C7A62] text-white text-xs px-2.5 py-1.5 rounded-xl font-medium hover:bg-[#4a6350] transition-colors whitespace-nowrap"
+                                >
                                   Boy Seç
                                 </Link>
                               </div>
@@ -276,12 +288,10 @@ export default async function ProductsPage({ searchParams }: PageProps) {
                       const discount = product.originalPrice && product.originalPrice > product.sitePrice
                         ? Math.round((1 - product.sitePrice / product.originalPrice) * 100)
                         : null
-                      const isNew = product.id > 0 // gerçek "yeni" mantığı buraya eklenebilir
 
                       return (
                         <li key={product.id}>
-                          <article className="group bg-white rounded-2xl overflow-hidden hover:shadow-lg transition-all duration-300 relative">
-                            {/* Görsel */}
+                          <article className="group bg-white rounded-2xl overflow-hidden hover:shadow-lg transition-all duration-300">
                             <Link href={`/urun/${product.slug}`} className="block relative overflow-hidden bg-[#F4F2EC]">
                               <div className="aspect-square relative">
                                 <Image
@@ -296,7 +306,7 @@ export default async function ProductsPage({ searchParams }: PageProps) {
                                 />
                               </div>
 
-                              {/* Rozetler — dairesel sticker */}
+                              {/* Dairesel rozetler */}
                               <div className="absolute top-2 left-2 flex flex-col gap-1">
                                 {!product.inStock && (
                                   <span className="bg-[#5C5C52] text-white text-[10px] font-semibold w-10 h-10 rounded-full flex items-center justify-center text-center leading-tight shadow">
@@ -310,7 +320,6 @@ export default async function ProductsPage({ searchParams }: PageProps) {
                                 )}
                               </div>
 
-                              {/* Kargo rozeti */}
                               <div className="absolute bottom-2 left-2">
                                 <span className="bg-white/90 backdrop-blur text-[#1E3A28] text-[9px] font-semibold px-2 py-0.5 rounded-full shadow-sm">
                                   Ücretsiz Kargo
@@ -318,7 +327,6 @@ export default async function ProductsPage({ searchParams }: PageProps) {
                               </div>
                             </Link>
 
-                            {/* Bilgi */}
                             <div className="p-3">
                               {product.category && (
                                 <p className="text-[10px] uppercase tracking-widest text-[#8C8A82] mb-1">{product.category}</p>
@@ -329,24 +337,30 @@ export default async function ProductsPage({ searchParams }: PageProps) {
                                 </h3>
                               </Link>
 
-                              <div className="mt-2.5 flex items-center justify-between gap-2">
-                                <div>
-                                  <p className="font-bold text-[#0D1510] text-base">{formatPrice(product.sitePrice)}</p>
-                                  {product.originalPrice && product.originalPrice > product.sitePrice && (
-                                    <p className="text-xs text-[#B0ADA6] line-through">{formatPrice(product.originalPrice)}</p>
-                                  )}
+                              {product.priceOnRequest ? (
+                                <div className="mt-2.5">
+                                  <PriceOnRequestInline productName={product.name} slug={product.slug} />
                                 </div>
-                                <AddToCartButton
-                                  product={{
-                                    id: String(product.id),
-                                    name: product.name,
-                                    price: product.sitePrice,
-                                    image: product.mainImage,
-                                    slug: product.slug,
-                                  }}
-                                  disabled={!product.inStock}
-                                />
-                              </div>
+                              ) : (
+                                <div className="mt-2.5 flex items-center justify-between gap-2">
+                                  <div>
+                                    <p className="font-bold text-[#0D1510] text-base">{formatPrice(product.sitePrice)}</p>
+                                    {product.originalPrice && product.originalPrice > product.sitePrice && (
+                                      <p className="text-xs text-[#B0ADA6] line-through">{formatPrice(product.originalPrice)}</p>
+                                    )}
+                                  </div>
+                                  <AddToCartButton
+                                    product={{
+                                      id: String(product.id),
+                                      name: product.name,
+                                      price: product.sitePrice,
+                                      image: product.mainImage,
+                                      slug: product.slug,
+                                    }}
+                                    disabled={!product.inStock}
+                                  />
+                                </div>
+                              )}
                             </div>
                           </article>
                         </li>

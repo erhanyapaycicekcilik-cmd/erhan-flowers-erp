@@ -116,6 +116,20 @@ Sonra tarayıcıda: **http://localhost:3200**
 - TEST ortamında kesilenler `provider = TRENDYOL_EFATURAM_TEST`: satışı "faturalandı" yapmaz, canlıda tekrar listelenir. Otomatik kesim sadece CANLI'da
 - 15 dk cron (`autoIssue`): aktif + otomatik açık + CANLI ise son 7 günün faturasızlarını keser (3 hatalı denemeden sonra durur)
 
+## Sadece Sitede Satılan Ürünler (`WEB-` model kodu)
+
+- Model kodu `WEB-` ile başlayan ürünler **sadece www.erhanflowers.com'da** satılır (`backend/src/common/site-only.ts`)
+- Pazaryerlerine gönderilmez (`broadcastPriceStock`, `broadcastAll`, görsel yayını, platform Excel'i atlar) ve Trendyol ürün senkronu bunları PASİF yapmaz
+- Bostann saksıları: `backend/src/site-only-catalog/` — backend açılışında eksikse eklenir (var olan kayda dokunmaz). 14 seri = 14 ürün grubu (`/urun-grubu/bostann-…-serisi-saksi`), her boyut×renk ayrı ürün (`WEB-BST-LUMEN140-BEJ`). Görseller `florayapay/public/bostann/`
+- `WEB-BST-` ürünleri sitede düz listede gizli, sadece grup sayfasında (Boy + Renk seçimi) ve aramada görünür
+- Kapatmak için: `SITE_ONLY_CATALOG_SEED=false` (yeni ekleme yapmaz) + ERP'den ürünleri/grupları pasif yap
+- Fiber saksılar (`fiber-pots.data.ts`, `WEB-SRN-FBR…`): 69 ürün, Saksılar → Fiber Saksılar, site fiyatı 0 = **"Fiyat için iletişime geçin"** (API `priceOnRequest`, sepete eklenmez, WhatsApp'tan fiyat sor). ERP'den site fiyatı girilince normal satışa açılır. Görseller `florayapay/public/fiber-saksi/`
+- Kaktüs & sazlıklar (`cactus-reeds.data.ts`, `WEB-CNP-…`): 57 ürün, ayrı üst kategori **Kaktüs ve Sazlıklar** (alt: Kaktüsler 34 / Sazlıklar 23; menüde "Kaktüs & Sazlık"), fiyatsız ("Fiyat için iletişime geçin"). Görseller `florayapay/public/kaktus-sazlik/` (arka plan silinip beyaz zemin, %12 kenar boşluğu — ERP Photoroom standardı)
+- Metal saksılar (`metal-pots.data.ts`, `WEB-OVV-…`): OOVV listesinden 86 ürün (metal saksı/vazo/şamdan/aranjman), Saksılar → Metal Saksılar (şamdan ve vazolar ayrı üst kategori **Vazo ve Şamdanlar**: Vazolar / Şamdan ve Mumluklar; menüde "Vazo & Şamdan"), **normal satış**, site fiyatı = listedeki fiyat × 3. Renk/boy farkı açıklamada not. Görseller `florayapay/public/metal-saksi/` (her fotoğraftan tek ürün kırpıldı, beyaz zemin)
+- Kayıt servisi görselleri sadece hâlâ `www.erhanflowers.com/bostann|fiber-saksi|kaktus-sazlik|metal-saksi/` altındaysa günceller; elle değiştirilen görsele dokunmaz
+- **WEB- ürünleri pazaryerine KESİNLİKLE gönderilmez** (sadece bu ürünler, diğerleri etkilenmez): ek olarak `IntegrationsService.pushPrice/pushProduct` WEB- kodlu yükü reddeder, Entegrasyon Merkezi `syncAllFromTrendyol` (Pazarama/İdefix/N11/HB/Trendrum toplu gönderim) WEB- ürünlerini almaz
+- Web siparişinde fiyatı 0 olan kalem varsa sipariş reddedilir (`WebOrdersService.create`)
+
 ## Veritabanı
 
 - **PostgreSQL 16** Docker container'da (`erhan-flowers-postgres-prod`)

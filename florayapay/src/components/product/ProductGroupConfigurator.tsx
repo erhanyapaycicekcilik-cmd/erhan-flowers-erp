@@ -38,6 +38,8 @@ export function ProductGroupConfigurator({ group }: Props) {
   }, [group.variants])
 
   const hasSizes = sizes.length > 0
+  // Saksı gruplarında ikinci seçenek saksı modeli değil, saksının rengidir
+  const potOptionLabel = group.category === 'Saksılar' ? 'Renk' : 'Saksı'
   const hasPots = pots.length > 0
 
   const [selectedSize, setSelectedSize] = useState<string | null>(hasSizes ? sizes[0] : null)
@@ -135,7 +137,7 @@ export function ProductGroupConfigurator({ group }: Props) {
           {hasPots && (
             <div>
               <p className="text-sm font-medium text-[#5C5C52] mb-2">
-                Saksı: <span className="text-[#0D1510]">{selectedPot}</span>
+                {potOptionLabel}: <span className="text-[#0D1510]">{selectedPot}</span>
               </p>
               <div className="flex flex-wrap gap-2">
                 {pots.map(pot => (

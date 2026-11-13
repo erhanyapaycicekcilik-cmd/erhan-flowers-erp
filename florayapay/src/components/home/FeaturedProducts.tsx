@@ -3,6 +3,7 @@ import Image from 'next/image'
 import { getProducts, getImageUrl } from '@/lib/api/catalog'
 import { formatPrice } from '@/lib/utils/format'
 import { AddToCartButton } from '@/components/product/AddToCartButton'
+import { PriceOnRequestInline } from '@/components/product/PriceOnRequest'
 
 export async function FeaturedProducts() {
   let products: Awaited<ReturnType<typeof getProducts>>['products'] = []
@@ -52,6 +53,11 @@ export async function FeaturedProducts() {
                       {product.name}
                     </h3>
                   </Link>
+                  {product.priceOnRequest ? (
+                    <div className="mt-3">
+                      <PriceOnRequestInline productName={product.name} slug={product.slug} />
+                    </div>
+                  ) : (
                   <div className="mt-3 flex items-center justify-between gap-2">
                     <p className="font-bold text-[#0D1510]">{formatPrice(product.sitePrice)}</p>
                     <AddToCartButton
@@ -59,6 +65,7 @@ export async function FeaturedProducts() {
                       disabled={!product.inStock}
                     />
                   </div>
+                  )}
                 </div>
               </article>
             </li>

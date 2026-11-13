@@ -3,6 +3,7 @@ import Image from 'next/image'
 import { getProducts, getImageUrl } from '@/lib/api/catalog'
 import { formatPrice } from '@/lib/utils/format'
 import { AddToCartButton } from './AddToCartButton'
+import { PriceOnRequestInline } from './PriceOnRequest'
 
 interface Props {
   category?: string
@@ -37,6 +38,11 @@ export async function RelatedProducts({ category, currentSlug }: Props) {
                       {product.name}
                     </h3>
                   </Link>
+                  {product.priceOnRequest ? (
+                    <div className="mt-2">
+                      <PriceOnRequestInline productName={product.name} slug={product.slug} />
+                    </div>
+                  ) : (
                   <div className="mt-2 flex items-center justify-between gap-2">
                     <p className="font-bold text-[#0D1510]">{formatPrice(product.sitePrice)}</p>
                     <AddToCartButton
@@ -44,6 +50,7 @@ export async function RelatedProducts({ category, currentSlug }: Props) {
                       disabled={!product.inStock}
                     />
                   </div>
+                  )}
                 </div>
               </article>
             </li>

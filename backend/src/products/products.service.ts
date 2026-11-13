@@ -5,6 +5,7 @@ import { Prisma } from '../generated/prisma-client';
 import { PrismaService } from '../prisma/prisma.service';
 import { IntegrationsService } from '../integrations/integrations.service';
 import { calcPlatformPrice } from '../integrations/platform-fees.config';
+import { SITE_ONLY_MODEL_PREFIX, isSiteOnlyModelCode } from '../common/site-only';
 
 type ProductPayload = {
   productName?: string;
@@ -387,6 +388,8 @@ export class ProductsService {
     stockQuantity?: unknown;
   }): Promise<void> {
     if (!product.barcode && !product.modelCode && !product.trendyolBarcode) return;
+    // Sadece sitede satılan ürünler pazaryerlerine gönderilmez
+    if (isSiteOnlyModelCode(product.modelCode)) return;
 
     // Platform fiyatı = marketPrice veya shopPrice — sitePrice ASLA kullanılmaz (farklı fiyat kanalı)
     const salePrice = Math.round(Number(product.marketPrice ?? product.shopPrice ?? 0));
@@ -475,6 +478,7 @@ export class ProductsService {
       include: { category: true, mediaFiles: true },
     });
     if (!product) return { ok: false, results: { error: 'Ürün bulunamadı.' } };
+    if (isSiteOnlyModelCode(product.modelCode)) return { ok: false, results: { error: 'Ürün sadece sitede satılıyor, pazaryerine gönderilmez.' } };
 
     const imageUrls = [
       ...(Array.isArray(product.imageUrls) ? (product.imageUrls as string[]) : []),
@@ -513,7 +517,7 @@ export class ProductsService {
   // Tüm aktif ürünlerin görsellerini platformlara toplu gönderir.
   async broadcastImagesAll(): Promise<{ sent: number; errors: number }> {
     const products = await this.prisma.product.findMany({
-      where: { status: 'ACTIVE' },
+      where: { status: 'ACTIVE', NOT: { modelCode: { startsWith: SITE_ONLY_MODEL_PREFIX } } },
       select: { id: true, barcode: true, modelCode: true, imageUrls: true },
     });
     let sent = 0;
@@ -716,6 +720,7 @@ export class ProductsService {
     });
 
     for (const product of products) {
+      if (isSiteOnlyModelCode(product.modelCode)) { skipped++; continue; } // sadece sitede satılıyor
       const key = product.barcode ?? product.modelCode;
       if (!key || payloadMap.has(key)) continue; // Trendyol varyantında varsa zaten eklendi
       const salePrice = Math.round(Number(product.sitePrice ?? product.marketPrice ?? product.shopPrice ?? 0));
@@ -1542,6 +1547,7 @@ export class ProductsService {
     let rows: Record<string, string | number>[] = [];
 
     for (const product of products) {
+      if (isSiteOnlyModelCode(product.modelCode)) continue; // sadece sitede satılıyor
       const sku = product.barcode ?? product.modelCode;
       const variant = product.productCenterVariant;
       const variantActive = variant?.status === 'ACTIVE';
