@@ -698,6 +698,57 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
     `);
   }
 
+  async listRetailOrders(query: Record<string, string>) {
+    const take = Math.min(Number(query.limit ?? 200), 500);
+    const page = Math.max(1, Number(query.page ?? 1));
+    const offset = (page - 1) * take;
+    const statusFilter = this.text(query.status ?? 'CONFIRMED,PREPARING,IN_PRODUCTION,READY');
+
+    return this.prisma.$queryRaw<Array<Record<string, unknown>>>(Prisma.sql`
+      SELECT
+        s.id,
+        s.event_key        AS "saleNumber",
+        s.channel::text    AS platform,
+        s.status::text     AS status,
+        COALESCE(c.display_name, c.first_name || ' ' || COALESCE(c.last_name,'')) AS "customerName",
+        c.phone,
+        a.city,
+        a.district,
+        a.full_address     AS "fullAddress",
+        s.customer_note    AS "customerNote",
+        s.internal_note    AS "internalNote",
+        s.cargo_provider   AS "cargoProvider",
+        s.order_date       AS "orderDate",
+        s.delivery_due_at  AS "deliveryDueAt",
+        s.created_at       AS "createdAt",
+        s.grand_total      AS "grandTotal",
+        COALESCE(
+          jsonb_agg(
+            jsonb_build_object(
+              'id',          si.id,
+              'productName', COALESCE(p.name, si.product_name_snapshot),
+              'modelCode',   p.model_code,
+              'barcode',     p.barcode,
+              'quantity',    si.quantity,
+              'imagePath',   p.image_url
+            ) ORDER BY si.id
+          ) FILTER (WHERE si.id IS NOT NULL),
+          '[]'::jsonb
+        ) AS items
+      FROM retail_sales s
+      LEFT JOIN retail_customers c   ON c.id = s.customer_id
+      LEFT JOIN retail_customer_addresses a ON a.id = s.address_id
+      LEFT JOIN retail_sale_items si ON si.sale_id = s.id
+      LEFT JOIN products p           ON p.id = si.product_id
+      WHERE s.channel::text = ANY(string_to_array('STORE,PHONE,WHATSAPP,INSTAGRAM,OTHER', ','))
+        AND s.status::text = ANY(string_to_array(${statusFilter}, ','))
+        AND (s.integration_sync_status = 'MANUAL' OR s.integration_sync_status IS NULL)
+      GROUP BY s.id, c.id, a.id
+      ORDER BY s.created_at DESC
+      LIMIT ${take} OFFSET ${offset}
+    `);
+  }
+
   async listWebOrders(query: Record<string, string>) {
     const q = this.text(query.q);
     const take = Math.min(Number(query.pageSize ?? 200), 500);
