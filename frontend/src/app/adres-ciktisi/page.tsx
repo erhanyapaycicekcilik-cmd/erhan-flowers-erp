@@ -841,117 +841,136 @@ type LabelProps = {
 
 function ShippingLabel(props: LabelProps) {
   const { sender, name, phone, address, district, city, items, totalQty, note, cargo, payment, codAmount, fragile, refCode, date, size } = props;
-  const scale = size === 'A4' ? 1.9 : size === 'A5' ? 1.4 : 1;
+  const scale = size === 'A4' ? 1.9 : size === 'A5' ? 1.35 : 1;
   const mm = (n: number) => `${n * scale}mm`;
   const location = [district, city].filter((v) => v.trim()).join(' / ');
   const maxItems = size === '100x150' ? 6 : 12;
   const shownItems = items.slice(0, maxItems);
   const hiddenCount = items.length - shownItems.length;
-  const border = `${mm(0.4)} solid #1e293b`;
-  const borderThin = `${mm(0.25)} solid #cbd5e1`;
+  const border = `${mm(0.35)} solid #111`;
+  const borderMid = `${mm(0.25)} solid #555`;
+  const borderThin = `${mm(0.2)} solid #d0d0d0`;
+
+  /* Dekoratif barkod çubukları */
+  const barPattern = [3,1,2,1,3,2,1,2,3,1,1,2,1,3,2,1,2,1,3,1,2,3,1,2,1];
+  const barTotal = barPattern.reduce((a, b) => a + b, 0);
+  const barUnit = 100 / (barTotal + barPattern.length * 0.4);
 
   return (
-    /* Dış çerçeve */
-    <div
-      style={{
-        flex: 1,
-        display: 'flex',
-        flexDirection: 'column',
-        fontFamily: 'Arial, Helvetica, sans-serif',
-        color: '#0f172a',
-        border,
-        borderRadius: mm(2),
-        overflow: 'hidden',
-      }}
-    >
-      {/* Üst bant: logo + gönderen */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: mm(3), borderBottom: border, padding: `${mm(2)} ${mm(3)}`, background: '#f8fafc' }}>
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', fontFamily: 'Arial, Helvetica, sans-serif', color: '#111', border, overflow: 'hidden', background: 'white' }}>
+
+      {/* ── HEADER: siyah bant – logo + marka + kanal ── */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: mm(2.5), background: '#111', padding: `${mm(2)} ${mm(3)}` }}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={COMPANY_LOGO} alt="" style={{ width: mm(14), height: mm(14), objectFit: 'contain', flexShrink: 0 }} />
-        <div style={{ flex: 1, minWidth: 0, borderLeft: borderThin, paddingLeft: mm(3) }}>
-          <div style={{ fontSize: mm(2.1), fontWeight: 800, letterSpacing: '0.1em', color: '#94a3b8', marginBottom: mm(0.5) }}>GÖNDEREN</div>
-          <div style={{ fontSize: mm(3.8), fontWeight: 900, lineHeight: 1.1 }}>{sender.name || '-'}</div>
-          <div style={{ fontSize: mm(2.3), lineHeight: 1.4, color: '#475569', marginTop: mm(0.5) }}>{sender.address}</div>
-          <div style={{ fontSize: mm(2.5), fontWeight: 700, color: '#334155', marginTop: mm(0.3) }}>Tel: {sender.phone}</div>
+        <img src={COMPANY_LOGO} alt="Erhan Flowers" style={{ width: mm(11), height: mm(11), objectFit: 'contain', flexShrink: 0, filter: 'brightness(0) invert(1)' }} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: mm(4.2), fontWeight: 900, color: 'white', letterSpacing: '0.04em', lineHeight: 1 }}>Erhan Flowers</div>
+          <div style={{ fontSize: mm(2), color: '#aaa', marginTop: mm(0.5), letterSpacing: '0.08em' }}>KARGO ETİKETİ</div>
+        </div>
+        {cargo && (
+          <div style={{ background: '#333', color: 'white', fontSize: mm(2.2), fontWeight: 700, padding: `${mm(0.8)} ${mm(2)}`, borderRadius: mm(1), flexShrink: 0, letterSpacing: '0.04em' }}>
+            {cargo}
+          </div>
+        )}
+      </div>
+
+      {/* ── GÖNDERİCİ şeridi ── */}
+      <div style={{ padding: `${mm(1.2)} ${mm(3)}`, borderBottom: border, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: mm(2) }}>
+        <div style={{ fontSize: mm(2.6), color: '#444', minWidth: 0 }}>
+          <span style={{ fontWeight: 700, color: '#111' }}>Gönderici:</span>{' '}
+          {sender.name} — {sender.address}
+        </div>
+        <div style={{ fontSize: mm(2.6), fontWeight: 700, color: '#111', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
+          {sender.phone}
         </div>
       </div>
 
-      {/* Alıcı başlık */}
-      <div style={{ background: '#1e293b', color: 'white', fontSize: mm(2.6), fontWeight: 900, letterSpacing: '0.15em', padding: `${mm(1)} ${mm(3)}` }}>
-        ALICI BİLGİLERİ
-      </div>
-
-      {/* Alıcı içerik */}
-      <div style={{ padding: `${mm(2.5)} ${mm(3)}`, borderBottom: border }}>
-        <div style={{ fontSize: mm(5.8), fontWeight: 900, lineHeight: 1.1, textTransform: 'uppercase', wordBreak: 'break-word' }}>{name || 'Ad Soyad'}</div>
-        {phone && <div style={{ fontSize: mm(4), fontWeight: 800, marginTop: mm(1), color: '#1e293b' }}>📞 {phone}</div>}
-        <div style={{ fontSize: mm(3.4), fontWeight: 600, lineHeight: 1.4, marginTop: mm(1.5), whiteSpace: 'pre-wrap', wordBreak: 'break-word', color: '#334155' }}>
+      {/* ── ALICI ── */}
+      <div style={{ padding: `${mm(2.5)} ${mm(3)}`, background: '#f5f5f5', borderBottom: border }}>
+        <div style={{ fontSize: mm(2), fontWeight: 700, color: '#888', letterSpacing: '0.12em', marginBottom: mm(1) }}>ALICI</div>
+        <div style={{ fontSize: mm(6.2), fontWeight: 900, lineHeight: 1.05, textTransform: 'uppercase', wordBreak: 'break-word', color: '#111' }}>
+          {name || 'Ad Soyad'}
+        </div>
+        {phone && (
+          <div style={{ fontSize: mm(4), fontWeight: 800, marginTop: mm(1.2), color: '#111', letterSpacing: '0.03em' }}>
+            {phone}
+          </div>
+        )}
+        <div style={{ fontSize: mm(3), fontWeight: 500, lineHeight: 1.5, marginTop: mm(1.2), whiteSpace: 'pre-wrap', wordBreak: 'break-word', color: '#333' }}>
           {address || 'Açık adres'}
         </div>
         {location && (
-          <div style={{ fontSize: mm(4.8), fontWeight: 900, marginTop: mm(1.5), textTransform: 'uppercase', letterSpacing: '0.03em', borderTop: borderThin, paddingTop: mm(1.5) }}>
+          <div style={{ fontSize: mm(4.4), fontWeight: 900, marginTop: mm(1.5), textTransform: 'uppercase', letterSpacing: '0.03em', paddingTop: mm(1.5), borderTop: borderMid, color: '#111' }}>
             {location}
           </div>
         )}
       </div>
 
-      {/* Kargo + Ödeme satırı */}
+      {/* ── 3 KOL: Kargo / Ödeme / Tarih ── */}
       <div style={{ display: 'flex', borderBottom: border }}>
         <div style={{ flex: 1, padding: `${mm(1.5)} ${mm(3)}`, borderRight: border }}>
-          <div style={{ fontSize: mm(2.1), fontWeight: 800, letterSpacing: '0.1em', color: '#94a3b8', marginBottom: mm(0.5) }}>KARGO</div>
-          <div style={{ fontSize: mm(3.2), fontWeight: 900 }}>{cargo || '—'}</div>
+          <div style={{ fontSize: mm(2), fontWeight: 700, color: '#888', letterSpacing: '0.1em', marginBottom: mm(0.5) }}>KARGO</div>
+          <div style={{ fontSize: mm(3), fontWeight: 800, color: '#111' }}>{cargo || '—'}</div>
         </div>
-        <div style={{ flex: 1, padding: `${mm(1.5)} ${mm(3)}`, background: payment === 'ODEMELI' ? '#1e293b' : 'white', color: payment === 'ODEMELI' ? 'white' : '#0f172a', borderRight: payment === 'ODEMELI' && codAmount ? border : 'none' }}>
-          <div style={{ fontSize: mm(2.1), fontWeight: 800, letterSpacing: '0.1em', opacity: 0.65, marginBottom: mm(0.5) }}>ÖDEME</div>
-          <div style={{ fontSize: mm(3.2), fontWeight: 900 }}>{payment === 'ODEMELI' ? 'ALICI ÖDEMELİ' : 'GÖNDERİCİ ÖDEMELİ'}</div>
-        </div>
-        {payment === 'ODEMELI' && codAmount && (
-          <div style={{ flex: 1, padding: `${mm(1.5)} ${mm(3)}`, background: '#0f172a', color: 'white' }}>
-            <div style={{ fontSize: mm(2.1), fontWeight: 800, letterSpacing: '0.1em', opacity: 0.65, marginBottom: mm(0.5) }}>TAHSİLAT</div>
-            <div style={{ fontSize: mm(3.6), fontWeight: 900 }}>{codAmount} ₺</div>
+        <div style={{ flex: 1, padding: `${mm(1.5)} ${mm(3)}`, background: payment === 'ODEMELI' ? '#111' : 'white', color: payment === 'ODEMELI' ? 'white' : '#111', borderRight: border }}>
+          <div style={{ fontSize: mm(2), fontWeight: 700, letterSpacing: '0.1em', opacity: 0.65, marginBottom: mm(0.5) }}>ÖDEME</div>
+          <div style={{ fontSize: mm(2.8), fontWeight: 900 }}>
+            {payment === 'ODEMELI' ? (codAmount ? `KAPIDA ${codAmount} ₺` : 'ALICI ÖDEMELİ') : 'GÖNDERİCİ'}
           </div>
-        )}
+        </div>
+        <div style={{ flex: 1, padding: `${mm(1.5)} ${mm(3)}` }}>
+          <div style={{ fontSize: mm(2), fontWeight: 700, color: '#888', letterSpacing: '0.1em', marginBottom: mm(0.5) }}>TARİH</div>
+          <div style={{ fontSize: mm(3), fontWeight: 800, color: '#111' }}>{date}</div>
+        </div>
       </div>
 
-      {/* Ürünler */}
-      {items.length > 0 && (
+      {/* ── ÜRÜNLER ── */}
+      {shownItems.length > 0 && (
         <div style={{ borderBottom: border }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', background: '#f1f5f9', padding: `${mm(1)} ${mm(3)}`, borderBottom: borderThin }}>
-            <span style={{ fontSize: mm(2.1), fontWeight: 800, letterSpacing: '0.1em', color: '#64748b' }}>İÇERİK</span>
-            <span style={{ fontSize: mm(2.1), fontWeight: 800, letterSpacing: '0.1em', color: '#64748b' }}>{totalQty} ADET</span>
+          <div style={{ display: 'flex', justifyContent: 'space-between', background: '#ebebeb', padding: `${mm(0.8)} ${mm(3)}` }}>
+            <span style={{ fontSize: mm(2), fontWeight: 700, color: '#666', letterSpacing: '0.1em' }}>İÇERİK</span>
+            <span style={{ fontSize: mm(2), fontWeight: 700, color: '#666', letterSpacing: '0.1em' }}>{totalQty} ADET</span>
           </div>
-          <div style={{ padding: `${mm(1)} ${mm(3)}` }}>
+          <div style={{ padding: `${mm(0.5)} ${mm(3)} ${mm(1)}` }}>
             {shownItems.map((item, i) => (
-              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', gap: mm(2), fontSize: mm(3), fontWeight: 600, lineHeight: 1.4, borderTop: i ? borderThin : 'none', paddingTop: i ? mm(0.8) : 0, paddingBottom: mm(0.8) }}>
+              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', gap: mm(2), fontSize: mm(2.9), fontWeight: 600, lineHeight: 1.4, borderTop: i ? borderThin : 'none', paddingTop: i ? mm(0.7) : mm(0.5), paddingBottom: mm(0.5), color: '#111' }}>
                 <span style={{ wordBreak: 'break-word' }}>{item.name}</span>
-                <b style={{ whiteSpace: 'nowrap', flexShrink: 0 }}>{Number(item.qty) || 1} Adet</b>
+                <b style={{ whiteSpace: 'nowrap', flexShrink: 0 }}>{Number(item.qty) || 1} adet</b>
               </div>
             ))}
-            {hiddenCount > 0 && <div style={{ fontSize: mm(2.6), color: '#64748b' }}>+{hiddenCount} ürün daha</div>}
+            {hiddenCount > 0 && <div style={{ fontSize: mm(2.4), color: '#888' }}>+{hiddenCount} ürün daha</div>}
           </div>
         </div>
       )}
 
-      {/* Not */}
+      {/* ── NOT ── */}
       {note.trim() && (
-        <div style={{ fontSize: mm(2.8), lineHeight: 1.4, background: '#fefce8', borderBottom: border, borderLeft: `${mm(1.2)} solid #eab308`, padding: `${mm(1.5)} ${mm(3)}` }}>
+        <div style={{ fontSize: mm(2.8), lineHeight: 1.4, background: '#f0f0f0', borderBottom: borderMid, borderLeft: `${mm(1.2)} solid #555`, padding: `${mm(1.5)} ${mm(3)}`, color: '#222' }}>
           <b>Not:</b> {note}
+        </div>
+      )}
+
+      {/* ── KIRILACAK EŞYA ── */}
+      {fragile && (
+        <div style={{ textAlign: 'center', borderTop: `${mm(0.35)} dashed #555`, borderBottom: `${mm(0.35)} dashed #555`, fontSize: mm(2.8), fontWeight: 900, letterSpacing: '0.07em', padding: `${mm(1)} ${mm(3)}`, background: '#fafafa', color: '#111' }}>
+          ⚠ KIRILACAK EŞYA · DİKKATLİ TAŞIYINIZ
         </div>
       )}
 
       <div style={{ flex: 1 }} />
 
-      {/* Kırılacak eşya */}
-      {fragile && (
-        <div style={{ textAlign: 'center', borderTop: `${mm(0.4)} dashed #1e293b`, borderBottom: `${mm(0.4)} dashed #1e293b`, fontSize: mm(3), fontWeight: 900, letterSpacing: '0.08em', padding: `${mm(1.2)} ${mm(3)}`, background: '#fafafa' }}>
-          ⚠ KIRILACAK EŞYA · DİKKATLİ TAŞIYINIZ
+      {/* ── FOOTER: sipariş no + dekoratif barkod ── */}
+      <div style={{ background: '#111', padding: `${mm(1.8)} ${mm(3)}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: mm(3) }}>
+        <div>
+          <div style={{ fontSize: mm(1.8), color: '#888', letterSpacing: '0.1em', marginBottom: mm(0.4) }}>SİPARİŞ NO</div>
+          <div style={{ fontSize: mm(3.2), fontWeight: 900, color: 'white', letterSpacing: '0.08em', fontFamily: 'monospace' }}>{refCode}</div>
         </div>
-      )}
-
-      {/* Alt bilgi */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: border, padding: `${mm(1.5)} ${mm(3)}`, background: '#f8fafc' }}>
-        <span style={{ fontSize: mm(2.4), fontWeight: 700, color: '#64748b' }}>{date}</span>
-        <span style={{ fontFamily: 'monospace', fontSize: mm(3.4), fontWeight: 900, letterSpacing: '0.08em', background: '#1e293b', color: 'white', padding: `${mm(0.6)} ${mm(1.5)}`, borderRadius: mm(0.8) }}>{refCode}</span>
+        {/* Dekoratif barkod */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: `${0.4 * scale}mm`, height: mm(8), flexShrink: 0 }}>
+          {barPattern.map((w, i) => (
+            <div key={i} style={{ width: `${w * barUnit}%`, height: i % 3 === 2 ? '70%' : '100%', background: i % 4 === 3 ? '#555' : 'white', flexShrink: 0, minWidth: `${scale * 0.6}mm` }} />
+          ))}
+        </div>
       </div>
     </div>
   );
