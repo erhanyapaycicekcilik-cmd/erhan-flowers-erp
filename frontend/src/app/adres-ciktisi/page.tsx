@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, ClipboardPaste, FileText, Plus, Printer, RotateCcw, Save, Search, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
@@ -11,7 +11,8 @@ const SENDER_STORAGE_KEY = 'adres-ciktisi-gonderen';
 type LabelSize = '100x150' | 'A5' | 'A4';
 type PaymentType = 'PESIN' | 'ODEMELI';
 
-type Item = { name: string; qty: string; price: string };
+type Item = { name: string; qty: string; price: string; productId?: number; imageUrl?: string };
+type ProductHit = { id: number; name: string; imageUrl?: string | null; salePrice?: number | null; trendyolSalePrice?: number | null };
 
 type Sender = {
   name: string;
@@ -156,6 +157,9 @@ export default function AddressPrintPage() {
   const [copies, setCopies] = useState(1);
   const [refCode, setRefCode] = useState('');
   const [date, setDate] = useState('');
+  const [productSuggestions, setProductSuggestions] = useState<Record<number, ProductHit[]>>({});
+  const [activeProductSearch, setActiveProductSearch] = useState<number | null>(null);
+  const productSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     api<{ role?: string }>('/auth/me').then((u) => setIsOwner(u?.role === 'OWNER')).catch(() => null);
@@ -198,6 +202,31 @@ export default function AddressPrintPage() {
 
   function updateItem(index: number, patch: Partial<Item>) {
     setItems((current) => current.map((item, i) => (i === index ? { ...item, ...patch } : item)));
+  }
+
+  const searchProducts = useCallback((index: number, q: string) => {
+    if (productSearchTimer.current) clearTimeout(productSearchTimer.current);
+    if (q.trim().length < 2) { setProductSuggestions((s) => ({ ...s, [index]: [] })); return; }
+    productSearchTimer.current = setTimeout(async () => {
+      try {
+        const res = await api<{ items?: ProductHit[]; results?: ProductHit[] } | ProductHit[]>(`/sales/products/search?q=${encodeURIComponent(q)}&limit=6`);
+        const list: ProductHit[] = Array.isArray(res) ? res : (res.items ?? res.results ?? []);
+        setProductSuggestions((s) => ({ ...s, [index]: list }));
+        setActiveProductSearch(index);
+      } catch { /* silent */ }
+    }, 280);
+  }, []);
+
+  function pickProduct(index: number, hit: ProductHit) {
+    const price = hit.salePrice ?? hit.trendyolSalePrice ?? 0;
+    updateItem(index, {
+      name: hit.name,
+      productId: hit.id,
+      imageUrl: hit.imageUrl ?? undefined,
+      price: price > 0 ? String(price) : items[index].price,
+    });
+    setProductSuggestions((s) => ({ ...s, [index]: [] }));
+    setActiveProductSearch(null);
   }
 
   async function pickCustomer(hit: CustomerHit) {
@@ -297,13 +326,49 @@ export default function AddressPrintPage() {
 
   async function handlePrint() {
     setBusy('print');
-    // Telefon varsa yazdırmadan önce müşteriyi otomatik kaydet; yoksa sadece yazdır
     if (onlyDigits(phone).length >= 10) {
-      const ok = await saveCustomer(true);
-      if (ok) setMsg({ type: 'ok', text: 'Müşteri kaydedildi, çıktı hazırlanıyor.' });
+      await saveCustomer(true);
     }
+
+    // Ürün varsa personel ekranına sipariş olarak düş (CONFIRMED)
+    if (filledItems.length > 0 && name.trim() && address.trim()) {
+      try {
+        const sale = await api<{ id: number; saleNumber?: string }>('/sales', {
+          method: 'POST',
+          json: {
+            clientRequestId: `adres-print-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+            channel,
+            saleType: 'STORE_SALE',
+            delivery: {
+              deliveryType: cargo.toLowerCase().includes('kurye') || cargo.toLowerCase().includes('elden') ? 'COURIER' : 'CARGO',
+              note: [note.trim(), cargo.trim() ? `Kargo: ${cargo.trim()}` : ''].filter(Boolean).join(' | ') || undefined,
+            },
+            payments: [{ method: payMethod, amount: invoiceTotal || 0, clientKey: `pay-print-${Date.now()}` }],
+            customer: customerPayload(),
+            address: addressPayload(),
+            items: filledItems.map((i) => ({
+              productName: i.name.trim(),
+              quantity: Number(i.qty) || 1,
+              unitPrice: Number(i.price.replace(',', '.')) || 0,
+              discountAmount: 0,
+              stockFulfillmentType: 'READY_STOCK',
+              ...(i.productId ? { productId: i.productId } : {}),
+            })),
+            customerNote: note.trim() || undefined,
+          },
+        });
+        const saleNo = sale.saleNumber ?? `#${sale.id}`;
+        if (sale.saleNumber) setRefCode(sale.saleNumber);
+        setMsg({ type: 'ok', text: `Sipariş ${saleNo} personel ekranına düştü. Çıktı hazırlanıyor.` });
+      } catch {
+        setMsg({ type: 'info', text: 'Müşteri kaydedildi. Sipariş oluşturulamadı — çıktı yazdırılıyor.' });
+      }
+    } else {
+      setMsg({ type: 'ok', text: 'Çıktı hazırlanıyor.' });
+    }
+
     setBusy('');
-    setTimeout(() => window.print(), 50);
+    setTimeout(() => window.print(), 100);
   }
 
   async function handleInvoice() {
@@ -509,26 +574,57 @@ export default function AddressPrintPage() {
             }
           >
             {items.map((item, index) => (
-              <div className="flex items-center gap-2" key={index}>
-                <input
-                  className="input"
-                  style={{ flex: 1, width: 'auto', minWidth: 0 }}
-                  value={item.name}
-                  onChange={(e) => updateItem(index, { name: e.target.value })}
-                  placeholder={`Ürün ${index + 1}`}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      setItems((c) => [...c, { name: '', qty: '1', price: '' }]);
-                    }
-                  }}
-                />
+              <div className="flex items-start gap-2" key={index}>
+                <div className="relative" style={{ flex: 1, minWidth: 0 }}>
+                  <div className="flex items-center gap-1">
+                    {item.imageUrl && (
+                      <img src={item.imageUrl} alt="" className="h-8 w-8 flex-none rounded object-cover" />
+                    )}
+                    <input
+                      className="input w-full"
+                      value={item.name}
+                      onChange={(e) => {
+                        updateItem(index, { name: e.target.value, productId: undefined, imageUrl: undefined });
+                        searchProducts(index, e.target.value);
+                      }}
+                      onFocus={() => { if ((productSuggestions[index]?.length ?? 0) > 0) setActiveProductSearch(index); }}
+                      onBlur={() => setTimeout(() => setActiveProductSearch(null), 200)}
+                      placeholder={`Ürün ${index + 1}`}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Escape') { setActiveProductSearch(null); setProductSuggestions((s) => ({ ...s, [index]: [] })); }
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          setItems((c) => [...c, { name: '', qty: '1', price: '' }]);
+                        }
+                      }}
+                    />
+                  </div>
+                  {activeProductSearch === index && (productSuggestions[index]?.length ?? 0) > 0 && (
+                    <ul className="absolute left-0 top-full z-50 mt-1 w-full overflow-hidden rounded-md border border-slate-200 bg-white shadow-lg">
+                      {productSuggestions[index].map((hit) => (
+                        <li key={hit.id}>
+                          <button
+                            type="button"
+                            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-indigo-50"
+                            onMouseDown={() => pickProduct(index, hit)}
+                          >
+                            {hit.imageUrl && <img src={hit.imageUrl} alt="" className="h-8 w-8 flex-none rounded object-cover" />}
+                            <span className="flex-1 truncate">{hit.name}</span>
+                            {(hit.salePrice ?? hit.trendyolSalePrice ?? 0) > 0 && (
+                              <span className="flex-none text-slate-500">₺{hit.salePrice ?? hit.trendyolSalePrice}</span>
+                            )}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
                 <input className="input text-center" style={{ width: 56, flex: 'none' }} value={item.qty} onChange={(e) => updateItem(index, { qty: e.target.value.replace(/[^0-9]/g, '') })} inputMode="numeric" title="Adet" />
                 <input className="input text-right" style={{ width: 88, flex: 'none' }} value={item.price} onChange={(e) => updateItem(index, { price: e.target.value.replace(/[^0-9.,]/g, '') })} inputMode="decimal" placeholder="₺ fiyat" title="Birim fiyat (KDV dahil) — fatura için" />
                 <button
                   type="button"
                   aria-label="Ürünü sil"
-                  className="rounded-md p-2 text-slate-400 hover:bg-red-50 hover:text-red-600"
+                  className="mt-1 rounded-md p-2 text-slate-400 hover:bg-red-50 hover:text-red-600"
                   onClick={() => setItems((c) => (c.length > 1 ? c.filter((_, i) => i !== index) : [{ name: '', qty: '1', price: '' }]))}
                 >
                   <Trash2 size={16} />
