@@ -726,11 +726,11 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
           jsonb_agg(
             jsonb_build_object(
               'id',          si.id,
-              'productName', COALESCE(p.name, si.product_name_snapshot),
-              'modelCode',   p.model_code,
-              'barcode',     p.barcode,
+              'productName', si.product_name_snapshot,
+              'modelCode',   si.model_code,
+              'barcode',     si.barcode,
               'quantity',    si.quantity,
-              'imagePath',   p.image_url
+              'imagePath',   si.external_image_url
             ) ORDER BY si.id
           ) FILTER (WHERE si.id IS NOT NULL),
           '[]'::jsonb
@@ -739,7 +739,6 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
       LEFT JOIN retail_customers c   ON c.id = s.customer_id
       LEFT JOIN retail_customer_addresses a ON a.id = s.address_id
       LEFT JOIN retail_sale_items si ON si.sale_id = s.id
-      LEFT JOIN products p           ON p.id = si.product_id
       WHERE s.channel::text = ANY(string_to_array('STORE,PHONE,WHATSAPP,INSTAGRAM,OTHER', ','))
         AND s.status::text = ANY(string_to_array(${statusFilter}, ','))
         AND (s.integration_sync_status = 'MANUAL' OR s.integration_sync_status IS NULL)
