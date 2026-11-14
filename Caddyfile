@@ -1,12 +1,49 @@
 # Flora E-Ticaret Sitesi — Ana domain: erhanflowers.com
 erhanflowers.com, www.erhanflowers.com {
+    # Gzip + Zstandard sıkıştırma (HTML/CSS/JS boyutunu ~70% küçültür)
+    encode zstd gzip
+
     # Meta/WhatsApp katalog feed — backend'den servis edilir
     handle /feed/meta-catalog {
         rewrite * /public/catalog/meta-feed
         reverse_proxy backend:8001
     }
 
-    # Diğer tüm istekler florayapay'e
+    # Next.js static dosyaları — içerik hash'li, 1 yıl cache (immutable)
+    handle /_next/static/* {
+        reverse_proxy florayapay:3200
+        header Cache-Control "public, max-age=31536000, immutable"
+    }
+
+    # Ürün görselleri ve statik public dosyalar — 7 gün cache
+    handle /fiber-saksi/* {
+        reverse_proxy florayapay:3200
+        header Cache-Control "public, max-age=604800, stale-while-revalidate=86400"
+    }
+    handle /bostann/* {
+        reverse_proxy florayapay:3200
+        header Cache-Control "public, max-age=604800, stale-while-revalidate=86400"
+    }
+    handle /metal-saksi/* {
+        reverse_proxy florayapay:3200
+        header Cache-Control "public, max-age=604800, stale-while-revalidate=86400"
+    }
+    handle /kaktus-sazlik/* {
+        reverse_proxy florayapay:3200
+        header Cache-Control "public, max-age=604800, stale-while-revalidate=86400"
+    }
+    handle /images/* {
+        reverse_proxy florayapay:3200
+        header Cache-Control "public, max-age=604800, stale-while-revalidate=86400"
+    }
+
+    # Next.js image optimizer çıktıları — 7 gün cache
+    handle /_next/image* {
+        reverse_proxy florayapay:3200
+        header Cache-Control "public, max-age=604800, stale-while-revalidate=86400"
+    }
+
+    # Diğer tüm istekler florayapay'e (HTML sayfaları — cache'lenmiyor)
     handle {
         reverse_proxy florayapay:3200
     }
@@ -32,7 +69,21 @@ florayapaycicek.com, www.florayapaycicek.com {
 
 # ERP Yönetim Paneli — Güvenli HTTPS
 erp.erhanflowers.com, erp.florayapaycicek.com {
-    reverse_proxy frontend:3000
+    encode zstd gzip
+
+    handle /_next/static/* {
+        reverse_proxy frontend:3000
+        header Cache-Control "public, max-age=31536000, immutable"
+    }
+
+    handle /_next/image* {
+        reverse_proxy frontend:3000
+        header Cache-Control "public, max-age=604800, stale-while-revalidate=86400"
+    }
+
+    handle {
+        reverse_proxy frontend:3000
+    }
 
     header {
         Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
