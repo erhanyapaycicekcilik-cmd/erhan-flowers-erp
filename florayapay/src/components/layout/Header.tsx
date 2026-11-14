@@ -12,7 +12,7 @@ const DEFAULT_ANNOUNCEMENTS = [
   '⭐ Google\'da 4.9 yıldız — 127 yorum  ·  14 gün iade garantisi',
   '🔥 Yüzlerce mutlu müşteri — Google\'da 4.9 yıldız',
   '💬 WhatsApp\'tan sipariş — anında yanıt',
-  '🌿 Trendyol\'a göre %15 daha uygun fiyat',
+  '🌿 Tüm ürünler Trendyol fiyatından %25 ucuz',
 ]
 
 function AnnouncementBar() {

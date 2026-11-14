@@ -16,7 +16,7 @@ import { ProductTracker } from '@/components/product/ProductTracker'
 import { UrgencyBar } from '@/components/product/UrgencyBar'
 import { DeliveryEstimate } from '@/components/product/DeliveryEstimate'
 import { WhatsAppOrderButton } from '@/components/product/WhatsAppOrderButton'
-import { StickyMobileCTA } from '@/components/product/StickyMobileCTA'
+import { ProductBuyBar, BuyNowButton } from '@/components/product/ProductBuyBar'
 import { RelatedProducts } from '@/components/product/RelatedProducts'
 import { ProductVideo } from '@/components/product/ProductVideo'
 
@@ -103,10 +103,33 @@ export default async function ProductDetailPage({ params }: PageProps) {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-16">
             {/* Sol — Görsel galeri + video */}
             <div className="space-y-4">
-              <ProductImageGallery
-                images={images.map(getImageUrl)}
-                productName={product.name}
-              />
+              <div className="relative">
+                <ProductImageGallery
+                  images={images.map(getImageUrl)}
+                  productName={product.name}
+                />
+                {/* Görsel üstü etiketler (sadece gerçek olanlar) */}
+                <div className="pointer-events-none absolute top-3 left-3 z-10 flex flex-col items-start gap-1.5">
+                  {!priceOnRequest && product.compareAtLabel && discount && discount > 0 && (
+                    <span className="bg-[#C62828] text-white text-xs sm:text-sm font-bold px-2.5 py-1 rounded-lg shadow">
+                      {product.compareAtLabel}&apos;dan %{discount} ucuz
+                    </span>
+                  )}
+                  {!priceOnRequest && product.sitePrice >= 1000 && (
+                    <span className="bg-[#F5B400] text-[#1A1A1A] text-xs sm:text-sm font-bold px-2.5 py-1 rounded-lg shadow">
+                      🚚 Kargo Bedava
+                    </span>
+                  )}
+                </div>
+                {product.videoUrl && (
+                  <a
+                    href="#urun-videosu"
+                    className="absolute top-3 right-3 z-10 inline-flex items-center gap-1.5 bg-white/95 border-2 border-[#E8590C] text-[#E8590C] text-xs sm:text-sm font-semibold px-3 py-1.5 rounded-full shadow"
+                  >
+                    ▶ Ürün Videosunu İzle
+                  </a>
+                )}
+              </div>
               {product.videoUrl && (
                 <ProductVideo videoUrl={product.videoUrl} title={product.name} autoplay={true} />
               )}
@@ -124,8 +147,9 @@ export default async function ProductDetailPage({ params }: PageProps) {
                 </Link>
               )}
 
-              {/* Ürün adı */}
-              <h1 className="font-display text-2xl lg:text-3xl font-light text-[#0D1510] leading-tight">
+              {/* Marka + ürün adı */}
+              <h1 className="text-xl lg:text-2xl text-[#5C5C52] leading-snug">
+                {product.brand && <span className="font-semibold text-[#0D1510] mr-1.5">{product.brand}</span>}
                 {product.name}
               </h1>
 
@@ -155,7 +179,7 @@ export default async function ProductDetailPage({ params }: PageProps) {
                   <PriceOnRequestPrice />
                 ) : (
                 <>
-                <div className="flex items-baseline gap-3">
+                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1.5">
                   <span className="text-4xl font-semibold text-[#0D1510]">
                     {formatPrice(product.sitePrice)}
                   </span>
@@ -166,7 +190,7 @@ export default async function ProductDetailPage({ params }: PageProps) {
                     </span>
                   )}
                   {discount && discount > 0 && (
-                    <span className="bg-[#E8F0EA] text-[#5C7A62] text-sm font-bold px-2.5 py-0.5 rounded-full">
+                    <span className="whitespace-nowrap bg-[#E8F0EA] text-[#5C7A62] text-sm font-bold px-2.5 py-0.5 rounded-full">
                       {product.compareAtLabel ? `${product.compareAtLabel}'dan %${discount} ucuz` : `%${discount} indirim`}
                     </span>
                   )}
@@ -199,6 +223,10 @@ export default async function ProductDetailPage({ params }: PageProps) {
                   disabled={!product.inStock}
                   size="lg"
                 />
+                <BuyNowButton
+                  product={{ id: String(product.id), name: product.name, price: product.sitePrice, image: product.mainImage, slug: params.slug }}
+                  disabled={!product.inStock}
+                />
                 <WhatsAppOrderButton
                   productName={product.name}
                   price={product.sitePrice}
@@ -212,11 +240,13 @@ export default async function ProductDetailPage({ params }: PageProps) {
                 {!priceOnRequest && <DeliveryEstimate />}
               </div>
 
-              {/* Sticky mobil CTA */}
+              {/* Mobilde altta sabit satın alma çubuğu */}
               {!priceOnRequest && (
-                <StickyMobileCTA
-                  product={{ id: String(product.id), name: product.name, price: product.sitePrice, image: product.mainImage ?? '', slug: params.slug }}
+                <ProductBuyBar
+                  product={{ id: String(product.id), name: product.name, price: product.sitePrice, image: product.mainImage, slug: params.slug }}
                   inStock={product.inStock}
+                  compareAtPrice={product.originalPrice}
+                  compareAtLabel={product.compareAtLabel}
                 />
               )}
 
@@ -276,7 +306,7 @@ export default async function ProductDetailPage({ params }: PageProps) {
 
         {/* Video */}
         {product.videoUrl && (
-          <div className="max-w-2xl mx-auto px-4 pb-8">
+          <div id="urun-videosu" className="max-w-2xl mx-auto px-4 pb-8 scroll-mt-24">
             <h2 className="font-semibold text-[#0D1510] mb-3">Ürün Videosu</h2>
             <ProductVideo videoUrl={product.videoUrl} title={product.name} />
           </div>

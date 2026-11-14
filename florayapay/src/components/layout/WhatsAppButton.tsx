@@ -1,12 +1,15 @@
 'use client'
 
 import { useState } from 'react'
+import { usePathname } from 'next/navigation'
 
 const WA_NUMBER = '905446546220'
 const WA_MESSAGE = 'Merhaba! Erhan Flowers hakkında bilgi almak istiyorum.'
 
 export function WhatsAppButton() {
   const [hovered, setHovered] = useState(false)
+  // Ürün sayfasında mobilde altta satın alma çubuğu var — buton onun üstünde dursun
+  const onProductPage = usePathname()?.startsWith('/urun/') ?? false
 
   const href = `https://wa.me/${WA_NUMBER}?text=${encodeURIComponent(WA_MESSAGE)}`
 
@@ -18,7 +21,7 @@ export function WhatsAppButton() {
       aria-label="WhatsApp ile iletişime geç"
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      className="fixed bottom-6 right-6 z-50 flex items-center gap-3 group"
+      className={`fixed ${onProductPage ? 'bottom-28 md:bottom-6' : 'bottom-6'} right-4 md:right-6 z-50 flex items-center gap-3 group`}
     >
       {/* Tooltip */}
       <span

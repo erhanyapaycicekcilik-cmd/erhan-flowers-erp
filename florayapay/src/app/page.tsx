@@ -3,6 +3,7 @@ import { Header } from '@/components/layout/Header'
 import { Footer } from '@/components/layout/Footer'
 import { CategoryGrid } from '@/components/home/CategoryGrid'
 import { FeaturedProducts } from '@/components/home/FeaturedProducts'
+import { LatestByCategory } from '@/components/home/LatestByCategory'
 import { TrustBadges } from '@/components/home/TrustBadges'
 import { WhyUs } from '@/components/home/WhyUs'
 // import { PromoBanners } from '@/components/home/PromoBanners'
@@ -42,6 +43,7 @@ export default function HomePage() {
         <SocialProofBar />
         <TrustBadges />
         <CategoryGrid />
+        <LatestByCategory />
         {/* <PromoBanners /> */}
         {/* <MekanKategorileri /> */}
         <FeaturedProducts />
