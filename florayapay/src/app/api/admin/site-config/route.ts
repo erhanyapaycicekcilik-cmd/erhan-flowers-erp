@@ -4,7 +4,16 @@ import { readSiteConfig, writeSiteConfig } from '@/lib/site-config'
 
 export async function GET() {
   try {
-    return NextResponse.json(readSiteConfig())
+    const config = readSiteConfig()
+    // Promosyon kodları sadece yönetici oturumuna gösterilir (herkese açık site ayarlarından çıkarılır)
+    const jar = await cookies()
+    const isAdmin = jar.get('admin_auth')?.value === (process.env.ADMIN_PASSWORD || 'erhan2024')
+    if (!isAdmin) {
+      const { promoCodes: _hidden, ...publicConfig } = config
+      void _hidden
+      return NextResponse.json(publicConfig)
+    }
+    return NextResponse.json(config)
   } catch {
     return NextResponse.json({ error: 'Okunamadı' }, { status: 500 })
   }

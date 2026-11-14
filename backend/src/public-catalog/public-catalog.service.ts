@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { resolveGeminiModel } from '../common/gemini-model';
 import { SITE_ONLY_MODEL_PREFIX, isSiteOnlyModelCode } from '../common/site-only';
-import { sitePriceFromTrendyol, TRENDYOL_COMPARE_LABEL } from '../common/site-pricing';
+import { productSitePrice, sitePriceFromTrendyol, TRENDYOL_COMPARE_LABEL } from '../common/site-pricing';
 
 // Sadece ürün grubu sayfasında (boyut/renk seçimiyle) satılan site ürünleri
 const GROUP_ONLY_MODEL_PREFIX = 'WEB-BST-';
@@ -814,9 +814,7 @@ export class PublicCatalogService {
     const trendyolPrice = isSiteOnlyModelCode(product.modelCode)
       ? 0
       : Number(product.productCenterVariant?.trendyolSalePrice ?? 0) || 0;
-    const price = trendyolPrice > 0
-      ? sitePriceFromTrendyol(trendyolPrice, Number(product.shopPrice) || 0)
-      : product.sitePrice || product.marketPrice || product.shopPrice;
+    const price = productSitePrice({ ...product, trendyolSalePrice: trendyolPrice });
     const compareAt = trendyolPrice > 0 ? trendyolPrice : product.listPrice;
 
     return {

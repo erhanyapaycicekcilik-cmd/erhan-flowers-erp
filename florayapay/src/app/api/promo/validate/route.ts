@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { readSiteConfig, writeSiteConfig } from '@/lib/site-config'
+import { readSiteConfig } from '@/lib/site-config'
 
 export async function GET(req: NextRequest) {
   const code = req.nextUrl.searchParams.get('code')?.trim().toUpperCase()
@@ -29,19 +29,4 @@ export async function GET(req: NextRequest) {
   })
 }
 
-/** Sipariş tamamlandığında kullanım sayısını artır */
-export async function POST(req: NextRequest) {
-  const { code } = await req.json()
-  if (!code) return NextResponse.json({ ok: false })
-
-  const config = readSiteConfig()
-  const idx = (config.promoCodes ?? []).findIndex(
-    (p) => p.code.toUpperCase() === code.toUpperCase(),
-  )
-  if (idx !== -1) {
-    config.promoCodes[idx].usedCount = (config.promoCodes[idx].usedCount ?? 0) + 1
-    writeSiteConfig(config)
-  }
-
-  return NextResponse.json({ ok: true })
-}
+// Kullanım sayısı artık sipariş başarıyla kaydedilince sunucuda artırılır (api/orders/create).

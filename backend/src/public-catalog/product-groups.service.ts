@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { sitePriceFromTrendyol } from '../common/site-pricing';
+import { productSitePrice, sitePriceFromTrendyol } from '../common/site-pricing';
 
 function slugify(v: string) {
   return v
@@ -53,9 +53,9 @@ export class ProductGroupsService {
             if (!price && v.productId) {
               const p = await this.prisma.product.findFirst({
                 where: { id: v.productId },
-                select: { sitePrice: true, marketPrice: true },
+                select: { modelCode: true, sitePrice: true, marketPrice: true, shopPrice: true, productCenterVariant: { select: { trendyolSalePrice: true } } },
               });
-              price = Number(p?.sitePrice) || Number(p?.marketPrice) || 0;
+              price = p ? productSitePrice({ ...p, trendyolSalePrice: p.productCenterVariant?.trendyolSalePrice }) : 0;
             } else if (!price && v.trendyolVariantId) {
               const tv = await this.prisma.trendyolProductVariant.findFirst({
                 where: { id: v.trendyolVariantId },
@@ -92,10 +92,10 @@ export class ProductGroupsService {
         if (v.productId) {
           const p = await this.prisma.product.findFirst({
             where: { id: v.productId },
-            select: { sitePrice: true, imageUrls: true, productName: true, marketPrice: true },
+            select: { modelCode: true, sitePrice: true, shopPrice: true, imageUrls: true, productName: true, marketPrice: true, productCenterVariant: { select: { trendyolSalePrice: true } } },
           });
           if (p) {
-            if (!price) price = Number(p.sitePrice) || Number(p.marketPrice) || 0;
+            if (!price) price = productSitePrice({ ...p, trendyolSalePrice: p.productCenterVariant?.trendyolSalePrice });
             images = this.parseImages(p.imageUrls);
             productName = p.productName;
           }

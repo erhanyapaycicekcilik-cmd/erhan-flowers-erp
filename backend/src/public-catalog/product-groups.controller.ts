@@ -1,7 +1,8 @@
 import {
   BadRequestException, Body, Controller, Delete, Get,
-  NotFoundException, Param, Post, Put, Query,
+  NotFoundException, Param, Post, Put, Query, UnauthorizedException,
 } from '@nestjs/common';
+import { isValidAdminSecret } from '../common/admin-secret';
 import { ProductGroupsService } from './product-groups.service';
 
 @Controller('public/catalog/groups')
@@ -25,8 +26,7 @@ export class ProductGroupsController {
   // ─── Admin (secret korumalı) ──────────────────────────────────────────────
 
   private checkSecret(secret: string | undefined) {
-    const expected = process.env.REVALIDATE_SECRET || 'dev-secret-local';
-    if (secret !== expected) throw new BadRequestException('Unauthorized');
+    if (!isValidAdminSecret(secret)) throw new UnauthorizedException('Unauthorized');
   }
 
   @Get('admin/list')

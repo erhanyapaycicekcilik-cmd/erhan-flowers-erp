@@ -1,6 +1,7 @@
 import { BadRequestException, Body, Controller, Get, Header, NotFoundException, Param, Post, Query, Res, UseGuards } from '@nestjs/common';
 import { Response } from 'express';
 
+import { isValidAdminSecret } from '../common/admin-secret';
 import { AuthGuard } from '../auth/auth.guard';
 import { PublicCatalogService } from './public-catalog.service';
 import { TrendyolProductSyncService } from './trendyol-product-sync.service';
@@ -93,16 +94,14 @@ export class PublicCatalogController {
   // Admin: Ürün adına göre otomatik kategori ataması
   @Post('admin/recategorize')
   recategorizeByName(@Query('secret') secret?: string) {
-    const expected = process.env.REVALIDATE_SECRET || 'dev-secret-local';
-    if (secret !== expected) return { error: 'Unauthorized' };
+    if (!isValidAdminSecret(secret)) return { error: 'Unauthorized' };
     return this.catalog.recategorizeByName();
   }
 
   // Admin: Tüm onaylı maliyetleri sitePrice'a toplu yansıt
   @Post('admin/bulk-sync-site-price')
   bulkSyncSitePrice(@Query('secret') secret?: string) {
-    const expected = process.env.REVALIDATE_SECRET || 'dev-secret-local';
-    if (secret !== expected) return { error: 'Unauthorized' };
+    if (!isValidAdminSecret(secret)) return { error: 'Unauthorized' };
     return this.catalog.bulkSyncSitePriceFromApprovedCosts();
   }
 
@@ -113,8 +112,7 @@ export class PublicCatalogController {
     @Query('secret') secret: string,
     @Body() body: { search: string; changePercent: number; dryRun?: boolean },
   ) {
-    const expected = process.env.REVALIDATE_SECRET || 'dev-secret-local';
-    if (secret !== expected) return { error: 'Unauthorized' };
+    if (!isValidAdminSecret(secret)) return { error: 'Unauthorized' };
     if (!body.search?.trim()) throw new BadRequestException('search gerekli.');
     if (typeof body.changePercent !== 'number') throw new BadRequestException('changePercent sayı olmalı.');
     return this.catalog.bulkPriceAdjust({
@@ -127,8 +125,7 @@ export class PublicCatalogController {
   // Admin: Trendyol ürünlerini anında çek
   @Post('admin/trendyol-sync')
   runTrendyolSync(@Query('secret') secret?: string) {
-    const expected = process.env.REVALIDATE_SECRET || 'dev-secret-local';
-    if (secret !== expected) {
+    if (!isValidAdminSecret(secret)) {
       return { error: 'Unauthorized' };
     }
     return this.trendyolSync.syncNow();
@@ -140,8 +137,7 @@ export class PublicCatalogController {
     @Query('secret') secret: string,
     @Body() body: { productId: number; category: string; subCategory?: string | null },
   ) {
-    const expected = process.env.REVALIDATE_SECRET || 'dev-secret-local';
-    if (secret !== expected) return { error: 'Unauthorized' };
+    if (!isValidAdminSecret(secret)) return { error: 'Unauthorized' };
     if (!body.productId || !body.category) throw new BadRequestException('productId ve category gerekli.');
     return this.catalog.setCategory(body.productId, body.category, body.subCategory ?? null);
   }
@@ -155,8 +151,7 @@ export class PublicCatalogController {
       warrantyMonths?: number; inStock?: boolean; images?: string[]; videoUrl?: string | null;
     },
   ) {
-    const expected = process.env.REVALIDATE_SECRET || 'dev-secret-local';
-    if (secret !== expected) return { error: 'Unauthorized' };
+    if (!isValidAdminSecret(secret)) return { error: 'Unauthorized' };
     if (!body.name || !body.sitePrice) throw new BadRequestException('name ve sitePrice gerekli.');
     return this.catalog.createProduct(body);
   }
@@ -166,8 +161,7 @@ export class PublicCatalogController {
     @Query('secret') secret: string,
     @Body() body: { productId: number; videoUrl: string | null },
   ) {
-    const expected = process.env.REVALIDATE_SECRET || 'dev-secret-local';
-    if (secret !== expected) return { error: 'Unauthorized' };
+    if (!isValidAdminSecret(secret)) return { error: 'Unauthorized' };
     if (!body.productId) throw new BadRequestException('productId gerekli.');
     return this.catalog.setVideo(body.productId, body.videoUrl ?? null);
   }
