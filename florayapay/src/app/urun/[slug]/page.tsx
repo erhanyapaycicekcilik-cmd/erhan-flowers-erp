@@ -13,7 +13,6 @@ import { ProductImageGallery } from '@/components/product/ProductImageGallery'
 import { AddToCartButton } from '@/components/product/AddToCartButton'
 import { PriceOnRequestPrice, PriceInquiryButtons } from '@/components/product/PriceOnRequest'
 import { ProductTracker } from '@/components/product/ProductTracker'
-import { UrgencyBar } from '@/components/product/UrgencyBar'
 import { DeliveryEstimate } from '@/components/product/DeliveryEstimate'
 import { WhatsAppOrderButton } from '@/components/product/WhatsAppOrderButton'
 import { ProductBuyBar, BuyNowButton } from '@/components/product/ProductBuyBar'
@@ -202,8 +201,7 @@ export default async function ProductDetailPage({ params }: PageProps) {
                 )}
               </div>
 
-              {/* Aciliyet çubuğu */}
-              {!priceOnRequest && <UrgencyBar productId={String(product.id)} />}
+              <div className="mt-4" />
 
               {/* Sepete ekle (fiyatsız üründe fiyat sorma butonları) */}
               {priceOnRequest ? (
