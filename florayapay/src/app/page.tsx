@@ -8,7 +8,6 @@ import { TrustBadges } from '@/components/home/TrustBadges'
 import { WhyUs } from '@/components/home/WhyUs'
 // import { PromoBanners } from '@/components/home/PromoBanners'
 // import { MekanKategorileri } from '@/components/home/MekanKategorileri'
-import { SocialProofBar } from '@/components/home/SocialProofBar'
 import { InstagramFeed } from '@/components/home/InstagramFeed'
 
 export const metadata: Metadata = {
@@ -40,7 +39,6 @@ export default function HomePage() {
     <>
       <Header />
       <main>
-        <SocialProofBar />
         <TrustBadges />
         <CategoryGrid />
         <LatestByCategory />

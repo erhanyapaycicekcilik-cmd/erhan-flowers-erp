@@ -153,13 +153,15 @@ export class PublicCatalogService {
   async listCategories() {
     // catalogCategory alanına göre dinamik kategori listesi
     // Hem Product hem TrendyolProductVariant tablosundan say (Product.productId null olabilir)
+    // Sayılar sitede gerçekten listelenen ürünlerle aynı olsun (sadece satıştakiler)
+    const idx = await this.trendyolIndex();
     const [products, variants] = await Promise.all([
       this.prisma.product.findMany({
-        where: { status: 'ACTIVE', catalogCategory: { not: null } },
+        where: { status: 'ACTIVE', catalogCategory: { not: null }, ...this.onSaleProductFilter(idx) },
         select: { catalogCategory: true },
       }),
       this.prisma.trendyolProductVariant.findMany({
-        where: { catalogCategory: { not: null }, productId: null },
+        where: { catalogCategory: { not: null }, ...this.onSaleVariantFilter(idx) },
         select: { catalogCategory: true },
       }),
     ]);
@@ -197,13 +199,14 @@ export class PublicCatalogService {
     const matched = CAT_NAMES.find((n) => slugify(n) === categorySlug);
     if (!matched) return [];
 
+    const idx = await this.trendyolIndex();
     const [products, variants] = await Promise.all([
       this.prisma.product.findMany({
-        where: { status: 'ACTIVE', catalogCategory: matched, catalogSubCategory: { not: null } },
+        where: { status: 'ACTIVE', catalogCategory: matched, catalogSubCategory: { not: null }, ...this.onSaleProductFilter(idx) },
         select: { catalogSubCategory: true },
       }),
       this.prisma.trendyolProductVariant.findMany({
-        where: { productId: null, catalogCategory: matched, catalogSubCategory: { not: null } },
+        where: { catalogCategory: matched, catalogSubCategory: { not: null }, ...this.onSaleVariantFilter(idx) },
         select: { catalogSubCategory: true },
       }),
     ]);
@@ -898,6 +901,28 @@ export class PublicCatalogService {
       shadowedVariantIds.add(v.id);
     }
     return { priceByProductId, onSaleProductIds, shadowedVariantIds: [...shadowedVariantIds] };
+  }
+
+  /** Sitede listelenen Product: sadece sitede satılan WEB- (stoklu, grup-dışı) veya Trendyol'da satıştaki */
+  private onSaleProductFilter(idx: TrendyolIndex) {
+    return {
+      NOT: { modelCode: { startsWith: GROUP_ONLY_MODEL_PREFIX } },
+      OR: [
+        { modelCode: { startsWith: SITE_ONLY_MODEL_PREFIX }, stockQuantity: { gt: 0 } },
+        { id: { in: idx.onSaleProductIds } },
+      ],
+    };
+  }
+
+  /** Sitede ayrı listelenen Trendyol ürünü: ERP kaydına bağlı/eşleşmiş değil, aktif, stoklu, fiyatlı */
+  private onSaleVariantFilter(idx: TrendyolIndex) {
+    return {
+      productId: null,
+      status: 'ACTIVE' as const,
+      stockQuantity: { gt: 0 },
+      trendyolSalePrice: { gt: 0 },
+      id: { notIn: idx.shadowedVariantIds },
+    };
   }
 
   /** Product satırlarına Trendyol fiyatını iliştirir (bağlı ya da barkod/model koduyla eşleşen). */
