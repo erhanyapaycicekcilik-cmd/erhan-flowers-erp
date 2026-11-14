@@ -1282,6 +1282,7 @@ export const FIBER_POTS: SiteOnlySimpleProduct[] = [
   },
   {
     "modelCode": "WEB-SRN-FBR1073",
+    "retired": true,
     "name": "Fiber Kaya Model Seperatör Saksı 40x100x65 cm",
     "description": "Fiber Kaya Model Seperatör Saksı 40x100x65 cm. Kaya Model serisi fiberglass (fiber) saksı. Dikdörtgen formu ve kaya dokulu yüzeyi ile mekan bölücü olarak da kullanılabilir.\n\nÖlçüler: En 40 cm, boy 100 cm, yükseklik 65 cm.\nKatalog kodu: FBR 1073.\n\nFiyat, renk seçenekleri ve teslim süresi için bizimle iletişime geçin.",
     "images": [
@@ -1296,6 +1297,7 @@ export const FIBER_POTS: SiteOnlySimpleProduct[] = [
   },
   {
     "modelCode": "WEB-SRN-FBR1074",
+    "retired": true,
     "name": "Fiber Kaya Model Saksı 65x45 cm",
     "description": "Fiber Kaya Model Saksı 65x45 cm. Kaya Model serisi fiberglass (fiber) saksı. Doğal kaya görünümündeki yüzey dokusu ile iç ve dış mekânlarda dekoratif bir etki yaratır.\n\nÖlçüler: Çap 65 cm, yükseklik 45 cm.\nKatalog kodu: FBR 1074.\n\nFiyat, renk seçenekleri ve teslim süresi için bizimle iletişime geçin.",
     "images": [
