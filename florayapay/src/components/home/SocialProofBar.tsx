@@ -2,15 +2,12 @@
 
 import { useState, useEffect } from 'react'
 
+// Sadece doğru bilgiler — uydurma sipariş/yorum/sayı yazılmaz
 const messages = [
-  '🛒 Ayşe H. (İstanbul) az önce sipariş verdi',
-  '⭐ "Gerçek gibi görünüyor, çok memnunum" — Fatma K.',
-  '🚚 Bu hafta 214 sipariş gönderildi',
-  '🛒 Mehmet T. (Ankara) az önce sipariş verdi',
-  '⭐ "Ofisime aldım, herkes soruyor" — Ali R.',
-  '🔥 Bu ay 500+ müşteri alışveriş yaptı',
-  '🛒 Selin B. (İzmir) az önce sepete ekledi',
-  '⭐ Google\'da 4.9 yıldız — 127 yorum',
+  '🌿 Tüm ürünler Trendyol fiyatından %25 ucuz',
+  '🚚 1.000 TL ve üzeri siparişlerde kargo bedava',
+  '📍 Manavgat mağazamızda ürünleri yerinde görebilirsiniz',
+  '💬 WhatsApp\'tan sipariş — 0544 654 62 20',
 ]
 
 export function SocialProofBar() {
