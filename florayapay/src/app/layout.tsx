@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next'
 import './globals.css'
 import { GoogleTagManager } from '@/components/analytics/GoogleTagManager'
 import { GoogleAnalytics } from '@/components/analytics/GoogleAnalytics'
+import { MetaPixel } from '@/components/analytics/MetaPixel'
 import { JsonLd } from '@/components/seo/JsonLd'
 import { organizationSchema, websiteSchema, localBusinessSchema } from '@/lib/seo/schemas'
 import { WhatsAppButton } from '@/components/layout/WhatsAppButton'
@@ -135,6 +136,8 @@ export default function RootLayout({
         {/* Google Tag Manager — tüm izleme buradan */}
         {gtmId && <GoogleTagManager gtmId={gtmId} />}
         {gaId && <GoogleAnalytics gaId={gaId} />}
+        {/* Meta Pixel */}
+        <MetaPixel />
 
         {children}
 
