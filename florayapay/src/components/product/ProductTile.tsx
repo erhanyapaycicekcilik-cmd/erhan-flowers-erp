@@ -26,6 +26,9 @@ export function ProductTile({ product, topLabel }: { product: PublicProduct; top
           className="object-contain group-hover:scale-105 transition-transform duration-500 p-2"
         />
         <div className="absolute top-2 left-2 flex flex-col items-start gap-1">
+          {product.bestseller && (
+            <span className="bg-[#E8590C] text-white text-[10px] sm:text-xs font-bold px-2 py-0.5 rounded-md shadow">🔥 Çok Satan</span>
+          )}
           {topLabel && (
             <span className="bg-[#1E3A28] text-white text-[10px] sm:text-xs font-bold px-2 py-0.5 rounded-md shadow">{topLabel}</span>
           )}

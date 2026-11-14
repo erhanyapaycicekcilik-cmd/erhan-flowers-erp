@@ -144,8 +144,9 @@ export default async function ProductsPage({ searchParams }: PageProps) {
                   <p className="text-sm text-[#8C8A82] mt-0.5">{response.pagination.total} ürün bulundu</p>
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
-                  {(['price_asc', 'price_desc', 'newest', 'name'] as const).map(s => {
+                  {(['bestseller', 'price_asc', 'price_desc', 'newest', 'name'] as const).map(s => {
                     const labels: Record<string, string> = {
+                      bestseller: 'Çok Satanlar',
                       price_asc: 'Fiyat ↑',
                       price_desc: 'Fiyat ↓',
                       newest: 'En Yeni',
@@ -161,7 +162,7 @@ export default async function ProductsPage({ searchParams }: PageProps) {
                         key={s}
                         href={`/urunler?${qs}`}
                         className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors whitespace-nowrap ${
-                          searchParams.sirala === s
+                          (searchParams.sirala ?? 'bestseller') === s
                             ? 'bg-[#1E3A28] text-white'
                             : 'bg-white border border-[#E0DDD4] text-[#5C5C52] hover:bg-[#F4F2EC]'
                         }`}
@@ -311,6 +312,9 @@ export default async function ProductsPage({ searchParams }: PageProps) {
                                   <span className="bg-[#5C5C52] text-white text-[10px] font-semibold w-10 h-10 rounded-full flex items-center justify-center text-center leading-tight shadow">
                                     Tükendi
                                   </span>
+                                )}
+                                {product.bestseller && (
+                                  <span className="bg-[#E8590C] text-white text-[10px] font-bold px-2 py-1 rounded-md shadow">🔥 Çok Satan</span>
                                 )}
                                 {discount && discount >= 5 && (
                                   <span className="bg-[#8C2D2D] text-white text-[10px] font-bold w-10 h-10 rounded-full flex items-center justify-center shadow">

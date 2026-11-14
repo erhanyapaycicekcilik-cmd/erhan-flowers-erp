@@ -45,7 +45,7 @@ export class PublicCatalogController {
     @Query('modelCode') modelCode?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
-    @Query('sort') sort?: 'price_asc' | 'price_desc' | 'newest' | 'name',
+    @Query('sort') sort?: 'price_asc' | 'price_desc' | 'newest' | 'name' | 'bestseller',
   ) {
     return this.catalog.listProducts({
       categorySlug: category,
