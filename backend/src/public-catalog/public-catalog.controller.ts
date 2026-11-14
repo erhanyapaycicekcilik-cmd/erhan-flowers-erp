@@ -31,6 +31,11 @@ export class PublicCatalogController {
     return this.catalog.listSubCategories(category);
   }
 
+  @Get('latest-by-category')
+  latestByCategory() {
+    return this.catalog.latestByCategory();
+  }
+
   @Get('products')
   listProducts(
     @Query('category') category?: string,

@@ -67,6 +67,20 @@ export async function getSubCategories(categorySlug: string): Promise<Category[]
   }
 }
 
+export interface LatestByCategoryItem {
+  category: { name: string; slug: string }
+  product: PublicProduct
+}
+
+/** Ana sayfa: her kategoriden en son eklenen (satıştaki) ürün */
+export async function getLatestByCategory(): Promise<LatestByCategoryItem[]> {
+  try {
+    return await apiFetch<LatestByCategoryItem[]>('/public/catalog/latest-by-category')
+  } catch {
+    return []
+  }
+}
+
 export async function getProducts(params: {
   category?: string
   subcategory?: string

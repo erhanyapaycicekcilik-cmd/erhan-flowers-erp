@@ -218,6 +218,59 @@ export class PublicCatalogService {
       .map(([name, count]) => ({ name, slug: slugify(name), count }));
   }
 
+  // Ana sayfa: her kategoriden en son eklenen (satıştaki, fiyatlı) ürün — 10 dk önbellek
+  private latestCache: { at: number; value: Promise<Array<{ category: { name: string; slug: string }; product: ReturnType<PublicCatalogService['variantToPublicProduct']> | ReturnType<PublicCatalogService['toPublicProduct']> }>> } | null = null;
+
+  latestByCategory() {
+    const now = Date.now();
+    if (this.latestCache && now - this.latestCache.at < 10 * 60_000) return this.latestCache.value;
+    const value = this.buildLatestByCategory().catch((e) => { this.latestCache = null; throw e; });
+    this.latestCache = { at: now, value };
+    return value;
+  }
+
+  private async buildLatestByCategory() {
+    const [cats, idx] = await Promise.all([this.listCategories(), this.trendyolIndex()]);
+    const out = [];
+    for (const c of cats) {
+      const [prod, variant] = await Promise.all([
+        this.prisma.product.findFirst({
+          where: {
+            status: 'ACTIVE',
+            catalogCategory: c.name,
+            NOT: { modelCode: { startsWith: GROUP_ONLY_MODEL_PREFIX } },
+            OR: [
+              { modelCode: { startsWith: SITE_ONLY_MODEL_PREFIX }, stockQuantity: { gt: 0 }, sitePrice: { gt: 0 } },
+              { id: { in: idx.onSaleProductIds } },
+            ],
+          },
+          select: { ...SAFE_SELECT, createdAt: true },
+          orderBy: { createdAt: 'desc' },
+        }),
+        this.prisma.trendyolProductVariant.findFirst({
+          where: {
+            productId: null, catalogCategory: c.name, stockQuantity: { gt: 0 }, trendyolSalePrice: { gt: 0 },
+            status: 'ACTIVE', id: { notIn: idx.shadowedVariantIds },
+          },
+          select: {
+            id: true, productName: true, currentModelCode: true, barcode: true, trendyolSalePrice: true,
+            stockQuantity: true, catalogCategory: true, catalogSubCategory: true, images: true, brand: true,
+            productDescription: true, productColor: true, createdAt: true,
+          },
+          orderBy: { createdAt: 'desc' },
+        }),
+      ]);
+      const useVariant = variant && (!prod || variant.createdAt > prod.createdAt);
+      const product = useVariant
+        ? this.variantToPublicProduct(variant)
+        : prod
+          ? this.toPublicProduct((await this.withTrendyolMatch([prod]))[0])
+          : null;
+      if (product && product.sitePrice > 0 && product.mainImage) out.push({ category: { name: c.name, slug: c.slug }, product });
+    }
+    return out;
+  }
+
   async listProducts(params: {
     categorySlug?: string;
     subCategorySlug?: string;
