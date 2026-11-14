@@ -13,6 +13,8 @@ export interface PublicProduct {
   originalPrice: number | null
   /** originalPrice'ın kaynağı; 'Trendyol' ise üstü çizili fiyat Trendyol fiyatıdır (indirim değil, karşılaştırma) */
   compareAtLabel?: string | null
+  /** Son 90 günde en çok satanlardan (önce Trendyol) */
+  bestseller?: boolean
   brand: string
   description: string | null
   colorVariant: string | null

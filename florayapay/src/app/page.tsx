@@ -4,6 +4,7 @@ import { Footer } from '@/components/layout/Footer'
 import { CategoryGrid } from '@/components/home/CategoryGrid'
 import { FeaturedProducts } from '@/components/home/FeaturedProducts'
 import { LatestByCategory } from '@/components/home/LatestByCategory'
+import { BestSellers } from '@/components/home/BestSellers'
 import { TrustBadges } from '@/components/home/TrustBadges'
 import { WhyUs } from '@/components/home/WhyUs'
 // import { PromoBanners } from '@/components/home/PromoBanners'
@@ -41,6 +42,7 @@ export default function HomePage() {
       <main>
         <TrustBadges />
         <CategoryGrid />
+        <BestSellers />
         <LatestByCategory />
         {/* <PromoBanners /> */}
         {/* <MekanKategorileri /> */}
