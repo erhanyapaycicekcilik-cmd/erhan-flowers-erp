@@ -27,7 +27,7 @@ export const TRENDYOL_COMPARE_LABEL = 'Trendyol';
 
 /**
  * Bir Product kaydının sitede gösterilen (ve siparişte tahsil edilen) fiyatı.
- * Trendyol'a bağlı ve WEB- olmayan ürün: Trendyol −%X (dükkan fiyatının altına inmez).
+ * Trendyol'a bağlı (ya da barkod/model koduyla eşleşen) ve WEB- olmayan ürün: Trendyol −%X.
  * Diğerleri: ERP site fiyatı → pazar fiyatı → dükkan fiyatı.
  */
 export function productSitePrice(p: {
@@ -39,6 +39,8 @@ export function productSitePrice(p: {
 }): number {
   const isSiteOnly = isSiteOnlyModelCode(p.modelCode ?? '');
   const trendyolPrice = isSiteOnly ? 0 : Number(p.trendyolSalePrice ?? 0) || 0;
-  if (trendyolPrice > 0) return sitePriceFromTrendyol(trendyolPrice, Number(p.shopPrice) || 0);
+  // Not: ERP'deki dükkan fiyatı bazı ürünlerde Trendyol fiyatına eşit girilmiş; taban olarak kullanılırsa
+  // indirim hiç uygulanmıyordu. Kural tüm Trendyol ürünlerinde aynı: Trendyol −%X.
+  if (trendyolPrice > 0) return sitePriceFromTrendyol(trendyolPrice);
   return Number(p.sitePrice) || Number(p.marketPrice) || Number(p.shopPrice) || 0;
 }

@@ -70,6 +70,9 @@ export class WebOrdersService {
       const fromGroup = await this.groupPrice(i?.productSlug, id)
       const catalogPrice = p && !('priceOnRequest' in p && p.priceOnRequest) ? Number(p.sitePrice) : 0
       const price = fromGroup ?? catalogPrice
+      if (p && 'inStock' in p && p.inStock === false) {
+        throw new BadRequestException(`"${String(i?.productName ?? p.name).slice(0, 80)}" şu an satışta değil.`)
+      }
       if (!p || !(price > 0)) {
         // Fiyatı olmayan ("fiyat için iletişime geçin") veya satıştan kalkmış ürün siteden sipariş edilemez
         throw new BadRequestException(`"${String(i?.productName ?? 'Ürün').slice(0, 80)}" için fiyat bilgisi yok veya ürün satışta değil. Lütfen bizimle iletişime geçin.`)
