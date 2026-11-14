@@ -14,8 +14,8 @@ COPY --from=deps /app/node_modules ./node_modules
 ARG CACHEBUST=1
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
-ARG NEXT_PUBLIC_API_URL=https://api.florayapaycicek.com
-ARG SITE_URL=https://florayapaycicek.com
+ARG NEXT_PUBLIC_API_URL=https://api.erhanflowers.com
+ARG SITE_URL=https://www.erhanflowers.com
 ARG INTERNAL_API_URL=http://backend:8001
 ARG NEXT_PUBLIC_GTM_ID=GTM-PXJ5D4B7
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
