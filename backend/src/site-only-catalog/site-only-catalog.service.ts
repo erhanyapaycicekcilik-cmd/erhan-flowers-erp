@@ -177,6 +177,7 @@ export class SiteOnlyCatalogService implements OnApplicationBootstrap {
     let created = 0;
     let imagesUpdated = 0;
     let moved = 0;
+    let retired = 0;
     const categoryIds = new Map<string, number>();
 
     for (const item of products) {
@@ -188,6 +189,18 @@ export class SiteOnlyCatalogService implements OnApplicationBootstrap {
         where: { modelCode: item.modelCode },
         select: { id: true, imageUrls: true, catalogCategory: true, catalogSubCategory: true },
       });
+      if (item.retired) {
+        // Kaldırılan ürün: yeni açılmaz; açıksa ve görselleri hâlâ bizim koyduğumuzsa pasife alınır
+        if (existing) {
+          const cur = existing.imageUrls;
+          const ours = Array.isArray(cur) && cur.length > 0 && cur.every(isManagedImage);
+          if (ours) {
+            const r = await this.prisma.product.updateMany({ where: { id: existing.id, status: 'ACTIVE' }, data: { status: 'PASSIVE' } });
+            if (r.count) retired++;
+          }
+        }
+        continue;
+      }
       if (existing) {
         const prev = item.previousCatalog;
         if (
@@ -246,9 +259,9 @@ export class SiteOnlyCatalogService implements OnApplicationBootstrap {
       created++;
     }
 
-    if (created || imagesUpdated || moved) {
-      this.logger.log(`Tekil site ürünleri: ${created} eklendi, ${imagesUpdated} görsel güncellendi, ${moved} kategorisi taşındı`);
+    if (created || imagesUpdated || moved || retired) {
+      this.logger.log(`Tekil site ürünleri: ${created} eklendi, ${imagesUpdated} görsel güncellendi, ${moved} kategorisi taşındı, ${retired} kaldırıldı`);
     }
-    return { created, imagesUpdated, moved };
+    return { created, imagesUpdated, moved, retired };
   }
 }

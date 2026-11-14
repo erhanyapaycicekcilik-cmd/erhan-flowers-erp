@@ -30,6 +30,8 @@ export interface SiteOnlySeries {
 /** Gruba bağlı olmayan tekil site ürünü (ör. "fiyat için iletişime geçin" fiber saksılar) */
 export interface SiteOnlySimpleProduct {
   modelCode: string; // WEB- ile başlamalı
+  /** true: sitede gösterilmez — yoksa eklenmez, varsa PASİF yapılır (görselleri hâlâ bizimkiyse; ERP'den gerçek fotoğraf eklenip açılan ürüne dokunulmaz) */
+  retired?: boolean;
   name: string;
   description: string;
   images: string[];
