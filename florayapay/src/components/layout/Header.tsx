@@ -43,6 +43,7 @@ const navLinks = [
 ]
 
 const extraLinks = [
+  { href: '/toptan-satis', label: 'Toptan Satış' },
   { href: '/dukkan-fotograflari', label: 'Mağazamız' },
   { href: '/projelerimiz', label: 'Projelerimiz' },
   { href: '/referanslarimiz', label: 'Referanslar' },

@@ -16,6 +16,7 @@ import { ProductTracker } from '@/components/product/ProductTracker'
 import { DeliveryEstimate } from '@/components/product/DeliveryEstimate'
 import { WhatsAppOrderButton } from '@/components/product/WhatsAppOrderButton'
 import { ProductBuyBar, BuyNowButton } from '@/components/product/ProductBuyBar'
+import { WholesaleButton } from '@/components/product/WholesaleRequest'
 import { RelatedProducts } from '@/components/product/RelatedProducts'
 import { ProductVideo } from '@/components/product/ProductVideo'
 
@@ -232,6 +233,11 @@ export default async function ProductDetailPage({ params }: PageProps) {
                 />
               </div>
               )}
+
+              {/* Toptan / kurumsal alım */}
+              <div className="mt-3">
+                <WholesaleButton productName={product.name} productSlug={params.slug} />
+              </div>
 
               {/* Teslimat tahmini */}
               <div className="mt-4">
