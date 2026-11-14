@@ -45,8 +45,15 @@ export interface Category {
   count: number
 }
 
+// Sunucu tarafında ERP'ye iç ağdan (docker: http://backend:8001) bağlan — internet/Caddy turu yok
+// (Derleme sırasında backend ayakta olmadığı için o aşamada yine genel adres kullanılır.)
+const SERVER_API_URL =
+  typeof window === 'undefined' && process.env.NEXT_PHASE !== 'phase-production-build' && process.env.INTERNAL_API_URL
+    ? process.env.INTERNAL_API_URL
+    : API_URL
+
 async function apiFetch<T>(path: string): Promise<T> {
-  const res = await fetch(`${API_URL}${path}`, {
+  const res = await fetch(`${SERVER_API_URL}${path}`, {
     next: { revalidate: 60 }, // 60 saniye cache — yeni ürün 1 dakikada sitede
   })
   if (!res.ok) throw new Error(`API error: ${res.status}`)

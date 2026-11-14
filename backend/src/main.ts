@@ -9,6 +9,9 @@ import { productImageRoot } from './product-image-paths';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  // Caddy arkasında: gerçek ziyaretçi IP'si X-Forwarded-For'dan okunsun.
+  // Aksi halde hız sınırı (Throttler) tüm ziyaretçileri tek IP sayıp dakikada 30 isteği herkese paylaştırıyordu.
+  app.set('trust proxy', 1);
   const isProduction = process.env.NODE_ENV === 'production';
 
   // Helmet: HTTP güvenlik başlıkları (XSS, clickjacking, MIME sniffing vb.)
