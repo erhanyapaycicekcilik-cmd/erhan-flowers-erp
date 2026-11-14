@@ -3,6 +3,7 @@ import {
   NotFoundException, Param, Post, Put, Query, UnauthorizedException,
 } from '@nestjs/common';
 import { isValidAdminSecret } from '../common/admin-secret';
+import { SkipThrottle } from '@nestjs/throttler';
 import { ProductGroupsService } from './product-groups.service';
 
 @Controller('public/catalog/groups')
@@ -11,11 +12,13 @@ export class ProductGroupsController {
 
   // ─── Public ───────────────────────────────────────────────────────────────
 
+  @SkipThrottle()
   @Get()
   listGroups(@Query('category') category?: string, @Query('subcategory') subcategory?: string) {
     return this.svc.listGroups(category, subcategory);
   }
 
+  @SkipThrottle()
   @Get(':slug')
   async getGroup(@Param('slug') slug: string) {
     const g = await this.svc.getGroupBySlug(slug);

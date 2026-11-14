@@ -1,3 +1,4 @@
+import { SkipThrottle, Throttle } from '@nestjs/throttler';
 import { BadRequestException, Body, Controller, Get, Header, NotFoundException, Param, Post, Query, Res, UseGuards } from '@nestjs/common';
 import { Response } from 'express';
 
@@ -16,26 +17,31 @@ export class PublicCatalogController {
     private readonly siteSettings: SiteSettingsService,
   ) {}
 
+  @SkipThrottle() // site sunucusu tüm ziyaretçiler adına buradan okur
   @Get('settings')
   getSiteSettings() {
     return this.siteSettings.getAll();
   }
 
+  @SkipThrottle() // site sunucusu tüm ziyaretçiler adına buradan okur
   @Get('categories')
   listCategories() {
     return this.catalog.listCategories();
   }
 
+  @SkipThrottle() // site sunucusu tüm ziyaretçiler adına buradan okur
   @Get('subcategories')
   listSubCategories(@Query('category') category: string) {
     return this.catalog.listSubCategories(category);
   }
 
+  @SkipThrottle() // site sunucusu tüm ziyaretçiler adına buradan okur
   @Get('latest-by-category')
   latestByCategory() {
     return this.catalog.latestByCategory();
   }
 
+  @SkipThrottle() // site sunucusu tüm ziyaretçiler adına buradan okur
   @Get('products')
   listProducts(
     @Query('category') category?: string,
@@ -59,6 +65,7 @@ export class PublicCatalogController {
     });
   }
 
+  @SkipThrottle() // site sunucusu tüm ziyaretçiler adına buradan okur
   @Get('products/slug/:slug')
   async getProductBySlug(@Param('slug') slug: string) {
     const product = await this.catalog.getProductBySlug(slug);
@@ -66,6 +73,7 @@ export class PublicCatalogController {
     return product;
   }
 
+  @SkipThrottle() // site sunucusu tüm ziyaretçiler adına buradan okur
   @Get('products/:id')
   async getProductById(@Param('id') id: string) {
     const product = await this.catalog.getProductById(Number(id));
@@ -74,6 +82,7 @@ export class PublicCatalogController {
   }
 
   // Fotoğrafla fiyat sorgulama — Gemini görsel tanıma ile ürün ara (şifresiz, mobil kullanımı)
+  @Throttle({ default: { ttl: 60000, limit: 10 } }) // Gemini maliyeti
   @Post('price-lookup')
   async priceLookup(@Body() body: { imageBase64?: string; mimeType?: string }) {
     if (!body.imageBase64) throw new BadRequestException('imageBase64 gerekli.');
@@ -172,6 +181,7 @@ export class PublicCatalogController {
   }
 
   // Meta/WhatsApp Commerce Manager ürün kataloğu feed'i (CSV)
+  @SkipThrottle() // site sunucusu tüm ziyaretçiler adına buradan okur
   @Get('meta-feed')
   async metaCatalogFeed(@Res() res: Response) {
     const siteUrl = process.env.SITE_URL || 'https://www.erhanflowers.com';

@@ -525,7 +525,7 @@ export class PublicCatalogService {
       const candidates = [segment, segment.replace(/-/g, '.')];
       for (const modelCode of candidates) {
         const product = await this.prisma.product.findFirst({
-          where: { modelCode, status: 'ACTIVE' },
+          where: { modelCode: { equals: modelCode, mode: 'insensitive' }, status: 'ACTIVE' },
           select: SAFE_SELECT,
         });
         if (product) return this.toPublicProduct((await this.withTrendyolMatch([product]))[0]);
@@ -538,7 +538,11 @@ export class PublicCatalogService {
       for (const modelCode of candidates) {
         const variant = await this.prisma.trendyolProductVariant.findFirst({
           where: {
-            OR: [{ currentModelCode: modelCode }, { barcode: modelCode }],
+            // Trendyol kodlarında küçük harf olabilir (ör. 01917628q916820927); slug'dan gelen kod büyük harfe çevrilmiş olur
+            OR: [
+              { currentModelCode: { equals: modelCode, mode: 'insensitive' } },
+              { barcode: { equals: modelCode, mode: 'insensitive' } },
+            ],
             catalogCategory: { not: null },
           },
           select: {
