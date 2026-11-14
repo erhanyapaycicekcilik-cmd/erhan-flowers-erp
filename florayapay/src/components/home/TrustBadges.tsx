@@ -7,20 +7,16 @@ const badges = [
 
 export function TrustBadges() {
   return (
-    <section className="border-y border-[#E0DDD4] bg-white py-8" aria-label="Güven göstergeleri">
-      <div className="max-w-screen-2xl mx-auto px-4">
-        <ul className="grid grid-cols-2 md:grid-cols-4 gap-6">
-          {badges.map((b) => (
-            <li key={b.title} className="flex items-center gap-3">
-              <span className="text-2xl" aria-hidden="true">{b.icon}</span>
-              <div>
-                <p className="font-semibold text-[#0D1510] text-sm">{b.title}</p>
-                <p className="text-xs text-[#8C8A82]">{b.desc}</p>
-              </div>
-            </li>
-          ))}
-        </ul>
-      </div>
+    <section className="bg-white border-b border-[#E0DDD4]" aria-label="Güven göstergeleri">
+      <ul className="max-w-screen-2xl mx-auto px-3 py-2.5 flex md:justify-center gap-4 md:gap-10 overflow-x-auto [scrollbar-width:none]">
+        {badges.map((b) => (
+          <li key={b.title} className="flex-shrink-0 flex items-center gap-1.5 text-xs text-[#3A3A34]">
+            <span aria-hidden="true">{b.icon}</span>
+            <span className="font-semibold">{b.title}</span>
+            <span className="text-[#8C8A82] hidden sm:inline">· {b.desc}</span>
+          </li>
+        ))}
+      </ul>
     </section>
   )
 }

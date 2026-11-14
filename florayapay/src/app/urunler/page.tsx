@@ -123,7 +123,7 @@ export default async function ProductsPage({ searchParams }: PageProps) {
           </nav>
 
           {/* Ana layout: sidebar + içerik */}
-          <div className="flex gap-6 items-start">
+          <div className="flex flex-col lg:flex-row gap-3 lg:gap-6 items-stretch lg:items-start">
 
             {/* Sol kenar çubuğu */}
             <SidebarFilters
