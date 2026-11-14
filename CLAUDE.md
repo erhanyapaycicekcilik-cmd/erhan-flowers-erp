@@ -92,6 +92,7 @@ Sonra tarayıcıda: **http://localhost:3200**
 - Toplu gönderim → `/products/broadcast-all` (ürünler sayfasında buton var)
 - Eşleştirme: `barcode` yoksa `modelCode` kullanılır
 - Platform bağlantı listesi 5dk TTL cache ile tutulur
+- **Site fiyatı = güncel Trendyol fiyatının %25 altı** (`backend/src/common/site-pricing.ts`, `SITE_TRENDYOL_DISCOUNT_PERCENT`). Okuma anında hesaplanır (Trendyol fiyatı her gece 04:00 senkronlanır); Product kaydında dükkan fiyatının altına inmez; WEB- ürünler ERP site fiyatıyla satılır. Sitede sadece Trendyol'da ACTIVE olan ürünler listelenir. Üstü çizili fiyat "Trendyol'da" etiketiyle gösterilir
 - **15 dakikada bir cron**: `OrderSyncService.syncAllPlatforms()` — tüm platformlarda teslim edilmiş siparişleri otomatik DELIVERED yapar (`markMissingAsDelivered`)
 
 ## Katalog Stratejisi (`/katalog-stratejisi`, sadece OWNER)

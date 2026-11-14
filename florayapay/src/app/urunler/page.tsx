@@ -346,7 +346,10 @@ export default async function ProductsPage({ searchParams }: PageProps) {
                                   <div>
                                     <p className="font-bold text-[#0D1510] text-base">{formatPrice(product.sitePrice)}</p>
                                     {product.originalPrice && product.originalPrice > product.sitePrice && (
-                                      <p className="text-xs text-[#B0ADA6] line-through">{formatPrice(product.originalPrice)}</p>
+                                      <p className="text-xs text-[#B0ADA6]">
+                                        {product.compareAtLabel && <span className="mr-1">{product.compareAtLabel}&apos;da</span>}
+                                        <span className="line-through">{formatPrice(product.originalPrice)}</span>
+                                      </p>
                                     )}
                                   </div>
                                   <AddToCartButton

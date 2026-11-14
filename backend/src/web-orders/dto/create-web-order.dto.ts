@@ -24,4 +24,6 @@ export class CreateWebOrderDto {
   vergiDairesi?: string
   items!: CreateWebOrderItemDto[]
   customerId?: number
+  /** Sadece site sunucusu (x-site-key ile) gönderebilir; doğrulanmış promosyon kodu */
+  promo?: { code: string; type: 'percent' | 'fixed'; value: number }
 }

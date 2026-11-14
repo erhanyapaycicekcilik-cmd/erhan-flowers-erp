@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { productSitePrice, sitePriceFromTrendyol } from '../common/site-pricing';
 
 function slugify(v: string) {
   return v
@@ -52,15 +53,15 @@ export class ProductGroupsService {
             if (!price && v.productId) {
               const p = await this.prisma.product.findFirst({
                 where: { id: v.productId },
-                select: { sitePrice: true, marketPrice: true },
+                select: { modelCode: true, sitePrice: true, marketPrice: true, shopPrice: true, productCenterVariant: { select: { trendyolSalePrice: true } } },
               });
-              price = Number(p?.sitePrice) || Number(p?.marketPrice) || 0;
+              price = p ? productSitePrice({ ...p, trendyolSalePrice: p.productCenterVariant?.trendyolSalePrice }) : 0;
             } else if (!price && v.trendyolVariantId) {
               const tv = await this.prisma.trendyolProductVariant.findFirst({
                 where: { id: v.trendyolVariantId },
                 select: { trendyolSalePrice: true },
               });
-              price = Number(tv?.trendyolSalePrice) || 0;
+              price = sitePriceFromTrendyol(Number(tv?.trendyolSalePrice) || 0);
             }
             return { ...v, price };
           }),
@@ -91,10 +92,10 @@ export class ProductGroupsService {
         if (v.productId) {
           const p = await this.prisma.product.findFirst({
             where: { id: v.productId },
-            select: { sitePrice: true, imageUrls: true, productName: true, marketPrice: true },
+            select: { modelCode: true, sitePrice: true, shopPrice: true, imageUrls: true, productName: true, marketPrice: true, productCenterVariant: { select: { trendyolSalePrice: true } } },
           });
           if (p) {
-            if (!price) price = Number(p.sitePrice) || Number(p.marketPrice) || 0;
+            if (!price) price = productSitePrice({ ...p, trendyolSalePrice: p.productCenterVariant?.trendyolSalePrice });
             images = this.parseImages(p.imageUrls);
             productName = p.productName;
           }
@@ -104,7 +105,7 @@ export class ProductGroupsService {
             select: { trendyolSalePrice: true, images: true, productName: true },
           });
           if (tv) {
-            if (!price) price = Number(tv.trendyolSalePrice) || 0;
+            if (!price) price = sitePriceFromTrendyol(Number(tv.trendyolSalePrice) || 0);
             images = this.parseImages(tv.images);
             productName = tv.productName;
           }
@@ -278,7 +279,7 @@ export class ProductGroupsService {
         id: v.id,
         name: v.productName,
         modelCode: v.currentModelCode,
-        price: Number(v.trendyolSalePrice),
+        price: sitePriceFromTrendyol(Number(v.trendyolSalePrice)),
         image: this.parseImages(v.images)[0] ?? null,
       })),
     };

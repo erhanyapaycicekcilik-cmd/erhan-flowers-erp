@@ -276,16 +276,16 @@ export default function SiparisPage() {
         }),
       })
 
-      // Promo kodu kullanıldıysa kullanım sayısını artır
-      if (promoApplied) {
-        fetch('/api/promo/validate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ code: promoApplied.code }),
-        }).catch(() => {})
-      }
-
       const data = res.ok ? await res.json() : {}
+      if (!res.ok && res.status < 500) {
+        // Geçersiz sepet (satıştan kalkmış / fiyatsız ürün vb.) — sunucu mesajını göster
+        const err = await res.json().catch(() => ({}))
+        alert(err?.message || 'Siparişiniz kaydedilemedi. Sepetinizdeki fiyatlar güncellenmiş olabilir; sayfayı yenileyip tekrar deneyin.')
+        setLoading(false)
+        return
+      }
+      // Kesin tutar ERP'de hesaplanır (güncel fiyat + doğrulanmış promosyon)
+      const odenecek = Number(data.grandTotal) > 0 ? Number(data.grandTotal) : genelToplam
 
       if (odemeYontemi === 'kart' && !data.orderNumber) {
         // Sipariş ERP'ye kaydedilmeden karttan para çekme — adres/ürün bilgisi kaybolur
@@ -299,7 +299,7 @@ export default function SiparisPage() {
         // Tami 3D Secure ödeme — kart bilgilerini /odeme-kart sayfasında topla
         const orderPayload = {
           orderId: orderNumber,
-          amount: Math.round(genelToplam),
+          amount: Math.round(odenecek),
           musteri: { ad: form.ad, soyad: form.soyad, email: form.email || `${form.telefon}@erhanflowers.com`, telefon: form.telefon },
           adres: { adres: form.adres, sehir: form.sehir, ulke: 'Turkey' },
           urunler: items.map(i => ({ id: String(i.id), ad: i.name, kategori: 'YAPAY_CICEK', fiyat: i.price, adet: i.quantity })),
@@ -315,7 +315,7 @@ export default function SiparisPage() {
       clearCart()
 
       if (odemeYontemi === 'eft') {
-        router.push(`/dekont-yukle?kod=${orderNumber}&tutar=${Math.round(genelToplam)}`)
+        router.push(`/dekont-yukle?kod=${orderNumber}&tutar=${Math.round(odenecek)}`)
       } else {
         router.push('/siparis-tamamlandi')
       }

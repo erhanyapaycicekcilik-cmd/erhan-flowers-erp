@@ -11,6 +11,8 @@ export interface PublicProduct {
   /** Fiyatı olmayan site ürünü: sepete eklenmez, "Fiyat için iletişime geçin" gösterilir */
   priceOnRequest?: boolean
   originalPrice: number | null
+  /** originalPrice'ın kaynağı; 'Trendyol' ise üstü çizili fiyat Trendyol fiyatıdır (indirim değil, karşılaştırma) */
+  compareAtLabel?: string | null
   brand: string
   description: string | null
   colorVariant: string | null

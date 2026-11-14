@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { setProductVideo } from '@/app/admin/actions'
 
 interface Props {
   productId: number
@@ -30,13 +31,7 @@ export function VideoEditor({ productId, currentVideoUrl }: Props) {
   async function save() {
     setSaving(true)
     try {
-      const secret = process.env.NEXT_PUBLIC_REVALIDATE_SECRET || 'dev-secret-local'
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8101'
-      await fetch(`${apiUrl}/public/catalog/admin/set-video?secret=${secret}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ productId, videoUrl: value.trim() || null }),
-      })
+      await setProductVideo(productId, value.trim() || null)
       router.refresh()
       setEditing(false)
     } finally {

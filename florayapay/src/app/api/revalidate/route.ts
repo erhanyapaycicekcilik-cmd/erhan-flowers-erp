@@ -1,5 +1,6 @@
 import { revalidatePath } from 'next/cache'
 import { NextRequest, NextResponse } from 'next/server'
+import { isValidAdminSecret } from '@/lib/admin-secret'
 
 // ERP backend bu endpoint'i çağırınca ürünler listesi anında güncellenir.
 // Güvenlik: REVALIDATE_SECRET token ile korunur.
@@ -7,7 +8,7 @@ import { NextRequest, NextResponse } from 'next/server'
 export async function POST(req: NextRequest) {
   const secret = req.nextUrl.searchParams.get('secret')
 
-  if (secret !== process.env.REVALIDATE_SECRET) {
+  if (!isValidAdminSecret(secret)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

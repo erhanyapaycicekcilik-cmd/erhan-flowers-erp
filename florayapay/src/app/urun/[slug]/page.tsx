@@ -160,13 +160,14 @@ export default async function ProductDetailPage({ params }: PageProps) {
                     {formatPrice(product.sitePrice)}
                   </span>
                   {product.originalPrice && (
-                    <span className="text-lg text-[#C4C0B8] line-through">
-                      {formatPrice(product.originalPrice)}
+                    <span className="text-lg text-[#C4C0B8]">
+                      {product.compareAtLabel && <span className="text-sm mr-1">{product.compareAtLabel}&apos;da</span>}
+                      <span className="line-through">{formatPrice(product.originalPrice)}</span>
                     </span>
                   )}
                   {discount && discount > 0 && (
                     <span className="bg-[#E8F0EA] text-[#5C7A62] text-sm font-bold px-2.5 py-0.5 rounded-full">
-                      %{discount} indirim
+                      {product.compareAtLabel ? `${product.compareAtLabel}'dan %${discount} ucuz` : `%${discount} indirim`}
                     </span>
                   )}
                 </div>
