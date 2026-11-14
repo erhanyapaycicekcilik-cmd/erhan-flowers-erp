@@ -1,7 +1,7 @@
 'use client'
 
 import Image from 'next/image'
-import { useState } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { ChevronLeft, ChevronRight, X, ZoomIn } from 'lucide-react'
 
 interface Props {
@@ -12,6 +12,38 @@ interface Props {
 export function ProductImageGallery({ images, productName }: Props) {
   const [active, setActive] = useState(0)
   const [lightbox, setLightbox] = useState(false)
+  const [sliding, setSliding] = useState<'left' | 'right' | null>(null)
+  const autoplayRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const goTo = useCallback((index: number, direction: 'left' | 'right') => {
+    if (sliding) return
+    setSliding(direction)
+    setTimeout(() => {
+      setActive(index)
+      setSliding(null)
+    }, 350)
+  }, [sliding])
+
+  const prev = useCallback((e?: React.MouseEvent) => {
+    e?.stopPropagation()
+    goTo((active - 1 + images.length) % images.length, 'right')
+  }, [active, images.length, goTo])
+
+  const next = useCallback((e?: React.MouseEvent) => {
+    e?.stopPropagation()
+    goTo((active + 1) % images.length, 'left')
+  }, [active, images.length, goTo])
+
+  // Otomatik geçiş — 3 saniyede bir
+  useEffect(() => {
+    if (images.length <= 1) return
+    autoplayRef.current = setTimeout(() => {
+      goTo((active + 1) % images.length, 'left')
+    }, 3000)
+    return () => {
+      if (autoplayRef.current) clearTimeout(autoplayRef.current)
+    }
+  }, [active, images.length, goTo])
 
   if (images.length === 0) {
     return (
@@ -21,35 +53,47 @@ export function ProductImageGallery({ images, productName }: Props) {
     )
   }
 
-  const prev = (e?: React.MouseEvent) => {
-    e?.stopPropagation()
-    setActive((i) => (i - 1 + images.length) % images.length)
-  }
-  const next = (e?: React.MouseEvent) => {
-    e?.stopPropagation()
-    setActive((i) => (i + 1) % images.length)
-  }
+  const slideClass = sliding === 'left'
+    ? 'animate-slide-out-left'
+    : sliding === 'right'
+    ? 'animate-slide-out-right'
+    : ''
 
   return (
     <>
+      <style>{`
+        @keyframes slideOutLeft {
+          from { transform: translateX(0); opacity: 1; }
+          to   { transform: translateX(-8%); opacity: 0; }
+        }
+        @keyframes slideOutRight {
+          from { transform: translateX(0); opacity: 1; }
+          to   { transform: translateX(8%); opacity: 0; }
+        }
+        .animate-slide-out-left  { animation: slideOutLeft  0.35s ease forwards; }
+        .animate-slide-out-right { animation: slideOutRight 0.35s ease forwards; }
+      `}</style>
+
       <div className="space-y-3">
         {/* Ana görsel */}
         <div
           className="relative aspect-square bg-gray-50 rounded-3xl overflow-hidden cursor-zoom-in"
           onClick={() => setLightbox(true)}
         >
-          <Image
-            src={images[active]}
-            alt={`${productName} — görsel ${active + 1}`}
-            fill
-            sizes="(max-width: 768px) 100vw, (max-width: 1024px) 60vw, 50vw"
-            className="object-cover"
-            priority
-            quality={60}
-          />
+          <div className={`absolute inset-0 ${slideClass}`}>
+            <Image
+              src={images[active]}
+              alt={`${productName} — görsel ${active + 1}`}
+              fill
+              sizes="(max-width: 768px) 100vw, (max-width: 1024px) 60vw, 50vw"
+              className="object-cover"
+              priority
+              quality={60}
+            />
+          </div>
 
           {/* Zoom ikonu */}
-          <div className="absolute top-3 right-3 w-9 h-9 bg-white/80 rounded-full flex items-center justify-center shadow-sm pointer-events-none">
+          <div className="absolute top-3 right-3 w-9 h-9 bg-white/80 rounded-full flex items-center justify-center shadow-sm pointer-events-none z-10">
             <ZoomIn size={16} className="text-gray-600" />
           </div>
 
@@ -58,24 +102,24 @@ export function ProductImageGallery({ images, productName }: Props) {
               <button
                 onClick={prev}
                 aria-label="Önceki görsel"
-                className="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 bg-white/90 rounded-full flex items-center justify-center shadow-md hover:bg-white active:scale-95 transition-all"
+                className="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 bg-white/90 rounded-full flex items-center justify-center shadow-md hover:bg-white active:scale-95 transition-all z-10"
               >
                 <ChevronLeft size={20} />
               </button>
               <button
                 onClick={next}
                 aria-label="Sonraki görsel"
-                className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 bg-white/90 rounded-full flex items-center justify-center shadow-md hover:bg-white active:scale-95 transition-all"
+                className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 bg-white/90 rounded-full flex items-center justify-center shadow-md hover:bg-white active:scale-95 transition-all z-10"
               >
                 <ChevronRight size={20} />
               </button>
 
               {/* Dot indikatörler */}
-              <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
+              <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5 z-10">
                 {images.map((_, i) => (
                   <button
                     key={i}
-                    onClick={(e) => { e.stopPropagation(); setActive(i) }}
+                    onClick={(e) => { e.stopPropagation(); goTo(i, i > active ? 'left' : 'right') }}
                     aria-label={`Görsel ${i + 1}`}
                     className={`h-2 rounded-full transition-all ${
                       i === active ? 'bg-white w-4' : 'bg-white/50 w-2'
@@ -93,7 +137,7 @@ export function ProductImageGallery({ images, productName }: Props) {
             {images.map((img, i) => (
               <button
                 key={i}
-                onClick={() => setActive(i)}
+                onClick={() => goTo(i, i > active ? 'left' : 'right')}
                 aria-label={`Görsel ${i + 1}`}
                 className={`flex-shrink-0 w-16 h-16 rounded-xl overflow-hidden border-2 transition-all ${
                   i === active
