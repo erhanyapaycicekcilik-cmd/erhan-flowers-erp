@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { sitePriceFromTrendyol } from '../common/site-pricing';
 
 function slugify(v: string) {
   return v
@@ -60,7 +61,7 @@ export class ProductGroupsService {
                 where: { id: v.trendyolVariantId },
                 select: { trendyolSalePrice: true },
               });
-              price = Number(tv?.trendyolSalePrice) || 0;
+              price = sitePriceFromTrendyol(Number(tv?.trendyolSalePrice) || 0);
             }
             return { ...v, price };
           }),
@@ -104,7 +105,7 @@ export class ProductGroupsService {
             select: { trendyolSalePrice: true, images: true, productName: true },
           });
           if (tv) {
-            if (!price) price = Number(tv.trendyolSalePrice) || 0;
+            if (!price) price = sitePriceFromTrendyol(Number(tv.trendyolSalePrice) || 0);
             images = this.parseImages(tv.images);
             productName = tv.productName;
           }
@@ -278,7 +279,7 @@ export class ProductGroupsService {
         id: v.id,
         name: v.productName,
         modelCode: v.currentModelCode,
-        price: Number(v.trendyolSalePrice),
+        price: sitePriceFromTrendyol(Number(v.trendyolSalePrice)),
         image: this.parseImages(v.images)[0] ?? null,
       })),
     };

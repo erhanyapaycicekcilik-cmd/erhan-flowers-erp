@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { resolveGeminiModel } from '../common/gemini-model';
 import { SITE_ONLY_MODEL_PREFIX, isSiteOnlyModelCode } from '../common/site-only';
+import { sitePriceFromTrendyol, TRENDYOL_COMPARE_LABEL } from '../common/site-pricing';
 
 // Sadece ürün grubu sayfasında (boyut/renk seçimiyle) satılan site ürünleri
 const GROUP_ONLY_MODEL_PREFIX = 'WEB-BST-';
@@ -34,6 +35,10 @@ const SAFE_SELECT = {
   catalogSubCategory: true,
   category: {
     select: { id: true, name: true },
+  },
+  // Site fiyatı = Trendyol fiyatının %25 altı (common/site-pricing.ts)
+  productCenterVariant: {
+    select: { trendyolSalePrice: true },
   },
 };
 
@@ -250,6 +255,9 @@ export class PublicCatalogService {
         // Sadece sitede satılan, fiyatı girilmemiş ürünler "Fiyat için iletişime geçin" ile listelenir
         { modelCode: { startsWith: SITE_ONLY_MODEL_PREFIX } },
       ],
+      // Trendyol'a bağlı ürün sadece Trendyol'da satıştaysa (ACTIVE) sitede listelenir;
+      // Trendyol'da kapatılan/arşivlenen ürün siteden de düşer. Trendyol bağı olmayanlar (WEB- vb.) etkilenmez.
+      AND: [{ OR: [{ productCenterVariant: { is: null } }, { productCenterVariant: { is: { status: 'ACTIVE' } } }] }],
     };
     if (matchedCategory) productWhere['catalogCategory'] = matchedCategory;
     if (matchedSubCategory) productWhere['catalogSubCategory'] = matchedSubCategory;
@@ -264,6 +272,7 @@ export class PublicCatalogService {
       delete productWhere['status'];
       delete productWhere['stockQuantity'];
       delete productWhere['OR'];
+      delete productWhere['AND'];
     }
     if (params.modelCode?.trim()) {
       // FL- ön eki Flora siparişlerinde gelir; products tablosunda ön eksiz kayıtlı
@@ -272,6 +281,7 @@ export class PublicCatalogService {
       delete productWhere['status'];
       delete productWhere['stockQuantity'];
       delete productWhere['OR'];
+      delete productWhere['AND'];
     }
     if (params.search?.trim()) {
       const term = params.search.trim();
@@ -296,6 +306,7 @@ export class PublicCatalogService {
       catalogCategory: { not: null },
       stockQuantity: { gt: 0 },
       trendyolSalePrice: { gt: 0 },
+      status: 'ACTIVE', // sadece Trendyol'da satışta olanlar
     };
     if (matchedCategory) variantWhere['catalogCategory'] = matchedCategory;
     if (matchedSubCategory) variantWhere['catalogSubCategory'] = matchedSubCategory;
@@ -304,6 +315,7 @@ export class PublicCatalogService {
       delete variantWhere['stockQuantity'];
       delete variantWhere['trendyolSalePrice'];
       delete variantWhere['productId'];
+      delete variantWhere['status'];
     }
     if (params.modelCode?.trim()) {
       const mc = params.modelCode.trim().replace(/^FL-/i, '');
@@ -311,6 +323,7 @@ export class PublicCatalogService {
       delete variantWhere['stockQuantity'];
       delete variantWhere['trendyolSalePrice'];
       delete variantWhere['productId'];
+      delete variantWhere['status'];
     }
     if (params.search?.trim()) {
       const term = params.search.trim();
@@ -572,7 +585,8 @@ export class PublicCatalogService {
   }) {
     const modelCode = v.currentModelCode || v.barcode;
     const catName = v.catalogCategory;
-    const price = Number(v.trendyolSalePrice) || 0;
+    const trendyolPrice = Number(v.trendyolSalePrice) || 0;
+    const price = sitePriceFromTrendyol(trendyolPrice);
     const images = this.parseImageUrls(v.images);
 
     return {
@@ -583,7 +597,8 @@ export class PublicCatalogService {
       category: catName,
       categorySlug: catName ? slugify(catName) : null,
       sitePrice: price,
-      originalPrice: null as number | null,
+      originalPrice: price > 0 && trendyolPrice > price ? trendyolPrice : (null as number | null),
+      compareAtLabel: price > 0 && trendyolPrice > price ? TRENDYOL_COMPARE_LABEL : (null as string | null),
       brand: v.brand ?? '',
       description: v.productDescription,
       colorVariant: v.productColor,
@@ -790,10 +805,19 @@ export class PublicCatalogService {
     catalogCategory?: string | null;
     catalogSubCategory?: string | null;
     category: { id: number; name: string } | null;
+    productCenterVariant?: { trendyolSalePrice: unknown } | null;
   }) {
     const images = this.parseImageUrls(product.imageUrls);
     const catName = product.catalogCategory ?? product.category?.name ?? null;
-    const price = product.sitePrice || product.marketPrice || product.shopPrice;
+    // Trendyol'da satılan ürün: site fiyatı Trendyol fiyatının %25 altı (dükkan fiyatının altına inmez).
+    // WEB- ürünler Trendyol'da yok, ERP'de girilen site fiyatıyla satılır.
+    const trendyolPrice = isSiteOnlyModelCode(product.modelCode)
+      ? 0
+      : Number(product.productCenterVariant?.trendyolSalePrice ?? 0) || 0;
+    const price = trendyolPrice > 0
+      ? sitePriceFromTrendyol(trendyolPrice, Number(product.shopPrice) || 0)
+      : product.sitePrice || product.marketPrice || product.shopPrice;
+    const compareAt = trendyolPrice > 0 ? trendyolPrice : product.listPrice;
 
     return {
       id: product.id,
@@ -803,7 +827,8 @@ export class PublicCatalogService {
       category: catName,
       categorySlug: catName ? slugify(catName) : null,
       sitePrice: price,
-      originalPrice: price > 0 && product.listPrice > price ? product.listPrice : null,
+      originalPrice: price > 0 && compareAt > price ? compareAt : null,
+      compareAtLabel: price > 0 && trendyolPrice > price ? TRENDYOL_COMPARE_LABEL : null,
       // Fiyatı olmayan site ürünü: sepete eklenmez, "Fiyat için iletişime geçin" gösterilir
       priceOnRequest: !(price > 0) && isSiteOnlyModelCode(product.modelCode),
       brand: product.brand,
