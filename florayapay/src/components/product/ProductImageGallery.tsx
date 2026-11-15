@@ -47,7 +47,7 @@ export function ProductImageGallery({ images, productName }: Props) {
 
   if (images.length === 0) {
     return (
-      <div className="aspect-square bg-gray-100 rounded-3xl flex items-center justify-center text-8xl text-gray-200">
+      <div className="aspect-[4/5] bg-gray-100 rounded-3xl flex items-center justify-center text-8xl text-gray-200">
         🌿
       </div>
     )
@@ -77,7 +77,7 @@ export function ProductImageGallery({ images, productName }: Props) {
       <div className="space-y-3">
         {/* Ana görsel */}
         <div
-          className="relative aspect-square bg-gray-50 rounded-3xl overflow-hidden cursor-zoom-in"
+          className="relative aspect-[4/5] bg-gray-50 rounded-3xl overflow-hidden cursor-zoom-in"
           onClick={() => setLightbox(true)}
         >
           <div className={`absolute inset-0 ${slideClass}`}>
