@@ -526,17 +526,18 @@ export class OrderSyncService {
         const qty = Number(line.quantity ?? 1);
         const unitPrice = Number(line.price ?? line.unitPrice ?? 0);
 
-        let stockCard: { id: number; stockQuantity: unknown; unit: string } | null = null;
-        if (barcode) stockCard = await this.prisma.stockCard.findFirst({ where: { barcode, status: 'ACTIVE' }, select: { id: true, stockQuantity: true, unit: true } });
-        if (!stockCard && sku) stockCard = await this.prisma.stockCard.findFirst({ where: { sku, status: 'ACTIVE' }, select: { id: true, stockQuantity: true, unit: true } });
+        let stockCard: { id: number; stockQuantity: unknown; unit: string; imagePath: string | null } | null = null;
+        if (barcode) stockCard = await this.prisma.stockCard.findFirst({ where: { barcode, status: 'ACTIVE' }, select: { id: true, stockQuantity: true, unit: true, imagePath: true } });
+        if (!stockCard && sku) stockCard = await this.prisma.stockCard.findFirst({ where: { sku, status: 'ACTIVE' }, select: { id: true, stockQuantity: true, unit: true, imagePath: true } });
         if (!stockCard && sku) {
           const mapping = await this.prisma.$queryRaw<Array<{ stock_card_id: number }>>`SELECT stock_card_id FROM marketplace_sku_mappings WHERE platform = 'N11' AND external_sku = ${sku} LIMIT 1`;
-          if (mapping.length > 0) stockCard = await this.prisma.stockCard.findFirst({ where: { id: mapping[0].stock_card_id, status: 'ACTIVE' }, select: { id: true, stockQuantity: true, unit: true } });
+          if (mapping.length > 0) stockCard = await this.prisma.stockCard.findFirst({ where: { id: mapping[0].stock_card_id, status: 'ACTIVE' }, select: { id: true, stockQuantity: true, unit: true, imagePath: true } });
         }
 
         const n11ImageUrl = (line as Record<string, unknown>).productImage ? String((line as Record<string, unknown>).productImage) :
           ((line as Record<string, unknown>).imageUrl ? String((line as Record<string, unknown>).imageUrl) :
-          ((line as Record<string, unknown>).thumbnailUrl ? String((line as Record<string, unknown>).thumbnailUrl) : null));
+          ((line as Record<string, unknown>).thumbnailUrl ? String((line as Record<string, unknown>).thumbnailUrl) :
+          (stockCard?.imagePath ?? null)));
 
         await this.prisma.marketplaceOrderItem.create({
           data: { orderId: savedOrder.id, productName: String(line.productName ?? 'Bilinmeyen Urun'), sku, barcode, quantity: qty, unitPrice, totalPrice: qty * unitPrice, stockCardId: stockCard?.id ?? null, productImageUrl: n11ImageUrl },
@@ -686,17 +687,18 @@ export class OrderSyncService {
         const qty = Number(line.quantity ?? 1);
         const unitPrice = Number(line.price ?? line.salePrice ?? 0);
 
-        let stockCard: { id: number; stockQuantity: unknown; unit: string } | null = null;
-        if (barcode) stockCard = await this.prisma.stockCard.findFirst({ where: { barcode, status: 'ACTIVE' }, select: { id: true, stockQuantity: true, unit: true } });
-        if (!stockCard && sku) stockCard = await this.prisma.stockCard.findFirst({ where: { sku, status: 'ACTIVE' }, select: { id: true, stockQuantity: true, unit: true } });
+        let stockCard: { id: number; stockQuantity: unknown; unit: string; imagePath: string | null } | null = null;
+        if (barcode) stockCard = await this.prisma.stockCard.findFirst({ where: { barcode, status: 'ACTIVE' }, select: { id: true, stockQuantity: true, unit: true, imagePath: true } });
+        if (!stockCard && sku) stockCard = await this.prisma.stockCard.findFirst({ where: { sku, status: 'ACTIVE' }, select: { id: true, stockQuantity: true, unit: true, imagePath: true } });
         if (!stockCard && sku) {
           const mapping = await this.prisma.$queryRaw<Array<{ stock_card_id: number }>>`SELECT stock_card_id FROM marketplace_sku_mappings WHERE platform = 'HEPSIBURADA' AND external_sku = ${sku} LIMIT 1`;
-          if (mapping.length > 0) stockCard = await this.prisma.stockCard.findFirst({ where: { id: mapping[0].stock_card_id, status: 'ACTIVE' }, select: { id: true, stockQuantity: true, unit: true } });
+          if (mapping.length > 0) stockCard = await this.prisma.stockCard.findFirst({ where: { id: mapping[0].stock_card_id, status: 'ACTIVE' }, select: { id: true, stockQuantity: true, unit: true, imagePath: true } });
         }
 
         const hbImageUrl = (line as Record<string, unknown>).imageUrl ? String((line as Record<string, unknown>).imageUrl) :
           ((line as Record<string, unknown>).productImageUrl ? String((line as Record<string, unknown>).productImageUrl) :
-          ((line as Record<string, unknown>).productImage ? String((line as Record<string, unknown>).productImage) : null));
+          ((line as Record<string, unknown>).productImage ? String((line as Record<string, unknown>).productImage) :
+          (stockCard?.imagePath ?? null)));
 
         await this.prisma.marketplaceOrderItem.create({
           data: { orderId: savedOrder.id, productName: String(line.productName ?? line.name ?? 'Bilinmeyen Urun'), sku, barcode, quantity: qty, unitPrice, totalPrice: qty * unitPrice, stockCardId: stockCard?.id ?? null, productImageUrl: hbImageUrl },
