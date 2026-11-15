@@ -5,7 +5,8 @@ import { BOSTANN_SERIES } from './bostann-pots.data';
 import { FIBER_POTS } from './fiber-pots.data';
 import { CACTUS_REEDS } from './cactus-reeds.data';
 import { METAL_POTS } from './metal-pots.data';
-import type { SiteOnlySeries, SiteOnlySimpleProduct } from './site-only-catalog.types';
+import { DECOR_POT_GROUPS } from './decor-pots.data';
+import type { SiteOnlyGroup, SiteOnlySeries, SiteOnlySimpleProduct } from './site-only-catalog.types';
 
 const CATEGORY_NAME = 'Saksı';
 const CATALOG_CATEGORY = 'Saksılar';
@@ -16,6 +17,7 @@ const MANAGED_IMAGE_BASES = [
   'https://www.erhanflowers.com/fiber-saksi/',
   'https://www.erhanflowers.com/kaktus-sazlik/',
   'https://www.erhanflowers.com/metal-saksi/',
+  'https://www.erhanflowers.com/dekoratif-saksi/',
 ];
 
 function isManagedImage(url: unknown): boolean {
@@ -50,6 +52,7 @@ export class SiteOnlyCatalogService implements OnApplicationBootstrap {
       await this.seedSimple(FIBER_POTS);
       await this.seedSimple(CACTUS_REEDS);
       await this.seedSimple(METAL_POTS);
+      await this.seedGroups(DECOR_POT_GROUPS);
     })().catch((err: unknown) => {
       this.logger.error(`Site ürünleri eklenemedi: ${err instanceof Error ? err.message : String(err)}`);
     });
@@ -263,5 +266,126 @@ export class SiteOnlyCatalogService implements OnApplicationBootstrap {
       this.logger.log(`Tekil site ürünleri: ${created} eklendi, ${imagesUpdated} görsel güncellendi, ${moved} kategorisi taşındı, ${retired} kaldırıldı`);
     }
     return { created, imagesUpdated, moved, retired };
+  }
+
+  /**
+   * Genel ürün grupları (boy × renk). Her varyant ayrı ürün; sitede grup sayfasında Boy + Renk seçilir,
+   * seçilen rengin görselleri gösterilir. Var olan kayıtların fiyat/stok/adına dokunmaz; sadece
+   * bizim koyduğumuz görselleri günceller.
+   */
+  async seedGroups(groupsList: SiteOnlyGroup[]) {
+    let productsCreated = 0;
+    let groupsCreated = 0;
+    let variantsCreated = 0;
+    let imagesUpdated = 0;
+    const categoryIds = new Map<string, number>();
+
+    for (const def of groupsList) {
+      let categoryId = categoryIds.get(def.categoryName);
+      if (!categoryId) {
+        const category =
+          (await this.prisma.category.findUnique({ where: { name: def.categoryName } })) ??
+          (await this.prisma.category.create({
+            data: { name: def.categoryName, codePrefix: def.categoryCodePrefix ?? 'SKS', startCode: 1, currentCode: 1 },
+          }));
+        categoryId = category.id;
+        categoryIds.set(def.categoryName, categoryId);
+      }
+
+      let group = await this.prisma.productGroup.findUnique({ where: { slug: def.slug } });
+      if (group && group.mainImage !== def.mainImage && (!group.mainImage || isManagedImage(group.mainImage))) {
+        group = await this.prisma.productGroup.update({ where: { id: group.id }, data: { mainImage: def.mainImage } });
+        imagesUpdated++;
+      }
+      if (!group) {
+        group = await this.prisma.productGroup.create({
+          data: {
+            name: def.name,
+            slug: def.slug,
+            description: def.description,
+            mainImage: def.mainImage,
+            category: def.catalogCategory,
+            subCategory: def.groupSubCategory,
+            isActive: true,
+            sortOrder: def.sortOrder,
+          },
+        });
+        groupsCreated++;
+      }
+
+      for (const [index, v] of def.variants.entries()) {
+        if (!v.modelCode.startsWith(SITE_ONLY_MODEL_PREFIX)) {
+          this.logger.warn(`Atlandı, WEB- ön eki yok: ${v.modelCode}`);
+          continue;
+        }
+        let product = await this.prisma.product.findUnique({ where: { modelCode: v.modelCode }, select: { id: true, imageUrls: true } });
+        if (product) {
+          const current = product.imageUrls;
+          const managed = Array.isArray(current) && current.length > 0 && current.every(isManagedImage);
+          if (managed && !sameList(current, v.images)) {
+            await this.prisma.product.update({ where: { id: product.id }, data: { imageUrls: v.images } });
+            imagesUpdated++;
+          }
+        } else {
+          product = await this.prisma.product.create({
+            data: {
+              productName: v.productName,
+              modelCode: v.modelCode,
+              categoryId,
+              stockQuantity: DEFAULT_STOCK,
+              sitePrice: v.sitePrice,
+              // Pazaryeri fiyatları bilerek 0: bu ürünler sadece sitede satılır
+              marketPrice: 0,
+              listPrice: 0,
+              shopPrice: 0,
+              costPrice: 0,
+              imageUrls: v.images,
+              brand: def.brand ?? 'Erhan Flowers',
+              vatRate: 20,
+              colorVariant: v.colorLabel,
+              productHeight: v.productHeight ?? null,
+              potSize: v.potSize ?? null,
+              catalogCategory: def.catalogCategory,
+              status: 'ACTIVE',
+              description: v.description,
+            },
+            select: { id: true, imageUrls: true },
+          });
+          productsCreated++;
+        }
+
+        const potImage = v.images[0] ?? null;
+        const existingVariant = await this.prisma.productGroupVariant.findFirst({
+          where: { groupId: group.id, productId: product.id },
+          select: { id: true, potImage: true },
+        });
+        if (existingVariant) {
+          if (potImage && existingVariant.potImage !== potImage && (!existingVariant.potImage || isManagedImage(existingVariant.potImage))) {
+            await this.prisma.productGroupVariant.update({ where: { id: existingVariant.id }, data: { potImage } });
+            imagesUpdated++;
+          }
+        } else {
+          await this.prisma.productGroupVariant.create({
+            data: {
+              groupId: group.id,
+              productId: product.id,
+              sizeLabel: v.sizeLabel,
+              potLabel: v.colorLabel,
+              potImage,
+              isActive: true,
+              sortOrder: index,
+            },
+          });
+          variantsCreated++;
+        }
+      }
+    }
+
+    if (productsCreated || groupsCreated || variantsCreated || imagesUpdated) {
+      this.logger.log(
+        `Site ürün grupları: ${productsCreated} ürün, ${groupsCreated} grup, ${variantsCreated} varyant eklendi; ${imagesUpdated} görsel güncellendi`,
+      );
+    }
+    return { productsCreated, groupsCreated, variantsCreated, imagesUpdated };
   }
 }
