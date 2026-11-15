@@ -6,7 +6,11 @@ import { SITE_ONLY_MODEL_PREFIX, isSiteOnlyModelCode } from '../common/site-only
 import { productSitePrice, sitePriceFromTrendyol, TRENDYOL_COMPARE_LABEL } from '../common/site-pricing';
 
 // Sadece ürün grubu sayfasında (boyut/renk seçimiyle) satılan site ürünleri
-const GROUP_ONLY_MODEL_PREFIX = 'WEB-BST-';
+// Ürün grubu varyantı olarak satılan site ürünleri (Bostann WEB-BST-, dekoratif saksı kataloğu WEB-DKS-)
+const GROUP_ONLY_MODEL_PREFIXES = ['WEB-BST-', 'WEB-DKS-'];
+const GROUP_ONLY_NOT = GROUP_ONLY_MODEL_PREFIXES.map((prefix) => ({ modelCode: { startsWith: prefix } }));
+// Ürünleri sadece grup olarak satılan alt kategoriler: sekmesi grup sayısıyla gösterilir
+const GROUP_SUBCATEGORY_TABS = ['Plastik Saksılar'];
 
 // Müşteriye güvenli gösterilebilecek alanlar.
 // Maliyet alanları (costPrice, purchasePrice, supplierName vb.) KESİNLİKLE YOK —
@@ -215,6 +219,14 @@ export class PublicCatalogService {
     for (const p of [...products, ...variants]) {
       if (p.catalogSubCategory) counts.set(p.catalogSubCategory, (counts.get(p.catalogSubCategory) ?? 0) + 1);
     }
+    // Sadece ürün grubu olarak satılan alt kategoriler (ör. Plastik Saksılar): grup sayısı kadar
+    const groups = await this.prisma.productGroup.findMany({
+      where: { isActive: true, category: matched, subCategory: { in: GROUP_SUBCATEGORY_TABS } },
+      select: { subCategory: true },
+    });
+    for (const g of groups) {
+      if (g.subCategory) counts.set(g.subCategory, (counts.get(g.subCategory) ?? 0) + 1);
+    }
 
     return Array.from(counts.entries())
       .sort(([a], [b]) => a.localeCompare(b, 'tr'))
@@ -284,7 +296,7 @@ export class PublicCatalogService {
           where: {
             status: 'ACTIVE',
             catalogCategory: c.name,
-            NOT: { modelCode: { startsWith: GROUP_ONLY_MODEL_PREFIX } },
+            NOT: GROUP_ONLY_NOT,
             OR: [
               { modelCode: { startsWith: SITE_ONLY_MODEL_PREFIX }, stockQuantity: { gt: 0 }, sitePrice: { gt: 0 } },
               { id: { in: idx.onSaleProductIds } },
@@ -347,6 +359,7 @@ export class PublicCatalogService {
         distinct: ['catalogSubCategory'],
       });
       matchedSubCategory = allSubs.find((p) => p.catalogSubCategory && slugify(p.catalogSubCategory) === params.subCategorySlug)?.catalogSubCategory ?? undefined;
+      matchedSubCategory ??= GROUP_SUBCATEGORY_TABS.find((n) => slugify(n) === params.subCategorySlug);
     }
 
     // ── 1. Product tablosu ──────────────────────────────────────────────────
@@ -374,7 +387,7 @@ export class PublicCatalogService {
     // Ürün grubu varyantı olarak satılan site ürünleri (ör. Bostann saksı boyut×renk) düz listede
     // tek tek gösterilmez; müşteri bunları grup sayfasından boyut/renk seçerek alır. Aramada görünürler.
     if (!params.search?.trim()) {
-      productWhere['NOT'] = { modelCode: { startsWith: GROUP_ONLY_MODEL_PREFIX } };
+      productWhere['NOT'] = GROUP_ONLY_NOT;
     }
 
     if (params.barcode?.trim()) {
@@ -977,7 +990,7 @@ export class PublicCatalogService {
   /** Sitede listelenen Product: sadece sitede satılan WEB- (stoklu, grup-dışı) veya Trendyol'da satıştaki */
   private onSaleProductFilter(idx: TrendyolIndex) {
     return {
-      NOT: { modelCode: { startsWith: GROUP_ONLY_MODEL_PREFIX } },
+      NOT: GROUP_ONLY_NOT,
       OR: [
         { modelCode: { startsWith: SITE_ONLY_MODEL_PREFIX }, stockQuantity: { gt: 0 } },
         { id: { in: idx.onSaleProductIds } },
