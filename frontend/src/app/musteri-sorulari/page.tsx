@@ -27,12 +27,14 @@ const PLATFORM_COLORS: Record<string, string> = {
   TRENDYOL: 'bg-orange-500',
   N11: 'bg-purple-600',
   HEPSIBURADA: 'bg-red-600',
+  SITE_TOPTAN: 'bg-emerald-700',
 };
 
 const PLATFORM_LABELS: Record<string, string> = {
   TRENDYOL: 'Trendyol',
   N11: 'N11',
   HEPSIBURADA: 'Hepsiburada',
+  SITE_TOPTAN: 'Site · Toptan',
 };
 
 export default function MusteriSorulariPage() {
@@ -134,7 +136,7 @@ export default function MusteriSorulariPage() {
           </button>
         ))}
         <div className="w-px bg-border mx-1" />
-        {['', 'TRENDYOL', 'N11', 'HEPSIBURADA'].map((p) => (
+        {['', 'TRENDYOL', 'N11', 'HEPSIBURADA', 'SITE_TOPTAN'].map((p) => (
           <button
             key={p}
             onClick={() => setFilterPlatform(p)}
@@ -193,7 +195,7 @@ export default function MusteriSorulariPage() {
               </p>
 
               <div className="rounded-lg bg-muted p-3 mb-3">
-                <p className="text-sm">{q.question}</p>
+                <p className="text-sm whitespace-pre-line">{q.question}</p>
               </div>
 
               {q.answer && (

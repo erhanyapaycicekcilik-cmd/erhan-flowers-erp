@@ -11,6 +11,10 @@ export interface PublicProduct {
   /** Fiyatı olmayan site ürünü: sepete eklenmez, "Fiyat için iletişime geçin" gösterilir */
   priceOnRequest?: boolean
   originalPrice: number | null
+  /** originalPrice'ın kaynağı; 'Trendyol' ise üstü çizili fiyat Trendyol fiyatıdır (indirim değil, karşılaştırma) */
+  compareAtLabel?: string | null
+  /** Son 90 günde en çok satanlardan (önce Trendyol) */
+  bestseller?: boolean
   brand: string
   description: string | null
   colorVariant: string | null
@@ -41,8 +45,15 @@ export interface Category {
   count: number
 }
 
+// Sunucu tarafında ERP'ye iç ağdan (docker: http://backend:8001) bağlan — internet/Caddy turu yok
+// (Derleme sırasında backend ayakta olmadığı için o aşamada yine genel adres kullanılır.)
+const SERVER_API_URL =
+  typeof window === 'undefined' && process.env.NEXT_PHASE !== 'phase-production-build' && process.env.INTERNAL_API_URL
+    ? process.env.INTERNAL_API_URL
+    : API_URL
+
 async function apiFetch<T>(path: string): Promise<T> {
-  const res = await fetch(`${API_URL}${path}`, {
+  const res = await fetch(`${SERVER_API_URL}${path}`, {
     next: { revalidate: 60 }, // 60 saniye cache — yeni ürün 1 dakikada sitede
   })
   if (!res.ok) throw new Error(`API error: ${res.status}`)
@@ -60,6 +71,20 @@ export async function getCategories(): Promise<Category[]> {
 export async function getSubCategories(categorySlug: string): Promise<Category[]> {
   try {
     return await apiFetch<Category[]>(`/public/catalog/subcategories?category=${encodeURIComponent(categorySlug)}`)
+  } catch {
+    return []
+  }
+}
+
+export interface LatestByCategoryItem {
+  category: { name: string; slug: string }
+  product: PublicProduct
+}
+
+/** Ana sayfa: her kategoriden en son eklenen (satıştaki) ürün */
+export async function getLatestByCategory(): Promise<LatestByCategoryItem[]> {
+  try {
+    return await apiFetch<LatestByCategoryItem[]>('/public/catalog/latest-by-category')
   } catch {
     return []
   }

@@ -8,8 +8,14 @@ export class PublicOrdersController {
   constructor(private readonly svc: WebOrdersService) {}
 
   @Post()
-  create(@Body() dto: CreateWebOrderDto) {
-    return this.svc.create(dto)
+  create(@Body() dto: CreateWebOrderDto, @Headers('x-site-key') siteKey?: string) {
+    return this.svc.create(dto, siteKey)
+  }
+
+  /** Sadece site sunucusu (x-site-key): kartla tahsil edilecek tutar */
+  @Get(':orderNumber/payable')
+  payable(@Param('orderNumber') orderNumber: string, @Headers('x-site-key') siteKey?: string) {
+    return this.svc.payable(orderNumber, siteKey)
   }
 
   /** Site, TAMI tahsilatı (complete-3ds) başarılı olunca çağırır; imza: HMAC-SHA256(TAMI_SECRET_KEY, orderNumber) */

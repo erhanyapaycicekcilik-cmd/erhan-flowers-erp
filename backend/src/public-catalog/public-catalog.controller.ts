@@ -1,6 +1,8 @@
+import { SkipThrottle, Throttle } from '@nestjs/throttler';
 import { BadRequestException, Body, Controller, Get, Header, NotFoundException, Param, Post, Query, Res, UseGuards } from '@nestjs/common';
 import { Response } from 'express';
 
+import { isValidAdminSecret } from '../common/admin-secret';
 import { AuthGuard } from '../auth/auth.guard';
 import { PublicCatalogService } from './public-catalog.service';
 import { TrendyolProductSyncService } from './trendyol-product-sync.service';
@@ -15,21 +17,31 @@ export class PublicCatalogController {
     private readonly siteSettings: SiteSettingsService,
   ) {}
 
+  @SkipThrottle() // site sunucusu tüm ziyaretçiler adına buradan okur
   @Get('settings')
   getSiteSettings() {
     return this.siteSettings.getAll();
   }
 
+  @SkipThrottle() // site sunucusu tüm ziyaretçiler adına buradan okur
   @Get('categories')
   listCategories() {
     return this.catalog.listCategories();
   }
 
+  @SkipThrottle() // site sunucusu tüm ziyaretçiler adına buradan okur
   @Get('subcategories')
   listSubCategories(@Query('category') category: string) {
     return this.catalog.listSubCategories(category);
   }
 
+  @SkipThrottle() // site sunucusu tüm ziyaretçiler adına buradan okur
+  @Get('latest-by-category')
+  latestByCategory() {
+    return this.catalog.latestByCategory();
+  }
+
+  @SkipThrottle() // site sunucusu tüm ziyaretçiler adına buradan okur
   @Get('products')
   listProducts(
     @Query('category') category?: string,
@@ -39,7 +51,7 @@ export class PublicCatalogController {
     @Query('modelCode') modelCode?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
-    @Query('sort') sort?: 'price_asc' | 'price_desc' | 'newest' | 'name',
+    @Query('sort') sort?: 'price_asc' | 'price_desc' | 'newest' | 'name' | 'bestseller',
   ) {
     return this.catalog.listProducts({
       categorySlug: category,
@@ -53,6 +65,7 @@ export class PublicCatalogController {
     });
   }
 
+  @SkipThrottle() // site sunucusu tüm ziyaretçiler adına buradan okur
   @Get('products/slug/:slug')
   async getProductBySlug(@Param('slug') slug: string) {
     const product = await this.catalog.getProductBySlug(slug);
@@ -60,6 +73,7 @@ export class PublicCatalogController {
     return product;
   }
 
+  @SkipThrottle() // site sunucusu tüm ziyaretçiler adına buradan okur
   @Get('products/:id')
   async getProductById(@Param('id') id: string) {
     const product = await this.catalog.getProductById(Number(id));
@@ -68,6 +82,7 @@ export class PublicCatalogController {
   }
 
   // Fotoğrafla fiyat sorgulama — Gemini görsel tanıma ile ürün ara (şifresiz, mobil kullanımı)
+  @Throttle({ default: { ttl: 60000, limit: 10 } }) // Gemini maliyeti
   @Post('price-lookup')
   async priceLookup(@Body() body: { imageBase64?: string; mimeType?: string }) {
     if (!body.imageBase64) throw new BadRequestException('imageBase64 gerekli.');
@@ -93,16 +108,14 @@ export class PublicCatalogController {
   // Admin: Ürün adına göre otomatik kategori ataması
   @Post('admin/recategorize')
   recategorizeByName(@Query('secret') secret?: string) {
-    const expected = process.env.REVALIDATE_SECRET || 'dev-secret-local';
-    if (secret !== expected) return { error: 'Unauthorized' };
+    if (!isValidAdminSecret(secret)) return { error: 'Unauthorized' };
     return this.catalog.recategorizeByName();
   }
 
   // Admin: Tüm onaylı maliyetleri sitePrice'a toplu yansıt
   @Post('admin/bulk-sync-site-price')
   bulkSyncSitePrice(@Query('secret') secret?: string) {
-    const expected = process.env.REVALIDATE_SECRET || 'dev-secret-local';
-    if (secret !== expected) return { error: 'Unauthorized' };
+    if (!isValidAdminSecret(secret)) return { error: 'Unauthorized' };
     return this.catalog.bulkSyncSitePriceFromApprovedCosts();
   }
 
@@ -113,8 +126,7 @@ export class PublicCatalogController {
     @Query('secret') secret: string,
     @Body() body: { search: string; changePercent: number; dryRun?: boolean },
   ) {
-    const expected = process.env.REVALIDATE_SECRET || 'dev-secret-local';
-    if (secret !== expected) return { error: 'Unauthorized' };
+    if (!isValidAdminSecret(secret)) return { error: 'Unauthorized' };
     if (!body.search?.trim()) throw new BadRequestException('search gerekli.');
     if (typeof body.changePercent !== 'number') throw new BadRequestException('changePercent sayı olmalı.');
     return this.catalog.bulkPriceAdjust({
@@ -127,8 +139,7 @@ export class PublicCatalogController {
   // Admin: Trendyol ürünlerini anında çek
   @Post('admin/trendyol-sync')
   runTrendyolSync(@Query('secret') secret?: string) {
-    const expected = process.env.REVALIDATE_SECRET || 'dev-secret-local';
-    if (secret !== expected) {
+    if (!isValidAdminSecret(secret)) {
       return { error: 'Unauthorized' };
     }
     return this.trendyolSync.syncNow();
@@ -140,8 +151,7 @@ export class PublicCatalogController {
     @Query('secret') secret: string,
     @Body() body: { productId: number; category: string; subCategory?: string | null },
   ) {
-    const expected = process.env.REVALIDATE_SECRET || 'dev-secret-local';
-    if (secret !== expected) return { error: 'Unauthorized' };
+    if (!isValidAdminSecret(secret)) return { error: 'Unauthorized' };
     if (!body.productId || !body.category) throw new BadRequestException('productId ve category gerekli.');
     return this.catalog.setCategory(body.productId, body.category, body.subCategory ?? null);
   }
@@ -155,8 +165,7 @@ export class PublicCatalogController {
       warrantyMonths?: number; inStock?: boolean; images?: string[]; videoUrl?: string | null;
     },
   ) {
-    const expected = process.env.REVALIDATE_SECRET || 'dev-secret-local';
-    if (secret !== expected) return { error: 'Unauthorized' };
+    if (!isValidAdminSecret(secret)) return { error: 'Unauthorized' };
     if (!body.name || !body.sitePrice) throw new BadRequestException('name ve sitePrice gerekli.');
     return this.catalog.createProduct(body);
   }
@@ -166,13 +175,13 @@ export class PublicCatalogController {
     @Query('secret') secret: string,
     @Body() body: { productId: number; videoUrl: string | null },
   ) {
-    const expected = process.env.REVALIDATE_SECRET || 'dev-secret-local';
-    if (secret !== expected) return { error: 'Unauthorized' };
+    if (!isValidAdminSecret(secret)) return { error: 'Unauthorized' };
     if (!body.productId) throw new BadRequestException('productId gerekli.');
     return this.catalog.setVideo(body.productId, body.videoUrl ?? null);
   }
 
   // Meta/WhatsApp Commerce Manager ürün kataloğu feed'i (CSV)
+  @SkipThrottle() // site sunucusu tüm ziyaretçiler adına buradan okur
   @Get('meta-feed')
   async metaCatalogFeed(@Res() res: Response) {
     const siteUrl = process.env.SITE_URL || 'https://www.erhanflowers.com';

@@ -3,9 +3,14 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { resolveGeminiModel } from '../common/gemini-model';
 import { SITE_ONLY_MODEL_PREFIX, isSiteOnlyModelCode } from '../common/site-only';
+import { productSitePrice, sitePriceFromTrendyol, TRENDYOL_COMPARE_LABEL } from '../common/site-pricing';
 
 // Sadece ürün grubu sayfasında (boyut/renk seçimiyle) satılan site ürünleri
-const GROUP_ONLY_MODEL_PREFIX = 'WEB-BST-';
+// Ürün grubu varyantı olarak satılan site ürünleri (Bostann WEB-BST-, dekoratif saksı kataloğu WEB-DKS-)
+const GROUP_ONLY_MODEL_PREFIXES = ['WEB-BST-', 'WEB-DKS-'];
+const GROUP_ONLY_NOT = GROUP_ONLY_MODEL_PREFIXES.map((prefix) => ({ modelCode: { startsWith: prefix } }));
+// Ürünleri sadece grup olarak satılan alt kategoriler: sekmesi grup sayısıyla gösterilir
+const GROUP_SUBCATEGORY_TABS = ['Plastik Saksılar'];
 
 // Müşteriye güvenli gösterilebilecek alanlar.
 // Maliyet alanları (costPrice, purchasePrice, supplierName vb.) KESİNLİKLE YOK —
@@ -35,7 +40,17 @@ const SAFE_SELECT = {
   category: {
     select: { id: true, name: true },
   },
+  // Site fiyatı = Trendyol fiyatının %25 altı (common/site-pricing.ts)
+  productCenterVariant: {
+    select: { trendyolSalePrice: true, status: true },
+  },
 };
+
+interface TrendyolIndex {
+  priceByProductId: Map<number, { trendyolSalePrice: number; onSale: boolean; barcode: string }>;
+  onSaleProductIds: number[];
+  shadowedVariantIds: number[];
+}
 
 function slugify(value: string) {
   return value
@@ -142,13 +157,15 @@ export class PublicCatalogService {
   async listCategories() {
     // catalogCategory alanına göre dinamik kategori listesi
     // Hem Product hem TrendyolProductVariant tablosundan say (Product.productId null olabilir)
+    // Sayılar sitede gerçekten listelenen ürünlerle aynı olsun (sadece satıştakiler)
+    const idx = await this.trendyolIndex();
     const [products, variants] = await Promise.all([
       this.prisma.product.findMany({
-        where: { status: 'ACTIVE', catalogCategory: { not: null } },
+        where: { status: 'ACTIVE', catalogCategory: { not: null }, ...this.onSaleProductFilter(idx) },
         select: { catalogCategory: true },
       }),
       this.prisma.trendyolProductVariant.findMany({
-        where: { catalogCategory: { not: null }, productId: null },
+        where: { catalogCategory: { not: null }, ...this.onSaleVariantFilter(idx) },
         select: { catalogCategory: true },
       }),
     ]);
@@ -186,13 +203,14 @@ export class PublicCatalogService {
     const matched = CAT_NAMES.find((n) => slugify(n) === categorySlug);
     if (!matched) return [];
 
+    const idx = await this.trendyolIndex();
     const [products, variants] = await Promise.all([
       this.prisma.product.findMany({
-        where: { status: 'ACTIVE', catalogCategory: matched, catalogSubCategory: { not: null } },
+        where: { status: 'ACTIVE', catalogCategory: matched, catalogSubCategory: { not: null }, ...this.onSaleProductFilter(idx) },
         select: { catalogSubCategory: true },
       }),
       this.prisma.trendyolProductVariant.findMany({
-        where: { productId: null, catalogCategory: matched, catalogSubCategory: { not: null } },
+        where: { catalogCategory: matched, catalogSubCategory: { not: null }, ...this.onSaleVariantFilter(idx) },
         select: { catalogSubCategory: true },
       }),
     ]);
@@ -201,10 +219,114 @@ export class PublicCatalogService {
     for (const p of [...products, ...variants]) {
       if (p.catalogSubCategory) counts.set(p.catalogSubCategory, (counts.get(p.catalogSubCategory) ?? 0) + 1);
     }
+    // Sadece ürün grubu olarak satılan alt kategoriler (ör. Plastik Saksılar): grup sayısı kadar
+    const groups = await this.prisma.productGroup.findMany({
+      where: { isActive: true, category: matched, subCategory: { in: GROUP_SUBCATEGORY_TABS } },
+      select: { subCategory: true },
+    });
+    for (const g of groups) {
+      if (g.subCategory) counts.set(g.subCategory, (counts.get(g.subCategory) ?? 0) + 1);
+    }
 
     return Array.from(counts.entries())
       .sort(([a], [b]) => a.localeCompare(b, 'tr'))
       .map(([name, count]) => ({ name, slug: slugify(name), count }));
+  }
+
+  // ── Çok satanlar: son 90 gün pazaryeri satışları (önce Trendyol) — 30 dk önbellek ─────────
+  private salesCache: { at: number; value: Promise<Map<string, number>> } | null = null;
+
+  /** barkod / stok kodu → satış skoru. Trendyol satışı her zaman öne geçer (1e6 + adet), diğer pazaryerleri adet. */
+  private salesScores(): Promise<Map<string, number>> {
+    const now = Date.now();
+    if (this.salesCache && now - this.salesCache.at < 30 * 60_000) return this.salesCache.value;
+    const value = (async () => {
+      const since = new Date(now - 90 * 24 * 3600_000);
+      const items = await this.prisma.marketplaceOrderItem.findMany({
+        where: {
+          order: {
+            orderDate: { gte: since },
+            NOT: [
+              { status: { contains: 'cancel', mode: 'insensitive' } },
+              { status: { contains: 'return', mode: 'insensitive' } },
+              { status: { contains: 'iptal', mode: 'insensitive' } },
+              { status: { contains: 'iade', mode: 'insensitive' } },
+              { status: { contains: 'unsupplied', mode: 'insensitive' } },
+            ],
+          },
+        },
+        select: { barcode: true, sku: true, quantity: true, order: { select: { platform: true } } },
+      });
+      const ty = new Map<string, number>();
+      const other = new Map<string, number>();
+      for (const it of items) {
+        const q = Number(it.quantity) || 0;
+        const target = it.order.platform.toUpperCase().startsWith('TRENDYOL') ? ty : other;
+        for (const k of new Set([it.barcode, it.sku].filter(Boolean) as string[])) {
+          const key = k.replace(/^FL-/i, '');
+          target.set(key, (target.get(key) ?? 0) + q);
+        }
+      }
+      const out = new Map<string, number>();
+      for (const [k, q] of other) out.set(k, q);
+      for (const [k, q] of ty) out.set(k, 1_000_000 + q);
+      return out;
+    })().catch((e) => { this.salesCache = null; throw e; });
+    this.salesCache = { at: now, value };
+    return value;
+  }
+
+  // Ana sayfa: her kategoriden en son eklenen (satıştaki, fiyatlı) ürün — 10 dk önbellek
+  private latestCache: { at: number; value: Promise<Array<{ category: { name: string; slug: string }; product: ReturnType<PublicCatalogService['variantToPublicProduct']> | ReturnType<PublicCatalogService['toPublicProduct']> }>> } | null = null;
+
+  latestByCategory() {
+    const now = Date.now();
+    if (this.latestCache && now - this.latestCache.at < 10 * 60_000) return this.latestCache.value;
+    const value = this.buildLatestByCategory().catch((e) => { this.latestCache = null; throw e; });
+    this.latestCache = { at: now, value };
+    return value;
+  }
+
+  private async buildLatestByCategory() {
+    const [cats, idx] = await Promise.all([this.listCategories(), this.trendyolIndex()]);
+    const out = [];
+    for (const c of cats) {
+      const [prod, variant] = await Promise.all([
+        this.prisma.product.findFirst({
+          where: {
+            status: 'ACTIVE',
+            catalogCategory: c.name,
+            NOT: GROUP_ONLY_NOT,
+            OR: [
+              { modelCode: { startsWith: SITE_ONLY_MODEL_PREFIX }, stockQuantity: { gt: 0 }, sitePrice: { gt: 0 } },
+              { id: { in: idx.onSaleProductIds } },
+            ],
+          },
+          select: { ...SAFE_SELECT, createdAt: true },
+          orderBy: { createdAt: 'desc' },
+        }),
+        this.prisma.trendyolProductVariant.findFirst({
+          where: {
+            productId: null, catalogCategory: c.name, stockQuantity: { gt: 0 }, trendyolSalePrice: { gt: 0 },
+            status: 'ACTIVE', id: { notIn: idx.shadowedVariantIds },
+          },
+          select: {
+            id: true, productName: true, currentModelCode: true, barcode: true, trendyolSalePrice: true,
+            stockQuantity: true, catalogCategory: true, catalogSubCategory: true, images: true, brand: true,
+            productDescription: true, productColor: true, createdAt: true,
+          },
+          orderBy: { createdAt: 'desc' },
+        }),
+      ]);
+      const useVariant = variant && (!prod || variant.createdAt > prod.createdAt);
+      const product = useVariant
+        ? this.variantToPublicProduct(variant)
+        : prod
+          ? this.toPublicProduct((await this.withTrendyolMatch([prod]))[0])
+          : null;
+      if (product && product.sitePrice > 0 && product.mainImage) out.push({ category: { name: c.name, slug: c.slug }, product });
+    }
+    return out;
   }
 
   async listProducts(params: {
@@ -215,7 +337,7 @@ export class PublicCatalogService {
     modelCode?: string;
     page?: number;
     limit?: number;
-    sort?: 'price_asc' | 'price_desc' | 'newest' | 'name';
+    sort?: 'price_asc' | 'price_desc' | 'newest' | 'name' | 'bestseller';
   }) {
     const page = Math.max(1, params.page ?? 1);
     const limit = Math.min(2000, Math.max(1, params.limit ?? 48));
@@ -237,6 +359,7 @@ export class PublicCatalogService {
         distinct: ['catalogSubCategory'],
       });
       matchedSubCategory = allSubs.find((p) => p.catalogSubCategory && slugify(p.catalogSubCategory) === params.subCategorySlug)?.catalogSubCategory ?? undefined;
+      matchedSubCategory ??= GROUP_SUBCATEGORY_TABS.find((n) => slugify(n) === params.subCategorySlug);
     }
 
     // ── 1. Product tablosu ──────────────────────────────────────────────────
@@ -251,12 +374,20 @@ export class PublicCatalogService {
         { modelCode: { startsWith: SITE_ONLY_MODEL_PREFIX } },
       ],
     };
+    // Sitede sadece: Trendyol'da AKTİF + stoklu olanlar ve sadece sitede satılan WEB- ürünleri
+    const tyIndex = await this.trendyolIndex();
+    // Stok: Trendyol ürününde Trendyol stoğu esas (dizinde kontrol edildi), WEB- üründe ERP stoğu
+    delete productWhere['stockQuantity'];
+    productWhere['AND'] = [{ OR: [
+      { modelCode: { startsWith: SITE_ONLY_MODEL_PREFIX }, stockQuantity: { gt: 0 } },
+      { id: { in: tyIndex.onSaleProductIds } },
+    ] }];
     if (matchedCategory) productWhere['catalogCategory'] = matchedCategory;
     if (matchedSubCategory) productWhere['catalogSubCategory'] = matchedSubCategory;
     // Ürün grubu varyantı olarak satılan site ürünleri (ör. Bostann saksı boyut×renk) düz listede
     // tek tek gösterilmez; müşteri bunları grup sayfasından boyut/renk seçerek alır. Aramada görünürler.
     if (!params.search?.trim()) {
-      productWhere['NOT'] = { modelCode: { startsWith: GROUP_ONLY_MODEL_PREFIX } };
+      productWhere['NOT'] = GROUP_ONLY_NOT;
     }
 
     if (params.barcode?.trim()) {
@@ -264,6 +395,7 @@ export class PublicCatalogService {
       delete productWhere['status'];
       delete productWhere['stockQuantity'];
       delete productWhere['OR'];
+      delete productWhere['AND'];
     }
     if (params.modelCode?.trim()) {
       // FL- ön eki Flora siparişlerinde gelir; products tablosunda ön eksiz kayıtlı
@@ -272,6 +404,7 @@ export class PublicCatalogService {
       delete productWhere['status'];
       delete productWhere['stockQuantity'];
       delete productWhere['OR'];
+      delete productWhere['AND'];
     }
     if (params.search?.trim()) {
       const term = params.search.trim();
@@ -296,6 +429,9 @@ export class PublicCatalogService {
       catalogCategory: { not: null },
       stockQuantity: { gt: 0 },
       trendyolSalePrice: { gt: 0 },
+      status: 'ACTIVE', // sadece Trendyol'da satışta olanlar
+      // ERP ürün kaydıyla eşleşen Trendyol ürünü, ERP kaydı üzerinden listelenir (çift görünmesin)
+      id: { notIn: tyIndex.shadowedVariantIds },
     };
     if (matchedCategory) variantWhere['catalogCategory'] = matchedCategory;
     if (matchedSubCategory) variantWhere['catalogSubCategory'] = matchedSubCategory;
@@ -304,6 +440,8 @@ export class PublicCatalogService {
       delete variantWhere['stockQuantity'];
       delete variantWhere['trendyolSalePrice'];
       delete variantWhere['productId'];
+      delete variantWhere['status'];
+      delete variantWhere['id'];
     }
     if (params.modelCode?.trim()) {
       const mc = params.modelCode.trim().replace(/^FL-/i, '');
@@ -311,15 +449,17 @@ export class PublicCatalogService {
       delete variantWhere['stockQuantity'];
       delete variantWhere['trendyolSalePrice'];
       delete variantWhere['productId'];
+      delete variantWhere['status'];
+      delete variantWhere['id'];
     }
     if (params.search?.trim()) {
       const term = params.search.trim();
       variantWhere['productName'] = { contains: term, mode: 'insensitive' };
     }
 
-    const [productCount, productRows, variantRows] = await Promise.all([
-      this.prisma.product.count({ where: productWhere as any }),
-      this.prisma.product.findMany({ where: productWhere as any, select: SAFE_SELECT, orderBy: orderBy as any, skip, take: limit }),
+    const [productRows, variantRows] = await Promise.all([
+      // Sayfalama birleşik listede yapılır (Product + Trendyol ürünleri birlikte sıralanır; her sayfada tekrar etmez)
+      this.prisma.product.findMany({ where: productWhere as any, select: { ...SAFE_SELECT, createdAt: true }, orderBy: orderBy as any }),
       // Barcode/modelCode aramasında da variant tablosuna bak (HB, Flora siparişlerinde barkod match için)
       // Sadece tam liste için barcode/modelCode/search filtresi olmadığında büyük sorgu çalıştır
       this.prisma.trendyolProductVariant.findMany({
@@ -337,6 +477,7 @@ export class PublicCatalogService {
           brand: true,
           productDescription: true,
           productColor: true,
+          createdAt: true,
         },
         orderBy: { id: 'desc' },
         // Barcode/modelCode aramasında limit 1 yeterli; tam listede sayfalama üst çerçevesine bırak
@@ -344,19 +485,43 @@ export class PublicCatalogService {
       }),
     ]);
 
-    const variantProducts = variantRows.map((v) => this.variantToPublicProduct(v));
-    const allProducts = [...productRows.map((p) => this.toPublicProduct(p)), ...variantProducts];
+    const [matchedRows, sales] = await Promise.all([this.withTrendyolMatch(productRows), this.salesScores()]);
+    const idx = await this.trendyolIndex();
+    const scoreOf = (codes: Array<string | null | undefined>) => {
+      let best = 0;
+      for (const c of codes) if (c) best = Math.max(best, sales.get(c) ?? 0);
+      return best;
+    };
+    const rows = [
+      ...matchedRows.map((p) => ({
+        pub: this.toPublicProduct(p),
+        createdAt: p.createdAt.getTime(),
+        score: scoreOf([idx.priceByProductId.get(p.id)?.barcode, p.barcode, p.modelCode]),
+      })),
+      ...variantRows.map((v) => ({
+        pub: this.variantToPublicProduct(v),
+        createdAt: v.createdAt.getTime(),
+        score: scoreOf([v.barcode, v.currentModelCode]),
+      })),
+    ];
 
-    // Sort birleşik listeye uygula
-    // Fiyatı olmayan ürünler (fiyat için iletişime geçin) artan sıralamada sona
-    if (params.sort === 'price_asc')  allProducts.sort((a, b) => (a.sitePrice || Infinity) - (b.sitePrice || Infinity));
-    if (params.sort === 'price_desc') allProducts.sort((a, b) => b.sitePrice - a.sitePrice);
-    if (params.sort === 'name')       allProducts.sort((a, b) => a.name.localeCompare(b.name, 'tr'));
+    // Sıralama birleşik listede. Varsayılan: çok satanlar (önce Trendyol satışları), sonra en yeniler
+    const sort = params.sort ?? 'bestseller';
+    if (sort === 'price_asc')  rows.sort((a, b) => (a.pub.sitePrice || Infinity) - (b.pub.sitePrice || Infinity));
+    else if (sort === 'price_desc') rows.sort((a, b) => b.pub.sitePrice - a.pub.sitePrice);
+    else if (sort === 'name')  rows.sort((a, b) => a.pub.name.localeCompare(b.pub.name, 'tr'));
+    else if (sort === 'newest') rows.sort((a, b) => b.createdAt - a.createdAt);
+    else rows.sort((a, b) => b.score - a.score || b.createdAt - a.createdAt);
 
-    const total = productCount + variantRows.length;
+    // "Çok Satan" etiketi: tüm katalogdaki satış sırasına göre ilk 20
+    const topScores = [...sales.values()].sort((a, b) => b - a);
+    const cutoff = topScores[Math.min(19, topScores.length - 1)] ?? Infinity;
+    const allProducts = rows.map((r) => ({ ...r.pub, bestseller: r.score > 0 && r.score >= cutoff }));
+
+    const total = allProducts.length;
 
     return {
-      products: allProducts,
+      products: (params.barcode || params.modelCode) ? allProducts : allProducts.slice(skip, skip + limit),
       pagination: {
         total,
         page,
@@ -373,10 +538,10 @@ export class PublicCatalogService {
       const candidates = [segment, segment.replace(/-/g, '.')];
       for (const modelCode of candidates) {
         const product = await this.prisma.product.findFirst({
-          where: { modelCode, status: 'ACTIVE' },
+          where: { modelCode: { equals: modelCode, mode: 'insensitive' }, status: 'ACTIVE' },
           select: SAFE_SELECT,
         });
-        if (product) return this.toPublicProduct(product);
+        if (product) return this.toPublicProduct((await this.withTrendyolMatch([product]))[0]);
       }
     }
     // Product tablosunda bulunamadıysa TrendyolProductVariant'ta ara
@@ -386,7 +551,11 @@ export class PublicCatalogService {
       for (const modelCode of candidates) {
         const variant = await this.prisma.trendyolProductVariant.findFirst({
           where: {
-            OR: [{ currentModelCode: modelCode }, { barcode: modelCode }],
+            // Trendyol kodlarında küçük harf olabilir (ör. 01917628q916820927); slug'dan gelen kod büyük harfe çevrilmiş olur
+            OR: [
+              { currentModelCode: { equals: modelCode, mode: 'insensitive' } },
+              { barcode: { equals: modelCode, mode: 'insensitive' } },
+            ],
             catalogCategory: { not: null },
           },
           select: {
@@ -418,7 +587,7 @@ export class PublicCatalogService {
       where: { id, status: 'ACTIVE' },
       select: SAFE_SELECT,
     });
-    return product ? this.toPublicProduct(product) : null;
+    return product ? this.toPublicProduct((await this.withTrendyolMatch([product]))[0]) : null;
   }
 
   async createProduct(data: {
@@ -572,7 +741,8 @@ export class PublicCatalogService {
   }) {
     const modelCode = v.currentModelCode || v.barcode;
     const catName = v.catalogCategory;
-    const price = Number(v.trendyolSalePrice) || 0;
+    const trendyolPrice = Number(v.trendyolSalePrice) || 0;
+    const price = sitePriceFromTrendyol(trendyolPrice);
     const images = this.parseImageUrls(v.images);
 
     return {
@@ -583,7 +753,8 @@ export class PublicCatalogService {
       category: catName,
       categorySlug: catName ? slugify(catName) : null,
       sitePrice: price,
-      originalPrice: null as number | null,
+      originalPrice: price > 0 && trendyolPrice > price ? trendyolPrice : (null as number | null),
+      compareAtLabel: price > 0 && trendyolPrice > price ? TRENDYOL_COMPARE_LABEL : (null as string | null),
       brand: v.brand ?? '',
       description: v.productDescription,
       colorVariant: v.productColor,
@@ -768,6 +939,86 @@ export class PublicCatalogService {
     return { updated, skipped, details };
   }
 
+  // ── Trendyol eşleşme dizini (5 dk önbellek) ───────────────────────────────
+  // Site = Trendyol'da AKTİF + stoklu ürünler, fiyat Trendyol −%X. ERP Product kaydı Trendyol ürünüyle
+  // productCenterVariant bağıyla, yoksa barkod / model koduyla eşleştirilir. Eşleşen Trendyol kaydı ayrıca
+  // "Trendyol ürünü" olarak listelenmez (aynı ürün iki kez görünmesin).
+  private trendyolIndexCache: { at: number; value: Promise<TrendyolIndex> } | null = null;
+
+  private trendyolIndex(): Promise<TrendyolIndex> {
+    const now = Date.now();
+    if (this.trendyolIndexCache && now - this.trendyolIndexCache.at < 5 * 60_000) return this.trendyolIndexCache.value;
+    const value = this.buildTrendyolIndex().catch((e) => { this.trendyolIndexCache = null; throw e; });
+    this.trendyolIndexCache = { at: now, value };
+    return value;
+  }
+
+  private async buildTrendyolIndex(): Promise<TrendyolIndex> {
+    const [variants, products] = await Promise.all([
+      this.prisma.trendyolProductVariant.findMany({
+        where: { trendyolSalePrice: { gt: 0 } },
+        select: { id: true, productId: true, barcode: true, currentModelCode: true, trendyolSalePrice: true, status: true, stockQuantity: true },
+      }),
+      this.prisma.product.findMany({
+        where: { status: 'ACTIVE' },
+        select: { id: true, barcode: true, modelCode: true },
+      }),
+    ]);
+    const byProductId = new Map<number, (typeof variants)[number]>();
+    const byBarcode = new Map<string, (typeof variants)[number]>();
+    const byCode = new Map<string, (typeof variants)[number]>();
+    for (const v of variants) {
+      if (v.productId) byProductId.set(v.productId, v);
+      byBarcode.set(v.barcode, v);
+      if (v.currentModelCode && !byCode.has(v.currentModelCode)) byCode.set(v.currentModelCode, v);
+    }
+    const priceByProductId = new Map<number, { trendyolSalePrice: number; onSale: boolean; barcode: string }>();
+    const onSaleProductIds: number[] = [];
+    const shadowedVariantIds = new Set<number>();
+    for (const p of products) {
+      if (isSiteOnlyModelCode(p.modelCode)) continue;
+      const v = byProductId.get(p.id) || (p.barcode ? byBarcode.get(p.barcode) : undefined) || byBarcode.get(p.modelCode) || byCode.get(p.modelCode);
+      if (!v) continue;
+      const onSale = v.status === 'ACTIVE' && v.stockQuantity > 0;
+      priceByProductId.set(p.id, { trendyolSalePrice: Number(v.trendyolSalePrice) || 0, onSale, barcode: v.barcode });
+      if (onSale) onSaleProductIds.push(p.id);
+      shadowedVariantIds.add(v.id);
+    }
+    return { priceByProductId, onSaleProductIds, shadowedVariantIds: [...shadowedVariantIds] };
+  }
+
+  /** Sitede listelenen Product: sadece sitede satılan WEB- (stoklu, grup-dışı) veya Trendyol'da satıştaki */
+  private onSaleProductFilter(idx: TrendyolIndex) {
+    return {
+      NOT: GROUP_ONLY_NOT,
+      OR: [
+        { modelCode: { startsWith: SITE_ONLY_MODEL_PREFIX }, stockQuantity: { gt: 0 } },
+        { id: { in: idx.onSaleProductIds } },
+      ],
+    };
+  }
+
+  /** Sitede ayrı listelenen Trendyol ürünü: ERP kaydına bağlı/eşleşmiş değil, aktif, stoklu, fiyatlı */
+  private onSaleVariantFilter(idx: TrendyolIndex) {
+    return {
+      productId: null,
+      status: 'ACTIVE' as const,
+      stockQuantity: { gt: 0 },
+      trendyolSalePrice: { gt: 0 },
+      id: { notIn: idx.shadowedVariantIds },
+    };
+  }
+
+  /** Product satırlarına Trendyol fiyatını iliştirir (bağlı ya da barkod/model koduyla eşleşen). */
+  private async withTrendyolMatch<T extends { id: number; modelCode: string; productCenterVariant?: { trendyolSalePrice: unknown; status?: string } | null }>(rows: T[]): Promise<T[]> {
+    if (rows.length === 0) return rows;
+    const idx = await this.trendyolIndex();
+    return rows.map((r) => {
+      const m = idx.priceByProductId.get(r.id);
+      return m ? { ...r, productCenterVariant: { trendyolSalePrice: m.trendyolSalePrice, status: m.onSale ? 'ACTIVE' : 'PASSIVE' } } : r;
+    });
+  }
+
   private toPublicProduct(product: {
     id: number;
     productName: string;
@@ -790,10 +1041,17 @@ export class PublicCatalogService {
     catalogCategory?: string | null;
     catalogSubCategory?: string | null;
     category: { id: number; name: string } | null;
+    productCenterVariant?: { trendyolSalePrice: unknown; status?: string } | null;
   }) {
     const images = this.parseImageUrls(product.imageUrls);
     const catName = product.catalogCategory ?? product.category?.name ?? null;
-    const price = product.sitePrice || product.marketPrice || product.shopPrice;
+    // Trendyol'da satılan ürün: site fiyatı Trendyol fiyatının %25 altı (dükkan fiyatının altına inmez).
+    // WEB- ürünler Trendyol'da yok, ERP'de girilen site fiyatıyla satılır.
+    const trendyolPrice = isSiteOnlyModelCode(product.modelCode)
+      ? 0
+      : Number(product.productCenterVariant?.trendyolSalePrice ?? 0) || 0;
+    const price = productSitePrice({ ...product, trendyolSalePrice: trendyolPrice });
+    const compareAt = trendyolPrice > 0 ? trendyolPrice : product.listPrice;
 
     return {
       id: product.id,
@@ -803,7 +1061,8 @@ export class PublicCatalogService {
       category: catName,
       categorySlug: catName ? slugify(catName) : null,
       sitePrice: price,
-      originalPrice: price > 0 && product.listPrice > price ? product.listPrice : null,
+      originalPrice: price > 0 && compareAt > price ? compareAt : null,
+      compareAtLabel: price > 0 && trendyolPrice > price ? TRENDYOL_COMPARE_LABEL : null,
       // Fiyatı olmayan site ürünü: sepete eklenmez, "Fiyat için iletişime geçin" gösterilir
       priceOnRequest: !(price > 0) && isSiteOnlyModelCode(product.modelCode),
       brand: product.brand,
@@ -813,7 +1072,8 @@ export class PublicCatalogService {
       origin: product.origin,
       vatRate: product.vatRate,
       warrantyMonths: product.warrantyMonths,
-      inStock: product.stockQuantity > 0,
+      // Trendyol ürününde Trendyol'daki satış durumu esas
+      inStock: product.productCenterVariant?.status ? product.productCenterVariant.status === 'ACTIVE' : product.stockQuantity > 0,
       images,
       mainImage: images[0] ?? null,
       videoUrl: product.videoUrl ?? null,

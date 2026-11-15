@@ -56,6 +56,7 @@ export function Footer() {
                 { href: '/yapay-cicek-bakimi', label: 'Bakım Rehberi' },
                 { href: '/mekaninizi-gonderin', label: 'Mekanınızı Gönderin' },
                 { href: '/oneri-istek', label: 'Öneri & İstek' },
+                { href: '/toptan-satis', label: 'Toptan & Kurumsal Satış' },
                 { href: '/sss', label: 'Sık Sorulan Sorular' },
               ].map((link) => (
                 <li key={link.href}>

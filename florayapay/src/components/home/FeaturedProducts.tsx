@@ -1,15 +1,13 @@
 ﻿import Link from 'next/link'
-import Image from 'next/image'
-import { getProducts, getImageUrl } from '@/lib/api/catalog'
-import { formatPrice } from '@/lib/utils/format'
-import { AddToCartButton } from '@/components/product/AddToCartButton'
-import { PriceOnRequestInline } from '@/components/product/PriceOnRequest'
+import { getProducts } from '@/lib/api/catalog'
+import { ProductTile } from '@/components/product/ProductTile'
 
 export async function FeaturedProducts() {
   let products: Awaited<ReturnType<typeof getProducts>>['products'] = []
   try {
-    const res = await getProducts({ page: 1, sort: 'newest' })
-    products = res.products.slice(0, 8)
+    const res = await getProducts({ page: 1, limit: 60, sort: 'newest' })
+    // Vitrinde sadece hemen satın alınabilen (fiyatlı, stoklu) ürünler
+    products = res.products.filter((p) => !p.priceOnRequest && p.sitePrice > 0 && p.inStock).slice(0, 8)
   } catch {
     return null
   }
@@ -34,40 +32,7 @@ export async function FeaturedProducts() {
         <ul className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
           {products.map((product) => (
             <li key={product.id}>
-              <article className="group bg-white rounded-2xl border border-[#E8E4DA] overflow-hidden hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200">
-                <Link href={`/urun/${product.slug}`} className="block relative aspect-[3/4] bg-white overflow-hidden">
-                  <Image
-                    src={getImageUrl(product.mainImage)}
-                    alt={product.name}
-                    fill
-                    sizes="(max-width: 640px) 50vw, 25vw"
-                    className="object-contain group-hover:scale-105 transition-transform duration-500 p-2"
-                  />
-                </Link>
-                <div className="p-3">
-                  {product.category && (
-                    <p className="text-xs text-[#5C7A62] font-medium mb-1">{product.category}</p>
-                  )}
-                  <Link href={`/urun/${product.slug}`}>
-                    <h3 className="text-sm font-semibold text-[#0D1510] hover:text-[#5C7A62] transition-colors line-clamp-2 leading-snug">
-                      {product.name}
-                    </h3>
-                  </Link>
-                  {product.priceOnRequest ? (
-                    <div className="mt-3">
-                      <PriceOnRequestInline productName={product.name} slug={product.slug} />
-                    </div>
-                  ) : (
-                  <div className="mt-3 flex items-center justify-between gap-2">
-                    <p className="font-bold text-[#0D1510]">{formatPrice(product.sitePrice)}</p>
-                    <AddToCartButton
-                      product={{ id: String(product.id), name: product.name, price: product.sitePrice, image: product.mainImage, slug: product.slug }}
-                      disabled={!product.inStock}
-                    />
-                  </div>
-                  )}
-                </div>
-              </article>
+              <ProductTile product={product} />
             </li>
           ))}
         </ul>

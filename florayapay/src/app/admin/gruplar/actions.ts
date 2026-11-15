@@ -1,7 +1,8 @@
 'use server'
+import { adminSecret } from '@/lib/admin-secret'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8101'
-const secret = () => process.env.REVALIDATE_SECRET || 'dev-secret-local'
+const secret = () => adminSecret()
 
 export async function createGroup(data: {
   name: string; description?: string; mainImage?: string; category?: string; subCategory?: string
@@ -82,4 +83,10 @@ export async function searchProducts(q: string) {
   )
   if (!res.ok) return { products: [], variants: [] }
   return res.json()
+}
+
+/** Grup detayını yönetim için getir — anahtar sunucuda kalır */
+export async function getGroupAdmin(id: number) {
+  const res = await fetch(`${API_URL}/public/catalog/groups/admin/${id}?secret=${encodeURIComponent(secret())}`, { cache: 'no-store' })
+  return res.ok ? res.json() : null
 }

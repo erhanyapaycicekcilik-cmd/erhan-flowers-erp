@@ -6,7 +6,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { getImageUrl } from '@/lib/api/catalog'
 import { formatPrice } from '@/lib/utils/format'
-import { updateGroup, deleteGroup, addVariant, updateVariant, deleteVariant, searchProducts } from '../actions'
+import { updateGroup, deleteGroup, addVariant, updateVariant, deleteVariant, searchProducts, getGroupAdmin } from '../actions'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8101'
 
@@ -53,9 +53,8 @@ export default function GroupEditPage() {
 
   const load = useCallback(async () => {
     try {
-      const secret = 'dev-secret-local' // gerçek ortamda env'den gelecek
-      const r = await fetch(`${API_URL}/public/catalog/groups/admin/${id}?secret=${secret}`, { cache: 'no-store' })
-      if (r.ok) setGroup(await r.json())
+      const g = await getGroupAdmin(Number(id))
+      if (g) setGroup(g)
     } finally { setLoading(false) }
   }, [id])
 

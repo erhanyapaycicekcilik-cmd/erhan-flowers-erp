@@ -39,21 +39,40 @@ export function ProductGroupConfigurator({ group }: Props) {
 
   const hasSizes = sizes.length > 0
   // Saksı gruplarında ikinci seçenek saksı modeli değil, saksının rengidir
-  const potOptionLabel = group.category === 'Saksılar' ? 'Renk' : 'Saksı'
+  const potOptionLabel = group.category === 'Saksılar' || group.category === 'Vazo ve Şamdanlar' ? 'Renk' : 'Saksı'
   const hasPots = pots.length > 0
 
   const [selectedSize, setSelectedSize] = useState<string | null>(hasSizes ? sizes[0] : null)
   const [selectedPot, setSelectedPot] = useState<string | null>(hasPots ? pots[0].label : null)
 
-  // Seçilen kombinasyona uyan varyant
+  // Seçilen boyda bulunan renkler (her boy her renkte olmayabilir)
+  const availablePots = useMemo(() => new Set(
+    group.variants.filter(v => !hasSizes || v.sizeLabel === selectedSize).map(v => v.potLabel).filter(Boolean) as string[],
+  ), [group.variants, hasSizes, selectedSize])
+
+  // Seçilen kombinasyona uyan varyant (yoksa null — yanlış ürün sepete eklenmesin)
   const matched: ProductGroupVariant | null = useMemo(() => {
+    if (!hasSizes && !hasPots) return group.variants[0] ?? null
     return group.variants.find(v =>
       (!hasSizes || v.sizeLabel === selectedSize) &&
       (!hasPots || v.potLabel === selectedPot)
-    ) ?? group.variants[0] ?? null
+    ) ?? null
   }, [group.variants, selectedSize, selectedPot, hasSizes, hasPots])
 
   const [activeImg, setActiveImg] = useState(0)
+
+  const chooseSize = (size: string) => {
+    setSelectedSize(size)
+    setActiveImg(0)
+    if (hasPots) {
+      const pots = group.variants.filter(v => v.sizeLabel === size).map(v => v.potLabel).filter(Boolean) as string[]
+      if (pots.length && (!selectedPot || !pots.includes(selectedPot))) setSelectedPot(pots[0])
+    }
+  }
+  const choosePot = (pot: string) => {
+    setSelectedPot(pot)
+    setActiveImg(0)
+  }
   const images = matched?.images?.length ? matched.images : (group.mainImage ? [group.mainImage] : [])
 
   return (
@@ -119,7 +138,7 @@ export function ProductGroupConfigurator({ group }: Props) {
               <div className="flex flex-wrap gap-2">
                 {sizes.map(size => (
                   <button key={size}
-                    onClick={() => setSelectedSize(size)}
+                    onClick={() => chooseSize(size)}
                     className={`px-4 py-2 rounded-xl border-2 text-sm font-medium transition-all ${
                       selectedSize === size
                         ? 'border-[#5C7A62] bg-[#5C7A62] text-white'
@@ -140,11 +159,17 @@ export function ProductGroupConfigurator({ group }: Props) {
                 {potOptionLabel}: <span className="text-[#0D1510]">{selectedPot}</span>
               </p>
               <div className="flex flex-wrap gap-2">
-                {pots.map(pot => (
+                {pots.map(pot => {
+                  const available = availablePots.has(pot.label)
+                  return (
                   <button key={pot.label}
-                    onClick={() => setSelectedPot(pot.label)}
+                    onClick={() => available && choosePot(pot.label)}
+                    disabled={!available}
+                    title={available ? pot.label : `${pot.label} — bu boyda yok`}
                     className={`flex flex-col items-center gap-1.5 p-2 rounded-xl border-2 text-xs font-medium transition-all ${
-                      selectedPot === pot.label
+                      !available
+                        ? 'border-dashed border-[#E0DDD4] text-[#B5B2A8] opacity-40 cursor-not-allowed'
+                        : selectedPot === pot.label
                         ? 'border-[#5C7A62] bg-[#5C7A62]/5'
                         : 'border-[#E0DDD4] text-[#5C5C52] hover:border-[#5C7A62]'
                     }`}
@@ -158,7 +183,8 @@ export function ProductGroupConfigurator({ group }: Props) {
                     )}
                     <span className={selectedPot === pot.label ? 'text-[#5C7A62] font-semibold' : ''}>{pot.label}</span>
                   </button>
-                ))}
+                  )
+                })}
               </div>
             </div>
           )}
@@ -206,7 +232,7 @@ export function ProductGroupConfigurator({ group }: Props) {
               <div className="space-y-1">
                 {group.variants.map(v => (
                   <button key={v.id}
-                    onClick={() => { if (v.sizeLabel) setSelectedSize(v.sizeLabel); if (v.potLabel) setSelectedPot(v.potLabel) }}
+                    onClick={() => { if (v.sizeLabel) setSelectedSize(v.sizeLabel); if (v.potLabel) setSelectedPot(v.potLabel); setActiveImg(0) }}
                     className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-colors ${
                       matched?.id === v.id ? 'bg-[#5C7A62]/10 text-[#0D1510]' : 'hover:bg-[#F4F2EC] text-[#5C5C52]'
                     }`}

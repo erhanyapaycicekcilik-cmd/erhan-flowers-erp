@@ -123,7 +123,7 @@ export default async function ProductsPage({ searchParams }: PageProps) {
           </nav>
 
           {/* Ana layout: sidebar + içerik */}
-          <div className="flex gap-6 items-start">
+          <div className="flex flex-col lg:flex-row gap-3 lg:gap-6 items-stretch lg:items-start">
 
             {/* Sol kenar çubuğu */}
             <SidebarFilters
@@ -144,8 +144,9 @@ export default async function ProductsPage({ searchParams }: PageProps) {
                   <p className="text-sm text-[#8C8A82] mt-0.5">{response.pagination.total} ürün bulundu</p>
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
-                  {(['price_asc', 'price_desc', 'newest', 'name'] as const).map(s => {
+                  {(['bestseller', 'price_asc', 'price_desc', 'newest', 'name'] as const).map(s => {
                     const labels: Record<string, string> = {
+                      bestseller: 'Çok Satanlar',
                       price_asc: 'Fiyat ↑',
                       price_desc: 'Fiyat ↓',
                       newest: 'En Yeni',
@@ -161,7 +162,7 @@ export default async function ProductsPage({ searchParams }: PageProps) {
                         key={s}
                         href={`/urunler?${qs}`}
                         className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors whitespace-nowrap ${
-                          searchParams.sirala === s
+                          (searchParams.sirala ?? 'bestseller') === s
                             ? 'bg-[#1E3A28] text-white'
                             : 'bg-white border border-[#E0DDD4] text-[#5C5C52] hover:bg-[#F4F2EC]'
                         }`}
@@ -202,26 +203,12 @@ export default async function ProductsPage({ searchParams }: PageProps) {
                                     sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
                                     quality={70}
                                     priority={idx < 4}
-                                    className="object-cover group-hover:scale-105 transition-transform duration-500"
+                                    className="object-contain bg-white p-1 group-hover:scale-105 transition-transform duration-500"
                                   />
                                 ) : (
                                   <div className="w-full h-full flex items-center justify-center text-4xl">🌳</div>
                                 )}
                               </div>
-                              {sizes.length > 0 && (
-                                <div className="absolute top-2 left-2 flex flex-wrap gap-1">
-                                  {sizes.slice(0, 3).map(s => (
-                                    <span key={s} className="bg-white/90 backdrop-blur text-[#0D1510] text-[9px] font-semibold px-1.5 py-0.5 rounded-full shadow-sm">
-                                      {s}
-                                    </span>
-                                  ))}
-                                  {sizes.length > 3 && (
-                                    <span className="bg-white/90 backdrop-blur text-[#8C8A82] text-[9px] px-1.5 py-0.5 rounded-full shadow-sm">
-                                      +{sizes.length - 3}
-                                    </span>
-                                  )}
-                                </div>
-                              )}
                               <div className="absolute bottom-2 right-2">
                                 <span className="bg-[#5C7A62] text-white text-[10px] font-semibold px-2 py-1 rounded-full shadow">
                                   {optionCount} seçenek
@@ -237,21 +224,34 @@ export default async function ProductsPage({ searchParams }: PageProps) {
                                   {group.name}
                                 </h3>
                               </Link>
-                              <div className="mt-2.5 flex items-center justify-between gap-2">
-                                <p className="font-semibold text-[#0D1510] text-sm">
-                                  {minPrice > 0
-                                    ? minPrice === maxPrice
-                                      ? formatPrice(minPrice)
-                                      : `${formatPrice(minPrice)} – ${formatPrice(maxPrice)}`
-                                    : '—'}
-                                </p>
-                                <Link
-                                  href={`/urun-grubu/${group.slug}`}
-                                  className="flex items-center gap-1 bg-[#5C7A62] text-white text-xs px-2.5 py-1.5 rounded-xl font-medium hover:bg-[#4a6350] transition-colors whitespace-nowrap"
-                                >
-                                  Boy Seç
-                                </Link>
-                              </div>
+                              {/* Boylar resmin üstünde değil, altında — sayfa açılınca okunur */}
+                              {sizes.length > 0 && (() => {
+                                const cms = [...new Set(sizes.map((x) => x.match(/(\d+)\s*cm/i)?.[1]).filter(Boolean))] as string[]
+                                const labels = cms.length ? cms.map((c) => `${c} cm`) : sizes
+                                return (
+                                  <div className="mt-2 flex flex-wrap gap-1">
+                                    {labels.slice(0, 4).map((l) => (
+                                      <span key={l} className="bg-[#F4F2EC] border border-[#E0DDD4] text-[#3A3A34] text-[10px] font-medium px-1.5 py-0.5 rounded-md">{l}</span>
+                                    ))}
+                                    {labels.length > 4 && <span className="text-[10px] text-[#8C8A82] px-1 py-0.5">+{labels.length - 4}</span>}
+                                  </div>
+                                )
+                              })()}
+                              <p className="mt-2 text-sm text-[#0D1510]">
+                                {minPrice > 0 ? (
+                                  minPrice === maxPrice ? (
+                                    <span className="font-bold text-base">{formatPrice(minPrice)}</span>
+                                  ) : (
+                                    <><span className="font-bold text-base">{formatPrice(minPrice)}</span><span className="text-xs text-[#8C8A82]">&apos;den başlayan</span></>
+                                  )
+                                ) : '—'}
+                              </p>
+                              <Link
+                                href={`/urun-grubu/${group.slug}`}
+                                className="mt-2 block text-center bg-[#5C7A62] text-white text-xs py-2 rounded-xl font-semibold hover:bg-[#4a6350] transition-colors"
+                              >
+                                Boy ve Renk Seç
+                              </Link>
                             </div>
                           </article>
                         </li>
@@ -313,6 +313,9 @@ export default async function ProductsPage({ searchParams }: PageProps) {
                                     Tükendi
                                   </span>
                                 )}
+                                {product.bestseller && (
+                                  <span className="bg-[#E8590C] text-white text-[10px] font-bold px-2 py-1 rounded-md shadow">🔥 Çok Satan</span>
+                                )}
                                 {discount && discount >= 5 && (
                                   <span className="bg-[#8C2D2D] text-white text-[10px] font-bold w-10 h-10 rounded-full flex items-center justify-center shadow">
                                     %{discount}
@@ -346,7 +349,10 @@ export default async function ProductsPage({ searchParams }: PageProps) {
                                   <div>
                                     <p className="font-bold text-[#0D1510] text-base">{formatPrice(product.sitePrice)}</p>
                                     {product.originalPrice && product.originalPrice > product.sitePrice && (
-                                      <p className="text-xs text-[#B0ADA6] line-through">{formatPrice(product.originalPrice)}</p>
+                                      <p className="text-xs text-[#B0ADA6]">
+                                        {product.compareAtLabel && <span className="mr-1">{product.compareAtLabel}&apos;da</span>}
+                                        <span className="line-through">{formatPrice(product.originalPrice)}</span>
+                                      </p>
                                     )}
                                   </div>
                                   <AddToCartButton

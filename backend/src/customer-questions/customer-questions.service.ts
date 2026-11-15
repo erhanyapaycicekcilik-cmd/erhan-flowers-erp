@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service';
@@ -34,11 +35,47 @@ export class CustomerQuestionsService {
 
   async answer(id: number, answer: string, companyCode = 'ERHAN') {
     const question = await this.prisma.customerQuestion.findUniqueOrThrow({ where: { id } });
-    await this.sendAnswerToPlatform(question.platform, question.externalId, answer, companyCode);
+    // Siteden gelen talepler (SITE_*) bir pazaryerine gönderilmez; cevap sadece kayda yazılır
+    if (!question.platform.startsWith('SITE_')) {
+      await this.sendAnswerToPlatform(question.platform, question.externalId, answer, companyCode);
+    }
     return this.prisma.customerQuestion.update({
       where: { id },
       data: { answer, status: 'ANSWERED', answeredAt: new Date() },
     });
+  }
+
+  /** Sitedeki toptan / kurumsal alım formu → Müşteri Soruları (platform SITE_TOPTAN) + bildirim */
+  async createWholesaleRequest(d: {
+    name: string; phone: string; company: string; city: string; quantity: string; message: string; productName: string; productSlug: string;
+  }) {
+    const lines = [
+      '🏢 TOPTAN / KURUMSAL ALIM TALEBİ',
+      `Ad soyad: ${d.name}`,
+      `Telefon: ${d.phone}`,
+      d.company && `Firma: ${d.company}`,
+      d.city && `Şehir: ${d.city}`,
+      d.productName && `Ürün: ${d.productName}`,
+      d.productSlug && `Link: https://www.erhanflowers.com/urun/${d.productSlug}`,
+      d.quantity && `Adet: ${d.quantity}`,
+      d.message && `Not: ${d.message}`,
+    ].filter(Boolean);
+    const q = await this.prisma.customerQuestion.create({
+      data: {
+        platform: 'SITE_TOPTAN',
+        externalId: randomUUID(),
+        productName: d.productName || 'Toptan alım (genel)',
+        productSku: d.productSlug || null,
+        customerName: d.company ? `${d.name} (${d.company})` : d.name,
+        question: lines.join('\n'),
+        askedAt: new Date(),
+        rawPayload: d,
+      },
+    });
+    await this.push
+      .sendToAll({ title: 'Yeni toptan alım talebi', body: `${d.name}${d.company ? ' · ' + d.company : ''}${d.quantity ? ' · ' + d.quantity : ''}`, url: '/musteri-sorulari' })
+      .catch(() => null);
+    return { success: true, id: q.id };
   }
 
   @Cron(CronExpression.EVERY_5_MINUTES)

@@ -1,10 +1,11 @@
+import { adminSecret } from '@/lib/admin-secret'
 import Link from 'next/link'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8101'
 
 async function getGroups() {
   try {
-    const secret = process.env.REVALIDATE_SECRET || 'dev-secret-local'
+    const secret = adminSecret()
     const res = await fetch(`${API_URL}/public/catalog/groups/admin/list?secret=${secret}`, {
       cache: 'no-store',
     })

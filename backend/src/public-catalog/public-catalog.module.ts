@@ -19,6 +19,6 @@ import { ProductGroupsService } from './product-groups.service';
   ],
   controllers: [PublicCatalogController, ProductGroupsController],
   providers: [PublicCatalogService, TrendyolProductSyncService, CredentialVaultService, ProductGroupsService],
-  exports: [TrendyolProductSyncService],
+  exports: [TrendyolProductSyncService, PublicCatalogService, ProductGroupsService],
 })
 export class PublicCatalogModule {}

@@ -129,8 +129,9 @@ function ProductCard({ product }: { product: PublicProduct }) {
               {formatPrice(product.sitePrice)}
             </p>
             {product.originalPrice && (
-              <p className="text-xs text-gray-400 line-through mt-0.5">
-                {formatPrice(product.originalPrice)}
+              <p className="text-xs text-gray-400 mt-0.5">
+                {product.compareAtLabel && <span className="mr-1">{product.compareAtLabel}&apos;da</span>}
+                <span className="line-through">{formatPrice(product.originalPrice)}</span>
               </p>
             )}
           </div>

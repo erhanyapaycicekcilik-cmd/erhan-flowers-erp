@@ -3,11 +3,12 @@ import { Header } from '@/components/layout/Header'
 import { Footer } from '@/components/layout/Footer'
 import { CategoryGrid } from '@/components/home/CategoryGrid'
 import { FeaturedProducts } from '@/components/home/FeaturedProducts'
+import { LatestByCategory } from '@/components/home/LatestByCategory'
+import { BestSellers } from '@/components/home/BestSellers'
 import { TrustBadges } from '@/components/home/TrustBadges'
 import { WhyUs } from '@/components/home/WhyUs'
 // import { PromoBanners } from '@/components/home/PromoBanners'
 // import { MekanKategorileri } from '@/components/home/MekanKategorileri'
-import { SocialProofBar } from '@/components/home/SocialProofBar'
 import { InstagramFeed } from '@/components/home/InstagramFeed'
 
 export const metadata: Metadata = {
@@ -39,9 +40,10 @@ export default function HomePage() {
     <>
       <Header />
       <main>
-        <SocialProofBar />
         <TrustBadges />
         <CategoryGrid />
+        <BestSellers />
+        <LatestByCategory />
         {/* <PromoBanners /> */}
         {/* <MekanKategorileri /> */}
         <FeaturedProducts />

@@ -1,4 +1,5 @@
 'use server'
+import { adminSecret } from '@/lib/admin-secret'
 
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
@@ -9,7 +10,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8101'
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3200'
 
 async function revalidateSite() {
-  const secret = process.env.REVALIDATE_SECRET || 'dev-secret-local'
+  const secret = adminSecret()
   await fetch(`${APP_URL}/api/revalidate?secret=${secret}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -39,7 +40,7 @@ export async function adminLogout() {
 }
 
 export async function createProduct(form: FormData) {
-  const secret = process.env.REVALIDATE_SECRET || 'dev-secret-local'
+  const secret = adminSecret()
   const data = {
     name: form.get('name'),
     modelCode: form.get('modelCode') || null,
@@ -82,7 +83,7 @@ export async function deleteProduct(id: number) {
 /** Ürün adına göre otomatik kategori ataması */
 export async function triggerRecategorize(): Promise<{ error?: string; data?: unknown }> {
   try {
-    const secret = process.env.REVALIDATE_SECRET || 'dev-secret-local'
+    const secret = adminSecret()
     const res = await fetch(`${API_URL}/public/catalog/admin/recategorize?secret=${secret}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -102,7 +103,7 @@ export async function updateProductCategory(
   subCategory?: string | null,
 ): Promise<{ ok?: boolean; error?: string }> {
   try {
-    const secret = process.env.REVALIDATE_SECRET || 'dev-secret-local'
+    const secret = adminSecret()
     const res = await fetch(`${API_URL}/public/catalog/admin/set-category?secret=${secret}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -123,7 +124,7 @@ export async function bulkPriceAdjust(params: {
   dryRun?: boolean
 }): Promise<{ error?: string; updated?: number; skipped?: number; preview?: Array<{ id: number; name: string; oldSitePrice: number; newSitePrice: number; oldMarketPrice: number; newMarketPrice: number }> }> {
   try {
-    const secret = process.env.REVALIDATE_SECRET || 'dev-secret-local'
+    const secret = adminSecret()
     const res = await fetch(`${API_URL}/public/catalog/admin/bulk-price-adjust?secret=${secret}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -142,7 +143,7 @@ export async function bulkPriceAdjust(params: {
 /** Trendyol'dan ürünleri çek ve siteyi revalidate et */
 export async function triggerTrendyolSync(): Promise<{ error?: string; data?: unknown }> {
   try {
-    const secret = process.env.REVALIDATE_SECRET || 'dev-secret-local'
+    const secret = adminSecret()
     const res = await fetch(`${API_URL}/public/catalog/admin/trendyol-sync?secret=${secret}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -158,4 +159,15 @@ export async function triggerTrendyolSync(): Promise<{ error?: string; data?: un
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'Bağlantı hatası' }
   }
+}
+
+/** Ürün videosunu kaydet — anahtar sunucuda kalır (eskiden tarayıcıdan gönderiliyordu) */
+export async function setProductVideo(productId: number, videoUrl: string | null): Promise<{ error?: string }> {
+  const res = await fetch(`${API_URL}/public/catalog/admin/set-video?secret=${encodeURIComponent(adminSecret())}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ productId, videoUrl }),
+    cache: 'no-store',
+  })
+  return res.ok ? {} : { error: `Hata (${res.status})` }
 }

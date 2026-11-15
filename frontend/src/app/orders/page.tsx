@@ -550,6 +550,10 @@ export default function OrdersPage() {
               <FileSpreadsheet size={16} />
               Listeyi Excel İndir
             </button>
+            <Link className="btn btn-primary bg-emerald-600 hover:bg-emerald-700" href="/adres-ciktisi">
+              <Tag size={16} />
+              Elle Adres Çıktısı
+            </Link>
           </div>
         </section>
 

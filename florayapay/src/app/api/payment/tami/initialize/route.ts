@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { initiate3DS, tamiEnabled } from '@/lib/tami'
 import { store3dsHtml } from '@/lib/3ds-store'
+import { fetchPayableOrder } from '@/lib/erp-internal'
 
 const SITE_URL = process.env.SITE_URL || 'https://www.erhanflowers.com'
 
@@ -11,9 +12,26 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json()
+    // Tahsil edilecek tutar ERP'deki siparişten alınır; tarayıcıdan gelen amount/ürün fiyatları kullanılmaz
+    const order = await fetchPayableOrder(String(body?.orderId ?? ''))
+    if (!order) {
+      return NextResponse.json({ error: 'Sipariş bulunamadı. Lütfen siparişi yeniden oluşturun.' }, { status: 400 })
+    }
+    if (order.paid || order.cancelled) {
+      return NextResponse.json({ error: order.paid ? 'Bu siparişin ödemesi zaten alınmış.' : 'Bu sipariş iptal edilmiş.' }, { status: 400 })
+    }
+    const amount = Math.round(order.grandTotal * 100) / 100
     const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || '127.0.0.1'
-    const callbackUrl = `${SITE_URL}/api/payment/tami/callback/${encodeURIComponent(body.orderId)}`
-    const result = await initiate3DS({ ...body, musteri: { ...body.musteri, ip }, callbackUrl })
+    const callbackUrl = `${SITE_URL}/api/payment/tami/callback/${encodeURIComponent(order.orderNumber)}`
+    const result = await initiate3DS({
+      ...body,
+      orderId: order.orderNumber,
+      amount,
+      // Sepet tek kalem: toplam her zaman tahsil edilen tutara eşit olsun
+      urunler: [{ id: order.orderNumber, ad: `Erhan Flowers sipariş ${order.orderNumber}`, kategori: 'YAPAY_CICEK', fiyat: amount, adet: 1 }],
+      musteri: { ...body.musteri, ip },
+      callbackUrl,
+    })
 
     if (!result.success || !result.threeDSHtmlContent) {
       return NextResponse.json(
