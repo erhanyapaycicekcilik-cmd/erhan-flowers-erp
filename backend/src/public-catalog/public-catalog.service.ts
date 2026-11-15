@@ -384,10 +384,23 @@ export class PublicCatalogService {
     ] }];
     if (matchedCategory) productWhere['catalogCategory'] = matchedCategory;
     if (matchedSubCategory) productWhere['catalogSubCategory'] = matchedSubCategory;
-    // Ürün grubu varyantı olarak satılan site ürünleri (ör. Bostann saksı boyut×renk) düz listede
-    // tek tek gösterilmez; müşteri bunları grup sayfasından boyut/renk seçerek alır. Aramada görünürler.
+    // Ürün grubu varyantı olarak satılan site ürünleri (ör. Bostann saksı boyut×renk, ağaç grupları)
+    // düz listede tek tek gösterilmez; müşteri bunları grup sayfasından seçerek alır. Aramada görünürler.
     if (!params.search?.trim()) {
       productWhere['NOT'] = GROUP_ONLY_NOT;
+
+      // Aktif bir ProductGroup'a bağlı ürünleri düz listeden gizle (ör. ağaç grupları)
+      if (matchedCategory) {
+        const groupedVariants = await this.prisma.productGroupVariant.findMany({
+          where: { isActive: true, productId: { not: null }, group: { isActive: true, category: matchedCategory } },
+          select: { productId: true },
+        });
+        const groupedIds = groupedVariants.map((v) => v.productId!).filter(Boolean);
+        if (groupedIds.length > 0) {
+          const existing = (productWhere['NOT'] as unknown[]) ?? [];
+          productWhere['NOT'] = [...(Array.isArray(existing) ? existing : [existing]), { id: { in: groupedIds } }];
+        }
+      }
     }
 
     if (params.barcode?.trim()) {
