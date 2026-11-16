@@ -160,9 +160,11 @@ export class BillAccountsService {
     const results: Array<Record<string, unknown>> = [];
 
     for (const a of accounts) {
-      const no = a.subscriberNo!.replace(/\s+/g, '');
-      if (no.length < 4) continue;
-      const q = [`"${no}"`, a.emailSender ? `from:${a.emailSender}` : '', 'newer_than:45d'].filter(Boolean).join(' ');
+      // Birden fazla numara girilebilir (hesap no + sözleşme no): virgül, noktalı virgül veya / ile ayrılmış
+      const nos = a.subscriberNo!.split(/[,;/]+/).map((x) => x.replace(/\s+/g, '')).filter((x) => x.length >= 4);
+      if (!nos.length) continue;
+      const numQ = nos.length === 1 ? `"${nos[0]}"` : `{${nos.map((n) => `"${n}"`).join(' ')}}`;
+      const q = [numQ, a.emailSender ? `from:${a.emailSender}` : '', 'newer_than:45d'].filter(Boolean).join(' ');
       const ids = await this.gmail.searchMessageIds(q, 6);
       if (!ids?.length) {
         results.push({ accountId: a.id, name: a.name, found: 0 });
