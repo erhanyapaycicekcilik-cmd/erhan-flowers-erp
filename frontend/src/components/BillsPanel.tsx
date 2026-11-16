@@ -325,8 +325,8 @@ export function BillsPanel() {
             <label className="text-xs text-gray-600">Kurum
               <input placeholder="ör: Enerjisa, İSKİ, Türk Telekom" value={form.provider} onChange={e => setForm(f => ({ ...f, provider: e.target.value }))} className="mt-1 w-full border rounded-lg px-3 py-2 text-sm" />
             </label>
-            <label className="text-xs text-gray-600">{isUtility ? 'Abone / Tesisat / Hizmet No' : 'Hesap / Sözleşme No'}
-              <input placeholder="Faturanın üstündeki numara" value={form.subscriberNo} onChange={e => setForm(f => ({ ...f, subscriberNo: e.target.value }))} className="mt-1 w-full border rounded-lg px-3 py-2 text-sm font-mono" />
+            <label className="text-xs text-gray-600">{isUtility ? 'Abone / Tesisat / Sözleşme No' : 'Hesap / Sözleşme No'}
+              <input placeholder="ör: 8145873522 (e-postadaki numara)" value={form.subscriberNo} onChange={e => setForm(f => ({ ...f, subscriberNo: e.target.value }))} className="mt-1 w-full border rounded-lg px-3 py-2 text-sm font-mono" />
             </label>
             <label className="text-xs text-gray-600">Son ödeme günü (1-31) *
               <input type="number" min={1} max={31} value={form.dueDay} onChange={e => setForm(f => ({ ...f, dueDay: e.target.value }))} className="mt-1 w-full border rounded-lg px-3 py-2 text-sm" />
@@ -340,7 +340,7 @@ export function BillsPanel() {
               </label>
             )}
             <label className="text-xs text-gray-600">Fatura e-postası gönderen (opsiyonel)
-              <input placeholder="ör: efatura@enerjisa.com.tr" value={form.emailSender} onChange={e => setForm(f => ({ ...f, emailSender: e.target.value }))} className="mt-1 w-full border rounded-lg px-3 py-2 text-sm" />
+              <input placeholder="ör: ckenerji.com.tr" value={form.emailSender} onChange={e => setForm(f => ({ ...f, emailSender: e.target.value }))} className="mt-1 w-full border rounded-lg px-3 py-2 text-sm" />
             </label>
           </div>
           <p className="text-xs text-gray-500 mt-2">
