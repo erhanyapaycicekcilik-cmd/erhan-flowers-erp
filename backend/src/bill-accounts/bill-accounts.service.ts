@@ -1,8 +1,14 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { createHash, randomBytes, timingSafeEqual } from 'crypto';
 import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service';
 import { GmailOrderService } from '../integrations/services/gmail-order.service';
-import { parseBillEmail } from './bill-email-parser';
+import { parseBillEmail, ParsedBill } from './bill-email-parser';
+
+const SMS_TOKEN_KEY = 'bill_sms_token';
+const SMS_LOG_KEY = 'bill_sms_log';
+
+export type SmsLogEntry = { at: string; from: string | null; text: string; matched: string | null; amount: number | null; dueDate: string | null; result: string };
 
 export const BILL_TYPES = ['RENT', 'WATER', 'ELECTRICITY', 'NATURAL_GAS', 'MOBILE', 'INTERNET', 'CREDIT_CARD', 'OTHER'];
 
@@ -18,6 +24,11 @@ type AccountInput = {
   subscriberNo?: string | null;
   emailSender?: string | null;
 };
+
+/** Hesaptaki numaralar (virgül, noktalı virgül veya / ile birden fazla). */
+function accountNumbers(subscriberNo: string | null) {
+  return (subscriberNo ?? '').split(/[,;/]+/).map((x) => x.replace(/\s+/g, '')).filter((x) => x.length >= 4);
+}
 
 const clean = (v: string | null | undefined) => (v === undefined ? undefined : v?.trim() || null);
 
@@ -161,7 +172,7 @@ export class BillAccountsService {
 
     for (const a of accounts) {
       // Birden fazla numara girilebilir (hesap no + sözleşme no): virgül, noktalı virgül veya / ile ayrılmış
-      const nos = a.subscriberNo!.split(/[,;/]+/).map((x) => x.replace(/\s+/g, '')).filter((x) => x.length >= 4);
+      const nos = accountNumbers(a.subscriberNo);
       if (!nos.length) continue;
       const numQ = nos.length === 1 ? `"${nos[0]}"` : `{${nos.map((n) => `"${n}"`).join(' ')}}`;
       const q = [numQ, a.emailSender ? `from:${a.emailSender}` : '', 'newer_than:45d'].filter(Boolean).join(' ');
@@ -191,24 +202,115 @@ export class BillAccountsService {
         if (handledMonths.has(mk)) continue;
         handledMonths.add(mk);
 
-        const key = { billAccountId_year_month: { billAccountId: a.id, year, month } };
-        const existing = await this.prisma.billPayment.findUnique({ where: key });
-        if (existing?.paidAt || (existing?.source === 'MANUAL' && existing.amount != null)) continue;
-
-        const data = {
-          amount: parsed.amount ?? existing?.amount ?? null,
-          invoiceNo: parsed.invoiceNo ?? existing?.invoiceNo ?? null,
-          dueDate: parsed.dueDate ?? existing?.dueDate ?? null,
-          source: 'EMAIL',
-          emailMessageId: id,
-          note: existing?.note ?? `E-posta: ${msg.subject.slice(0, 120)}`,
-        };
-        await this.prisma.billPayment.upsert({ where: key, create: { billAccountId: a.id, year, month, ...data }, update: data });
+        const data = await this.applyParsed(a.id, year, month, parsed, 'EMAIL', id, `E-posta: ${msg.subject.slice(0, 120)}`);
+        if (!data) continue;
         updated++;
         results.push({ accountId: a.id, name: a.name, year, month, amount: data.amount, invoiceNo: data.invoiceNo, subject: msg.subject });
       }
     }
 
     return { connected: true, scanned: accounts.length, updated, results };
+  }
+
+  /**
+   * Ayrıştırılan faturayı ilgili ayın kaydına yazar. Ödenmiş veya elle (MANUAL) tutar girilmiş aya dokunmaz.
+   * sourceRef: e-posta mesaj id'si ya da `sms:<özet>` — aynı kaynak iki kez işlenmez.
+   */
+  private async applyParsed(billAccountId: number, year: number, month: number, parsed: ParsedBill, source: 'EMAIL' | 'SMS', sourceRef: string, note: string) {
+    const key = { billAccountId_year_month: { billAccountId, year, month } };
+    const existing = await this.prisma.billPayment.findUnique({ where: key });
+    if (existing?.paidAt || (existing?.source === 'MANUAL' && existing.amount != null)) return null;
+    const data = {
+      amount: parsed.amount ?? existing?.amount ?? null,
+      invoiceNo: parsed.invoiceNo ?? existing?.invoiceNo ?? null,
+      dueDate: parsed.dueDate ?? existing?.dueDate ?? null,
+      source,
+      emailMessageId: sourceRef,
+      note: existing?.note ?? note,
+    };
+    await this.prisma.billPayment.upsert({ where: key, create: { billAccountId, year, month, ...data }, update: data });
+    return data;
+  }
+
+  // ─── SMS (Android yönlendirme uygulaması → webhook) ────────────────────────
+
+  private async getSetting(key: string) {
+    return (await this.prisma.appSetting.findUnique({ where: { key } }))?.value ?? null;
+  }
+
+  private async setSetting(key: string, value: string) {
+    await this.prisma.appSetting.upsert({ where: { key }, create: { key, value }, update: { value } });
+  }
+
+  /** SMS adresinin gizli anahtarı (yoksa oluşturur) + son gelen SMS'ler. */
+  async smsSettings(regenerate = false) {
+    let token = regenerate ? null : await this.getSetting(SMS_TOKEN_KEY);
+    if (!token) {
+      token = randomBytes(18).toString('hex');
+      await this.setSetting(SMS_TOKEN_KEY, token);
+    }
+    return { token, log: await this.smsLog() };
+  }
+
+  async smsLog(): Promise<SmsLogEntry[]> {
+    try { return JSON.parse((await this.getSetting(SMS_LOG_KEY)) ?? '[]'); } catch { return []; }
+  }
+
+  private async pushSmsLog(e: SmsLogEntry) {
+    const log = await this.smsLog();
+    log.unshift(e);
+    await this.setSetting(SMS_LOG_KEY, JSON.stringify(log.slice(0, 30)));
+  }
+
+  /** Telefondan gelen SMS: abone numarası eşleşen hesabın o ayki faturasına yazar. */
+  async receiveSms(token: string | undefined, body: unknown) {
+    const saved = await this.getSetting(SMS_TOKEN_KEY);
+    const ok = !!saved && !!token && token.length === saved.length && timingSafeEqual(Buffer.from(token), Buffer.from(saved));
+    if (!ok) throw new UnauthorizedException('Geçersiz anahtar.');
+
+    // Uygulamalar farklı alan adları kullanıyor — hepsini kabul et
+    let text = '';
+    let from: string | null = null;
+    if (typeof body === 'string') text = body;
+    else if (body && typeof body === 'object') {
+      const b = body as Record<string, unknown>;
+      const pick = (...keys: string[]) => keys.map((k) => b[k]).find((v) => typeof v === 'string' && v.trim()) as string | undefined;
+      text = pick('text', 'message', 'msg', 'body', 'content', 'sms', 'key') ?? '';
+      from = pick('from', 'sender', 'phone', 'number', 'address', 'title') ?? null;
+    }
+    text = text.trim().slice(0, 2000);
+    if (!text) throw new BadRequestException('SMS metni boş.');
+
+    const digits = text.replace(/[^0-9]/g, ' ');
+    const accounts = await this.prisma.billAccount.findMany({ where: { isActive: true, subscriberNo: { not: null } } });
+    const compact = text.replace(/\s+/g, '').toUpperCase();
+    const hasNumber = (n: string) =>
+      /^\d+$/.test(n) ? new RegExp(`(^|\\D)${n}(\\D|$)`).test(digits) : compact.includes(n.toUpperCase());
+    const account = accounts.find((a) => accountNumbers(a.subscriberNo).some(hasNumber));
+    const parsed = parseBillEmail(text);
+
+    const entry: SmsLogEntry = {
+      at: new Date().toISOString(), from, text: text.slice(0, 400), matched: account?.name ?? null,
+      amount: parsed.amount, dueDate: parsed.dueDate?.toISOString() ?? null, result: '',
+    };
+
+    if (!account) entry.result = 'Abone numarası hiçbir hesapla eşleşmedi';
+    else if (!parsed.amount && !parsed.invoiceNo) entry.result = 'Tutar okunamadı';
+    else {
+      const ref = parsed.dueDate ?? new Date();
+      const year = ref.getUTCFullYear();
+      const month = ref.getUTCMonth() + 1;
+      const hash = createHash('sha1').update(text).digest('hex').slice(0, 16);
+      const dup = await this.prisma.billPayment.findFirst({ where: { emailMessageId: `sms:${hash}` } });
+      if (dup) entry.result = 'Bu SMS daha önce işlendi';
+      else {
+        const data = await this.applyParsed(account.id, year, month, parsed, 'SMS', `sms:${hash}`, `SMS${from ? ` (${from})` : ''}: ${text.slice(0, 120)}`);
+        entry.result = data ? `${month}/${year} faturasına yazıldı` : `${month}/${year} zaten ödendi veya elle girildi — değiştirilmedi`;
+      }
+    }
+
+    await this.pushSmsLog(entry);
+    this.logger.log(`Fatura SMS: ${entry.matched ?? '-'} → ${entry.result}`);
+    return { ok: true, matched: entry.matched, amount: entry.amount, result: entry.result };
   }
 }

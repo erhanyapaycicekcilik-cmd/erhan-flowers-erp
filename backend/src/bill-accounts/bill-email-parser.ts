@@ -70,7 +70,7 @@ export function parseBillEmail(text: string): ParsedBill {
   // "toplam 2130.00 TL" / "1.540,25 TL tutarındaki" (CK Enerji borç bildirimi vb.) — para birimi şart
   const NUM = String.raw`(\d{1,3}(?:\.\d{3})+(?:,\d{1,2})?|\d+(?:[.,]\d{1,2})?)`;
   if (!amount) {
-    const m = f.match(new RegExp(`toplam\\s*[:：]?\\s*${NUM}\\s*(?:tl|try|₺)`)) ?? f.match(new RegExp(`${NUM}\\s*(?:tl|try|₺)\\s*tutarinda`));
+    const m = f.match(new RegExp(`toplam\\s*[:：]?\\s*${NUM}\\s*(?:tl|try|₺)`)) ?? f.match(new RegExp(`${NUM}\\s*(?:tl|try|₺)\\s*tutar(?:inda|li)`));
     if (m) amount = parseTrAmount(m[1]);
   }
   if (!amount) {
@@ -79,8 +79,17 @@ export function parseBillEmail(text: string): ParsedBill {
   }
 
   let dueDate: Date | null = null;
-  const dm = /son odeme(?: tarihi)?\s*[:：]?\s*/g.exec(f);
-  if (dm) dueDate = parseDateToken(f.slice(dm.index + dm[0].length, dm.index + dm[0].length + 25));
+  // "Son Ödeme Tarihi: 25.11.2026" — tarih ifadeden sonra
+  const dre = /son odeme(?: tarihi)?\s*[:：]?\s*/g;
+  let dm: RegExpExecArray | null;
+  while (!dueDate && (dm = dre.exec(f))) {
+    dueDate = parseDateToken(f.slice(dm.index + dm[0].length, dm.index + dm[0].length + 25));
+  }
+  // "12.10.2026 son ödeme tarihli" (ASAT SMS) — tarih ifadeden önce
+  if (!dueDate) {
+    const pm = f.match(/(\d{1,2}[./-]\d{1,2}[./-]\d{2,4})\s*(?:tarihli\s*)?son odeme(?: tarihli| tarihi)/);
+    if (pm) dueDate = parseDateToken(pm[1]);
+  }
 
   let invoiceNo: string | null = null;
   const im = /fatura (?:no|numarasi|seri ?no|seri ?sira ?no)\s*[:：]?\s*/g.exec(f);

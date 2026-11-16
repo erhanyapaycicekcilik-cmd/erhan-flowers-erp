@@ -123,6 +123,8 @@ Sonra tarayıcıda: **http://localhost:3200**
 - Taksitli borç: `backend/src/suppliers/installment-debts.*` — `installment_debts` + `debt_installments`. Toplam/taksit sayısı/ilk vade → eşit aylık taksit (kuruş farkı son taksitte, ay sonu taşmasında ayın son günü). `POST /installment-debts/installments/:id/pay` ödendi/geri al, `PUT .../installments/:id` tutar/vade düzelt. Cari bakiyeden bağımsızdır (aynı borcu iki yere girme)
 - Fatura hesapları (`bill_accounts`): tür (Kira/Su/Elektrik/Doğalgaz/Telefon/İnternet/Kredi Kartı/Diğer), kurum, **abone/tesisat no**, opsiyonel gönderen e-posta. Her ay otomatik listelenir; aylık kayıt `bill_payments` (tutar, fatura no, son ödeme tarihi, kaynak MANUAL/EMAIL). `PUT /bill-accounts/:id/month` elle giriş
 - **Gmail'den otomatik fatura**: her sabah 08:20 (`BillAccountsService.scanEmails`, elle `POST /bill-accounts/scan-email`) Gmail'de abone numarasını içeren son 45 günün e-postalarını okur, `bill-email-parser.ts` ile tutar/son ödeme/fatura no çıkarır. Elle girilmiş veya ödenmiş aya dokunmaz. Gmail bağlantısı mevcut `GMAIL_CLIENT_ID/SECRET/REDIRECT_URI` OAuth'unu kullanır (`/integrations/gmail/auth`)
+- Abone no alanına virgülle birden fazla numara girilebilir (ör. CK: hesap no + sözleşme no)
+- **SMS'ten fatura (Android)**: telefondaki SMS Forwarder/MacroDroid → `POST /bill-accounts/sms-webhook?token=…` (JSON `{from,text}`; oturumsuz, token `app_settings.bill_sms_token`, `GET /bill-accounts/sms-settings` OWNER). SMS'teki numara hesapla eşleşir, aynı ayrıştırıcı kullanılır, son 30 SMS `bill_sms_log`'da. Kaynak `SMS`. ASAT su SMS'i gönderen `2728`
 
 ## Sadece Sitede Satılan Ürünler (`WEB-` model kodu)
 
