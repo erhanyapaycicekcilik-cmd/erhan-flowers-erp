@@ -8,6 +8,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { Minus, Plus, Trash2, ShoppingBag, ArrowRight } from 'lucide-react'
 import { getImageUrl } from '@/lib/api/catalog'
+import { siteConfig } from '@/lib/site-config'
 
 function formatPrice(price: number) {
   return '₺' + new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(price)
@@ -142,6 +143,11 @@ function OrderSummary({ total }: { total: number }) {
   const kdvOrani = 0.20 // %20 KDV varsayımı
   const kdvDahil = total
   const kdvTutar = kdvDahil - kdvDahil / (1 + kdvOrani)
+  const threshold = siteConfig.freeShippingThreshold
+  const shippingFee = siteConfig.shippingFee ?? 0
+  const isFreeShipping = total >= threshold
+  const kargo = isFreeShipping ? 0 : shippingFee
+  const grandTotal = total + kargo
 
   return (
     <div className="bg-white rounded-2xl p-6 shadow-sm sticky top-24">
@@ -158,11 +164,19 @@ function OrderSummary({ total }: { total: number }) {
         </div>
         <div className="flex justify-between text-gray-600">
           <span>Kargo</span>
-          <span className="text-flora-600 font-medium">Ücretsiz</span>
+          {isFreeShipping
+            ? <span className="text-flora-600 font-medium">Ücretsiz</span>
+            : <span>{formatPrice(kargo)}</span>
+          }
         </div>
+        {!isFreeShipping && (
+          <div className="text-xs text-gray-400">
+            {formatPrice(threshold - total)} daha ekle, kargo bedava
+          </div>
+        )}
         <div className="border-t border-gray-100 pt-3 flex justify-between font-bold text-gray-900 text-base">
           <span>Toplam</span>
-          <span>{formatPrice(total)}</span>
+          <span>{formatPrice(grandTotal)}</span>
         </div>
       </div>
 
