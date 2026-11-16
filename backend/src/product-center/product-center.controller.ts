@@ -70,6 +70,18 @@ export class ProductCenterController {
     return this.productCenter.cleanupAutoCreatedStockCard(Number(id), body);
   }
 
+  @Post('size-series/preview')
+  @UseGuards(OwnerGuard)
+  sizeSeriesPreview(@Body() body: unknown) {
+    return this.productCenter.sizeSeries(body, false);
+  }
+
+  @Post('size-series')
+  @UseGuards(OwnerGuard)
+  sizeSeries(@Body() body: unknown) {
+    return this.productCenter.sizeSeries(body, true);
+  }
+
   @Post('entries/:id/copy-recipe')
   @UseGuards(OwnerGuard)
   copyRecipe(@Param('id') id: string, @Body() body: unknown, @Req() request: AuthenticatedRequest) {
