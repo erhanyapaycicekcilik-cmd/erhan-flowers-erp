@@ -8,6 +8,7 @@ import { useCart } from '@/hooks/useCart'
 import Image from 'next/image'
 import Link from 'next/link'
 import { getImageUrl } from '@/lib/api/catalog'
+import { siteConfig } from '@/lib/site-config'
 
 function fmt(n: number) {
   return '₺' + new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(n)
@@ -174,8 +175,9 @@ export default function SiparisPage() {
     : 0
 
   const eftIndirimTutar = total * EFT_INDIRIM
+  const kargoUcreti = total >= siteConfig.freeShippingThreshold ? 0 : (siteConfig.shippingFee ?? 0)
   const genelToplam = Math.max(0,
-    (odemeYontemi === 'eft' ? total - eftIndirimTutar : total) - promoIndirimTutar
+    (odemeYontemi === 'eft' ? total - eftIndirimTutar : total) - promoIndirimTutar + kargoUcreti
   )
 
   function set(key: keyof typeof form, val: string) {
@@ -228,7 +230,7 @@ export default function SiparisPage() {
       urunler,
       '',
       `*Toplam:* ${fmt(genelToplam)}`,
-      `*Kargo:* Ücretsiz`,
+      `*Kargo:* ${kargoUcreti === 0 ? 'Ücretsiz' : fmt(kargoUcreti)}`,
     ]
       .filter(Boolean)
       .join('\n')
@@ -733,7 +735,10 @@ export default function SiparisPage() {
                     )}
                     <div className="flex justify-between text-[#8C8A82]">
                       <span>Kargo</span>
-                      <span className="text-[#5C7A62] font-medium">Ücretsiz</span>
+                      {kargoUcreti === 0
+                        ? <span className="text-[#5C7A62] font-medium">Ücretsiz</span>
+                        : <span>{fmt(kargoUcreti)}</span>
+                      }
                     </div>
                     <div className="flex justify-between font-bold text-[#0D1510] text-base pt-1 border-t border-[#E0DDD4]">
                       <span>Toplam</span>
