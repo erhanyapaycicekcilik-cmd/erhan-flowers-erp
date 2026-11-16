@@ -266,7 +266,9 @@ export class BillAccountsService implements OnApplicationBootstrap {
       // Birden fazla numara girilebilir (hesap no + sözleşme no): virgül, noktalı virgül veya / ile ayrılmış
       const nos = accountNumbers(a.subscriberNo);
       if (!nos.length) continue;
-      const numQ = nos.length === 1 ? `"${nos[0]}"` : `{${nos.map((n) => `"${n}"`).join(' ')}}`;
+      const variants = nos.flatMap((n) =>
+        /^5\d{9}$/.test(n) ? [n, `0${n}`, `${n.slice(0, 3)} ${n.slice(3, 6)} ${n.slice(6, 8)} ${n.slice(8)}`] : [n]);
+      const numQ = variants.length === 1 ? `"${variants[0]}"` : `{${variants.map((n) => `"${n}"`).join(' ')}}`;
       const q = [numQ, a.emailSender ? `from:${a.emailSender}` : '', 'newer_than:45d'].filter(Boolean).join(' ');
       const ids = await this.gmail.searchMessageIds(q, 6);
       if (!ids?.length) {
@@ -378,7 +380,9 @@ export class BillAccountsService implements OnApplicationBootstrap {
     const accounts = await this.prisma.billAccount.findMany({ where: { isActive: true, subscriberNo: { not: null } } });
     const compact = text.replace(/\s+/g, '').toUpperCase();
     const hasNumber = (n: string) =>
-      /^\d+$/.test(n) ? new RegExp(`(^|\\D)${n}(\\D|$)`).test(digits) : compact.includes(n.toUpperCase());
+      /^\d+$/.test(n)
+        ? new RegExp(`(^|\\D)${n}(\\D|$)`).test(digits) || (n.length >= 10 && text.replace(/\D/g, '').includes(n))
+        : compact.includes(n.toUpperCase());
     const account = accounts.find((a) => accountNumbers(a.subscriberNo).some(hasNumber));
     const parsed = parseBillEmail(text);
 
@@ -421,7 +425,8 @@ export class BillAccountsService implements OnApplicationBootstrap {
    */
   private async discoverUnknownBillEmails(accounts: Array<{ subscriberNo: string | null }>) {
     const known = new Set(accounts.flatMap((a) => accountNumbers(a.subscriberNo)));
-    const q = 'newer_than:10d {fatura "son ödeme" borç borcunuz} -from:trendyol -from:hepsiburada -from:n11 -from:amazon -from:idefix -from:pazarama -category:promotions';
+    // Takip edilen kurumlar: Vodafone (cep), ASAT (su), CK Akdeniz (elektrik), Türk Telekom (internet)
+    const q = 'newer_than:10d {from:vodafone.com.tr from:vodafone.net.tr from:asat.gov.tr from:ckenerji.com.tr from:ckakdeniz.com.tr from:turktelekom.com.tr from:ttmail.com.tr from:ttnet.com.tr} {fatura "son ödeme" borç borcunuz tutar}';
     const ids = (await this.gmail.searchMessageIds(q, 25)) ?? [];
     let seenList: string[] = [];
     try { seenList = JSON.parse((await this.getSetting('bill_email_seen')) ?? '[]'); } catch { /* boş */ }
