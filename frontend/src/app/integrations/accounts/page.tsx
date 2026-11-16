@@ -21,6 +21,7 @@ const PLATFORM_LABELS: Record<string, string> = {
   IDEFIX: 'Idefix',
   TEKLIKLE: 'Teklikle',
   TRENDRUM: 'Trendrum',
+  KOCTAS: 'Koçtaş',
 };
 
 const FIELD_LABELS: Record<string, string> = {

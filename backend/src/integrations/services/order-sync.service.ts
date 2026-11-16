@@ -6,6 +6,7 @@ import { Prisma } from '../../generated/prisma-client';
 import { AmazonAdapter } from '../adapters/amazon.adapter';
 import { CredentialVaultService } from './credential-vault.service';
 import { IntegrationsService } from '../integrations.service';
+import { KoctasAdapter } from '../adapters/koctas.adapter';
 
 interface TrendyolOrderLine {
   id?: unknown;
@@ -91,6 +92,9 @@ export class OrderSyncService {
     }
     try { await this.runIdefixSync(); } catch (err) {
       this.logger.error('Idefix sync hatasi', err instanceof Error ? err.message : String(err));
+    }
+    try { await this.runKoctasSync(); } catch (err) {
+      this.logger.error('Koctas sync hatasi', err instanceof Error ? err.message : String(err));
     }
     try {
       const amazon = await this.runAmazonSync();
@@ -1634,6 +1638,62 @@ export class OrderSyncService {
 
     this.logger.log(`Idefix sync tamamlandi: ${newOrders} yeni siparis.`);
     return { processed: allOrders.length, newOrders };
+  }
+
+  /** Koçtaş Satış Ortağım (Mirakl): son 14 günde güncellenen siparişleri marketplace_orders'a yazar, durumları günceller */
+  async runKoctasSync(): Promise<{ configured: boolean; processed: number; newOrders: number }> {
+    const creds: Record<string, string> = {};
+    try {
+      const rows = await this.prisma.$queryRaw<Array<{ credentialType: string; encryptedValue: string }>>`
+        SELECT cc.credential_type AS "credentialType", cc.encrypted_value AS "encryptedValue"
+        FROM channel_credentials cc
+        JOIN channel_accounts ca ON cc.channel_account_id = ca.id
+        JOIN sales_channels sc ON ca.sales_channel_id = sc.id
+        JOIN companies co ON ca.company_id = co.id
+        WHERE sc.code = 'KOCTAS' AND co.code = 'ERHAN' AND ca.is_active = true AND cc.is_active = true
+      `;
+      for (const row of rows) {
+        try { creds[row.credentialType] = this.credentialVault.decrypt(row.encryptedValue); } catch { /* skip */ }
+      }
+    } catch { /* skip */ }
+    if (!creds.API_KEY && !process.env.KOCTAS_API_KEY) return { configured: false, processed: 0, newOrders: 0 };
+
+    const adapter = new KoctasAdapter(creds);
+    const orders = await adapter.fetchRawOrders(14);
+    let newOrders = 0;
+    for (const order of orders) {
+      const externalOrderId = String(order.order_id ?? '');
+      if (!externalOrderId) continue;
+      const state = String(order.order_state ?? '');
+      const existing = await this.prisma.marketplaceOrder.findUnique({
+        where: { platform_externalOrderId: { platform: 'KOCTAS', externalOrderId } },
+      });
+      if (existing) {
+        if (state && existing.status !== state) {
+          await this.prisma.marketplaceOrder.update({ where: { id: existing.id }, data: { status: state, rawPayload: order as object } });
+        }
+        continue;
+      }
+      const customer = (order.customer ?? {}) as Record<string, any>;
+      const ship = (customer.shipping_address ?? {}) as Record<string, any>;
+      await this.prisma.marketplaceOrder.create({
+        data: {
+          platform: 'KOCTAS',
+          externalOrderId,
+          orderNumber: String(order.commercial_id ?? externalOrderId),
+          status: state || 'WAITING_ACCEPTANCE',
+          customerName: [ship.firstname ?? customer.firstname, ship.lastname ?? customer.lastname].filter(Boolean).join(' '),
+          totalAmount: Number(order.total_price ?? order.price ?? 0),
+          cargoAmount: Number(order.shipping_price ?? 0),
+          currency: String(order.currency_iso_code ?? 'TRY'),
+          orderDate: order.created_date ? new Date(String(order.created_date)) : null,
+          rawPayload: order as object,
+        },
+      });
+      newOrders++;
+    }
+    if (newOrders > 0) this.logger.log(`Koctas sync: ${newOrders} yeni siparis (${orders.length} incelendi).`);
+    return { configured: true, processed: orders.length, newOrders };
   }
 
   async runAmazonSync(): Promise<{ configured: boolean; processed: number; newOrders: number }> {
