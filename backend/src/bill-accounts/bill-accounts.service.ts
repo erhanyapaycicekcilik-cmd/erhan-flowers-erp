@@ -42,31 +42,48 @@ export class BillAccountsService implements OnApplicationBootstrap {
   ) {}
 
   /**
-   * Tek seferlik: CK Akdeniz elektrik abonelikleri (Dükkan 1 / Dükkan 2 / Ev).
-   * `app_settings.seed_ck_electric_v1` ile bir kez çalışır — sonradan silinen/düzenlenen hesap geri gelmez.
+   * Tek seferlik hesap kayıtları (Dükkan 1 / Dükkan 2 / Ev) + ekran görüntülerinden alınan faturalar.
+   * Her blok `app_settings` bayrağıyla bir kez çalışır — sonradan silinen/düzenlenen hesap geri gelmez.
    */
   async onApplicationBootstrap() {
+    await this.seedOnce('seed_ck_electric_v1', 'ELECTRICITY', 'CK Akdeniz', 26, [
+      { name: 'Dükkan 1 – Elektrik', subscriberNo: '4577106676', sortOrder: 1 },
+      { name: 'Dükkan 2 – Elektrik', subscriberNo: '8145873522', sortOrder: 2 },
+      { name: 'Ev – Elektrik', subscriberNo: null, sortOrder: 3 },
+    ]);
+    await this.seedOnce('seed_asat_water_v1', 'WATER', 'ASAT', 12, [
+      { name: 'Dükkan 1 – Su', subscriberNo: '1002112893', sortOrder: 11 },
+      { name: 'Dükkan 2 – Su', subscriberNo: '1002112894', sortOrder: 12 },
+      { name: 'Ev – Su', subscriberNo: null, sortOrder: 13 },
+    ]);
+    // Kullanıcının gönderdiği CK sayfası / CK e-postası+SMS / ASAT SMS'indeki faturalar
+    await this.seedBillsOnce('seed_initial_bills_v1', [
+      { subscriberNo: '4577106676', year: 2026, month: 11, amount: 435, dueDate: '2026-11-26', note: 'CK online işlemler ekranından' },
+      { subscriberNo: '8145873522', year: 2026, month: 10, amount: 2130, dueDate: null, note: 'CK borç bildirimi (e-posta 30.10.2026 + SMS): ödenmemiş 1 adet fatura toplamı' },
+      { subscriberNo: '1002112893', year: 2026, month: 10, amount: 328.54, dueDate: '2026-10-12', note: 'ASAT SMS: son ödemesi gecikmiş fatura' },
+    ]);
+  }
+
+  private async seedOnce(
+    flag: string, type: string, provider: string, dueDay: number,
+    seeds: Array<{ name: string; subscriberNo: string | null; sortOrder: number }>,
+  ) {
     try {
-      const FLAG = 'seed_ck_electric_v1';
-      if (await this.getSetting(FLAG)) return;
-      const seeds = [
-        { name: 'Dükkan 1 – Elektrik', subscriberNo: '4577106676', sortOrder: 1 },
-        { name: 'Dükkan 2 – Elektrik', subscriberNo: '8145873522', sortOrder: 2 },
-        { name: 'Ev – Elektrik', subscriberNo: null as string | null, sortOrder: 3 },
-      ];
+      if (await this.getSetting(flag)) return;
       const existing = await this.prisma.billAccount.findMany({ where: { isActive: true } });
 
-      // Daha önce iki numara tek hesaba girildiyse: o hesabı Dükkan 1'e çevir (ödeme geçmişi korunur)
+      // Daha önce birden fazla numara tek hesaba girildiyse: o hesabı ilk numaranın hesabına çevir (geçmiş korunur)
+      const firstNo = seeds[0].subscriberNo!;
       const combined = existing.find((a) => {
         const nos = accountNumbers(a.subscriberNo);
-        return nos.length > 1 && nos.includes('4577106676');
+        return nos.length > 1 && nos.includes(firstNo);
       });
       if (combined) {
         await this.prisma.billAccount.update({
           where: { id: combined.id },
-          data: { name: seeds[0].name, subscriberNo: seeds[0].subscriberNo, type: 'ELECTRICITY', provider: 'CK Akdeniz', sortOrder: 1 },
+          data: { name: seeds[0].name, subscriberNo: firstNo, type, provider, sortOrder: seeds[0].sortOrder },
         });
-        combined.subscriberNo = seeds[0].subscriberNo;
+        combined.subscriberNo = firstNo;
         combined.name = seeds[0].name;
       }
 
@@ -75,13 +92,40 @@ export class BillAccountsService implements OnApplicationBootstrap {
           a.name === sd.name || (sd.subscriberNo && accountNumbers(a.subscriberNo).includes(sd.subscriberNo)));
         if (has) continue;
         await this.prisma.billAccount.create({
-          data: { type: 'ELECTRICITY', name: sd.name, provider: 'CK Akdeniz', subscriberNo: sd.subscriberNo, dueDay: 26, sortOrder: sd.sortOrder },
+          data: { type, name: sd.name, provider, subscriberNo: sd.subscriberNo, dueDay, sortOrder: sd.sortOrder },
         });
       }
-      await this.setSetting(FLAG, new Date().toISOString());
-      this.logger.log('CK Akdeniz elektrik hesapları (Dükkan 1 / Dükkan 2 / Ev) kontrol edildi');
+      await this.setSetting(flag, new Date().toISOString());
+      this.logger.log(`${provider} fatura hesapları kontrol edildi (${flag})`);
     } catch (err) {
-      this.logger.error('CK elektrik hesap kaydı hatası', err instanceof Error ? err.message : String(err));
+      this.logger.error(`${flag} hatası`, err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  private async seedBillsOnce(
+    flag: string,
+    bills: Array<{ subscriberNo: string; year: number; month: number; amount: number; dueDate: string | null; note: string }>,
+  ) {
+    try {
+      if (await this.getSetting(flag)) return;
+      const accounts = await this.prisma.billAccount.findMany({ where: { isActive: true } });
+      for (const b of bills) {
+        const acc = accounts.find((a) => accountNumbers(a.subscriberNo).includes(b.subscriberNo));
+        if (!acc) continue;
+        const key = { billAccountId_year_month: { billAccountId: acc.id, year: b.year, month: b.month } };
+        const ex = await this.prisma.billPayment.findUnique({ where: key });
+        if (ex?.paidAt || ex?.amount != null) continue; // ödenmiş ya da zaten tutarı girilmiş
+        const data = {
+          amount: b.amount,
+          dueDate: b.dueDate ? new Date(`${b.dueDate}T00:00:00Z`) : null,
+          note: b.note,
+          source: 'MANUAL',
+        };
+        await this.prisma.billPayment.upsert({ where: key, create: { billAccountId: acc.id, year: b.year, month: b.month, ...data }, update: data });
+      }
+      await this.setSetting(flag, new Date().toISOString());
+    } catch (err) {
+      this.logger.error(`${flag} hatası`, err instanceof Error ? err.message : String(err));
     }
   }
 
