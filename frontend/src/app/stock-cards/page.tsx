@@ -1242,6 +1242,9 @@ function StockCountPrintView({ items, onBack }: { items: StockCard[]; onBack: ()
   }, [stockedItems, selectedCategory]);
   const totalQuantity = activeItems.reduce((sum, item) => sum + Number(item.stockQuantity ?? 0), 0);
   const missingPriceCount = activeItems.filter((item) => Number(item.purchasePrice ?? 0) <= 0).length;
+  const [brokenImageIds, setBrokenImageIds] = useState<Set<number>>(() => new Set());
+  const noImageCount = activeItems.filter((item) => !stockImages(item)[0]).length;
+  const brokenImageCount = activeItems.filter((item) => stockImages(item)[0] && brokenImageIds.has(item.id)).length;
   const printDate = new Intl.DateTimeFormat('tr-TR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date());
   const money = (value: number) => value.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const sheetTitle = selectedCategory ? `Stok Sayım - ${selectedCategory}` : 'Stok Sayım - Tüm Kategoriler';
@@ -1308,6 +1311,8 @@ function StockCountPrintView({ items, onBack }: { items: StockCard[]; onBack: ()
             <div>Ürün: {activeItems.length.toLocaleString('tr-TR')}</div>
             <div>Sistem toplamı: {totalQuantity.toLocaleString('tr-TR')}</div>
             {missingPriceCount > 0 && <div className="text-red-600">Giriş fiyatı eksik: {missingPriceCount.toLocaleString('tr-TR')}</div>}
+            {noImageCount > 0 && <div className="text-amber-600">Görsel eklenmemiş: {noImageCount.toLocaleString('tr-TR')}</div>}
+            {brokenImageCount > 0 && <div className="text-amber-600">Görsel dosyası bulunamadı: {brokenImageCount.toLocaleString('tr-TR')}</div>}
           </div>
         </header>
 
@@ -1337,10 +1342,15 @@ function StockCountPrintView({ items, onBack }: { items: StockCard[]; onBack: ()
                 <tr>
                   <td className="stock-count-index">{index + 1}</td>
                   <td className="stock-count-image-cell">
-                    {image ? (
-                      <img className="stock-count-image" src={apiFileUrl(image.filePath)} alt={item.name} />
+                    {image && !brokenImageIds.has(item.id) ? (
+                      <img
+                        className="stock-count-image"
+                        src={apiFileUrl(image.filePath)}
+                        alt={item.name}
+                        onError={() => setBrokenImageIds((current) => new Set(current).add(item.id))}
+                      />
                     ) : (
-                      <div className="stock-count-no-image">Yok</div>
+                      <div className="stock-count-no-image">{image ? 'Dosya yok' : 'Görsel yok'}</div>
                     )}
                   </td>
                   <td>
@@ -1437,6 +1447,7 @@ function StockCountPrintView({ items, onBack }: { items: StockCard[]; onBack: ()
           background: #f8fafc;
           color: #94a3b8;
           font-size: 10px;
+          text-align: center;
           font-weight: 800;
         }
         .stock-count-name {
