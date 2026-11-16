@@ -67,8 +67,14 @@ export function parseBillEmail(text: string): ParsedBill {
     }
     if (amount) break;
   }
+  // "toplam 2130.00 TL" / "1.540,25 TL tutarındaki" (CK Enerji borç bildirimi vb.) — para birimi şart
+  const NUM = String.raw`(\d{1,3}(?:\.\d{3})+(?:,\d{1,2})?|\d+(?:[.,]\d{1,2})?)`;
   if (!amount) {
-    const m = f.match(/(\d{1,3}(?:\.\d{3})*,\d{2})\s*(?:tl|₺)/);
+    const m = f.match(new RegExp(`toplam\\s*[:：]?\\s*${NUM}\\s*(?:tl|try|₺)`)) ?? f.match(new RegExp(`${NUM}\\s*(?:tl|try|₺)\\s*tutarinda`));
+    if (m) amount = parseTrAmount(m[1]);
+  }
+  if (!amount) {
+    const m = f.match(/(\d{1,3}(?:\.\d{3})*,\d{2}|\d+\.\d{2})\s*(?:tl|₺)/);
     if (m) amount = parseTrAmount(m[1]);
   }
 
