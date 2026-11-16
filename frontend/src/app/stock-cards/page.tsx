@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, Fragment, useEffect, useMemo, useState } from 'react';
 import { Edit3, ExternalLink, FileText, History, ImagePlus, Minus, Plus, Printer, Save, Send, Trash2, X } from 'lucide-react';
 import { AdminShell } from '@/components/AdminShell';
 import { api, apiBaseUrl, apiFileUrl } from '@/lib/api';
@@ -1219,21 +1219,39 @@ export default function StockCardsPage() {
 
 function StockCountPrintView({ items, onBack }: { items: StockCard[]; onBack: () => void }) {
   const [includeZeroStock, setIncludeZeroStock] = useState(false);
-  const [blankRowCount, setBlankRowCount] = useState(30);
+  const [blankRowCount, setBlankRowCount] = useState(15);
+  const [selectedCategory, setSelectedCategory] = useState('');
+  const categoryLabel = (item: StockCard) => item.category?.trim() || 'Kategorisiz';
+  const stockedItems = useMemo(
+    () => items.filter((item) => item.status !== 'PASSIVE' && (includeZeroStock || Number(item.stockQuantity ?? 0) > 0)),
+    [items, includeZeroStock],
+  );
+  const categoryOptions = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const item of stockedItems) counts.set(categoryLabel(item), (counts.get(categoryLabel(item)) ?? 0) + 1);
+    return [...counts.entries()].sort((a, b) => a[0].localeCompare(b[0], 'tr'));
+  }, [stockedItems]);
   const activeItems = useMemo(() => {
-    return [...items]
-      .filter((item) => item.status !== 'PASSIVE')
-      .filter((item) => includeZeroStock || Number(item.stockQuantity ?? 0) > 0)
+    return stockedItems
+      .filter((item) => !selectedCategory || categoryLabel(item) === selectedCategory)
       .sort((a, b) => {
         const categoryCompare = String(a.category ?? '').localeCompare(String(b.category ?? ''), 'tr');
         if (categoryCompare !== 0) return categoryCompare;
         return a.name.localeCompare(b.name, 'tr');
       });
-  }, [items, includeZeroStock]);
+  }, [stockedItems, selectedCategory]);
   const totalQuantity = activeItems.reduce((sum, item) => sum + Number(item.stockQuantity ?? 0), 0);
   const missingPriceCount = activeItems.filter((item) => Number(item.purchasePrice ?? 0) <= 0).length;
   const printDate = new Intl.DateTimeFormat('tr-TR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date());
   const money = (value: number) => value.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const sheetTitle = selectedCategory ? `Stok Sayım - ${selectedCategory}` : 'Stok Sayım - Tüm Kategoriler';
+
+  function printSheet() {
+    const previousTitle = document.title;
+    document.title = sheetTitle;
+    window.print();
+    document.title = previousTitle;
+  }
 
   return (
     <main className="min-h-screen bg-slate-100 text-ink">
@@ -1242,6 +1260,19 @@ function StockCountPrintView({ items, onBack }: { items: StockCard[]; onBack: ()
           <X size={16} />
           Stok Merkezine Dön
         </button>
+        <label className="inline-flex min-h-10 items-center gap-2 rounded-md bg-slate-800 px-3 py-2 text-sm font-bold text-white">
+          Kategori
+          <select
+            className="max-w-[260px] rounded px-2 py-1 text-slate-900"
+            value={selectedCategory}
+            onChange={(event) => setSelectedCategory(event.target.value)}
+          >
+            <option value="">Tüm kategoriler ({stockedItems.length})</option>
+            {categoryOptions.map(([name, count]) => (
+              <option key={name} value={name}>{name} ({count})</option>
+            ))}
+          </select>
+        </label>
         <label className="inline-flex min-h-10 items-center gap-2 rounded-md bg-slate-800 px-3 py-2 text-sm font-bold text-white">
           <input type="checkbox" checked={includeZeroStock} onChange={(event) => setIncludeZeroStock(event.target.checked)} />
           Stoğu 0 olanları da ekle
@@ -1257,7 +1288,7 @@ function StockCountPrintView({ items, onBack }: { items: StockCard[]; onBack: ()
             onChange={(event) => setBlankRowCount(Math.max(0, Math.min(200, Number(event.target.value) || 0)))}
           />
         </label>
-        <button className="inline-flex min-h-10 items-center gap-2 rounded-md bg-emerald-600 px-5 py-2 text-sm font-bold text-white" type="button" onClick={() => window.print()}>
+        <button className="inline-flex min-h-10 items-center gap-2 rounded-md bg-emerald-600 px-5 py-2 text-sm font-bold text-white" type="button" onClick={printSheet}>
           <Printer size={16} />
           Yazdır / PDF Kaydet
         </button>
@@ -1267,6 +1298,7 @@ function StockCountPrintView({ items, onBack }: { items: StockCard[]; onBack: ()
         <header className="mb-4 flex items-end justify-between gap-4 border-b border-slate-300 pb-3">
           <div>
             <h1 className="text-2xl font-black tracking-normal">Stok Sayım Listesi</h1>
+            <div className="mt-1 text-lg font-black text-emerald-700">{selectedCategory || 'Tüm Kategoriler'}</div>
             <p className="mt-1 text-sm text-slate-600">
               {includeZeroStock ? 'Tüm aktif stok kartları' : 'Sistemde stoğu olan ürünler'} — rafta sayılan adedi &quot;Sayım&quot; sütununa yazın
             </p>
@@ -1294,8 +1326,15 @@ function StockCountPrintView({ items, onBack }: { items: StockCard[]; onBack: ()
             {activeItems.map((item, index) => {
               const image = stockImages(item)[0];
               const purchasePrice = Number(item.purchasePrice ?? 0);
+              const showCategoryHeader = !selectedCategory && (index === 0 || categoryLabel(activeItems[index - 1]) !== categoryLabel(item));
               return (
-                <tr key={item.id}>
+                <Fragment key={item.id}>
+                {showCategoryHeader && (
+                  <tr className="stock-count-category-row">
+                    <td colSpan={6}>{categoryLabel(item)}</td>
+                  </tr>
+                )}
+                <tr>
                   <td className="stock-count-index">{index + 1}</td>
                   <td className="stock-count-image-cell">
                     {image ? (
@@ -1323,6 +1362,7 @@ function StockCountPrintView({ items, onBack }: { items: StockCard[]; onBack: ()
                     )}
                   </td>
                 </tr>
+                </Fragment>
               );
             })}
           </tbody>
@@ -1330,7 +1370,7 @@ function StockCountPrintView({ items, onBack }: { items: StockCard[]; onBack: ()
 
         {blankRowCount > 0 && (
           <div className="stock-count-extra">
-            <h2 className="mb-1 mt-6 text-lg font-black">Sistemde Olmayan Ürünler</h2>
+            <h2 className="mb-1 mt-6 text-lg font-black">Sistemde Olmayan Ürünler{selectedCategory ? ` — ${selectedCategory}` : ''}</h2>
             <p className="mb-2 text-xs text-slate-600">Rafta olup yukarıdaki listede bulunmayan ürünleri buraya yazın (fotoğrafını telefonla çekip numarasını not edin).</p>
             <table className="stock-count-table w-full border-collapse text-left">
               <thead>
@@ -1439,6 +1479,13 @@ function StockCountPrintView({ items, onBack }: { items: StockCard[]; onBack: ()
         }
         .stock-count-wide {
           width: 50%;
+        }
+        .stock-count-category-row td {
+          background: #ecfdf5;
+          color: #065f46;
+          font-size: 13px;
+          font-weight: 900;
+          padding: 8px;
         }
         .stock-count-extra {
           break-before: page;
