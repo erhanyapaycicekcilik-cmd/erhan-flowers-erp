@@ -105,6 +105,12 @@ Sonra tarayıcıda: **http://localhost:3200**
 - **Yeni ürün açarken iki hesaba birden:** Ürün Merkezi'nde (hızlı kayıt + tam form) "Trendyol (Flora)" kanalı = platform kodu `TRENDYOL_FLORA`. `/publishing/send` bu kodu görünce ürünü FLORA Trendyol hesabına da gönderir (barkod aynı, model kodu FL- ön ekli, %-3 fiyat; `DEFAULT_STORES`). Varsayılan olarak işaretli
 - `IntegrationCenterService.storeCredentials(platform, company)`: ERHAN dışı mağazada .env'e **düşmez**, eksik API bilgisi varsa hata verir (Flora işlemi yanlışlıkla Erhan mağazasına gitmesin)
 
+## Boy Serisi (`/products/boy-serisi`, sadece OWNER)
+
+- Bir ürünü farklı boylarda **ayrı ürün / ayrı ilan** olarak kopyalar: `POST /product-center/size-series/preview` ve `POST /product-center/size-series` (`{modelCode,startCm,endCm,stepCm,priceStep,nameFrom,nameTo}`)
+- Kaynak adındaki boy (`150 Cm`) → yeni boy; model kodu `<kaynak>-<boy>`, yeni EAN-13 barkod; görsel/açıklama/kategori/stok kopyalanır; fiyat her adımda ±priceStep. `trendyolProductUrl` ve `trendyolBarcode` kopyalanmaz (kaynak ilan ezilmesin). Var olan model kodu tekrar oluşturulmaz
+- Sayfa oluşturduktan sonra `/publishing/send` ile Trendyol (Erhan+Flora), N11, HB'ye gönderir
+
 ## e-Dönüşüm / Fatura (`/e-donusum`, sadece OWNER)
 
 - Backend: `backend/src/e-invoices/` — `GET/PUT /e-invoices/settings`, `POST /e-invoices/settings/test`, `GET /e-invoices/pending?days=`, `POST /e-invoices/issue` (`{items:[{sourceType,sourceId}]}` veya `{all:true}`), `GET /e-invoices`, `POST /e-invoices/:id/retry`, `GET /e-invoices/draft/:sourceType/:id`
