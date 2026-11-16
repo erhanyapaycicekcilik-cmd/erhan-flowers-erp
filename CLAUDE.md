@@ -117,6 +117,13 @@ Sonra tarayıcıda: **http://localhost:3200**
 - TEST ortamında kesilenler `provider = TRENDYOL_EFATURAM_TEST`: satışı "faturalandı" yapmaz, canlıda tekrar listelenir. Otomatik kesim sadece CANLI'da
 - 15 dk cron (`autoIssue`): aktif + otomatik açık + CANLI ise son 7 günün faturasızlarını keser (3 hatalı denemeden sonra durur)
 
+## Borçlar & Faturalar (`/borclar`, sadece OWNER)
+
+- Sekmeler: **Tüm Borçlar** (özet + 45 günlük ödeme takvimi, `GET /suppliers/overview?days=`), Tedarikçiler (cari), **Taksitli Borçlar**, Faturalar (`BillsPanel`, `/faturalar` da aynı bileşeni kullanır)
+- Taksitli borç: `backend/src/suppliers/installment-debts.*` — `installment_debts` + `debt_installments`. Toplam/taksit sayısı/ilk vade → eşit aylık taksit (kuruş farkı son taksitte, ay sonu taşmasında ayın son günü). `POST /installment-debts/installments/:id/pay` ödendi/geri al, `PUT .../installments/:id` tutar/vade düzelt. Cari bakiyeden bağımsızdır (aynı borcu iki yere girme)
+- Fatura hesapları (`bill_accounts`): tür (Kira/Su/Elektrik/Doğalgaz/Telefon/İnternet/Kredi Kartı/Diğer), kurum, **abone/tesisat no**, opsiyonel gönderen e-posta. Her ay otomatik listelenir; aylık kayıt `bill_payments` (tutar, fatura no, son ödeme tarihi, kaynak MANUAL/EMAIL). `PUT /bill-accounts/:id/month` elle giriş
+- **Gmail'den otomatik fatura**: her sabah 08:20 (`BillAccountsService.scanEmails`, elle `POST /bill-accounts/scan-email`) Gmail'de abone numarasını içeren son 45 günün e-postalarını okur, `bill-email-parser.ts` ile tutar/son ödeme/fatura no çıkarır. Elle girilmiş veya ödenmiş aya dokunmaz. Gmail bağlantısı mevcut `GMAIL_CLIENT_ID/SECRET/REDIRECT_URI` OAuth'unu kullanır (`/integrations/gmail/auth`)
+
 ## Sadece Sitede Satılan Ürünler (`WEB-` model kodu)
 
 - Model kodu `WEB-` ile başlayan ürünler **sadece www.erhanflowers.com'da** satılır (`backend/src/common/site-only.ts`)

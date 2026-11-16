@@ -2252,6 +2252,7 @@ model Supplier {
   createdAt    DateTime          @default(now()) @map("created_at")
   updatedAt    DateTime          @updatedAt @map("updated_at")
   transactions DebtTransaction[]
+  installmentDebts InstallmentDebt[]
 
   @@map("suppliers")
 }
@@ -2273,6 +2274,42 @@ model DebtTransaction {
   stockCard   StockCard?          @relation(fields: [stockCardId], references: [id])
 
   @@map("debt_transactions")
+}
+
+// ─── Taksitli Borçlar ────────────────────────────────────────────────────────
+model InstallmentDebt {
+  id               Int               @id @default(autoincrement())
+  title            String
+  creditor         String?           // Alacaklı (tedarikçi seçilmediyse serbest metin: banka, kişi...)
+  supplierId       Int?              @map("supplier_id")
+  totalAmount      Decimal           @map("total_amount") @db.Decimal(14, 2)
+  installmentCount Int               @map("installment_count")
+  startDate        DateTime          @map("start_date") @db.Date
+  documentNo       String?           @map("document_no")
+  notes            String?
+  isClosed         Boolean           @default(false) @map("is_closed")
+  createdAt        DateTime          @default(now()) @map("created_at")
+  updatedAt        DateTime          @updatedAt @map("updated_at")
+  supplier         Supplier?         @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  installments     DebtInstallment[]
+
+  @@map("installment_debts")
+}
+
+model DebtInstallment {
+  id                Int             @id @default(autoincrement())
+  installmentDebtId Int             @map("installment_debt_id")
+  no                Int
+  dueDate           DateTime        @map("due_date") @db.Date
+  amount            Decimal         @db.Decimal(14, 2)
+  paidAt            DateTime?       @map("paid_at")
+  paidAmount        Decimal?        @map("paid_amount") @db.Decimal(14, 2)
+  note              String?
+  debt              InstallmentDebt @relation(fields: [installmentDebtId], references: [id], onDelete: Cascade)
+
+  @@unique([installmentDebtId, no])
+  @@index([dueDate])
+  @@map("debt_installments")
 }
 
 model MarketplaceOrder {
@@ -2506,8 +2543,11 @@ model ProjectReference {
 
 model BillAccount {
   id             Int           @id @default(autoincrement())
-  type           String        // RENT | WATER | ELECTRICITY | MOBILE | INTERNET | CREDIT_CARD
+  type           String        // RENT | WATER | ELECTRICITY | NATURAL_GAS | MOBILE | INTERNET | CREDIT_CARD | OTHER
   name           String
+  provider       String?       // Kurum: Enerjisa, İSKİ, Türk Telekom, Turkcell...
+  subscriberNo   String?       @map("subscriber_no")   // Abone / tesisat / hizmet numarası
+  emailSender    String?       @map("email_sender")    // Fatura e-postasının geldiği adres (opsiyonel filtre)
   dueDay         Int           @map("due_day")           // 1-31, ödeme/son ödeme günü
   statementDay   Int?          @map("statement_day")     // sadece kredi kartı: hesap kesim günü
   estimatedAmount Decimal?     @map("estimated_amount") @db.Decimal(12, 2)
@@ -2527,6 +2567,10 @@ model BillPayment {
   paidAt        DateTime?   @map("paid_at")
   amount        Decimal?    @db.Decimal(12, 2)
   note          String?
+  invoiceNo     String?     @map("invoice_no")
+  dueDate       DateTime?   @map("due_date")
+  source        String?     // MANUAL | EMAIL | AUTO
+  emailMessageId String?    @map("email_message_id")
   account       BillAccount @relation(fields: [billAccountId], references: [id], onDelete: Cascade)
 
   @@unique([billAccountId, year, month])

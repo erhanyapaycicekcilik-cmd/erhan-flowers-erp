@@ -187,6 +187,53 @@ export class GmailOrderService {
     this.logger.log(`${platform} sipariş e-postası işlendi: ${subject.slice(0, 60)}`);
   }
 
+  /** Gmail araması (q: Gmail arama sözdizimi). Bağlı değilse null döner. */
+  async searchMessageIds(q: string, maxResults = 10): Promise<string[] | null> {
+    const token = await this.getAccessToken();
+    if (!token) return null;
+    const data = await this.gmailGet<{ messages?: Array<{ id: string }> }>(
+      `/messages?q=${encodeURIComponent(q)}&maxResults=${maxResults}`,
+    );
+    return (data?.messages ?? []).map((m) => m.id);
+  }
+
+  /** Mesajın konu, gönderen, tarih ve düz metin içeriği (HTML etiketleri temizlenmiş). */
+  async getMessageContent(messageId: string): Promise<{ id: string; subject: string; from: string; date: Date | null; text: string } | null> {
+    type Part = { mimeType?: string; body?: { data?: string }; parts?: Part[] };
+    const msg = await this.gmailGet<GmailMessage & { internalDate?: string }>(`/messages/${messageId}?format=full`);
+    if (!msg) return null;
+    const header = (n: string) => msg.payload?.headers?.find((h) => h.name.toLowerCase() === n)?.value ?? '';
+    const decode = (d?: string) => (d ? Buffer.from(d.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8') : '');
+    const plain: string[] = [];
+    const html: string[] = [];
+    const walk = (p?: Part) => {
+      if (!p) return;
+      if (p.mimeType === 'text/plain') plain.push(decode(p.body?.data));
+      else if (p.mimeType === 'text/html') html.push(decode(p.body?.data));
+      p.parts?.forEach(walk);
+    };
+    walk(msg.payload as Part);
+    if (!plain.length && !html.length && msg.payload?.body?.data) html.push(decode(msg.payload.body.data));
+    const stripHtml = (h: string) =>
+      h
+        .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+        .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+        .replace(/<br\s*\/?>/gi, '\n')
+        .replace(/<\/(p|div|tr|td|th|li|h\d)>/gi, '\n')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/&nbsp;/g, ' ')
+        .replace(/&amp;/g, '&')
+        .replace(/&#(\d+);/g, (_, c) => String.fromCharCode(Number(c)));
+    const text = [...plain, ...html.map(stripHtml), msg.snippet ?? ''].join('\n').replace(/[ \t]+/g, ' ');
+    return {
+      id: msg.id,
+      subject: header('subject'),
+      from: header('from'),
+      date: msg.internalDate ? new Date(Number(msg.internalDate)) : null,
+      text,
+    };
+  }
+
   async getStatus(): Promise<{ connected: boolean; lastCheck?: string }> {
     const tokens = await this.loadTokens();
     return { connected: Boolean(tokens?.access_token) };

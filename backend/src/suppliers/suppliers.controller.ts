@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Post, Put, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '../auth/auth.guard';
 import { SuppliersService } from './suppliers.service';
 
@@ -12,6 +12,9 @@ export class SuppliersController {
 
   @Get('summary')
   summary() { return this.suppliers.summary(); }
+
+  @Get('overview')
+  overview(@Query('days') days?: string) { return this.suppliers.overview(days ? Number(days) || 45 : 45); }
 
   @Get(':id')
   get(@Param('id') id: string) { return this.suppliers.getSupplier(Number(id)); }

@@ -123,6 +123,102 @@ export class SuppliersService {
     return { suppliers: rows, totalDebt };
   }
 
+  /**
+   * Tüm borçlar tek ekranda: tedarikçi cari bakiyeleri + taksitli borçlar + aylık faturalar.
+   * `upcoming`: gecikmiş + önümüzdeki `days` gün içinde vadesi gelen ödemeler (tarih sırasıyla).
+   */
+  async overview(days = 45) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const horizon = new Date(today.getTime() + days * 86400000);
+
+    const [suppliers, installments, bills] = await Promise.all([
+      this.prisma.supplier.findMany({ include: { transactions: { select: { type: true, amount: true } } } }),
+      this.prisma.debtInstallment.findMany({
+        where: { paidAt: null },
+        include: { debt: { select: { id: true, title: true, creditor: true, installmentCount: true, supplier: { select: { name: true } } } } },
+        orderBy: { dueDate: 'asc' },
+      }),
+      this.prisma.billAccount.findMany({
+        where: { isActive: true },
+        include: { payments: { orderBy: [{ year: 'desc' }, { month: 'desc' }], take: 3 } },
+      }),
+    ]);
+
+    const supplierDebt = suppliers.reduce((sum, s) => {
+      const b = this.calcBalance(s.transactions);
+      return sum + (b > 0 ? b : 0);
+    }, 0);
+    const installmentRemaining = installments.reduce((s, i) => s + Number(i.amount), 0);
+
+    type Upcoming = {
+      kind: 'INSTALLMENT' | 'BILL';
+      refId: number;
+      title: string;
+      party: string | null;
+      dueDate: string;
+      amount: number | null;
+      overdue: boolean;
+      detail?: string | null;
+    };
+    const upcoming: Upcoming[] = [];
+
+    for (const i of installments) {
+      if (i.dueDate > horizon) continue;
+      upcoming.push({
+        kind: 'INSTALLMENT',
+        refId: i.id,
+        title: i.debt.title,
+        party: i.debt.supplier?.name ?? i.debt.creditor,
+        dueDate: i.dueDate.toISOString(),
+        amount: Number(i.amount),
+        overdue: i.dueDate < today,
+        detail: `${i.no}/${i.debt.installmentCount}. taksit`,
+      });
+    }
+
+    // Faturalar: bu ay ve önceki ay (ödenmemişse) + vadesi ufuk içindeyse gelecek ay
+    let billsUnpaid = 0;
+    const months: Array<{ y: number; m: number }> = [];
+    for (let k = -1; k <= 1; k++) {
+      const d = new Date(today.getFullYear(), today.getMonth() + k, 1);
+      months.push({ y: d.getFullYear(), m: d.getMonth() + 1 });
+    }
+    for (const a of bills) {
+      for (const { y, m } of months) {
+        if (a.createdAt > new Date(y, m, 0, 23, 59)) continue; // hesap o aydan sonra açıldı
+        const p = a.payments.find((x) => x.year === y && x.month === m);
+        if (p?.paidAt) continue;
+        const lastDay = new Date(y, m, 0).getDate();
+        const due = p?.dueDate ?? new Date(y, m - 1, Math.min(a.dueDay, lastDay));
+        if (due > horizon) continue;
+        const amount = p?.amount != null ? Number(p.amount) : a.estimatedAmount != null ? Number(a.estimatedAmount) : null;
+        billsUnpaid += amount ?? 0;
+        upcoming.push({
+          kind: 'BILL',
+          refId: a.id,
+          title: a.name,
+          party: a.provider,
+          dueDate: due.toISOString(),
+          amount,
+          overdue: due < today,
+          detail: [p?.invoiceNo ? `Fatura no ${p.invoiceNo}` : null, p?.amount == null ? 'tahmini' : null].filter(Boolean).join(' • ') || null,
+        });
+      }
+    }
+
+    upcoming.sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+    const r2 = (n: number) => Math.round(n * 100) / 100;
+    return {
+      supplierDebt: r2(supplierDebt),
+      installmentRemaining: r2(installmentRemaining),
+      billsUnpaid: r2(billsUnpaid),
+      grandTotal: r2(supplierDebt + installmentRemaining + billsUnpaid),
+      overdueTotal: r2(upcoming.filter((u) => u.overdue).reduce((s, u) => s + (u.amount ?? 0), 0)),
+      upcoming,
+    };
+  }
+
   private calcBalance(transactions: { type: string; amount: any }[]) {
     return transactions.reduce((sum, t) => {
       const amt = Number(t.amount);
