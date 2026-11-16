@@ -1218,17 +1218,22 @@ export default function StockCardsPage() {
 }
 
 function StockCountPrintView({ items, onBack }: { items: StockCard[]; onBack: () => void }) {
+  const [includeZeroStock, setIncludeZeroStock] = useState(false);
+  const [blankRowCount, setBlankRowCount] = useState(30);
   const activeItems = useMemo(() => {
     return [...items]
       .filter((item) => item.status !== 'PASSIVE')
+      .filter((item) => includeZeroStock || Number(item.stockQuantity ?? 0) > 0)
       .sort((a, b) => {
         const categoryCompare = String(a.category ?? '').localeCompare(String(b.category ?? ''), 'tr');
         if (categoryCompare !== 0) return categoryCompare;
         return a.name.localeCompare(b.name, 'tr');
       });
-  }, [items]);
+  }, [items, includeZeroStock]);
   const totalQuantity = activeItems.reduce((sum, item) => sum + Number(item.stockQuantity ?? 0), 0);
+  const missingPriceCount = activeItems.filter((item) => Number(item.purchasePrice ?? 0) <= 0).length;
   const printDate = new Intl.DateTimeFormat('tr-TR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date());
+  const money = (value: number) => value.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   return (
     <main className="min-h-screen bg-slate-100 text-ink">
@@ -1237,6 +1242,21 @@ function StockCountPrintView({ items, onBack }: { items: StockCard[]; onBack: ()
           <X size={16} />
           Stok Merkezine Dön
         </button>
+        <label className="inline-flex min-h-10 items-center gap-2 rounded-md bg-slate-800 px-3 py-2 text-sm font-bold text-white">
+          <input type="checkbox" checked={includeZeroStock} onChange={(event) => setIncludeZeroStock(event.target.checked)} />
+          Stoğu 0 olanları da ekle
+        </label>
+        <label className="inline-flex min-h-10 items-center gap-2 rounded-md bg-slate-800 px-3 py-2 text-sm font-bold text-white">
+          Boş satır (listede olmayanlar)
+          <input
+            className="w-16 rounded px-2 py-1 text-slate-900"
+            type="number"
+            min={0}
+            max={200}
+            value={blankRowCount}
+            onChange={(event) => setBlankRowCount(Math.max(0, Math.min(200, Number(event.target.value) || 0)))}
+          />
+        </label>
         <button className="inline-flex min-h-10 items-center gap-2 rounded-md bg-emerald-600 px-5 py-2 text-sm font-bold text-white" type="button" onClick={() => window.print()}>
           <Printer size={16} />
           Yazdır / PDF Kaydet
@@ -1247,31 +1267,36 @@ function StockCountPrintView({ items, onBack }: { items: StockCard[]; onBack: ()
         <header className="mb-4 flex items-end justify-between gap-4 border-b border-slate-300 pb-3">
           <div>
             <h1 className="text-2xl font-black tracking-normal">Stok Sayım Listesi</h1>
-            <p className="mt-1 text-sm text-slate-600">Görselli ürün adı ve adet kontrol listesi</p>
+            <p className="mt-1 text-sm text-slate-600">
+              {includeZeroStock ? 'Tüm aktif stok kartları' : 'Sistemde stoğu olan ürünler'} — rafta sayılan adedi &quot;Sayım&quot; sütununa yazın
+            </p>
           </div>
           <div className="text-right text-xs font-semibold text-slate-600">
             <div>Çıktı: {printDate}</div>
             <div>Ürün: {activeItems.length.toLocaleString('tr-TR')}</div>
             <div>Sistem toplamı: {totalQuantity.toLocaleString('tr-TR')}</div>
+            {missingPriceCount > 0 && <div className="text-red-600">Giriş fiyatı eksik: {missingPriceCount.toLocaleString('tr-TR')}</div>}
           </div>
         </header>
 
         <table className="stock-count-table w-full border-collapse text-left">
           <thead>
             <tr>
+              <th>#</th>
               <th>Görsel</th>
               <th>Ürün</th>
-              <th>Stok kodu</th>
-              <th>Kategori</th>
               <th>Sistem adedi</th>
               <th>Sayım</th>
+              <th>Giriş fiyatı</th>
             </tr>
           </thead>
           <tbody>
-            {activeItems.map((item) => {
+            {activeItems.map((item, index) => {
               const image = stockImages(item)[0];
+              const purchasePrice = Number(item.purchasePrice ?? 0);
               return (
                 <tr key={item.id}>
+                  <td className="stock-count-index">{index + 1}</td>
                   <td className="stock-count-image-cell">
                     {image ? (
                       <img className="stock-count-image" src={apiFileUrl(image.filePath)} alt={item.name} />
@@ -1281,17 +1306,56 @@ function StockCountPrintView({ items, onBack }: { items: StockCard[]; onBack: ()
                   </td>
                   <td>
                     <div className="stock-count-name">{item.name}</div>
-                    {item.model && <div className="stock-count-sub">Model: {item.model}</div>}
+                    <div className="stock-count-sub">
+                      {[item.sku, item.category || 'Kategorisiz', item.model ? `Model: ${item.model}` : ''].filter(Boolean).join(' · ')}
+                    </div>
                   </td>
-                  <td>{item.sku || '-'}</td>
-                  <td>{item.category || 'Kategorisiz'}</td>
                   <td className="stock-count-quantity">{Number(item.stockQuantity ?? 0).toLocaleString('tr-TR')} {item.unit}</td>
                   <td><div className="stock-count-blank" /></td>
+                  <td className="stock-count-price">
+                    {purchasePrice > 0 ? (
+                      `${money(purchasePrice)} ₺`
+                    ) : (
+                      <div className="stock-count-missing">
+                        <span>EKSİK</span>
+                        <div className="stock-count-blank" />
+                      </div>
+                    )}
+                  </td>
                 </tr>
               );
             })}
           </tbody>
         </table>
+
+        {blankRowCount > 0 && (
+          <div className="stock-count-extra">
+            <h2 className="mb-1 mt-6 text-lg font-black">Sistemde Olmayan Ürünler</h2>
+            <p className="mb-2 text-xs text-slate-600">Rafta olup yukarıdaki listede bulunmayan ürünleri buraya yazın (fotoğrafını telefonla çekip numarasını not edin).</p>
+            <table className="stock-count-table w-full border-collapse text-left">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Ürün adı / tarifi</th>
+                  <th>Adet</th>
+                  <th>Giriş fiyatı</th>
+                  <th>Satış fiyatı</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Array.from({ length: blankRowCount }, (_, index) => (
+                  <tr key={`blank-${index}`} className="stock-count-empty-row">
+                    <td className="stock-count-index">Y{index + 1}</td>
+                    <td className="stock-count-wide" />
+                    <td />
+                    <td />
+                    <td />
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </section>
 
       <style jsx>{`
@@ -1313,12 +1377,12 @@ function StockCountPrintView({ items, onBack }: { items: StockCard[]; onBack: ()
           vertical-align: middle;
         }
         .stock-count-image-cell {
-          width: 56px;
+          width: 92px;
         }
         .stock-count-image,
         .stock-count-no-image {
-          width: 44px;
-          height: 44px;
+          width: 80px;
+          height: 80px;
           border: 1px solid #cbd5e1;
           border-radius: 4px;
         }
@@ -1354,6 +1418,31 @@ function StockCountPrintView({ items, onBack }: { items: StockCard[]; onBack: ()
           height: 24px;
           min-width: 74px;
           border-bottom: 1px solid #64748b;
+        }
+        .stock-count-index {
+          width: 28px;
+          color: #64748b;
+          font-weight: 800;
+          text-align: center;
+        }
+        .stock-count-price {
+          white-space: nowrap;
+          font-weight: 800;
+        }
+        .stock-count-missing span {
+          color: #dc2626;
+          font-size: 9px;
+          font-weight: 900;
+        }
+        .stock-count-empty-row td {
+          height: 34px;
+        }
+        .stock-count-wide {
+          width: 50%;
+        }
+        .stock-count-extra {
+          break-before: page;
+          page-break-before: always;
         }
         @page {
           size: A4 portrait;
