@@ -62,8 +62,21 @@ export class ProductCenterService {
     private readonly config: ConfigService,
   ) {}
 
-  async listEntries() {
+  async listEntries(search?: string) {
+    // Liste en son güncellenen 1000 kayıtla sınırlı; arama verilirse TÜM kayıtlarda aranır (eski ürünler de bulunur)
+    const term = search?.trim();
+    const where = term
+      ? {
+          OR: [
+            { productName: { contains: term, mode: 'insensitive' as const } },
+            { barcode: { contains: term } },
+            { currentModelCode: { contains: term, mode: 'insensitive' as const } },
+            { supplierStockCode: { contains: term, mode: 'insensitive' as const } },
+          ],
+        }
+      : undefined;
     const variants = await this.prisma.trendyolProductVariant.findMany({
+      where,
       include: {
         product: { include: { category: true, mediaFiles: true } },
         family: true,
@@ -72,7 +85,7 @@ export class ProductCenterService {
         productCostDraft: { include: { items: true, pots: true } },
       },
       orderBy: { updatedAt: 'desc' },
-      take: 1000,
+      take: term ? 200 : 1000,
     });
 
     return variants.map((variant) => this.entrySummary(variant));
