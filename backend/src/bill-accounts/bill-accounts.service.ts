@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Logger, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException, OnApplicationBootstrap, UnauthorizedException } from '@nestjs/common';
 import { createHash, randomBytes, timingSafeEqual } from 'crypto';
 import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service';
@@ -33,13 +33,57 @@ function accountNumbers(subscriberNo: string | null) {
 const clean = (v: string | null | undefined) => (v === undefined ? undefined : v?.trim() || null);
 
 @Injectable()
-export class BillAccountsService {
+export class BillAccountsService implements OnApplicationBootstrap {
   private readonly logger = new Logger(BillAccountsService.name);
 
   constructor(
     private prisma: PrismaService,
     private gmail: GmailOrderService,
   ) {}
+
+  /**
+   * Tek seferlik: CK Akdeniz elektrik abonelikleri (Dükkan 1 / Dükkan 2 / Ev).
+   * `app_settings.seed_ck_electric_v1` ile bir kez çalışır — sonradan silinen/düzenlenen hesap geri gelmez.
+   */
+  async onApplicationBootstrap() {
+    try {
+      const FLAG = 'seed_ck_electric_v1';
+      if (await this.getSetting(FLAG)) return;
+      const seeds = [
+        { name: 'Dükkan 1 – Elektrik', subscriberNo: '4577106676', sortOrder: 1 },
+        { name: 'Dükkan 2 – Elektrik', subscriberNo: '8145873522', sortOrder: 2 },
+        { name: 'Ev – Elektrik', subscriberNo: null as string | null, sortOrder: 3 },
+      ];
+      const existing = await this.prisma.billAccount.findMany({ where: { isActive: true } });
+
+      // Daha önce iki numara tek hesaba girildiyse: o hesabı Dükkan 1'e çevir (ödeme geçmişi korunur)
+      const combined = existing.find((a) => {
+        const nos = accountNumbers(a.subscriberNo);
+        return nos.length > 1 && nos.includes('4577106676');
+      });
+      if (combined) {
+        await this.prisma.billAccount.update({
+          where: { id: combined.id },
+          data: { name: seeds[0].name, subscriberNo: seeds[0].subscriberNo, type: 'ELECTRICITY', provider: 'CK Akdeniz', sortOrder: 1 },
+        });
+        combined.subscriberNo = seeds[0].subscriberNo;
+        combined.name = seeds[0].name;
+      }
+
+      for (const sd of seeds) {
+        const has = existing.some((a) =>
+          a.name === sd.name || (sd.subscriberNo && accountNumbers(a.subscriberNo).includes(sd.subscriberNo)));
+        if (has) continue;
+        await this.prisma.billAccount.create({
+          data: { type: 'ELECTRICITY', name: sd.name, provider: 'CK Akdeniz', subscriberNo: sd.subscriberNo, dueDay: 26, sortOrder: sd.sortOrder },
+        });
+      }
+      await this.setSetting(FLAG, new Date().toISOString());
+      this.logger.log('CK Akdeniz elektrik hesapları (Dükkan 1 / Dükkan 2 / Ev) kontrol edildi');
+    } catch (err) {
+      this.logger.error('CK elektrik hesap kaydı hatası', err instanceof Error ? err.message : String(err));
+    }
+  }
 
   async list() {
     return this.prisma.billAccount.findMany({
