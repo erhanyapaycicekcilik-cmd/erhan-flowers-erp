@@ -13,8 +13,8 @@ export class ProductCenterController {
   constructor(private readonly productCenter: ProductCenterService) {}
 
   @Get('entries')
-  entries() {
-    return this.productCenter.listEntries();
+  entries(@Query('search') search?: string) {
+    return this.productCenter.listEntries(search);
   }
 
   @Get('entries/:id')

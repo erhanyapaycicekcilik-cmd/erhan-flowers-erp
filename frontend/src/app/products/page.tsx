@@ -630,6 +630,24 @@ export default function ProductsPage() {
     if (!needle) return families;
     return families.filter((item) => [item.familyName, ...((item.templates ?? []).map((template) => template.templateName))].join(' ').toLocaleLowerCase('tr-TR').includes(needle));
   }, [families, familySearch]);
+  // İlk yükleme son güncellenen 1000 ürünü getirir; aranan ürün bunların dışındaysa sunucuda tüm ürünlerde ara ve listeye ekle
+  useEffect(() => {
+    const term = query.trim();
+    if (term.length < 3) return;
+    const timer = setTimeout(() => {
+      api<Entry[]>(`/product-center/entries?search=${encodeURIComponent(term)}`)
+        .then((found) => {
+          if (!found?.length) return;
+          setEntries((current) => {
+            const known = new Set(current.map((entry) => entry.variantId));
+            const extra = found.map(normalizeEntry).filter((entry) => !known.has(entry.variantId));
+            return extra.length ? [...current, ...extra] : current;
+          });
+        })
+        .catch(() => null);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [query]);
   const visibleEntries = useMemo(() => {
     const needle = query.trim().toLocaleLowerCase('tr-TR');
     let base = showPassiveEntries ? entries : entries.filter((entry) => entry.status !== 'PASSIVE');
