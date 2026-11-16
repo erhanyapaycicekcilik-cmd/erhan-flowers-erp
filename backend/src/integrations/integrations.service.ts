@@ -13,6 +13,7 @@ import { TrendyolAdapter } from './adapters/trendyol.adapter';
 import { TrendrumAdapter } from './adapters/trendrum.adapter';
 import { PazaramaAdapter } from './adapters/pazarama.adapter';
 import { IdefixAdapter } from './adapters/idefix.adapter';
+import { KoctasAdapter } from './adapters/koctas.adapter';
 import { AmazonAdapter } from './adapters/amazon.adapter';
 import { IntegrationCenterService } from './services/integration-center.service';
 import { isSiteOnlyModelCode } from '../common/site-only';
@@ -28,6 +29,7 @@ const platforms: Array<{ platform: IntegrationPlatform; displayName: string }> =
   { platform: 'PAZARAMA', displayName: 'Pazarama' },
   { platform: 'IDEFIX', displayName: 'Idefix' },
   { platform: 'TEKLIKLE', displayName: 'Teklikle' },
+  { platform: 'KOCTAS', displayName: 'Koçtaş' },
 ];
 
 const TICIMAX_PLATFORM: IntegrationPlatform = 'TICIMAX';
@@ -1732,6 +1734,7 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
     if (platform === 'TRENDRUM') return new TrendrumAdapter(await this.integrationCenter.runtimeCredentials(platform, companyCode));
     if (platform === 'PAZARAMA') return new PazaramaAdapter(await this.integrationCenter.runtimeCredentials(platform, companyCode));
     if (platform === 'IDEFIX') return new IdefixAdapter(await this.integrationCenter.runtimeCredentials(platform, companyCode));
+    if (platform === 'KOCTAS') return new KoctasAdapter(await this.integrationCenter.runtimeCredentials(platform, companyCode));
     if (platform === 'AMAZON') return new AmazonAdapter(await this.integrationCenter.runtimeCredentials(platform, companyCode));
     return new GenericMarketplaceAdapter(platform);
   }
