@@ -1,9 +1,68 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Cron } from '@nestjs/schedule';
+import { MailService } from '../mail/mail.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class SuppliersService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(SuppliersService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly mail: MailService,
+  ) {}
+
+  /**
+   * Uyarılar: gecikmiş + `days` gün içinde vadesi gelen taksit/faturalar
+   * ve hesap olarak eklenmeyi bekleyen tanınmayan fatura bildirimleri (SMS/e-posta).
+   */
+  async alerts(days = 3) {
+    const ov = await this.overview(days);
+    const items = ov.upcoming;
+    let unknownBills = 0;
+    try {
+      const row = await this.prisma.appSetting.findUnique({ where: { key: 'bill_sms_log' } });
+      const log = JSON.parse(row?.value ?? '[]') as Array<{ suggestion?: unknown; at: string }>;
+      const since = Date.now() - 30 * 86400000;
+      unknownBills = log.filter((e) => e.suggestion && new Date(e.at).getTime() > since).length;
+    } catch { /* yok */ }
+    return {
+      overdueCount: items.filter((i) => i.overdue).length,
+      overdueTotal: Math.round(items.filter((i) => i.overdue).reduce((s, i) => s + (i.amount ?? 0), 0) * 100) / 100,
+      dueSoonCount: items.filter((i) => !i.overdue).length,
+      dueSoonTotal: Math.round(items.filter((i) => !i.overdue).reduce((s, i) => s + (i.amount ?? 0), 0) * 100) / 100,
+      unknownBills,
+      items,
+    };
+  }
+
+  /** Her sabah 09:10: gecikmiş / 3 gün içinde ödenecekler varsa sahibine e-posta. */
+  @Cron('10 9 * * *')
+  async dailyReminderEmail() {
+    try {
+      const a = await this.alerts(3);
+      if (!a.items.length) return;
+      const tl = (n: number | null) => (n == null ? '—' : `${n.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₺`);
+      const rows = a.items.map((i) => `<tr style="${i.overdue ? 'background:#fef2f2' : ''}">
+        <td style="padding:6px 10px;border-bottom:1px solid #eee">${new Date(i.dueDate).toLocaleDateString('tr-TR')}</td>
+        <td style="padding:6px 10px;border-bottom:1px solid #eee">${i.kind === 'BILL' ? 'Fatura' : 'Taksit'}</td>
+        <td style="padding:6px 10px;border-bottom:1px solid #eee"><b>${i.title}</b>${i.party ? ` — ${i.party}` : ''}${i.detail ? `<br><small style="color:#888">${i.detail}</small>` : ''}</td>
+        <td style="padding:6px 10px;border-bottom:1px solid #eee;text-align:right;white-space:nowrap">${tl(i.amount)}</td>
+        <td style="padding:6px 10px;border-bottom:1px solid #eee;color:${i.overdue ? '#dc2626' : '#ea580c'}">${i.overdue ? 'GECİKTİ' : 'Yaklaşıyor'}</td>
+      </tr>`).join('');
+      const html = `<div style="font-family:Arial,sans-serif;max-width:640px">
+        <h2 style="color:#b91c1c">Ödeme hatırlatması</h2>
+        <p>${a.overdueCount ? `<b style="color:#dc2626">${a.overdueCount} ödeme gecikti (${tl(a.overdueTotal)})</b><br>` : ''}${a.dueSoonCount ? `${a.dueSoonCount} ödeme 3 gün içinde (${tl(a.dueSoonTotal)})` : ''}</p>
+        <table style="border-collapse:collapse;width:100%;font-size:14px">${rows}</table>
+        ${a.unknownBills ? `<p>📩 ${a.unknownBills} tanınmayan fatura bildirimi hesap olarak eklenmeyi bekliyor.</p>` : ''}
+        <p><a href="https://erp.erhanflowers.com/borclar">Borçlar & Faturalar ekranını aç</a> — ödediklerinizi "Ödendi" işaretleyin.</p>
+      </div>`;
+      const subject = a.overdueCount ? `⚠ ${a.overdueCount} ödeme gecikti — ${tl(a.overdueTotal)}` : `⏰ ${a.dueSoonCount} ödeme yaklaşıyor — ${tl(a.dueSoonTotal)}`;
+      if (await this.mail.sendOwnerEmail(subject, html)) this.logger.log(`Ödeme hatırlatma e-postası gönderildi (${a.items.length} kalem)`);
+    } catch (err) {
+      this.logger.error('Ödeme hatırlatma hatası', err instanceof Error ? err.message : String(err));
+    }
+  }
 
   async listSuppliers() {
     const suppliers = await this.prisma.supplier.findMany({

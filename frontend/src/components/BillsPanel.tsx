@@ -88,9 +88,10 @@ function StatusBadge({ status }: { status: string }) {
   return <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 whitespace-nowrap">Bekliyor</span>
 }
 
-type SmsLogEntry = { at: string; from: string | null; text: string; matched: string | null; amount: number | null; dueDate: string | null; result: string }
+type Suggestion = { subscriberNo: string | null; type: string; provider: string | null }
+type SmsLogEntry = { at: string; channel?: 'SMS' | 'EMAIL'; from: string | null; text: string; matched: string | null; amount: number | null; dueDate: string | null; result: string; suggestion?: Suggestion | null }
 
-function SmsCard({ onReceived }: { onReceived: () => void }) {
+function SmsCard({ onReceived, onSuggest, knownNumbers }: { onReceived: () => void; onSuggest: (s: Suggestion) => void; knownNumbers: string[] }) {
   const [open, setOpen] = useState(false)
   const [data, setData] = useState<{ token: string; log: SmsLogEntry[] } | null>(null)
   const [copied, setCopied] = useState(false)
@@ -105,7 +106,9 @@ function SmsCard({ onReceived }: { onReceived: () => void }) {
     } catch (e) { setErr(e instanceof Error ? e.message : 'Yüklenemedi') }
   }, [onReceived])
 
-  useEffect(() => { if (open && !data) load() }, [open, data, load])
+  useEffect(() => { if (!data) load() }, [data, load])
+
+  const pending = (data?.log ?? []).filter(e => e.suggestion && !(e.suggestion.subscriberNo && knownNumbers.includes(e.suggestion.subscriberNo)))
 
   const url = data ? `${apiBaseUrl}/bill-accounts/sms-webhook?token=${data.token}` : ''
 
@@ -117,7 +120,8 @@ function SmsCard({ onReceived }: { onReceived: () => void }) {
     <div className="mb-4 rounded-xl border bg-white">
       <button onClick={() => setOpen(o => !o)} className="w-full flex items-center gap-3 p-3 text-sm text-left">
         <MessageSquare size={18} className="text-purple-600" />
-        <span className="flex-1"><b>SMS&apos;ten otomatik (Android)</b> — telefona gelen fatura SMS&apos;leri buraya iletilir, tutar ve son ödeme tarihi ilgili aya yazılır</span>
+        <span className="flex-1"><b>Gelen fatura bildirimleri (SMS + e-posta)</b> — telefondaki tüm SMS&apos;ler ve Gmail taranır, faturalar ilgili aya yazılır</span>
+        {pending.length > 0 && <span className="rounded-full bg-red-600 px-2 py-0.5 text-xs font-bold text-white">{pending.length} yeni</span>}
         <span className="text-gray-400">{open ? '▲' : '▼'}</span>
       </button>
       {open && (
@@ -137,12 +141,12 @@ function SmsCard({ onReceived }: { onReceived: () => void }) {
                 <li>Play Store&apos;dan <b>&quot;SMS Forwarder&quot;</b> (veya MacroDroid) uygulamasını kurun, SMS izni verin.</li>
                 <li>Yeni kural: <b>Webhook / URL</b> seçin, yukarıdaki adresi yapıştırın, yöntem <b>POST</b>, biçim <b>JSON</b>.</li>
                 <li>Gövde: <code className="bg-gray-100 px-1 rounded">{'{"from":"%from%","text":"%text%"}'}</code> (uygulamadaki değişken adlarını kullanın).</li>
-                <li>Filtre (önerilir): mesaj içinde <b>TL</b> geçenler veya kurumların gönderen adları (CKENERJI, TURKTELEKOM…).</li>
-                <li>Fatura hesabında abone/hesap numarası girili olmalı — SMS&apos;teki numarayla eşleştirilir.</li>
+                <li>Gönderen filtresi: <b>tümü (*)</b>. Banka, şifre, kargo SMS&apos;leri ERP&apos;de hiç kaydedilmeden atılır.</li>
+                <li>Kayıtlı hesabın numarası geçen SMS/e-posta → o ayın faturasına yazılır. Yeni bir abonelikten gelirse aşağıda <b>&quot;Hesap olarak ekle&quot;</b> çıkar.</li>
               </ol>
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <div className="text-xs font-semibold text-gray-600">Son gelen SMS&apos;ler</div>
+                  <div className="text-xs font-semibold text-gray-600">Son gelen fatura bildirimleri</div>
                   <button onClick={() => load()} className="text-xs text-blue-600">Yenile</button>
                 </div>
                 {data.log.length === 0 ? (
@@ -156,7 +160,11 @@ function SmsCard({ onReceived }: { onReceived: () => void }) {
                           {e.from && <span>{e.from}</span>}
                           <span className={e.matched ? 'text-green-700 font-semibold' : 'text-red-600'}>{e.matched ?? 'eşleşmedi'}</span>
                           {e.amount != null && <span className="font-semibold text-gray-800">{fmt(e.amount)} ₺</span>}
+                          <span className={`rounded px-1 ${e.channel === 'EMAIL' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>{e.channel === 'EMAIL' ? 'e-posta' : 'SMS'}</span>
                           <span>{e.result}</span>
+                          {e.suggestion && !(e.suggestion.subscriberNo && knownNumbers.includes(e.suggestion.subscriberNo)) && (
+                            <button onClick={() => onSuggest(e.suggestion!)} className="rounded bg-green-600 px-2 py-0.5 font-semibold text-white">+ Hesap olarak ekle</button>
+                          )}
                         </div>
                         <div className="text-gray-700 mt-0.5 break-words">{e.text}</div>
                       </div>
@@ -297,10 +305,10 @@ export function BillsPanel() {
   async function scanEmail() {
     setScanning(true)
     try {
-      const r = await api<{ connected: boolean; scanned: number; updated: number }>('/bill-accounts/scan-email', { method: 'POST' })
+      const r = await api<{ connected: boolean; scanned: number; updated: number; discovered?: number }>('/bill-accounts/scan-email', { method: 'POST' })
       if (!r.connected) setMsg('Gmail bağlı değil. Önce "Gmail\'i bağla" ile hesabınızı bağlayın.')
-      else if (r.scanned === 0) setMsg('Abone/tesisat numarası girilmiş hesap yok. Hesabı düzenleyip abone numarasını girin.')
-      else setMsg(`${r.scanned} hesap tarandı, ${r.updated} fatura e-postadan alındı.`)
+      else if (r.scanned === 0 && !r.discovered) setMsg('Abone/tesisat numarası girilmiş hesap yok. Hesabı düzenleyip abone numarasını girin.')
+      else setMsg(`${r.scanned} hesap tarandı, ${r.updated} fatura e-postadan alındı${r.discovered ? `, ${r.discovered} yeni abonelik bulundu (aşağıdaki listeden ekleyin)` : ''}.`)
       load()
     } catch (e) { setMsg(e instanceof Error ? e.message : 'Tarama başarısız') }
     finally { setScanning(false) }
@@ -367,7 +375,16 @@ export function BillsPanel() {
         </button>
       </div>
 
-      <SmsCard onReceived={load} />
+      <SmsCard
+        onReceived={load}
+        knownNumbers={accounts.flatMap(a => (a.subscriberNo ?? '').split(/[,;/]+/).map(x => x.replace(/\s+/g, '')).filter(Boolean))}
+        onSuggest={sg => {
+          setEditId(null)
+          setForm({ ...emptyForm, type: sg.type, provider: sg.provider ?? '', subscriberNo: sg.subscriberNo ?? '', name: [sg.provider, BILL_TYPE_LABELS[sg.type]].filter(Boolean).join(' – ') })
+          setFormOpen(true)
+          window.scrollTo({ top: 0, behavior: 'smooth' })
+        }}
+      />
 
       {/* Özet kartları */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">

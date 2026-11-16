@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
+import { PaymentAlertBanner } from './PaymentAlertBanner';
 import {
   BarChart3,
   Boxes,
@@ -571,6 +572,7 @@ export function AdminShell({ title, children }: { title: string; children: React
           <div className="mb-5">
             <h1 className="text-xl font-bold text-ink">{title}</h1>
           </div>
+          {user?.role === 'OWNER' && <PaymentAlertBanner />}
           {children}
         </main>
       </div>
@@ -580,6 +582,7 @@ export function AdminShell({ title, children }: { title: string; children: React
         <MobileTopBar title={title} user={user} />
 
         <main className="px-4 py-4 pb-24">
+          {user?.role === 'OWNER' && <PaymentAlertBanner />}
           {children}
         </main>
 

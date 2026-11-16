@@ -17,6 +17,23 @@ export class MailService {
     })
   }
 
+  /** İşletme sahibine (NOTIFY_EMAIL) genel bildirim e-postası. Gönderilirse true. */
+  async sendOwnerEmail(subject: string, html: string): Promise<boolean> {
+    const smtpUser = process.env.SMTP_USER ?? ''
+    const notifyEmail = process.env.NOTIFY_EMAIL ?? ''
+    if (!smtpUser || !notifyEmail) {
+      this.logger.warn('SMTP_USER / NOTIFY_EMAIL tanımlı değil — bildirim e-postası gönderilmedi')
+      return false
+    }
+    try {
+      await this.transporter().sendMail({ from: `"Erhan Flowers ERP" <${smtpUser}>`, to: notifyEmail, subject, html })
+      return true
+    } catch (err) {
+      this.logger.error('Bildirim e-postası gönderilemedi', err instanceof Error ? err.message : String(err))
+      return false
+    }
+  }
+
   async sendWebOrderConfirmation(order: {
     orderNumber: string
     customerName: string

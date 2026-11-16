@@ -101,3 +101,41 @@ export function parseBillEmail(text: string): ParsedBill {
 
   return { amount, dueDate, invoiceNo };
 }
+
+// ─── SMS sınıflandırma ───────────────────────────────────────────────────────
+
+const BILL_WORDS = /(fatura|son odeme|abone|sozlesme|soz\. ?no|tesisat|hesabiniza ait|borc|odenmemis|odenmedig|donem)/;
+const NOT_BILL_WORDS = /(kartiniz|kartinizla|harcama|dogrulama|sifre|sifreniz|kodu|kodunuz|otp|kampanya|takip numara|kargo|teslim)/;
+
+/** SMS fatura/borç bildirimi gibi mi? (banka harcaması, doğrulama kodu, kargo vb. hariç) */
+export function isBillLikeSms(text: string) {
+  const f = foldTr(text);
+  return BILL_WORDS.test(f) && !NOT_BILL_WORDS.test(f) && /\d/.test(f);
+}
+
+/** SMS'teki abone/sözleşme/hesap numarası adayı. */
+export function extractSubscriberNo(text: string): string | null {
+  const f = foldTr(text);
+  const m =
+    f.match(/(?:soz\.? ?no\.?|sozlesme no|abone no|tesisat no|hesap no|hizmet no|musteri no)\s*[.:]?\s*(\d{6,14})/) ??
+    f.match(/(\d{6,14})\s*(?:hizmet|abone|tesisat|sozlesme|hesap|musteri)?\s*(?:nolu|no'lu|no lu|numarali|sayili)/);
+  return m ? m[1] : null;
+}
+
+/** Gönderen + metinden fatura türü ve kurum tahmini. */
+const KNOWN_SENDERS: Record<string, { type: string; provider: string }> = {
+  '2728': { type: 'WATER', provider: 'ASAT' },
+  '252533649': { type: 'ELECTRICITY', provider: 'CK Akdeniz' },
+};
+
+export function guessBillType(text: string, from?: string | null): { type: string; provider: string | null } {
+  const sender = (from ?? '').replace(/\D/g, '');
+  if (sender && KNOWN_SENDERS[sender]) return KNOWN_SENDERS[sender];
+  const f = foldTr(`${from ?? ''} ${text}`);
+  if (/ck ?akdeniz|ck ?enerji|ckakdeniz|enerjisa|elektrik|\baydem\b|\bgediz\b|uludag elektrik|osmangazi elektrik/.test(f)) return { type: 'ELECTRICITY', provider: /ck ?akdeniz|ckakdeniz|ck ?enerji/.test(f) ? 'CK Akdeniz' : /enerjisa/.test(f) ? 'Enerjisa' : null };
+  if (/\basat\b|su kesinti|su fatura|\biski\b|\baski\b|\bbuski\b|\bizsu\b|su ve kanalizasyon/.test(f)) return { type: 'WATER', provider: /\basat\b/.test(f) ? 'ASAT' : null };
+  if (/dogalgaz|\bigdas\b|antalyagaz|baskentgaz|izmirgaz/.test(f)) return { type: 'NATURAL_GAS', provider: null };
+  if (/superonline|turknet|turk ?telekom|\bttnet\b|fiber|internet|millenicom/.test(f)) return { type: 'INTERNET', provider: /turk ?telekom|ttnet/.test(f) ? 'Türk Telekom' : /superonline/.test(f) ? 'Superonline' : /turknet/.test(f) ? 'TurkNet' : null };
+  if (/turkcell|vodafone|hattiniz|hat fatura/.test(f)) return { type: 'MOBILE', provider: /turkcell/.test(f) ? 'Turkcell' : /vodafone/.test(f) ? 'Vodafone' : null };
+  return { type: 'OTHER', provider: null };
+}

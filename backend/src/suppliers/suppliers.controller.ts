@@ -13,6 +13,12 @@ export class SuppliersController {
   @Get('summary')
   summary() { return this.suppliers.summary(); }
 
+  @Get('alerts')
+  alerts(@Query('days') days?: string) { return this.suppliers.alerts(days ? Number(days) || 3 : 3); }
+
+  @Post('alerts/send-test')
+  async sendTest() { await this.suppliers.dailyReminderEmail(); return { ok: true }; }
+
   @Get('overview')
   overview(@Query('days') days?: string) { return this.suppliers.overview(days ? Number(days) || 45 : 45); }
 
