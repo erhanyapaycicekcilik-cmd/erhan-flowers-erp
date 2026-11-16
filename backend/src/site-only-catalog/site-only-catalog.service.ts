@@ -8,6 +8,15 @@ import { METAL_POTS } from './metal-pots.data';
 import { DECOR_POT_GROUPS } from './decor-pots.data';
 import type { SiteOnlyGroup, SiteOnlySeries, SiteOnlySimpleProduct } from './site-only-catalog.types';
 
+function slugify(v: string) {
+  return v
+    .toLocaleLowerCase('tr')
+    .replace(/ğ/g, 'g').replace(/ü/g, 'u').replace(/ş/g, 's')
+    .replace(/ı/g, 'i').replace(/ö/g, 'o').replace(/ç/g, 'c')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
 const CATEGORY_NAME = 'Saksı';
 const CATALOG_CATEGORY = 'Saksılar';
 const DEFAULT_STOCK = 100;
