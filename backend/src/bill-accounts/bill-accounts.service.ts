@@ -3,12 +3,16 @@ import { createHash, randomBytes, timingSafeEqual } from 'crypto';
 import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service';
 import { GmailOrderService } from '../integrations/services/gmail-order.service';
-import { parseBillEmail, ParsedBill } from './bill-email-parser';
+import { extractSubscriberNo, guessBillType, isBillLikeSms, parseBillEmail, ParsedBill } from './bill-email-parser';
 
 const SMS_TOKEN_KEY = 'bill_sms_token';
 const SMS_LOG_KEY = 'bill_sms_log';
 
-export type SmsLogEntry = { at: string; from: string | null; text: string; matched: string | null; amount: number | null; dueDate: string | null; result: string };
+export type SmsLogEntry = {
+  at: string; channel?: 'SMS' | 'EMAIL'; ref?: string; from: string | null; text: string; matched: string | null; amount: number | null; dueDate: string | null; result: string;
+  /** Hesapla eşleşmeyen fatura SMS'i için öneri ("Hesap olarak ekle") */
+  suggestion?: { subscriberNo: string | null; type: string; provider: string | null } | null;
+};
 
 export const BILL_TYPES = ['RENT', 'WATER', 'ELECTRICITY', 'NATURAL_GAS', 'MOBILE', 'INTERNET', 'CREDIT_CARD', 'OTHER'];
 
@@ -297,7 +301,8 @@ export class BillAccountsService implements OnApplicationBootstrap {
       }
     }
 
-    return { connected: true, scanned: accounts.length, updated, results };
+    const discovered = await this.discoverUnknownBillEmails(accounts);
+    return { connected: true, scanned: accounts.length, updated, discovered, results };
   }
 
   /**
@@ -347,7 +352,7 @@ export class BillAccountsService implements OnApplicationBootstrap {
   private async pushSmsLog(e: SmsLogEntry) {
     const log = await this.smsLog();
     log.unshift(e);
-    await this.setSetting(SMS_LOG_KEY, JSON.stringify(log.slice(0, 30)));
+    await this.setSetting(SMS_LOG_KEY, JSON.stringify(log.slice(0, 50)));
   }
 
   /** Telefondan gelen SMS: abone numarası eşleşen hesabın o ayki faturasına yazar. */
@@ -377,12 +382,20 @@ export class BillAccountsService implements OnApplicationBootstrap {
     const account = accounts.find((a) => accountNumbers(a.subscriberNo).some(hasNumber));
     const parsed = parseBillEmail(text);
 
+    // Tüm SMS'ler gelebilir: hesapla eşleşmeyen ve fatura olmayanlar (banka, kod, kargo…) hiç kaydedilmeden atılır
+    if (!account && !isBillLikeSms(text)) {
+      return { ok: true, matched: null, amount: null, result: 'Fatura SMS\'i değil — yok sayıldı' };
+    }
+
     const entry: SmsLogEntry = {
       at: new Date().toISOString(), from, text: text.slice(0, 400), matched: account?.name ?? null,
       amount: parsed.amount, dueDate: parsed.dueDate?.toISOString() ?? null, result: '',
     };
 
-    if (!account) entry.result = 'Abone numarası hiçbir hesapla eşleşmedi';
+    if (!account) {
+      entry.result = 'Tanınmayan fatura SMS\'i — hesap olarak ekleyin';
+      entry.suggestion = { subscriberNo: extractSubscriberNo(text), ...guessBillType(text, from) };
+    }
     else if (!parsed.amount && !parsed.invoiceNo) entry.result = 'Tutar okunamadı';
     else {
       const ref = parsed.dueDate ?? new Date();
@@ -400,5 +413,45 @@ export class BillAccountsService implements OnApplicationBootstrap {
     await this.pushSmsLog(entry);
     this.logger.log(`Fatura SMS: ${entry.matched ?? '-'} → ${entry.result}`);
     return { ok: true, matched: entry.matched, amount: entry.amount, result: entry.result };
+  }
+
+  /**
+   * Hiçbir hesaba ait olmayan fatura e-postalarını bulur (yeni abonelik) → bildirim listesine öneri olarak düşer.
+   * Sadece abone/sözleşme numarası + tutar içerenler alınır (pazaryeri/e-arşiv satış faturaları karışmasın).
+   */
+  private async discoverUnknownBillEmails(accounts: Array<{ subscriberNo: string | null }>) {
+    const known = new Set(accounts.flatMap((a) => accountNumbers(a.subscriberNo)));
+    const q = 'newer_than:10d {fatura "son ödeme" borç borcunuz} -from:trendyol -from:hepsiburada -from:n11 -from:amazon -from:idefix -from:pazarama -category:promotions';
+    const ids = (await this.gmail.searchMessageIds(q, 25)) ?? [];
+    let seenList: string[] = [];
+    try { seenList = JSON.parse((await this.getSetting('bill_email_seen')) ?? '[]'); } catch { /* boş */ }
+    const seen = new Set(seenList);
+    let found = 0;
+    for (const id of ids) {
+      if (seen.has(id)) continue;
+      seen.add(id);
+      seenList.unshift(id);
+      if (await this.prisma.billPayment.findFirst({ where: { emailMessageId: id } })) continue;
+      const msg = await this.gmail.getMessageContent(id);
+      if (!msg) continue;
+      const text = `${msg.subject}\n${msg.text}`;
+      const subscriberNo = extractSubscriberNo(text);
+      const parsed = parseBillEmail(text);
+      const digits = text.replace(/[^0-9]/g, ' ');
+      const isKnown = [...known].some((n) => new RegExp(`(^|\\D)${n}(\\D|$)`).test(digits));
+      if (isKnown || !subscriberNo || !parsed.amount || !isBillLikeSms(text)) {
+        continue;
+      }
+      found++;
+      await this.pushSmsLog({
+        at: (msg.date ?? new Date()).toISOString(), channel: 'EMAIL', ref: `mail:${id}`, from: msg.from.slice(0, 80),
+        text: `${msg.subject} — ${msg.text.replace(/\s+/g, ' ').slice(0, 300)}`, matched: null,
+        amount: parsed.amount, dueDate: parsed.dueDate?.toISOString() ?? null,
+        result: 'Tanınmayan fatura e-postası — hesap olarak ekleyin',
+        suggestion: { subscriberNo, ...guessBillType(text, msg.from) },
+      });
+    }
+    await this.setSetting('bill_email_seen', JSON.stringify(seenList.slice(0, 400)));
+    return found;
   }
 }
