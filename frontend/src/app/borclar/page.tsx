@@ -102,7 +102,10 @@ export default function BorclarPage() {
     api<Overview>('/suppliers/overview?days=45').then(setOverview).catch(() => setOverview(null));
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+    try { if (new URLSearchParams(window.location.search).get('gmail')) setTab('bills'); } catch { /* yok */ }
+  }, []);
   useEffect(() => { if (tab === 'overview') loadOverview(); }, [tab]);
 
   const totalDebt = suppliers.reduce((s, x) => s + (x.balance > 0 ? x.balance : 0), 0);

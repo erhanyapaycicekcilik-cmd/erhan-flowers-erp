@@ -8,15 +8,16 @@ export class GmailController {
   constructor(private readonly gmailOrder: GmailOrderService) {}
 
   @Get('auth')
-  gmailAuth(@Res() res: Response) {
-    const url = this.gmailOrder.getAuthUrl();
+  gmailAuth(@Query('purpose') purpose: string | undefined, @Res() res: Response) {
+    const url = this.gmailOrder.getAuthUrl(purpose);
     res.redirect(url);
   }
 
   @Get('callback')
-  async gmailCallback(@Query('code') code: string, @Res() res: Response) {
-    const ok = await this.gmailOrder.exchangeCode(code);
+  async gmailCallback(@Query('code') code: string, @Query('state') state: string | undefined, @Res() res: Response) {
+    const ok = await this.gmailOrder.exchangeCode(code, state);
     const host = process.env.FRONTEND_URL ?? 'https://erp.florayapaycicek.com';
+    if (state === 'bills') return res.redirect(`${host}/borclar?gmail=${ok ? 'connected' : 'error'}`);
     res.redirect(`${host}/integrations?gmail=${ok ? 'connected' : 'error'}`);
   }
 

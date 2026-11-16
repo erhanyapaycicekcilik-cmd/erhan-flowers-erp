@@ -120,7 +120,7 @@ export function extractSubscriberNo(text: string): string | null {
   const phone = f.match(/(?:\+?90\s?)?0?(5\d{2})\s?(\d{3})\s?(\d{2})\s?(\d{2})(?!\d)/);
   if (phone && /(hat|gsm|numarali|nolu|vodafone|turkcell)/.test(f)) return `${phone[1]}${phone[2]}${phone[3]}${phone[4]}`;
   const m =
-    f.match(/(?:soz\.? ?no\.?|sozlesme no|abone no|tesisat no|hesap no|hizmet no|musteri no)\s*[.:]?\s*(\d{6,14})/) ??
+    f.match(/(?:soz\.? ?no\.?|(?:sozlesme|abone|tesisat|hesap|hizmet|musteri) (?:no|numarasi))\s*[.:]?\s*(\d{6,14})/) ??
     f.match(/(\d{6,14})\s*(?:hizmet|abone|tesisat|sozlesme|hesap|musteri)?\s*(?:nolu|no'lu|no lu|numarali|sayili)/);
   return m ? m[1] : null;
 }

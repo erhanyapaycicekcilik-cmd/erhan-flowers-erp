@@ -47,6 +47,12 @@ export class BillAccountsController {
     return this.service.smsSettings(true);
   }
 
+  @Delete('mailboxes/:email')
+  @UseGuards(OwnerGuard)
+  removeMailbox(@Param('email') email: string) {
+    return this.service.removeMailbox(email);
+  }
+
   @Post('scan-email')
   scanEmail(@Query('accountId') accountId?: string) {
     return this.service.scanEmails(accountId ? Number(accountId) : undefined);

@@ -60,6 +60,16 @@ export class BillAccountsService implements OnApplicationBootstrap {
       { name: 'Dükkan 2 – Su', subscriberNo: '1002112894', sortOrder: 12 },
       { name: 'Ev – Su', subscriberNo: null, sortOrder: 13 },
     ]);
+    await this.seedOnce('seed_vodafone_v1', 'MOBILE', 'Vodafone', 25, [
+      { name: 'Vodafone – 0544 654 62 20', subscriberNo: '5446546220', sortOrder: 21 },
+      { name: 'Vodafone – 0544 917 62 20', subscriberNo: '5449176220', sortOrder: 22 },
+    ]);
+    await this.seedOnce('seed_turktelekom_v1', 'INTERNET', 'Türk Telekom', 16, [
+      { name: 'Türk Telekom – İnternet', subscriberNo: '7037200938', sortOrder: 31 },
+    ]);
+    await this.seedBillsOnce('seed_turktelekom_bills_v1', [
+      { subscriberNo: '7037200938', year: 2026, month: 10, amount: 620.25, dueDate: '2026-10-16', note: 'Türk Telekom e-postası: Eylül 2026 dönemi' },
+    ]);
     // Kullanıcının gönderdiği CK sayfası / CK e-postası+SMS / ASAT SMS'indeki faturalar
     await this.seedBillsOnce('seed_initial_bills_v1', [
       { subscriberNo: '4577106676', year: 2026, month: 11, amount: 435, dueDate: '2026-11-26', note: 'CK online işlemler ekranından' },
@@ -229,8 +239,15 @@ export class BillAccountsService implements OnApplicationBootstrap {
     });
   }
 
+  /** Bağlı posta kutuları (sipariş hesabı + fatura için eklenenler). */
   async gmailStatus() {
-    return this.gmail.getStatus();
+    const mailboxes = await this.gmail.listMailboxes();
+    return { connected: mailboxes.length > 0, mailboxes };
+  }
+
+  async removeMailbox(email: string) {
+    await this.gmail.removeBillMailbox(email);
+    return this.gmailStatus();
   }
 
   /** Her sabah: abone numarası girilmiş hesaplar için Gmail'deki fatura e-postalarını tara. */
@@ -250,8 +267,8 @@ export class BillAccountsService implements OnApplicationBootstrap {
    * Elle girilmiş (MANUAL) veya ödenmiş kayıtlara dokunmaz.
    */
   async scanEmails(accountId?: number) {
-    const status = await this.gmail.getStatus();
-    if (!status.connected) {
+    const mailboxes = await this.gmail.listMailboxes();
+    if (!mailboxes.length) {
       return { connected: false, scanned: 0, updated: 0, results: [] as Array<Record<string, unknown>> };
     }
 
@@ -270,21 +287,26 @@ export class BillAccountsService implements OnApplicationBootstrap {
         /^5\d{9}$/.test(n) ? [n, `0${n}`, `${n.slice(0, 3)} ${n.slice(3, 6)} ${n.slice(6, 8)} ${n.slice(8)}`] : [n]);
       const numQ = variants.length === 1 ? `"${variants[0]}"` : `{${variants.map((n) => `"${n}"`).join(' ')}}`;
       const q = [numQ, a.emailSender ? `from:${a.emailSender}` : '', 'newer_than:45d'].filter(Boolean).join(' ');
-      const ids = await this.gmail.searchMessageIds(q, 6);
-      if (!ids?.length) {
+      // Tüm posta kutularında ara; her kayıt (posta kutusu, mesaj id) çifti
+      const found: Array<{ mailbox: string; id: string; ref: string }> = [];
+      for (const mb of mailboxes) {
+        const ids = (await this.gmail.searchMessageIds(q, 6, mb.id)) ?? [];
+        for (const id of ids) found.push({ mailbox: mb.id, id, ref: mb.id === 'primary' ? id : `${mb.id}|${id}` });
+      }
+      if (!found.length) {
         results.push({ accountId: a.id, name: a.name, found: 0 });
         continue;
       }
 
       const handledMonths = new Set<string>();
-      for (const id of ids) {
+      for (const { mailbox, id, ref: sourceRef } of found) {
         // Gmail en yeniden eskiye döner — her ay için en yeni e-posta geçerli
-        const already = await this.prisma.billPayment.findFirst({ where: { emailMessageId: id } });
+        const already = await this.prisma.billPayment.findFirst({ where: { emailMessageId: sourceRef } });
         if (already) {
           handledMonths.add(`${already.year}-${already.month}`);
           continue;
         }
-        const msg = await this.gmail.getMessageContent(id);
+        const msg = await this.gmail.getMessageContent(id, mailbox);
         if (!msg) continue;
         const parsed = parseBillEmail(msg.text);
         if (!parsed.amount && !parsed.invoiceNo) continue;
@@ -296,14 +318,15 @@ export class BillAccountsService implements OnApplicationBootstrap {
         if (handledMonths.has(mk)) continue;
         handledMonths.add(mk);
 
-        const data = await this.applyParsed(a.id, year, month, parsed, 'EMAIL', id, `E-posta: ${msg.subject.slice(0, 120)}`);
+        const data = await this.applyParsed(a.id, year, month, parsed, 'EMAIL', sourceRef, `E-posta: ${msg.subject.slice(0, 120)}`);
         if (!data) continue;
         updated++;
         results.push({ accountId: a.id, name: a.name, year, month, amount: data.amount, invoiceNo: data.invoiceNo, subject: msg.subject });
       }
     }
 
-    const discovered = await this.discoverUnknownBillEmails(accounts);
+    let discovered = 0;
+    for (const mb of mailboxes) discovered += await this.discoverUnknownBillEmails(accounts, mb.id, mb.email);
     return { connected: true, scanned: accounts.length, updated, discovered, results };
   }
 
@@ -423,21 +446,22 @@ export class BillAccountsService implements OnApplicationBootstrap {
    * Hiçbir hesaba ait olmayan fatura e-postalarını bulur (yeni abonelik) → bildirim listesine öneri olarak düşer.
    * Sadece abone/sözleşme numarası + tutar içerenler alınır (pazaryeri/e-arşiv satış faturaları karışmasın).
    */
-  private async discoverUnknownBillEmails(accounts: Array<{ subscriberNo: string | null }>) {
+  private async discoverUnknownBillEmails(accounts: Array<{ subscriberNo: string | null }>, mailbox = 'primary', mailboxEmail: string | null = null) {
     const known = new Set(accounts.flatMap((a) => accountNumbers(a.subscriberNo)));
     // Takip edilen kurumlar: Vodafone (cep), ASAT (su), CK Akdeniz (elektrik), Türk Telekom (internet)
     const q = 'newer_than:10d {from:vodafone.com.tr from:vodafone.net.tr from:asat.gov.tr from:ckenerji.com.tr from:ckakdeniz.com.tr from:turktelekom.com.tr from:ttmail.com.tr from:ttnet.com.tr} {fatura "son ödeme" borç borcunuz tutar}';
-    const ids = (await this.gmail.searchMessageIds(q, 25)) ?? [];
+    const ids = (await this.gmail.searchMessageIds(q, 25, mailbox)) ?? [];
     let seenList: string[] = [];
     try { seenList = JSON.parse((await this.getSetting('bill_email_seen')) ?? '[]'); } catch { /* boş */ }
     const seen = new Set(seenList);
     let found = 0;
     for (const id of ids) {
-      if (seen.has(id)) continue;
-      seen.add(id);
-      seenList.unshift(id);
-      if (await this.prisma.billPayment.findFirst({ where: { emailMessageId: id } })) continue;
-      const msg = await this.gmail.getMessageContent(id);
+      const ref = mailbox === 'primary' ? id : `${mailbox}|${id}`;
+      if (seen.has(ref)) continue;
+      seen.add(ref);
+      seenList.unshift(ref);
+      if (await this.prisma.billPayment.findFirst({ where: { emailMessageId: ref } })) continue;
+      const msg = await this.gmail.getMessageContent(id, mailbox);
       if (!msg) continue;
       const text = `${msg.subject}\n${msg.text}`;
       const subscriberNo = extractSubscriberNo(text);
@@ -449,7 +473,7 @@ export class BillAccountsService implements OnApplicationBootstrap {
       }
       found++;
       await this.pushSmsLog({
-        at: (msg.date ?? new Date()).toISOString(), channel: 'EMAIL', ref: `mail:${id}`, from: msg.from.slice(0, 80),
+        at: (msg.date ?? new Date()).toISOString(), channel: 'EMAIL', ref: `mail:${ref}`, from: `${msg.from.slice(0, 80)}${mailboxEmail ? ` → ${mailboxEmail}` : ''}`,
         text: `${msg.subject} — ${msg.text.replace(/\s+/g, ' ').slice(0, 300)}`, matched: null,
         amount: parsed.amount, dueDate: parsed.dueDate?.toISOString() ?? null,
         result: 'Tanınmayan fatura e-postası — hesap olarak ekleyin',

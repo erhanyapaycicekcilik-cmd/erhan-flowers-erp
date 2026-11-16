@@ -190,7 +190,7 @@ export function BillsPanel() {
   const [form, setForm] = useState(emptyForm)
   const [paying, setPaying] = useState<number | null>(null)
   const [msg, setMsg] = useState('')
-  const [gmail, setGmail] = useState<{ connected: boolean } | null>(null)
+  const [gmail, setGmail] = useState<{ connected: boolean; mailboxes: { id: string; email: string | null }[] } | null>(null)
   const [scanning, setScanning] = useState(false)
 
   // Aylık fatura girişi
@@ -210,7 +210,12 @@ export function BillsPanel() {
 
   useEffect(() => {
     load()
-    api<{ connected: boolean }>('/bill-accounts/gmail-status').then(setGmail).catch(() => setGmail(null))
+    api<{ connected: boolean; mailboxes: { id: string; email: string | null }[] }>('/bill-accounts/gmail-status').then(setGmail).catch(() => setGmail(null))
+    try {
+      const g = new URLSearchParams(window.location.search).get('gmail')
+      if (g === 'connected') setMsg('Gmail hesabı bağlandı. "E-postadan şimdi çek" ile faturaları tarayabilirsiniz.')
+      else if (g === 'error') setMsg('Gmail bağlanamadı. Google\'da izin verirken hata oldu — tekrar deneyin.')
+    } catch { /* yok */ }
   }, [load])
 
   function openNew() {
@@ -360,19 +365,38 @@ export function BillsPanel() {
       </div>
 
       {/* Gmail şeridi */}
-      <div className="mb-4 p-3 rounded-xl border bg-white flex flex-wrap items-center gap-3 text-sm">
-        <Mail size={18} className={gmail?.connected ? 'text-green-600' : 'text-gray-400'} />
-        <div className="flex-1 min-w-[200px]">
-          {gmail?.connected
-            ? <span>Gmail bağlı — abone numarası girilen hesapların fatura e-postaları <b>her sabah</b> otomatik okunur (tutar, fatura no, son ödeme tarihi).</span>
-            : <span className="text-gray-600">Faturaların otomatik gelmesi için Gmail&apos;i bağlayın ve kurumların e-fatura bildirimlerini bu e-postaya yönlendirin.</span>}
+      <div className="mb-4 p-3 rounded-xl border bg-white text-sm space-y-2">
+        <div className="flex flex-wrap items-center gap-3">
+          <Mail size={18} className={gmail?.connected ? 'text-green-600' : 'text-gray-400'} />
+          <div className="flex-1 min-w-[200px]">
+            {gmail?.connected
+              ? <span>Bağlı Gmail hesaplarındaki Vodafone, ASAT, CK Akdeniz ve Türk Telekom faturaları <b>her sabah</b> otomatik okunur.</span>
+              : <span className="text-gray-600">Faturaların e-postadan otomatik gelmesi için Gmail hesaplarınızı bağlayın.</span>}
+          </div>
+          <a href={`${apiBaseUrl}/integrations/gmail/auth?purpose=bills`} className="px-3 py-1.5 rounded-lg border hover:bg-gray-50">+ Gmail hesabı ekle</a>
+          <button onClick={scanEmail} disabled={scanning} className="px-3 py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1">
+            <RefreshCw size={14} className={scanning ? 'animate-spin' : ''} /> {scanning ? 'Taranıyor…' : 'E-postadan şimdi çek'}
+          </button>
         </div>
-        {!gmail?.connected && (
-          <a href={`${apiBaseUrl}/integrations/gmail/auth`} className="px-3 py-1.5 rounded-lg border hover:bg-gray-50">Gmail&apos;i bağla</a>
+        {gmail && gmail.mailboxes.length > 0 && (
+          <div className="flex flex-wrap gap-2 pl-7">
+            {gmail.mailboxes.map(mb => (
+              <span key={mb.id} className="inline-flex items-center gap-1 rounded-full bg-green-50 border border-green-200 px-2.5 py-0.5 text-xs text-green-800">
+                ✓ {mb.email ?? 'Sipariş Gmail hesabı'}
+                {mb.id !== 'primary' && (
+                  <button
+                    title="Kaldır"
+                    onClick={async () => {
+                      if (!confirm(`${mb.email} fatura taramasından çıkarılsın mı?`)) return
+                      setGmail(await api(`/bill-accounts/mailboxes/${encodeURIComponent(mb.id)}`, { method: 'DELETE' }))
+                    }}
+                    className="ml-1 text-green-700 hover:text-red-600"
+                  >✕</button>
+                )}
+              </span>
+            ))}
+          </div>
         )}
-        <button onClick={scanEmail} disabled={scanning} className="px-3 py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1">
-          <RefreshCw size={14} className={scanning ? 'animate-spin' : ''} /> {scanning ? 'Taranıyor…' : 'E-postadan şimdi çek'}
-        </button>
       </div>
 
       <SmsCard
