@@ -8,7 +8,7 @@ import { useCart } from '@/hooks/useCart'
 import Image from 'next/image'
 import Link from 'next/link'
 import { getImageUrl } from '@/lib/api/catalog'
-import { siteConfig } from '@/lib/site-config'
+import { shippingConfig as siteConfig } from '@/lib/shipping'
 
 function fmt(n: number) {
   return '₺' + new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(n)
