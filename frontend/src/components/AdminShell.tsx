@@ -61,6 +61,7 @@ const navGroups: { section: string; icon: LucideIcon; items: NavItem[] }[] = [
     items: [
       { href: '/products', label: 'Ürün Merkezi', icon: Boxes, roles: ALL },
       { href: '/products/excel-export', label: 'Excel İndir (Pazaryeri)', icon: Boxes, roles: OWNER_MANAGER },
+      { href: '/products/boy-serisi', label: 'Boy Serisi Oluştur', icon: Boxes, roles: OWNER_ONLY },
       { href: '/products/excel-import', label: 'Excel\'den Ürün Aktar', icon: Boxes, roles: OWNER_MANAGER },
       { href: '/katalog', label: 'PDF Katalog', icon: Boxes, roles: OWNER_MANAGER },
       { href: '/katalog-gorunu', label: 'Katalog Görünümü', icon: Boxes, roles: OWNER_MANAGER },
