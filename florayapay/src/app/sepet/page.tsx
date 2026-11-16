@@ -8,7 +8,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { Minus, Plus, Trash2, ShoppingBag, ArrowRight } from 'lucide-react'
 import { getImageUrl } from '@/lib/api/catalog'
-import { siteConfig } from '@/lib/site-config'
+import { shippingConfig as siteConfig } from '@/lib/shipping'
 
 function formatPrice(price: number) {
   return '₺' + new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(price)
