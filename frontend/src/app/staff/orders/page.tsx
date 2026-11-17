@@ -239,7 +239,7 @@ export default function StaffOrdersPage() {
     try {
       const [erpOrders, webOrders, retailOrders] = await Promise.all([
         api<OrderRow[]>('/integrations/orders?limit=200&status=CONFIRMED,PREPARING,IN_PRODUCTION,READY').catch(() => [] as OrderRow[]),
-        api<OrderRow[]>('/integrations/web-orders?limit=200&status=PENDING,CONFIRMED,PREPARING,READY').catch(() => [] as OrderRow[]),
+        api<OrderRow[]>('/integrations/web-orders?limit=200&status=CONFIRMED,PREPARING,READY').catch(() => [] as OrderRow[]),
         api<OrderRow[]>('/integrations/retail-orders?limit=200&status=PAYMENT_PENDING,CONFIRMED,PREPARING,IN_PRODUCTION,READY').catch(() => [] as OrderRow[]),
       ]);
       const combined = [

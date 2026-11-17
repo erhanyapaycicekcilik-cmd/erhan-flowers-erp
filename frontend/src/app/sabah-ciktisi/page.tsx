@@ -96,7 +96,7 @@ export default function SabahCiktisiPage() {
     try {
       const [erp, web, retail] = await Promise.all([
         api<OrderRow[]>('/integrations/orders?limit=300&status=CONFIRMED,PREPARING,IN_PRODUCTION,READY').catch(() => [] as OrderRow[]),
-        api<OrderRow[]>('/integrations/web-orders?limit=200&status=PENDING,CONFIRMED,PREPARING,READY').catch(() => [] as OrderRow[]),
+        api<OrderRow[]>('/integrations/web-orders?limit=200&status=CONFIRMED,PREPARING,READY').catch(() => [] as OrderRow[]),
         api<OrderRow[]>('/integrations/retail-orders?limit=200&status=PAYMENT_PENDING,CONFIRMED,PREPARING,IN_PRODUCTION,READY').catch(() => [] as OrderRow[]),
       ]);
       const all = [...(erp ?? []), ...(web ?? []), ...(retail ?? [])]
