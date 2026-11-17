@@ -331,6 +331,9 @@ export default function StaffOrdersPage() {
             <button onClick={() => void syncHB()} disabled={syncing} className="btn btn-secondary text-sm">
               <RefreshCw size={14} className={syncing ? 'animate-spin' : ''} /> {syncing ? 'Senkronize ediliyor...' : 'HB Senkronize Et'}
             </button>
+            <a href="/sabah-ciktisi" className="btn btn-primary text-sm">
+              <Printer size={15} /> Sabah Çıktısı (A5)
+            </a>
             <button onClick={() => void load()} className="btn btn-secondary text-sm">
               <RefreshCw size={14} /> Yenile
             </button>
