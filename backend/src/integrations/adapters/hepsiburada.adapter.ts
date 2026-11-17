@@ -20,7 +20,11 @@ export class HepsiburadaAdapter extends HttpMarketplaceOrderAdapter {
   // Hepsiburada sipariş API'si tarih filtresi desteklemiyor ve
   // offset/limit kullanıyor — genel adapter'ın startDate/endDate
   // parametreleri HB tarafından reddedildiği için override gerekli.
+  /** Son fetchOrders tüm sayfaları hatasız aldı mı? (Eksik listeyle "kargoya verildi" kararı verilmesin) */
+  lastFetchComplete = false;
+
   override async fetchOrders(): Promise<ExternalOrder[]> {
+    this.lastFetchComplete = false;
     const merchantId = this.env('MERCHANT_ID');
     const username = this.env('USERNAME') || this.env('API_KEY') || merchantId;
     const password = this.env('PASSWORD') || this.env('API_SECRET');
@@ -42,6 +46,8 @@ export class HepsiburadaAdapter extends HttpMarketplaceOrderAdapter {
     const pageSize = 50;
     const maxPages = 10;
     let offset = 0;
+    let complete = true;
+    let reachedEnd = false;
 
     for (let page = 0; page < maxPages; page++) {
       const url = new URL(basePath, `${apiBase}/`);
@@ -49,9 +55,10 @@ export class HepsiburadaAdapter extends HttpMarketplaceOrderAdapter {
       url.searchParams.set('limit', String(pageSize));
 
       const response = await fetch(url.toString(), { method: 'GET', headers });
-      if (!response.ok) break;
+      if (!response.ok) { complete = false; break; }
 
-      const json = await response.json().catch(() => ({})) as Record<string, unknown>;
+      const json = await response.json().catch(() => null) as Record<string, unknown> | null;
+      if (!json) { complete = false; break; }
 
       // HB yanıt formatı: { TotalCount, TotalPage, pageSize, pageIndex, data: [...] }
       const items = Array.isArray(json.data) ? json.data as Record<string, unknown>[]
@@ -59,7 +66,7 @@ export class HepsiburadaAdapter extends HttpMarketplaceOrderAdapter {
         : Array.isArray(json.orders) ? json.orders as Record<string, unknown>[]
         : [];
 
-      if (!items.length) break;
+      if (!items.length) { reachedEnd = true; break; }
 
       for (const order of items) {
         const mapped = this.mapHepsiburadaOrder(order);
@@ -68,9 +75,10 @@ export class HepsiburadaAdapter extends HttpMarketplaceOrderAdapter {
 
       const totalCount = Number(json.TotalCount ?? json.totalCount ?? 0);
       offset += pageSize;
-      if (totalCount > 0 && offset >= totalCount) break;
-      if (items.length < pageSize) break;
+      if (totalCount > 0 && offset >= totalCount) { reachedEnd = true; break; }
+      if (items.length < pageSize) { reachedEnd = true; break; }
     }
+    this.lastFetchComplete = complete && reachedEnd;
 
     // Tekrarlananları kaldır
     const deduped = Array.from(new Map(allOrders.map((o) => [o.externalOrderId, o])).values());

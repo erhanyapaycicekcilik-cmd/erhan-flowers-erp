@@ -12,6 +12,8 @@ export class N11Adapter extends HttpMarketplaceOrderAdapter {
       defaultOrderPath: '/rest/delivery/v1/shipmentPackages',
       defaultProductPath: '/ms/product/tasks/product-create',
       runtimeCredentials,
+      // 3 günden eski siparişler kargoya verilince durumu hiç güncellenmiyordu → 10 gün
+      defaultLookbackDays: 10,
     });
   }
 

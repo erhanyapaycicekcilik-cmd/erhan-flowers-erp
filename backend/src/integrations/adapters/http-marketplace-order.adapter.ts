@@ -8,10 +8,13 @@ type AdapterConfig = {
   defaultOrderPath: string;
   defaultProductPath?: string;
   runtimeCredentials?: Record<string, string>;
+  /** Kaç günlük sipariş çekilsin (env {PREFIX}_ORDER_LOOKBACK_DAYS yoksa). Varsayılan 3 */
+  defaultLookbackDays?: number;
 };
 
 export abstract class HttpMarketplaceOrderAdapter extends BaseIntegrationAdapter {
   platform: IntegrationPlatform;
+  private lookbackOverride: number | null = null;
 
   protected constructor(private readonly config: AdapterConfig) {
     super();
@@ -39,8 +42,16 @@ export abstract class HttpMarketplaceOrderAdapter extends BaseIntegrationAdapter
     if (missing.length) return [];
 
     const size = this.numberEnv('ORDER_PAGE_SIZE', 50);
-    const maxPages = this.numberEnv('ORDER_MAX_PAGES', 5);
-    const firstPage = await this.fetchOrderPage(0, size);
+    const maxPages = this.numberEnv('ORDER_MAX_PAGES', (this.config.defaultLookbackDays ?? 3) > 3 ? 10 : 5);
+    let firstPage: Awaited<ReturnType<typeof this.fetchOrderPage>>;
+    try {
+      firstPage = await this.fetchOrderPage(0, size);
+    } catch (error) {
+      // Uzun tarih aralığı reddedilirse eski 3 günlük aralıkla tekrar dene
+      if (this.lookbackOverride != null || (this.config.defaultLookbackDays ?? 3) <= 3) throw error;
+      this.lookbackOverride = 3;
+      firstPage = await this.fetchOrderPage(0, size);
+    }
     const totalPages = Math.min(Math.max(Number(firstPage.totalPages ?? 1), 1), maxPages);
     const content = [...firstPage.content];
 
@@ -94,7 +105,7 @@ export abstract class HttpMarketplaceOrderAdapter extends BaseIntegrationAdapter
     url.searchParams.set(this.env('PAGE_PARAM') || 'page', String(options.page));
     url.searchParams.set(this.env('SIZE_PARAM') || 'size', String(options.size));
 
-    const lookbackDays = this.numberEnv('ORDER_LOOKBACK_DAYS', 3);
+    const lookbackDays = this.lookbackOverride ?? this.numberEnv('ORDER_LOOKBACK_DAYS', this.config.defaultLookbackDays ?? 3);
     const now = Date.now();
     const start = now - lookbackDays * 24 * 60 * 60 * 1000;
     if (this.booleanEnv('USE_EPOCH_MS_DATES', true)) {
