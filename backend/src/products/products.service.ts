@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { Cron } from '@nestjs/schedule';
 import * as XLSX from 'xlsx';
 import { cleanMojibakeDeep } from '../common/mojibake';
 import { Prisma } from '../generated/prisma-client';
@@ -1709,5 +1710,38 @@ export class ProductsService {
     XLSX.utils.book_append_sheet(wb, allWs, 'Tum Urunler');
 
     return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+  }
+
+  // ─── Haftalık otomatik fiyat artışı ──────────────────────────────────────────
+  // Her Pazar 08:00'da tüm aktif Trendyol varyantlarına WEEKLY_PRICE_INCREASE TL ekler
+  // ve tüm platformlara yayınlar.
+  static readonly WEEKLY_PRICE_INCREASE = 5; // TL — değiştirmek için bu satırı düzenle
+
+  @Cron('0 8 * * 0') // Pazar 08:00 UTC (Türkiye 11:00)
+  async weeklyPriceIncrease() {
+    const amount = ProductsService.WEEKLY_PRICE_INCREASE;
+    this.logger.log(`Haftalık fiyat artışı başladı: +${amount} TL`);
+
+    // Trendyol varyantları
+    const updated = await this.prisma.trendyolProductVariant.updateMany({
+      where: { status: 'ACTIVE' },
+      data: { trendyolSalePrice: { increment: amount } },
+    });
+
+    // Ürünler tablosu (marketPrice)
+    await this.prisma.product.updateMany({
+      where: { status: 'ACTIVE', modelCode: { not: { startsWith: 'WEB-' } } },
+      data: { marketPrice: { increment: amount } },
+    });
+
+    this.logger.log(`Fiyat güncellendi: ${updated.count} Trendyol varyantı`);
+
+    // Tüm platformlara yayınla
+    try {
+      const result = await this.broadcastAll();
+      this.logger.log(`Haftalık yayın tamamlandı: ${result.sent} gönderildi, ${result.errors} hata`);
+    } catch (err) {
+      this.logger.error('Haftalık yayın hatası', err);
+    }
   }
 }
