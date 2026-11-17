@@ -109,6 +109,7 @@ Sonra tarayıcıda: **http://localhost:3200**
 
 - Menüde Satış → **Siparişler** (`/orders`); sipariş sayfalarının üstünde `components/OrdersTabs.tsx` sekmeleri: Pazaryeri (`/orders`) · **Web & Telefon** (`/web-siparisler`: web_orders + telefon/WhatsApp/Instagram/dükkan retail_sales; tezgâhta COMPLETED dükkan satışları hariç; durumlar web durumlarına eşlenir, retail için `POST /sales/:id/status`) · **Çıktı Merkezi (A5)** (`/sabah-ciktisi`, tek çıktı yeri) · Telefon Siparişi Gir (`/adres-ciktisi`) · İadeler · EFT · Fotoğraf Arşivi. Personel ekranı (`/staff/orders`) ayrı
 - Ödeme bekleyen (PENDING) web siparişleri personel ekranına / Çıktı Merkezi'ne düşmez
+- **İadeler** (`/iade-takip`, `backend/src/returns/`): `GET /returns?q=` (q yoksa: platform iade durumları + `return_status` dolu + videolu; q varsa tüm marketplace_orders'ta sipariş/paket no, müşteri, kargo kodu, barkod, stok kodu, ürün adı araması), `PATCH /returns/:id/return-status` (WAITING / REJECT_REQUESTED / REJECTED / ACCEPTED / CLOSED / null), `POST /returns/:id/videos` (video/fotoğraf, 500MB; ilk videoda süreç WAITING), `GET /returns/videos/:file/stream?token=&download=1` (indirme adı `iade-<platform>-<siparişNo>-<id>`). Telefonda "Kamerayla Video Çek" (`capture=environment`). Platform panel linkleri: partner.trendyol.com, merchant.hepsiburada.com, so.n11.com
 
 ## Boy Serisi (`/products/boy-serisi`, sadece OWNER)
 
