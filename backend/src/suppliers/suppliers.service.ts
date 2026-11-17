@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { MailService } from '../mail/mail.service';
+import { SalariesService } from './salaries.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -10,6 +11,7 @@ export class SuppliersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly mail: MailService,
+    private readonly salaries: SalariesService,
   ) {}
 
   /**
@@ -45,7 +47,7 @@ export class SuppliersService {
       const tl = (n: number | null) => (n == null ? '—' : `${n.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₺`);
       const rows = a.items.map((i) => `<tr style="${i.overdue ? 'background:#fef2f2' : ''}">
         <td style="padding:6px 10px;border-bottom:1px solid #eee">${new Date(i.dueDate).toLocaleDateString('tr-TR')}</td>
-        <td style="padding:6px 10px;border-bottom:1px solid #eee">${i.kind === 'BILL' ? 'Fatura' : 'Taksit'}</td>
+        <td style="padding:6px 10px;border-bottom:1px solid #eee">${i.kind === 'BILL' ? 'Fatura' : i.kind === 'SALARY' ? 'Maaş' : 'Taksit'}</td>
         <td style="padding:6px 10px;border-bottom:1px solid #eee"><b>${i.title}</b>${i.party ? ` — ${i.party}` : ''}${i.detail ? `<br><small style="color:#888">${i.detail}</small>` : ''}</td>
         <td style="padding:6px 10px;border-bottom:1px solid #eee;text-align:right;white-space:nowrap">${tl(i.amount)}</td>
         <td style="padding:6px 10px;border-bottom:1px solid #eee;color:${i.overdue ? '#dc2626' : '#ea580c'}">${i.overdue ? 'GECİKTİ' : 'Yaklaşıyor'}</td>
@@ -211,7 +213,7 @@ export class SuppliersService {
     const installmentRemaining = installments.reduce((s, i) => s + Number(i.amount), 0);
 
     type Upcoming = {
-      kind: 'INSTALLMENT' | 'BILL';
+      kind: 'INSTALLMENT' | 'BILL' | 'SALARY';
       refId: number;
       title: string;
       party: string | null;
@@ -266,13 +268,32 @@ export class SuppliersService {
       }
     }
 
+    // Personel maaşları (ödenmemiş; avanslar düşülmüş)
+    let salaryUnpaid = 0;
+    try {
+      for (const sal of await this.salaries.unpaidForOverview(horizon)) {
+        salaryUnpaid += sal.amount;
+        upcoming.push({
+          kind: 'SALARY',
+          refId: sal.employeeId,
+          title: sal.fullName,
+          party: 'Maaş',
+          dueDate: sal.dueDate.toISOString(),
+          amount: sal.amount,
+          overdue: sal.dueDate < today,
+          detail: `${String(sal.month).padStart(2, '0')}.${sal.year} maaşı`,
+        });
+      }
+    } catch { /* personel tablosu yoksa maaşsız devam */ }
+
     upcoming.sort((a, b) => a.dueDate.localeCompare(b.dueDate));
     const r2 = (n: number) => Math.round(n * 100) / 100;
     return {
       supplierDebt: r2(supplierDebt),
       installmentRemaining: r2(installmentRemaining),
       billsUnpaid: r2(billsUnpaid),
-      grandTotal: r2(supplierDebt + installmentRemaining + billsUnpaid),
+      salaryUnpaid: r2(salaryUnpaid),
+      grandTotal: r2(supplierDebt + installmentRemaining + billsUnpaid + salaryUnpaid),
       overdueTotal: r2(upcoming.filter((u) => u.overdue).reduce((s, u) => s + (u.amount ?? 0), 0)),
       upcoming,
     };
