@@ -3,6 +3,7 @@ import { BarChart3, CircleDollarSign, ClipboardList, Users } from 'lucide-react'
 import { AdminShell } from '@/components/AdminShell';
 
 const reports = [
+  { href: '/reports/ciro', title: 'Günlük Ciro', text: 'Gün gün toplam ciro: pazaryerleri, web sitesi, dükkan ve telefon satışları kanal kanal', icon: CircleDollarSign },
   { href: '/reports/gunluk', title: 'Günlük Rapor', text: 'Dünkü sipariş, ciro, stok çıkışı, maliyet ve kar özeti', icon: BarChart3 },
   { href: '/dashboard', title: 'Genel ERP Özeti', text: 'Ürün, stok, barkod ve kritik stok göstergeleri', icon: BarChart3 },
   { href: '/finance', title: 'Finans Raporları', text: 'Gelir, gider, tahsilat ve ödeme raporları', icon: CircleDollarSign },

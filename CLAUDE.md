@@ -111,6 +111,11 @@ Sonra tarayıcıda: **http://localhost:3200**
 - Ödeme bekleyen (PENDING) web siparişleri personel ekranına / Çıktı Merkezi'ne düşmez
 - **İadeler** (`/iade-takip`, `backend/src/returns/`): `GET /returns?q=` (q yoksa: platform iade durumları + `return_status` dolu + videolu; q varsa tüm marketplace_orders'ta sipariş/paket no, müşteri, kargo kodu, barkod, stok kodu, ürün adı araması), `PATCH /returns/:id/return-status` (WAITING / REJECT_REQUESTED / REJECTED / ACCEPTED / CLOSED / null), `POST /returns/:id/videos` (video/fotoğraf, 500MB; ilk videoda süreç WAITING), `GET /returns/videos/:file/stream?token=&download=1` (indirme adı `iade-<platform>-<siparişNo>-<id>`). Telefonda "Kamerayla Video Çek" (`capture=environment`). Platform panel linkleri: partner.trendyol.com, merchant.hepsiburada.com, so.n11.com
 
+## Günlük Ciro (`/reports/ciro`, OWNER/MANAGER)
+
+- `GET /dashboard/revenue?from=&to=` (`DashboardService.revenueLedger`, en fazla 400 gün): gün × kanal ciro, Türkiye saatiyle gün. Kaynaklar çakışmaz: pazaryerleri `marketplace_orders` (status ~ cancel/iptal/return/iade/undeliver/reject/refund hariç; `FLORA_` önekli → `<PLATFORM>_FLORA`), dükkan/telefon/WhatsApp/Instagram `retail_sales` elle girilenler (STORE/PHONE/WHATSAPP/INSTAGRAM/OTHER, sync NULL/MANUAL, CANCELLED/DRAFT hariç), web `web_orders` ödenmiş/onaylı. Tutar = sipariş tutarı (KDV dahil, komisyon/kargo düşülmez). Ekranda hazır aralıklar, kanal dağılımı, gün tablosu, CSV
+- Not: eski `/reports/gunluk` (dailyReport) retail_sales'in tümünü saydığı için pazaryeri siparişlerini iki kez sayabilir
+
 ## Boy Serisi (`/products/boy-serisi`, sadece OWNER)
 
 - Bir ürünü farklı boylarda **ayrı ürün / ayrı ilan** olarak kopyalar: `POST /product-center/size-series/preview` ve `POST /product-center/size-series` (`{modelCode,startCm,endCm,stepCm,priceStep,nameFrom,nameTo}`)
