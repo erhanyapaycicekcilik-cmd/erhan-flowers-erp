@@ -1,5 +1,15 @@
+# Güvenli TLS: yalnızca TLS 1.2 / 1.3 ve modern (AEAD) şifreleme takımları
+# (TLS 1.0/1.1, SSL 3.0 ve CBC/SHA1 takımları kapalı — ödeme sağlayıcısı TAMİ / PCI DSS gereği)
+(tls_strict) {
+    tls {
+        protocols tls1.2 tls1.3
+        ciphers TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384 TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384 TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256 TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256 TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256 TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256
+    }
+}
+
 # Flora E-Ticaret Sitesi — Ana domain: erhanflowers.com
 erhanflowers.com, www.erhanflowers.com {
+    import tls_strict
     # Gzip + Zstandard sıkıştırma (HTML/CSS/JS boyutunu ~70% küçültür)
     encode zstd gzip
 
@@ -64,11 +74,13 @@ erhanflowers.com, www.erhanflowers.com {
 }
 
 florayapaycicek.com, www.florayapaycicek.com {
+    import tls_strict
     redir https://www.erhanflowers.com{uri} 301
 }
 
 # ERP Yönetim Paneli — Güvenli HTTPS
 erp.erhanflowers.com, erp.florayapaycicek.com {
+    import tls_strict
     encode zstd gzip
 
     handle /_next/static/* {
@@ -102,6 +114,7 @@ erp.erhanflowers.com, erp.florayapaycicek.com {
 
 # Backend API — Güvenli HTTPS
 api.erhanflowers.com, api.florayapaycicek.com {
+    import tls_strict
     reverse_proxy backend:8001 {
         transport http {
             read_timeout 300s
