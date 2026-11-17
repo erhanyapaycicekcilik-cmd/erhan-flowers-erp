@@ -1771,6 +1771,48 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
     };
   }
 
+  /**
+   * Ciro raporu: siparişleri doğrudan platformdan çeker (Trendyol + n11, Erhan ve Flora mağazaları).
+   * İptal / iade / teslim edilemeyen hariç. Gün = Türkiye saatine göre sipariş tarihi.
+   * Bir mağaza hata verirse o kanal `ok:false` döner (rapor o kanalda ERP kaydına düşer).
+   */
+  async platformRevenue(from: string, to: string) {
+    const startMs = new Date(`${from}T00:00:00+03:00`).getTime();
+    const endMs = Math.min(new Date(`${to}T23:59:59.999+03:00`).getTime(), Date.now());
+    const trDay = (d: Date) => new Date(d.getTime() + 3 * 3600000).toISOString().slice(0, 10);
+    const stores: Array<{ channel: string; platform: IntegrationPlatform; company: 'ERHAN' | 'FLORA' }> = [
+      { channel: 'TRENDYOL', platform: 'TRENDYOL', company: 'ERHAN' },
+      { channel: 'TRENDYOL_FLORA', platform: 'TRENDYOL', company: 'FLORA' },
+      { channel: 'N11', platform: 'N11', company: 'ERHAN' },
+      { channel: 'N11_FLORA', platform: 'N11', company: 'FLORA' },
+    ];
+    const results: Array<{ channel: string; ok: boolean; error?: string; days: Record<string, { revenue: number; orders: number }> }> = [];
+    for (const st of stores) {
+      try {
+        // Flora: mağazaya özel bilgi zorunlu (Erhan bilgilerine düşüp Erhan cirosunu Flora diye saymasın)
+        const adapter = (st.company === 'ERHAN' ? await this.adapter(st.platform) : await this.storeAdapter(st.platform, st.company)) as unknown as {
+          fetchOrdersBetween?: (a: number, b: number) => Promise<ExternalOrder[]>;
+        };
+        if (typeof adapter.fetchOrdersBetween !== 'function') throw new Error('Tarih aralığıyla sipariş çekme desteklenmiyor');
+        const orders = await adapter.fetchOrdersBetween(startMs, endMs);
+        const days: Record<string, { revenue: number; orders: number }> = {};
+        for (const o of orders) {
+          if (o.status === 'CANCELLED' || o.invoiceStatus === 'RETURNED' || o.invoiceStatus === 'CANCELLED') continue;
+          if (!o.orderDate) continue;
+          const day = trDay(o.orderDate);
+          if (day < from || day > to) continue;
+          const d = (days[day] ??= { revenue: 0, orders: 0 });
+          d.revenue += Number(o.totalAmount) || 0;
+          d.orders += 1;
+        }
+        results.push({ channel: st.channel, ok: true, days });
+      } catch (error) {
+        results.push({ channel: st.channel, ok: false, error: this.errorMessage(error), days: {} });
+      }
+    }
+    return results;
+  }
+
   private async storeAdapter(platform: IntegrationPlatform, companyCode: string): Promise<IntegrationAdapter> {
     const credentials = await this.integrationCenter.storeCredentials(platform, companyCode);
     if (platform === 'TRENDYOL') return new TrendyolAdapter(credentials);

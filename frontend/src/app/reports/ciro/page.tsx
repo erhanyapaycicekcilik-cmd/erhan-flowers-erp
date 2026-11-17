@@ -15,6 +15,10 @@ type Ledger = {
   bestDay: Day | null;
   channels: Array<{ channel: string; revenue: number; orders: number }>;
   days: Day[];
+  sources?: Record<string, 'PLATFORM' | 'ERP'>;
+  platformErrors?: Array<{ channel: string; error: string }>;
+  liveNote?: string | null;
+  fetchedAt?: string;
 };
 
 const CHANNEL: Record<string, { label: string; color: string }> = {
@@ -63,14 +67,17 @@ export default function CiroPage() {
   const [data, setData] = useState<Ledger | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [source, setSource] = useState<'live' | 'erp'>('live');
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (refresh = false) => {
     setLoading(true);
     setError('');
-    try { setData(await api<Ledger>(`/dashboard/revenue?from=${from}&to=${to}`)); }
+    try {
+      setData(await api<Ledger>(`/dashboard/revenue?from=${from}&to=${to}&source=${source === 'erp' ? 'erp' : 'platform'}${refresh ? '&refresh=1' : ''}`));
+    }
     catch (e) { setError(e instanceof Error ? e.message : 'Yüklenemedi'); }
     finally { setLoading(false); }
-  }, [from, to]);
+  }, [from, to, source]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -108,10 +115,26 @@ export default function CiroPage() {
             <input type="date" value={from} onChange={(e) => { setActive('custom'); setRange([e.target.value, to]); }} className="rounded-lg border px-2 py-1.5" />
             <span>–</span>
             <input type="date" value={to} onChange={(e) => { setActive('custom'); setRange([from, e.target.value]); }} className="rounded-lg border px-2 py-1.5" />
-            <button onClick={() => void load()} className="rounded-lg border px-2 py-1.5" title="Yenile"><RefreshCw size={15} className={loading ? 'animate-spin' : ''} /></button>
+            <button onClick={() => void load(true)} className="rounded-lg border px-2 py-1.5" title="Platformlardan yeniden çek"><RefreshCw size={15} className={loading ? 'animate-spin' : ''} /></button>
             <button onClick={exportCsv} disabled={!data} className="inline-flex items-center gap-1 rounded-lg border px-3 py-1.5 font-semibold disabled:opacity-50"><Download size={15} /> Excel (CSV)</button>
           </div>
         </div>
+
+        {/* Veri kaynağı */}
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          <span className="font-semibold text-slate-600">Veri kaynağı:</span>
+          <button onClick={() => setSource('live')} className={`rounded-lg border px-3 py-1.5 font-semibold ${source === 'live' ? 'border-emerald-600 bg-emerald-50 text-emerald-700' : 'text-slate-600'}`}>Platformlardan (canlı)</button>
+          <button onClick={() => setSource('erp')} className={`rounded-lg border px-3 py-1.5 font-semibold ${source === 'erp' ? 'border-slate-700 bg-slate-100 text-slate-800' : 'text-slate-600'}`}>ERP kayıtları</button>
+          {loading && source === 'live' && <span className="text-xs text-slate-500">Trendyol ve n11&apos;den sipariş verisi alınıyor… (20-40 sn sürebilir)</span>}
+          {!loading && data?.fetchedAt && source === 'live' && <span className="text-xs text-slate-400">Son çekim: {new Date(data.fetchedAt).toLocaleTimeString('tr-TR')}</span>}
+        </div>
+        {data?.liveNote && <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">{data.liveNote}</div>}
+        {!!data?.platformErrors?.length && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+            Şu kanallarda platformdan veri alınamadı, ERP kaydı gösteriliyor:{' '}
+            {data.platformErrors.map((e) => `${ch(e.channel).label} (${e.error.slice(0, 80)})`).join(' · ')}
+          </div>
+        )}
 
         {error && <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
 
@@ -143,7 +166,14 @@ export default function CiroPage() {
                     const pct = data.total ? (c.revenue / data.total) * 100 : 0;
                     return (
                       <div key={c.channel} className="flex items-center gap-3 text-sm">
-                        <div className="w-36 shrink-0 font-medium">{ch(c.channel).label}</div>
+                        <div className="w-44 shrink-0 font-medium">
+                          {ch(c.channel).label}
+                          {data.sources?.[c.channel] && (
+                            <span className={`ml-1.5 rounded px-1 py-0.5 text-[10px] font-semibold ${data.sources[c.channel] === 'PLATFORM' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
+                              {data.sources[c.channel] === 'PLATFORM' ? 'platform' : 'ERP'}
+                            </span>
+                          )}
+                        </div>
                         <div className="h-3 flex-1 overflow-hidden rounded bg-slate-100">
                           <div className="h-full rounded" style={{ width: `${pct}%`, background: ch(c.channel).color }} />
                         </div>
@@ -196,7 +226,7 @@ export default function CiroPage() {
             </div>
 
             <p className="text-xs text-slate-500">
-              Ciroya girenler: pazaryeri siparişleri (iptal, iade ve teslim edilemeyenler hariç), dükkan / telefon / WhatsApp / Instagram satışları, ödenmiş ya da onaylanmış web sitesi siparişleri. Tutarlar müşterinin ödediği sipariş tutarıdır (KDV dahil, komisyon ve kargo düşülmemiş). Günler Türkiye saatine göredir.
+              Trendyol ve n11 (Erhan + Flora) rakamları &quot;Platformlardan&quot; seçiliyken doğrudan platformun sipariş listesinden alınır; Hepsiburada ve diğer pazaryerleri için tarih aralığıyla sorgu olmadığından ERP&apos;ye senkronlanan siparişler kullanılır. Ciroya girenler: pazaryeri siparişleri (iptal, iade ve teslim edilemeyenler hariç), dükkan / telefon / WhatsApp / Instagram satışları, ödenmiş ya da onaylanmış web sitesi siparişleri. Tutarlar müşterinin ödediği sipariş tutarıdır (KDV dahil, komisyon ve kargo düşülmemiş). Günler Türkiye saatine göredir.
             </p>
           </>
         )}
