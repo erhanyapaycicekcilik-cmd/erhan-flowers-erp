@@ -110,7 +110,7 @@ export class OrderSyncService {
         UPDATE retail_sales
         SET status = 'DELIVERED'::"RetailSaleStatus", updated_at = NOW()
         WHERE channel IN ('HEPSIBURADA'::"RetailSaleChannel", 'N11'::"RetailSaleChannel", 'TRENDYOL'::"RetailSaleChannel", 'TRENDYOL_FLORA'::"RetailSaleChannel")
-          AND status IN ('CONFIRMED'::"RetailSaleStatus", 'PREPARING'::"RetailSaleStatus", 'IN_PRODUCTION'::"RetailSaleStatus")
+          AND status IN ('CONFIRMED'::"RetailSaleStatus", 'PREPARING'::"RetailSaleStatus", 'IN_PRODUCTION'::"RetailSaleStatus", 'READY'::"RetailSaleStatus")
           AND COALESCE(order_date, created_at) < NOW() - INTERVAL '7 days'
       `;
       if (Number(cleaned) > 0) this.logger.log(`[CRON] ${cleaned} eski marketplace siparisi DELIVERED yapildi.`);

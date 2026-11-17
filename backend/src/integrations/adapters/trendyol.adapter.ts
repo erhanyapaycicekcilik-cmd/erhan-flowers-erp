@@ -326,6 +326,34 @@ export class TrendyolAdapter extends BaseIntegrationAdapter {
   // ekleme/birleştirme yapıyor). Bu yüzden istenmeyen görseli kaldırmanın tek
   // yolu Trendyol satıcı panelinden elle silmek. Bu metod, barkoda ait ürünün
   // panel düzenleme linkini (platformListingId ile) canlı olarak sorgular.
+  /** Mağazanın kendi ürün kataloğundan barkodla ilk ürün görseli (sipariş satırlarında görsel gelmediği için). */
+  async fetchProductImageByBarcode(barcode: string): Promise<string | null> {
+    if (!barcode || this.missingKeys().length) return null;
+    const supplierId = this.env('SUPPLIER_ID');
+    const pick = (row: Record<string, unknown> | undefined): string | null => {
+      if (!row) return null;
+      const lists = [row.images, ...(Array.isArray(row.variants) ? (row.variants as Array<Record<string, unknown>>).map((v) => v.images) : [])];
+      for (const list of lists) {
+        if (!Array.isArray(list)) continue;
+        for (const img of list) {
+          const url = typeof img === 'string' ? img : this.text((img as Record<string, unknown>)?.url);
+          if (url.startsWith('http')) return url;
+        }
+      }
+      return null;
+    };
+    for (const path of [`/product/sellers/${supplierId}/v2/products`, `/product/sellers/${supplierId}/products`]) {
+      try {
+        const response = await fetch(`${this.productApiBase()}${path}?barcode=${encodeURIComponent(barcode)}`, { headers: this.productHeaders(supplierId) });
+        if (!response.ok) continue;
+        const body = (await response.json().catch(() => ({}))) as { content?: Array<Record<string, unknown>> };
+        const url = pick(body.content?.[0]);
+        if (url) return url;
+      } catch { /* sonraki uç nokta */ }
+    }
+    return null;
+  }
+
   async getSellerPanelUrl(barcode: string): Promise<AdapterConnectionResult & { panelUrl?: string }> {
     const missing = this.missingKeys();
     if (missing.length) return this.missing(missing);

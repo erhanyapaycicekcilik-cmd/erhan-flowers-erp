@@ -207,6 +207,10 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
       await this.log(platform, 'FETCH_ORDERS', 'FAILED', message);
       return { ok: false, imported: 0, duplicated: 0, unknownStatus: 0, failed: 0, message, missingKeys: [] };
     }
+    // Trendyol sipariş satırlarında görsel genelde gelmez: mağazanın kendi ürün API'sinden barkodla bul
+    // (Flora mağazasında ERP'de eşleşen ürün/stok kartı olmadığı için görsel hiç çıkmıyordu)
+    if (platform === 'TRENDYOL') await this.fillTrendyolLineImages(adapter, orders, companyCode);
+
     let imported = 0;
     let duplicated = 0;
     let unknownStatus = 0;
@@ -256,12 +260,30 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
       }
     }
 
+    // Hepsiburada /openorders yalnızca henüz paketlenmemiş/kargoya verilmemiş siparişleri döndürür.
+    // Listeden düşen aktif sipariş kargoya verilmiştir → personel ekranından kalksın (yolda).
+    // (Önceden bu sadece ertesi gün ve ayrı bir senkronla yapılıyordu; kargoya verilen siparişler ekranda kalıyordu.)
+    let autoShipped = 0;
+    if (platform === 'HEPSIBURADA' && (adapter as { lastFetchComplete?: boolean }).lastFetchComplete === true) {
+      const openIds = orders.map((o) => o.externalOrderId).filter(Boolean);
+      autoShipped = Number(await this.prisma.$executeRaw`
+        UPDATE retail_sales
+        SET status = 'OUT_FOR_DELIVERY'::"RetailSaleStatus", updated_at = NOW()
+        WHERE channel = 'HEPSIBURADA'::"RetailSaleChannel"
+          AND status IN ('CONFIRMED'::"RetailSaleStatus", 'PREPARING'::"RetailSaleStatus", 'IN_PRODUCTION'::"RetailSaleStatus", 'READY'::"RetailSaleStatus")
+          AND external_order_id IS NOT NULL
+          AND created_at < NOW() - INTERVAL '10 minutes'
+          AND company_id = (SELECT id FROM companies WHERE code = ${companyCode} LIMIT 1)
+          AND external_order_id NOT IN (${openIds.length ? Prisma.join(openIds) : Prisma.sql`'__none__'`})
+      `);
+    }
+
     await this.prisma.$executeRaw`
       UPDATE integration_connections SET status = 'CONNECTED', last_sync_at = NOW(), last_error = NULL, updated_at = NOW()
       WHERE platform = ${platform}
     `;
-    await this.log(platform, 'FETCH_ORDERS', 'SUCCESS', `${imported} yeni, ${duplicated} mükerrer, ${unknownStatus} bilinmeyen durum, ${autoDelivered} otomatik teslim edildi.`, null, null, { imported, duplicated, unknownStatus, autoDelivered });
-    return { ok: true, imported, duplicated, unknownStatus, failed, autoDelivered };
+    await this.log(platform, 'FETCH_ORDERS', 'SUCCESS', `${imported} yeni, ${duplicated} mükerrer, ${unknownStatus} bilinmeyen durum, ${autoDelivered} otomatik teslim edildi${autoShipped ? `, ${autoShipped} kargoya verildi (açık listede yok)` : ''}.`, null, null, { imported, duplicated, unknownStatus, autoDelivered, autoShipped });
+    return { ok: true, imported, duplicated, unknownStatus, failed, autoDelivered, autoShipped };
   }
 
   // Siparişi pazaryerine "hazırlandı/kargolandı" olarak bildirir (paketleme adımı).
@@ -556,11 +578,11 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
                 sc.external_image_url,
                 i.external_image_url,
                 (SELECT img->>'url' FROM jsonb_array_elements(CASE WHEN jsonb_typeof(tpv.images) = 'array' THEN tpv.images ELSE '[]'::jsonb END) AS img WHERE img->>'url' IS NOT NULL AND img->>'url' <> '' LIMIT 1),
-                (SELECT url FROM products p, jsonb_array_elements_text(CASE WHEN jsonb_typeof(p.image_urls) = 'array' THEN p.image_urls ELSE '[]'::jsonb END) AS url WHERE ((i.barcode IS NOT NULL AND p.barcode = i.barcode) OR (i.model_code IS NOT NULL AND p.model_code = i.model_code)) LIMIT 1),
+                (SELECT url FROM products p, jsonb_array_elements_text(CASE WHEN jsonb_typeof(p.image_urls) = 'array' THEN p.image_urls ELSE '[]'::jsonb END) AS url WHERE ((i.barcode IS NOT NULL AND p.barcode = i.barcode) OR (i.model_code IS NOT NULL AND p.model_code = REGEXP_REPLACE(i.model_code, '^FL-', ''))) LIMIT 1),
                 -- HB/N11/Amazon satıcı stok kodu (ör. SD-3030) Trendyol barkodundan farklı olabilir:
                 -- Trendyol varyantının stok/model koduyla ve stok kartının sku/model/eski model koduyla da ara
                 (SELECT img->>'url' FROM trendyol_product_variants v2, jsonb_array_elements(CASE WHEN jsonb_typeof(v2.images) = 'array' THEN v2.images ELSE '[]'::jsonb END) AS img WHERE i.model_code IS NOT NULL AND i.model_code <> '' AND (UPPER(v2.supplier_stock_code) = UPPER(REGEXP_REPLACE(i.model_code, '^FL-', '')) OR UPPER(v2.current_model_code) = UPPER(REGEXP_REPLACE(i.model_code, '^FL-', ''))) AND img->>'url' IS NOT NULL AND img->>'url' <> '' LIMIT 1),
-                (SELECT sc2.image_path FROM stock_cards sc2 WHERE i.model_code IS NOT NULL AND i.model_code <> '' AND (UPPER(sc2.sku) = UPPER(i.model_code) OR UPPER(sc2.model) = UPPER(i.model_code) OR UPPER(sc2.old_model_code) = UPPER(i.model_code)) AND sc2.image_path IS NOT NULL AND sc2.image_path <> '' LIMIT 1),
+                (SELECT sc2.image_path FROM stock_cards sc2 WHERE i.model_code IS NOT NULL AND i.model_code <> '' AND (UPPER(sc2.sku) = UPPER(REGEXP_REPLACE(i.model_code, '^FL-', '')) OR UPPER(sc2.model) = UPPER(REGEXP_REPLACE(i.model_code, '^FL-', '')) OR UPPER(sc2.old_model_code) = UPPER(REGEXP_REPLACE(i.model_code, '^FL-', ''))) AND sc2.image_path IS NOT NULL AND sc2.image_path <> '' LIMIT 1),
                 -- Son çare: ürün adıyla eşleştir (marka ön eki atılır; çok kısa adlarda yanlış eşleşmeyi önlemek için en az 12 karakter)
                 (SELECT img->>'url' FROM trendyol_product_variants v3, jsonb_array_elements(CASE WHEN jsonb_typeof(v3.images) = 'array' THEN v3.images ELSE '[]'::jsonb END) AS img WHERE LENGTH(REGEXP_REPLACE(LOWER(TRIM(i.product_name_snapshot)), '^(erhan flowers|flora yapay çiçek|flora) +', '')) >= 12 AND LOWER(v3.product_name) LIKE '%' || REGEXP_REPLACE(LOWER(TRIM(i.product_name_snapshot)), '^(erhan flowers|flora yapay çiçek|flora) +', '') || '%' AND img->>'url' IS NOT NULL AND img->>'url' <> '' ORDER BY (LOWER(TRIM(v3.product_name)) = LOWER(TRIM(i.product_name_snapshot))) DESC, LENGTH(v3.product_name) LIMIT 1),
                 (SELECT url FROM products p3, jsonb_array_elements_text(CASE WHEN jsonb_typeof(p3.image_urls) = 'array' THEN p3.image_urls ELSE '[]'::jsonb END) AS url WHERE LENGTH(REGEXP_REPLACE(LOWER(TRIM(i.product_name_snapshot)), '^(erhan flowers|flora yapay çiçek|flora) +', '')) >= 12 AND LOWER(p3.product_name) LIKE '%' || REGEXP_REPLACE(LOWER(TRIM(i.product_name_snapshot)), '^(erhan flowers|flora yapay çiçek|flora) +', '') || '%' AND url IS NOT NULL AND url <> '' LIMIT 1)
@@ -581,7 +603,7 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
       LEFT JOIN retail_sale_items i ON i.sale_id = s.id
       LEFT JOIN stock_cards sc ON sc.id = i.stock_card_id
         OR (i.stock_card_id IS NULL AND i.barcode IS NOT NULL AND sc.barcode = i.barcode)
-        OR (i.stock_card_id IS NULL AND i.model_code IS NOT NULL AND sc.sku = i.model_code)
+        OR (i.stock_card_id IS NULL AND i.model_code IS NOT NULL AND sc.sku = REGEXP_REPLACE(i.model_code, '^FL-', ''))
       LEFT JOIN trendyol_product_variants tpv ON tpv.barcode = COALESCE(i.barcode, sc.barcode)
       WHERE (s.integration_sync_status IS NULL OR s.integration_sync_status <> 'MANUAL')
         AND (${companyCode} = '' OR co.code = ${companyCode})
@@ -937,6 +959,31 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
     `;
   }
 
+  /** barkod → görsel URL (null = bulunamadı); mağaza başına, 6 saat geçerli */
+  private readonly lineImageCache = new Map<string, { url: string | null; at: number }>();
+
+  private async fillTrendyolLineImages(adapter: unknown, orders: ExternalOrder[], companyCode: string) {
+    const a = adapter as { fetchProductImageByBarcode?: (barcode: string) => Promise<string | null> };
+    if (typeof a.fetchProductImageByBarcode !== 'function') return;
+    let lookups = 0;
+    for (const order of orders) {
+      for (const item of order.items) {
+        if (item.imageUrl || !item.barcode) continue;
+        const key = `${companyCode}:${item.barcode}`;
+        const cached = this.lineImageCache.get(key);
+        if (cached && Date.now() - cached.at < 6 * 3600_000) {
+          if (cached.url) item.imageUrl = cached.url;
+          continue;
+        }
+        if (lookups >= 60) continue; // bir senkronda en fazla 60 sorgu (API sınırı)
+        lookups += 1;
+        const url = await a.fetchProductImageByBarcode(item.barcode).catch(() => null);
+        this.lineImageCache.set(key, { url, at: Date.now() });
+        if (url) item.imageUrl = url;
+      }
+    }
+  }
+
   private async importExternalOrder(order: ExternalOrder, userId: number) {
     const companyPrefix = order.companyCode && order.companyCode !== 'ERHAN' ? `${order.companyCode}:` : '';
     const idempotencyKey = `${companyPrefix}${order.platform}:${order.externalOrderId}`;
@@ -956,8 +1003,14 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
         await tx.$executeRaw`
           UPDATE retail_sales
           SET status = CASE
-                WHEN status::text IN ('READY','OUT_FOR_DELIVERY','DELIVERED','COMPLETED','CANCELLED')
-                THEN status
+                -- Kapanmış sipariş değişmez
+                WHEN status::text IN ('DELIVERED','COMPLETED','CANCELLED') THEN status
+                -- Platform kargoya verdi / teslim etti / iptal etti: "Hazır" (fotoğraflı) siparişler de ilerler,
+                -- yoksa kargoya verilmiş sipariş personel ekranında "Kargo Bekleniyor"da takılı kalır
+                WHEN ${status}::text IN ('OUT_FOR_DELIVERY','DELIVERED','COMPLETED','CANCELLED')
+                THEN ${status}::"RetailSaleStatus"
+                -- Personelin ilerlettiği durum (Hazır / yolda) platformun eski "onaylandı" bilgisiyle geri gitmez
+                WHEN status::text IN ('READY','OUT_FOR_DELIVERY') THEN status
                 ELSE COALESCE(${status}::"RetailSaleStatus", status)
               END,
               invoice_status = COALESCE(${invoiceStatus}::"RetailInvoiceStatus", invoice_status),

@@ -232,8 +232,10 @@ export default function StaffOrdersPage() {
     }
   }
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const knownIdsRef = useRef<Set<string> | null>(null);
+
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const [erpOrders, webOrders, retailOrders] = await Promise.all([
         api<OrderRow[]>('/integrations/orders?limit=200&status=CONFIRMED,PREPARING,IN_PRODUCTION,READY').catch(() => [] as OrderRow[]),
@@ -245,13 +247,31 @@ export default function StaffOrdersPage() {
         ...(Array.isArray(webOrders) ? webOrders : []),
         ...(Array.isArray(retailOrders) ? retailOrders : []),
       ];
+      // Yeni gelen siparişleri bildir (ilk yüklemede değil)
+      const ids = new Set(combined.map((o) => `${o.platform}-${o.id}`));
+      if (knownIdsRef.current) {
+        const fresh = combined.filter((o) => !knownIdsRef.current!.has(`${o.platform}-${o.id}`));
+        if (fresh.length) {
+          setToastMsg(`🆕 ${fresh.length} yeni sipariş geldi`);
+          setTimeout(() => setToastMsg(''), 6000);
+        }
+      }
+      knownIdsRef.current = ids;
       setOrders(combined);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, []);
 
   useEffect(() => { void load(); }, [load]);
+
+  // Ekran açıkken 1 dakikada bir ve sekmeye dönünce sessizce yenile — yeni siparişler kendiliğinden düşsün
+  useEffect(() => {
+    const t = setInterval(() => { if (document.visibilityState === 'visible') void load(true); }, 60_000);
+    const onVisible = () => { if (document.visibilityState === 'visible') void load(true); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => { clearInterval(t); document.removeEventListener('visibilitychange', onVisible); };
+  }, [load]);
 
   const activeOrders = orders.filter((o) => o.status !== 'READY');
   const readyOrders = orders.filter((o) => o.status === 'READY');
