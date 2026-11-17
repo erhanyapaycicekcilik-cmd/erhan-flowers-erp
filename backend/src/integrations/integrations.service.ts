@@ -7,6 +7,7 @@ import { StaffTasksService } from '../staff-tasks/staff-tasks.service';
 import { GenericMarketplaceAdapter } from './adapters/generic-marketplace.adapter';
 import { HepsiburadaAdapter } from './adapters/hepsiburada.adapter';
 import { ExternalOrder, ExternalOrderSummary, IntegrationAdapter, IntegrationPlatform } from './adapters/integration-adapter.interface';
+import { summarizeSettlements, SettlementSummary } from './settlements';
 import { N11Adapter } from './adapters/n11.adapter';
 import { TicimaxAdapter } from './adapters/ticimax.adapter';
 import { TrendyolAdapter } from './adapters/trendyol.adapter';
@@ -1811,6 +1812,45 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
       }
     }
     return results;
+  }
+
+  /**
+   * Hakedişler: Trendyol cari hesap ekstresi (Erhan + Flora). Satış/iade/indirim kayıtları + ödemeler + kesinti faturaları.
+   * Satış (Sale) alınamazsa mağaza hatalı sayılır; diğer tipler alınamazsa uyarı olarak eklenir.
+   */
+  async platformSettlements(from: string, to: string) {
+    const startMs = new Date(`${from}T00:00:00+03:00`).getTime();
+    const endMs = Math.min(new Date(`${to}T23:59:59.999+03:00`).getTime(), Date.now());
+    const todayIso = new Date(Date.now() + 3 * 3600000).toISOString().slice(0, 10);
+    const stores: Array<{ channel: string; company: 'ERHAN' | 'FLORA'; label: string }> = [
+      { channel: 'TRENDYOL', company: 'ERHAN', label: 'Trendyol · Erhan Flowers' },
+      { channel: 'TRENDYOL_FLORA', company: 'FLORA', label: 'Trendyol · Flora' },
+    ];
+    const out: Array<{ channel: string; label: string; ok: boolean; error?: string; warnings: string[]; summary?: SettlementSummary }> = [];
+    for (const st of stores) {
+      const warnings: string[] = [];
+      try {
+        const adapter = (st.company === 'ERHAN' ? await this.adapter('TRENDYOL') : await this.storeAdapter('TRENDYOL', st.company)) as unknown as {
+          fetchFinance?: (k: 'settlements' | 'otherfinancials', t: string, a: number, b: number) => Promise<Array<Record<string, any>>>;
+        };
+        if (typeof adapter.fetchFinance !== 'function') throw new Error('Finans servisi desteklenmiyor');
+        const settlements = await adapter.fetchFinance('settlements', 'Sale', startMs, endMs);
+        for (const t of ['Return', 'Discount', 'DiscountCancel', 'Coupon', 'CouponCancel', 'ProvisionPositive', 'ProvisionNegative']) {
+          try { settlements.push(...(await adapter.fetchFinance('settlements', t, startMs, endMs))); }
+          catch (e) { if (t === 'Return') warnings.push(`İadeler alınamadı: ${this.errorMessage(e).slice(0, 120)}`); }
+        }
+        let payments: Array<Record<string, any>> = [];
+        try { payments = await adapter.fetchFinance('otherfinancials', 'PaymentOrder', startMs, endMs); }
+        catch (e) { warnings.push(`Ödemeler alınamadı: ${this.errorMessage(e).slice(0, 120)}`); }
+        let deductions: Array<Record<string, any>> = [];
+        try { deductions = await adapter.fetchFinance('otherfinancials', 'DeductionInvoices', startMs, endMs); }
+        catch (e) { warnings.push(`Kesinti faturaları alınamadı: ${this.errorMessage(e).slice(0, 120)}`); }
+        out.push({ channel: st.channel, label: st.label, ok: true, warnings, summary: summarizeSettlements(settlements, payments, deductions, todayIso) });
+      } catch (error) {
+        out.push({ channel: st.channel, label: st.label, ok: false, error: this.errorMessage(error), warnings });
+      }
+    }
+    return out;
   }
 
   private async storeAdapter(platform: IntegrationPlatform, companyCode: string): Promise<IntegrationAdapter> {
