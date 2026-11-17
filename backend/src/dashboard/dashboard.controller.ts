@@ -1,4 +1,4 @@
-import { Controller, Get, Query, Req, UseGuards } from '@nestjs/common';
+import { Controller, ForbiddenException, Get, Query, Req, UseGuards } from '@nestjs/common';
 import { Request } from 'express';
 import { AuthGuard } from '../auth/auth.guard';
 import { DashboardService } from './dashboard.service';
@@ -23,6 +23,13 @@ export class DashboardController {
   @Get('company-revenue')
   companyRevenue() {
     return this.dashboard.dailySalesByCompany();
+  }
+
+  /** Günlük ciro defteri — sadece sahip/yönetici */
+  @Get('revenue')
+  revenue(@Req() request: AuthenticatedRequest, @Query('from') from?: string, @Query('to') to?: string) {
+    if (!['OWNER', 'MANAGER'].includes(request.user?.role ?? '')) throw new ForbiddenException('Bu rapor için yetkiniz yok.');
+    return this.dashboard.revenueLedger(from, to);
   }
 
   @Get('daily-report')

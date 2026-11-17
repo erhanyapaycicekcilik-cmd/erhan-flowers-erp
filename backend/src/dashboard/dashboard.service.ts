@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -251,6 +251,86 @@ export class DashboardService {
         monthRevenue: Math.round(totalMonth * 100) / 100,
         monthOrders: totalMonthOrders,
       },
+    };
+  }
+
+  /**
+   * Günlük ciro defteri (Türkiye saatine göre gün). Kaynaklar çakışmasın diye:
+   *  - Pazaryerleri: marketplace_orders (iptal/iade/teslim edilemedi hariç; FLORA_ önekli = Flora mağazası)
+   *  - Dükkan/telefon/WhatsApp/Instagram: retail_sales'te ELLE girilenler (pazaryeri aktarımları hariç)
+   *  - Web sitesi: ödenmiş ya da onaylanmış web_orders (iptal hariç)
+   */
+  async revenueLedger(fromStr?: string, toStr?: string) {
+    const today = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Istanbul' }));
+    const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const valid = (v?: string) => (v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null);
+    const to = valid(toStr) ?? iso(today);
+    const from = valid(fromStr) ?? iso(new Date(today.getFullYear(), today.getMonth(), 1));
+    if (from > to) throw new BadRequestException('Başlangıç tarihi bitişten sonra olamaz.');
+    const spanDays = Math.round((new Date(to).getTime() - new Date(from).getTime()) / 86400000) + 1;
+    if (spanDays > 400) throw new BadRequestException('En fazla 400 günlük aralık seçilebilir.');
+
+    const rows = await this.prisma.$queryRaw<Array<{ day: string; channel: string; revenue: number; orders: number }>>`
+      WITH src AS (
+        SELECT ((COALESCE(mo.order_date, mo.created_at) AT TIME ZONE 'UTC') AT TIME ZONE 'Europe/Istanbul')::date AS day,
+               CASE WHEN mo.external_order_id LIKE 'FLORA\_%' THEN mo.platform || '_FLORA' ELSE mo.platform END AS channel,
+               mo.total_amount::float AS amount
+        FROM marketplace_orders mo
+        WHERE NOT (LOWER(COALESCE(mo.status, '')) ~ '(cancel|iptal|return|iade|undeliver|reject|refund)')
+        UNION ALL
+        SELECT ((COALESCE(s.order_date, s.created_at) AT TIME ZONE 'UTC') AT TIME ZONE 'Europe/Istanbul')::date,
+               s.channel::text,
+               s.grand_total::float
+        FROM retail_sales s
+        WHERE s.channel::text IN ('STORE', 'PHONE', 'WHATSAPP', 'INSTAGRAM', 'OTHER')
+          AND (s.integration_sync_status IS NULL OR s.integration_sync_status = 'MANUAL')
+          AND s.status::text NOT IN ('CANCELLED', 'DRAFT')
+        UNION ALL
+        SELECT ((wo.created_at AT TIME ZONE 'UTC') AT TIME ZONE 'Europe/Istanbul')::date,
+               'WEBSITE',
+               wo.grand_total::float
+        FROM web_orders wo
+        WHERE wo.status::text <> 'CANCELLED'
+          AND (wo.paid_at IS NOT NULL OR wo.status::text IN ('CONFIRMED', 'PREPARING', 'READY', 'SHIPPED', 'DELIVERED'))
+      )
+      SELECT to_char(day, 'YYYY-MM-DD') AS day, channel, SUM(amount)::float AS revenue, COUNT(*)::int AS orders
+      FROM src
+      WHERE day BETWEEN ${from}::date AND ${to}::date
+      GROUP BY day, channel
+      ORDER BY day, channel
+    `;
+
+    // Her gün için satır (satış olmayan günler 0)
+    const days: Array<{ date: string; total: number; orders: number; byChannel: Record<string, number> }> = [];
+    for (let d = new Date(`${from}T12:00:00Z`); iso2(d) <= to; d = new Date(d.getTime() + 86400000)) {
+      days.push({ date: iso2(d), total: 0, orders: 0, byChannel: {} });
+    }
+    function iso2(d: Date) { return d.toISOString().slice(0, 10); }
+    const byDay = new Map(days.map((x) => [x.date, x]));
+    const channelTotals: Record<string, { revenue: number; orders: number }> = {};
+    for (const r of rows) {
+      const day = byDay.get(r.day);
+      if (!day) continue;
+      day.byChannel[r.channel] = Math.round(((day.byChannel[r.channel] ?? 0) + r.revenue) * 100) / 100;
+      day.total += r.revenue;
+      day.orders += r.orders;
+      const ct = (channelTotals[r.channel] ??= { revenue: 0, orders: 0 });
+      ct.revenue += r.revenue;
+      ct.orders += r.orders;
+    }
+    for (const d of days) d.total = Math.round(d.total * 100) / 100;
+    const total = Math.round(days.reduce((s, d) => s + d.total, 0) * 100) / 100;
+    const orders = days.reduce((s, d) => s + d.orders, 0);
+    const activeDays = days.filter((d) => d.date <= iso(today)).length || 1;
+    return {
+      from, to,
+      total, orders,
+      dailyAverage: Math.round((total / activeDays) * 100) / 100,
+      bestDay: days.reduce<typeof days[number] | null>((b, d) => (!b || d.total > b.total ? d : b), null),
+      channels: Object.entries(channelTotals)
+        .map(([channel, v]) => ({ channel, revenue: Math.round(v.revenue * 100) / 100, orders: v.orders }))
+        .sort((a, b) => b.revenue - a.revenue),
+      days,
     };
   }
 }
