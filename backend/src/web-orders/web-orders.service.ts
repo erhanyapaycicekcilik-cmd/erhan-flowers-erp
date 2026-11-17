@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, Logger, NotFoundException, OnApplicationBootstrap, UnauthorizedException } from '@nestjs/common'
 import { createHmac, timingSafeEqual } from 'crypto'
 import { PrismaService } from '../prisma/prisma.service'
+import { isValidTcKimlik, isValidTrPhone } from './order-validation'
 import { MailService } from '../mail/mail.service'
 import { CreateWebOrderDto } from './dto/create-web-order.dto'
 import { PublicCatalogService } from '../public-catalog/public-catalog.service'
@@ -142,6 +143,10 @@ export class WebOrdersService implements OnApplicationBootstrap {
 
   async create(dto: CreateWebOrderDto, siteKey?: string) {
     if (!['WHATSAPP', 'EFT', 'ONLINE'].includes(dto?.paymentMethod)) throw new BadRequestException('Geçersiz ödeme yöntemi.')
+    // Sahte / bot siparişleri: geçerli telefon ve (girildiyse) geçerli TC zorunlu
+    if (!isValidTrPhone(dto.customerPhone)) throw new BadRequestException('Lütfen geçerli bir cep telefonu numarası girin (05XX XXX XX XX).')
+    if (dto.tcKimlik && !isValidTcKimlik(dto.tcKimlik)) throw new BadRequestException('T.C. Kimlik No geçersiz.')
+    if (!/[a-zA-ZçğıöşüÇĞİÖŞÜ]{2,}/.test(String(dto.customerName ?? ''))) throw new BadRequestException('Ad soyad gerekli.')
     if (!dto.customerName?.trim() || !dto.customerPhone?.trim() || !dto.address?.trim() || !dto.city?.trim()) {
       throw new BadRequestException('Ad, telefon, şehir ve adres zorunludur.')
     }
