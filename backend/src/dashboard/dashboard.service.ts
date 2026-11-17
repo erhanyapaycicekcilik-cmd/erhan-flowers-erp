@@ -1,9 +1,16 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { IntegrationsService } from '../integrations/integrations.service';
 
 @Injectable()
 export class DashboardService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly integrations: IntegrationsService,
+  ) {}
+
+  /** Platform ciro sorgusu önbelleği (API'leri yormamak için 10 dk) */
+  private readonly platformCache = new Map<string, { at: number; data: Awaited<ReturnType<IntegrationsService['platformRevenue']>> }>();
 
   async summary(userRole?: string) {
     const [totalProducts, totalImages, totalBarcodes, stockProducts, recentlyAddedProducts, stockCards, outOfStockCards] =
@@ -260,7 +267,7 @@ export class DashboardService {
    *  - Dükkan/telefon/WhatsApp/Instagram: retail_sales'te ELLE girilenler (pazaryeri aktarımları hariç)
    *  - Web sitesi: ödenmiş ya da onaylanmış web_orders (iptal hariç)
    */
-  async revenueLedger(fromStr?: string, toStr?: string) {
+  async revenueLedger(fromStr?: string, toStr?: string, live = true, refresh = false) {
     const today = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Istanbul' }));
     const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     const valid = (v?: string) => (v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null);
@@ -300,6 +307,31 @@ export class DashboardService {
       ORDER BY day, channel
     `;
 
+    // Trendyol / n11 (Erhan + Flora): veriyi doğrudan platformdan al; alınamayan kanalda ERP kaydı kalır
+    const sources: Record<string, 'PLATFORM' | 'ERP'> = {};
+    const platformErrors: Array<{ channel: string; error: string }> = [];
+    let liveNote: string | null = null;
+    const oldest = new Date(today.getTime() - 180 * 86400000);
+    if (live && (spanDays > 93 || new Date(from) < oldest)) {
+      liveNote = 'Platformdan canlı veri en fazla 93 günlük ve son 6 aylık aralıkta alınır; bu aralıkta ERP kayıtları gösteriliyor.';
+    } else if (live) {
+      const key = `${from}|${to}`;
+      let cached = this.platformCache.get(key);
+      if (!cached || refresh || Date.now() - cached.at > 10 * 60000) {
+        cached = { at: Date.now(), data: await this.integrations.platformRevenue(from, to) };
+        this.platformCache.set(key, cached);
+        if (this.platformCache.size > 50) this.platformCache.delete(this.platformCache.keys().next().value as string);
+      }
+      for (const res of cached.data) {
+        if (!res.ok) { platformErrors.push({ channel: res.channel, error: res.error ?? 'bilinmeyen hata' }); continue; }
+        sources[res.channel] = 'PLATFORM';
+        // Bu kanalın ERP satırlarını platform rakamlarıyla değiştir
+        for (let i = rows.length - 1; i >= 0; i--) if (rows[i].channel === res.channel) rows.splice(i, 1);
+        for (const [day, v] of Object.entries(res.days)) rows.push({ day, channel: res.channel, revenue: v.revenue, orders: v.orders });
+      }
+    }
+    for (const r of rows) sources[r.channel] ??= 'ERP';
+
     // Her gün için satır (satış olmayan günler 0)
     const days: Array<{ date: string; total: number; orders: number; byChannel: Record<string, number> }> = [];
     for (let d = new Date(`${from}T12:00:00Z`); iso2(d) <= to; d = new Date(d.getTime() + 86400000)) {
@@ -325,6 +357,10 @@ export class DashboardService {
     return {
       from, to,
       total, orders,
+      sources,
+      platformErrors,
+      liveNote,
+      fetchedAt: new Date().toISOString(),
       dailyAverage: Math.round((total / activeDays) * 100) / 100,
       bestDay: days.reduce<typeof days[number] | null>((b, d) => (!b || d.total > b.total ? d : b), null),
       channels: Object.entries(channelTotals)

@@ -27,9 +27,15 @@ export class DashboardController {
 
   /** Günlük ciro defteri — sadece sahip/yönetici */
   @Get('revenue')
-  revenue(@Req() request: AuthenticatedRequest, @Query('from') from?: string, @Query('to') to?: string) {
+  revenue(
+    @Req() request: AuthenticatedRequest,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('source') source?: string,
+    @Query('refresh') refresh?: string,
+  ) {
     if (!['OWNER', 'MANAGER'].includes(request.user?.role ?? '')) throw new ForbiddenException('Bu rapor için yetkiniz yok.');
-    return this.dashboard.revenueLedger(from, to);
+    return this.dashboard.revenueLedger(from, to, source !== 'erp', refresh === '1');
   }
 
   @Get('daily-report')

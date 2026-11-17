@@ -547,6 +547,51 @@ export class TrendyolAdapter extends BaseIntegrationAdapter {
     });
   }
 
+  /**
+   * Belirli tarih aralığındaki tüm paketler (ciro raporu). Trendyol en fazla 2 haftalık aralık kabul ettiği için
+   * 14 günlük parçalar; parça başına en fazla 50 sayfa × 200. Hata olursa fırlatır (eksik veriyle ciro gösterilmesin).
+   */
+  async fetchOrdersBetween(startMs: number, endMs: number): Promise<ExternalOrder[]> {
+    const missing = this.missingKeys();
+    if (missing.length) throw new Error(`Trendyol API bilgileri eksik: ${missing.join(', ')}`);
+    const chunk = 14 * 86400000 - 1;
+    const all: ExternalOrder[] = [];
+    for (let s = startMs; s < endMs; s += chunk + 1) {
+      const e = Math.min(s + chunk, endMs);
+      for (let page = 0; page < 50; page += 1) {
+        const data = await this.requestOrdersRange(s, e, page, 200);
+        const content = Array.isArray(data.content) ? data.content : [];
+        all.push(...content.map((o) => this.mapOrder(o)));
+        if (page + 1 >= Number(data.totalPages ?? 1) || content.length === 0) break;
+      }
+    }
+    return Array.from(new Map(all.filter((o) => o.externalOrderId).map((o) => [o.externalOrderId, o])).values());
+  }
+
+  private async requestOrdersRange(start: number, end: number, page: number, size: number, attempt = 1): Promise<{ content?: Array<Record<string, any>>; totalPages?: number }> {
+    const supplierId = this.env('SUPPLIER_ID');
+    const apiBaseUrl = this.env('API_URL').replace(/\/+$/, '');
+    const url = new URL(`${apiBaseUrl}/order/sellers/${supplierId}/v2/orders`);
+    url.searchParams.set('startDate', String(start));
+    url.searchParams.set('endDate', String(end));
+    url.searchParams.set('page', String(page));
+    url.searchParams.set('size', String(size));
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        Authorization: `Basic ${Buffer.from(`${this.env('API_KEY')}:${this.env('API_SECRET')}`).toString('base64')}`,
+        'User-Agent': `${supplierId} - SelfIntegration`,
+        Accept: 'application/json',
+      },
+    });
+    if (response.status === 429 && attempt < 4) {
+      await this.delay(1500 * attempt);
+      return this.requestOrdersRange(start, end, page, size, attempt + 1);
+    }
+    if (!response.ok) throw new Error(`Trendyol sipariş listesi alınamadı. HTTP ${response.status}: ${await this.safeErrorText(response)}`);
+    return response.json().catch(() => ({})) as Promise<{ content?: Array<Record<string, any>>; totalPages?: number }>;
+  }
+
   private requestOrders(options: { size: number; page: number; lookbackDays: number }) {
     const supplierId = this.env('SUPPLIER_ID');
     const now = Date.now();

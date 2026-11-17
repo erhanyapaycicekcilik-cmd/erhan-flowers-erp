@@ -114,6 +114,7 @@ Sonra tarayıcıda: **http://localhost:3200**
 ## Günlük Ciro (`/reports/ciro`, OWNER/MANAGER)
 
 - `GET /dashboard/revenue?from=&to=` (`DashboardService.revenueLedger`, en fazla 400 gün): gün × kanal ciro, Türkiye saatiyle gün. Kaynaklar çakışmaz: pazaryerleri `marketplace_orders` (status ~ cancel/iptal/return/iade/undeliver/reject/refund hariç; `FLORA_` önekli → `<PLATFORM>_FLORA`), dükkan/telefon/WhatsApp/Instagram `retail_sales` elle girilenler (STORE/PHONE/WHATSAPP/INSTAGRAM/OTHER, sync NULL/MANUAL, CANCELLED/DRAFT hariç), web `web_orders` ödenmiş/onaylı. Tutar = sipariş tutarı (KDV dahil, komisyon/kargo düşülmez). Ekranda hazır aralıklar, kanal dağılımı, gün tablosu, CSV
+- **Platformdan canlı** (varsayılan, `source=platform`; `source=erp` sadece ERP): Trendyol + n11 (Erhan ve Flora) siparişleri `IntegrationsService.platformRevenue` ile doğrudan API'den (`TrendyolAdapter.fetchOrdersBetween` 14 günlük parçalar, `HttpMarketplaceOrderAdapter.fetchOrdersBetween` 7 günlük); iptal/iade hariç. Başarılı kanalın ERP satırları platform rakamıyla değiştirilir, hata veren kanal ERP'de kalır (`platformErrors`). Flora `storeAdapter` (Erhan bilgisine düşmez). 10 dk önbellek (`refresh=1` yeniler); en fazla 93 gün / son 6 ay. Hepsiburada ve diğerleri ERP kaydından (tarih aralıklı API yok)
 - Not: eski `/reports/gunluk` (dailyReport) retail_sales'in tümünü saydığı için pazaryeri siparişlerini iki kez sayabilir
 
 ## Boy Serisi (`/products/boy-serisi`, sadece OWNER)

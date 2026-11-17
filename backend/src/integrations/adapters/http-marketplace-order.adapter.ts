@@ -15,6 +15,8 @@ type AdapterConfig = {
 export abstract class HttpMarketplaceOrderAdapter extends BaseIntegrationAdapter {
   platform: IntegrationPlatform;
   private lookbackOverride: number | null = null;
+  /** Ciro raporu için belirli tarih aralığı (epoch ms); doluysa lookback yerine kullanılır */
+  private rangeOverride: { start: number; end: number } | null = null;
 
   protected constructor(private readonly config: AdapterConfig) {
     super();
@@ -64,6 +66,30 @@ export abstract class HttpMarketplaceOrderAdapter extends BaseIntegrationAdapter
     return Array.from(new Map(orders.map((order) => [order.externalOrderId, order])).values());
   }
 
+  /**
+   * Belirli tarih aralığındaki tüm siparişler (ciro raporu). 7 günlük parçalar, parça başına en fazla 20 sayfa.
+   * Hata olursa fırlatır — eksik veriyle ciro gösterilmesin.
+   */
+  async fetchOrdersBetween(startMs: number, endMs: number): Promise<ExternalOrder[]> {
+    if (this.missingKeys().length) throw new Error(`${this.platform} API bilgileri eksik`);
+    const size = 100;
+    const chunk = 7 * 86400000;
+    const all: ExternalOrder[] = [];
+    try {
+      for (let s = startMs; s < endMs; s += chunk) {
+        this.rangeOverride = { start: s, end: Math.min(s + chunk - 1, endMs) };
+        const first = await this.fetchOrderPage(0, size);
+        const pages = Math.min(Math.max(Number(first.totalPages ?? 1), 1), 20);
+        const content = [...first.content];
+        for (let page = 1; page < pages; page += 1) content.push(...(await this.fetchOrderPage(page, size)).content);
+        all.push(...content.map((o) => this.mapGenericOrder(o)).filter((o) => o.externalOrderId));
+      }
+    } finally {
+      this.rangeOverride = null;
+    }
+    return Array.from(new Map(all.map((o) => [o.externalOrderId, o])).values());
+  }
+
   async pushProduct(payload: unknown): Promise<AdapterConnectionResult> {
     const missing = this.missingKeys();
     if (missing.length) return this.missing(missing);
@@ -106,8 +132,8 @@ export abstract class HttpMarketplaceOrderAdapter extends BaseIntegrationAdapter
     url.searchParams.set(this.env('SIZE_PARAM') || 'size', String(options.size));
 
     const lookbackDays = this.lookbackOverride ?? this.numberEnv('ORDER_LOOKBACK_DAYS', this.config.defaultLookbackDays ?? 3);
-    const now = Date.now();
-    const start = now - lookbackDays * 24 * 60 * 60 * 1000;
+    const now = this.rangeOverride?.end ?? Date.now();
+    const start = this.rangeOverride?.start ?? now - lookbackDays * 24 * 60 * 60 * 1000;
     if (this.booleanEnv('USE_EPOCH_MS_DATES', true)) {
       url.searchParams.set(this.env('START_DATE_PARAM') || 'startDate', String(start));
       url.searchParams.set(this.env('END_DATE_PARAM') || 'endDate', String(now));
