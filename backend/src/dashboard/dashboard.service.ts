@@ -9,6 +9,28 @@ export class DashboardService {
     private readonly integrations: IntegrationsService,
   ) {}
 
+  private readonly settlementCache = new Map<string, { at: number; data: Awaited<ReturnType<IntegrationsService['platformSettlements']>> }>();
+
+  /** Hakedişler (Trendyol cari hesap ekstresi). 10 dk önbellek, en fazla 93 gün. */
+  async settlements(fromStr?: string, toStr?: string, refresh = false) {
+    const today = new Date(Date.now() + 3 * 3600000);
+    const iso = (d: Date) => d.toISOString().slice(0, 10);
+    const valid = (v?: string) => (v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null);
+    const to = valid(toStr) ?? iso(today);
+    const from = valid(fromStr) ?? `${iso(today).slice(0, 8)}01`;
+    if (from > to) throw new BadRequestException('Başlangıç tarihi bitişten sonra olamaz.');
+    const span = Math.round((new Date(to).getTime() - new Date(from).getTime()) / 86400000) + 1;
+    if (span > 93) throw new BadRequestException('Hakediş için en fazla 93 günlük aralık seçilebilir.');
+    const key = `${from}|${to}`;
+    let c = this.settlementCache.get(key);
+    if (!c || refresh || Date.now() - c.at > 10 * 60000) {
+      c = { at: Date.now(), data: await this.integrations.platformSettlements(from, to) };
+      this.settlementCache.set(key, c);
+      if (this.settlementCache.size > 30) this.settlementCache.delete(this.settlementCache.keys().next().value as string);
+    }
+    return { from, to, fetchedAt: new Date(c.at).toISOString(), stores: c.data };
+  }
+
   /** Platform ciro sorgusu önbelleği (API'leri yormamak için 10 dk) */
   private readonly platformCache = new Map<string, { at: number; data: Awaited<ReturnType<IntegrationsService['platformRevenue']>> }>();
 

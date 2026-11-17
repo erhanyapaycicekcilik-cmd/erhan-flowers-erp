@@ -117,6 +117,12 @@ Sonra tarayıcıda: **http://localhost:3200**
 - **Platformdan canlı** (varsayılan, `source=platform`; `source=erp` sadece ERP): Trendyol + n11 (Erhan ve Flora) siparişleri `IntegrationsService.platformRevenue` ile doğrudan API'den (`TrendyolAdapter.fetchOrdersBetween` 14 günlük parçalar, `HttpMarketplaceOrderAdapter.fetchOrdersBetween` 7 günlük); iptal/iade hariç. Başarılı kanalın ERP satırları platform rakamıyla değiştirilir, hata veren kanal ERP'de kalır (`platformErrors`). Flora `storeAdapter` (Erhan bilgisine düşmez). 10 dk önbellek (`refresh=1` yeniler); en fazla 93 gün / son 6 ay. Hepsiburada ve diğerleri ERP kaydından (tarih aralıklı API yok)
 - Not: eski `/reports/gunluk` (dailyReport) retail_sales'in tümünü saydığı için pazaryeri siparişlerini iki kez sayabilir
 
+## Hakedişler (`/reports/hakedis`, OWNER/MANAGER)
+
+- `GET /dashboard/settlements?from=&to=&refresh=1` (en fazla 93 gün, 10 dk önbellek) → `IntegrationsService.platformSettlements`: Trendyol Erhan + Flora (`storeAdapter`) cari hesap ekstresi — `TrendyolAdapter.fetchFinance('settlements'|'otherfinancials', type)` (`${API_URL}/finance/che/sellers/{id}/…`, 15 günlük parçalar). Tipler: Sale (zorunlu), Return, Discount(Cancel), Coupon(Cancel), Provision±; otherfinancials PaymentOrder (yatan ödemeler) + DeductionInvoices (kesinti faturaları)
+- Özet `integrations/settlements.ts` `summarizeSettlements` (tutarlar mutlak, yön işlem tipinden): satış, iade, indirim, komisyon, satıcı hakedişi, kesintiler, net, yatan ödemeler, vadesi gelecek (paymentDate ≥ bugün, paymentOrderId yok)
+- Hepsiburada / n11 hakediş servisi resmi dokümanda doğrulanamadı → ekranda panel linki; diğer pazaryerleri API aktif olunca
+
 ## Boy Serisi (`/products/boy-serisi`, sadece OWNER)
 
 - Bir ürünü farklı boylarda **ayrı ürün / ayrı ilan** olarak kopyalar: `POST /product-center/size-series/preview` ve `POST /product-center/size-series` (`{modelCode,startCm,endCm,stepCm,priceStep,nameFrom,nameTo}`)

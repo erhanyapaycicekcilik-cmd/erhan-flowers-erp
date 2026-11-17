@@ -568,6 +568,51 @@ export class TrendyolAdapter extends BaseIntegrationAdapter {
     return Array.from(new Map(all.filter((o) => o.externalOrderId).map((o) => [o.externalOrderId, o])).values());
   }
 
+  /**
+   * Muhasebe & Finans (cari hesap ekstresi): `settlements` (Sale, Return, Discount, Coupon…) ve
+   * `otherfinancials` (PaymentOrder, DeductionInvoices…). Trendyol en fazla 15 günlük aralık kabul eder → parçalı çekilir.
+   * Hata olursa fırlatır.
+   */
+  async fetchFinance(kind: 'settlements' | 'otherfinancials', transactionType: string, startMs: number, endMs: number): Promise<Array<Record<string, any>>> {
+    const missing = this.missingKeys();
+    if (missing.length) throw new Error(`Trendyol API bilgileri eksik: ${missing.join(', ')}`);
+    const supplierId = this.env('SUPPLIER_ID');
+    const apiBaseUrl = this.env('API_URL').replace(/\/+$/, '');
+    const chunk = 15 * 86400000 - 1;
+    const all: Array<Record<string, any>> = [];
+    for (let s = startMs; s < endMs; s += chunk + 1) {
+      const e = Math.min(s + chunk, endMs);
+      for (let page = 0; page < 50; page += 1) {
+        const url = new URL(`${apiBaseUrl}/finance/che/sellers/${supplierId}/${kind}`);
+        url.searchParams.set('startDate', String(s));
+        url.searchParams.set('endDate', String(e));
+        url.searchParams.set('transactionType', transactionType);
+        url.searchParams.set('page', String(page));
+        url.searchParams.set('size', '500');
+        let response: Response | null = null;
+        for (let attempt = 1; attempt <= 4; attempt++) {
+          response = await fetch(url, {
+            headers: {
+              Authorization: `Basic ${Buffer.from(`${this.env('API_KEY')}:${this.env('API_SECRET')}`).toString('base64')}`,
+              'User-Agent': `${supplierId} - SelfIntegration`,
+              Accept: 'application/json',
+            },
+          });
+          if (response.status !== 429) break;
+          await this.delay(1500 * attempt);
+        }
+        if (!response || !response.ok) {
+          throw new Error(`Trendyol finans (${kind}/${transactionType}) alınamadı. HTTP ${response?.status}: ${response ? await this.safeErrorText(response) : ''}`);
+        }
+        const data = (await response.json().catch(() => ({}))) as { content?: Array<Record<string, any>>; totalPages?: number };
+        const content = Array.isArray(data.content) ? data.content : [];
+        all.push(...content);
+        if (content.length === 0 || page + 1 >= Number(data.totalPages ?? 1)) break;
+      }
+    }
+    return all;
+  }
+
   private async requestOrdersRange(start: number, end: number, page: number, size: number, attempt = 1): Promise<{ content?: Array<Record<string, any>>; totalPages?: number }> {
     const supplierId = this.env('SUPPLIER_ID');
     const apiBaseUrl = this.env('API_URL').replace(/\/+$/, '');

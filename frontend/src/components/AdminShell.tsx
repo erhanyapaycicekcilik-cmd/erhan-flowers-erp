@@ -112,6 +112,7 @@ const navGroups: { section: string; icon: LucideIcon; items: NavItem[] }[] = [
     icon: CircleDollarSign,
     items: [
       { href: '/reports/ciro', label: 'Günlük Ciro', icon: BarChart3, roles: OWNER_MANAGER },
+      { href: '/reports/hakedis', label: 'Hakedişler', icon: CircleDollarSign, roles: OWNER_MANAGER },
       { href: '/harcama', label: 'Günlük Harcama', icon: Wallet, roles: OWNER_MANAGER },
       { href: '/finance', label: 'Finans', icon: CircleDollarSign, roles: OWNER_ONLY },
       { href: '/faturalar', label: 'Faturalar', icon: CircleDollarSign, roles: OWNER_ONLY },

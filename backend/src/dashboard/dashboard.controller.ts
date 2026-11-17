@@ -38,6 +38,13 @@ export class DashboardController {
     return this.dashboard.revenueLedger(from, to, source !== 'erp', refresh === '1');
   }
 
+  /** Hakedişler (platform cari hesap ekstresi) — sadece sahip/yönetici */
+  @Get('settlements')
+  settlements(@Req() request: AuthenticatedRequest, @Query('from') from?: string, @Query('to') to?: string, @Query('refresh') refresh?: string) {
+    if (!['OWNER', 'MANAGER'].includes(request.user?.role ?? '')) throw new ForbiddenException('Bu rapor için yetkiniz yok.');
+    return this.dashboard.settlements(from, to, refresh === '1');
+  }
+
   @Get('daily-report')
   dailyReport(@Query('date') date?: string) {
     return this.dashboard.dailyReport(date);
