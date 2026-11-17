@@ -1,9 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { AlertTriangle, CalendarClock, ChevronDown, ChevronRight, CreditCard, FileText, LayoutDashboard, Package, Plus, Trash2, TrendingDown, TrendingUp, Warehouse, X } from 'lucide-react';
+import { Users, AlertTriangle, CalendarClock, ChevronDown, ChevronRight, CreditCard, FileText, LayoutDashboard, Package, Plus, Trash2, TrendingDown, TrendingUp, Warehouse, X } from 'lucide-react';
 import { BillsPanel } from '@/components/BillsPanel';
 import { InstallmentDebtsPanel } from '@/components/InstallmentDebtsPanel';
+import { SalariesPanel } from '@/components/SalariesPanel';
 import { AdminShell } from '@/components/AdminShell';
 import { api } from '@/lib/api';
 
@@ -31,10 +32,11 @@ type Overview = {
   supplierDebt: number;
   installmentRemaining: number;
   billsUnpaid: number;
+  salaryUnpaid?: number;
   grandTotal: number;
   overdueTotal: number;
   upcoming: Array<{
-    kind: 'INSTALLMENT' | 'BILL';
+    kind: 'INSTALLMENT' | 'BILL' | 'SALARY';
     refId: number;
     title: string;
     party: string | null;
@@ -45,12 +47,13 @@ type Overview = {
   }>;
 };
 
-type Tab = 'overview' | 'suppliers' | 'installments' | 'bills';
+type Tab = 'overview' | 'suppliers' | 'installments' | 'bills' | 'salaries';
 const TABS: { key: Tab; label: string; icon: typeof Warehouse }[] = [
   { key: 'overview', label: 'Tüm Borçlar', icon: LayoutDashboard },
   { key: 'suppliers', label: 'Tedarikçiler', icon: Warehouse },
   { key: 'installments', label: 'Taksitli Borçlar', icon: CreditCard },
   { key: 'bills', label: 'Faturalar', icon: FileText },
+  { key: 'salaries', label: 'Personel Maaşları', icon: Users },
 ];
 
 const fmt = (n: number) => new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2 }).format(n);
@@ -185,7 +188,7 @@ export default function BorclarPage() {
 
         {tab === 'overview' && (
           <div className="space-y-4">
-            <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+            <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
               <div className="col-span-2 lg:col-span-1 bg-red-600 text-white rounded-xl p-4">
                 <div className="text-xs opacity-80">Toplam Borç</div>
                 <div className="text-2xl font-bold">{fmt(overview?.grandTotal ?? 0)} ₺</div>
@@ -201,6 +204,10 @@ export default function BorclarPage() {
               <button onClick={() => setTab('bills')} className="text-left bg-white border rounded-xl p-4 hover:border-blue-300">
                 <div className="text-xs text-gray-500">Ödenmemiş faturalar</div>
                 <div className="text-lg font-bold text-gray-800">{fmt(overview?.billsUnpaid ?? 0)} ₺</div>
+              </button>
+              <button onClick={() => setTab('salaries')} className="text-left bg-white border rounded-xl p-4 hover:border-blue-300">
+                <div className="text-xs text-gray-500">Ödenmemiş maaşlar</div>
+                <div className="text-lg font-bold text-gray-800">{fmt(overview?.salaryUnpaid ?? 0)} ₺</div>
               </button>
               <div className={`rounded-xl p-4 border ${overview && overview.overdueTotal > 0 ? 'bg-red-50 border-red-200' : 'bg-gray-50'}`}>
                 <div className="text-xs text-gray-500">Gecikmiş</div>
@@ -219,11 +226,11 @@ export default function BorclarPage() {
                   {overview.upcoming.map((u) => (
                     <button
                       key={`${u.kind}-${u.refId}-${u.dueDate}`}
-                      onClick={() => setTab(u.kind === 'BILL' ? 'bills' : 'installments')}
+                      onClick={() => setTab(u.kind === 'BILL' ? 'bills' : u.kind === 'SALARY' ? 'salaries' : 'installments')}
                       className={`w-full text-left flex flex-wrap items-center gap-3 px-4 py-2.5 text-sm hover:bg-gray-50 ${u.overdue ? 'bg-red-50' : ''}`}
                     >
                       <span className={`w-24 font-medium ${u.overdue ? 'text-red-600' : 'text-gray-700'}`}>{new Date(u.dueDate).toLocaleDateString('tr-TR')}</span>
-                      <span className={`text-[11px] px-2 py-0.5 rounded-full ${u.kind === 'BILL' ? 'bg-cyan-100 text-cyan-700' : 'bg-purple-100 text-purple-700'}`}>{u.kind === 'BILL' ? 'Fatura' : 'Taksit'}</span>
+                      <span className={`text-[11px] px-2 py-0.5 rounded-full ${u.kind === 'BILL' ? 'bg-cyan-100 text-cyan-700' : u.kind === 'SALARY' ? 'bg-emerald-100 text-emerald-700' : 'bg-purple-100 text-purple-700'}`}>{u.kind === 'BILL' ? 'Fatura' : u.kind === 'SALARY' ? 'Maaş' : 'Taksit'}</span>
                       <span className="flex-1 min-w-[160px]">
                         <span className="font-semibold text-gray-800">{u.title}</span>
                         {u.party && <span className="text-gray-500"> • {u.party}</span>}
@@ -258,6 +265,8 @@ export default function BorclarPage() {
         )}
 
         {tab === 'bills' && <BillsPanel />}
+
+        {tab === 'salaries' && <SalariesPanel onChange={loadOverview} />}
 
         {tab === 'suppliers' && (<>
         {/* Özet */}

@@ -1,5 +1,6 @@
 import { Body, Controller, Delete, Get, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '../auth/auth.guard';
+import { OwnerGuard } from '../auth/owner.guard';
 import { SuppliersService } from './suppliers.service';
 
 @UseGuards(AuthGuard)
@@ -14,12 +15,15 @@ export class SuppliersController {
   summary() { return this.suppliers.summary(); }
 
   @Get('alerts')
+  @UseGuards(OwnerGuard)
   alerts(@Query('days') days?: string) { return this.suppliers.alerts(days ? Number(days) || 3 : 3); }
 
   @Post('alerts/send-test')
+  @UseGuards(OwnerGuard)
   async sendTest() { await this.suppliers.dailyReminderEmail(); return { ok: true }; }
 
   @Get('overview')
+  @UseGuards(OwnerGuard)
   overview(@Query('days') days?: string) { return this.suppliers.overview(days ? Number(days) || 45 : 45); }
 
   @Get(':id')
