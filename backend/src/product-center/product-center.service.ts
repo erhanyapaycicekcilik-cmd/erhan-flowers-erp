@@ -1484,22 +1484,17 @@ Sadece 3 satır ürün adı yaz, başka hiçbir şey yazma.`;
     if ((end - start) / stepCm > 40) throw new BadRequestException('En fazla 40 boy oluşturulabilir.');
     if (!Number.isFinite(priceStep)) throw new BadRequestException('Fiyat artışı geçersiz.');
 
-    const source = await this.prisma.trendyolProductVariant.findFirst({
-      where: {
-        status: 'ACTIVE',
-        OR: [
-          { currentModelCode: sourceCode },
-          { proposedModelCode: sourceCode },
-          { barcode: sourceCode },
-          { product: { modelCode: sourceCode } },
-        ],
-      },
-      include: { product: { include: { mediaFiles: true } }, productCostDraft: true },
-      orderBy: [{ productId: { sort: 'desc', nulls: 'last' } }, { id: 'asc' }],
-    });
-    if (!source) throw new NotFoundException(`${sourceCode} kodlu aktif ürün bulunamadı.`);
+    const source = await this.findSizeSeriesSource(sourceCode);
+    if (!source) {
+      throw new NotFoundException(`"${sourceCode}" ile eşleşen ürün bulunamadı. Ürünler sayfasında ürünü açıp barkodunu buraya yazmayı deneyin.`);
+    }
 
-    const baseModelCode = source.product?.modelCode || source.proposedModelCode || source.currentModelCode || sourceCode;
+    // Yeni model kodları kullanıcının yazdığı koddan türetilir (ERH-BS2105 → ERH-BS2105-100);
+    // barkod yazıldıysa ürünün kendi model/stok kodu kullanılır.
+    const enteredIsBarcode = /^\d{8,14}$/.test(sourceCode);
+    const baseModelCode = (enteredIsBarcode
+      ? (source.product?.modelCode || source.proposedModelCode || source.currentModelCode || source.supplierStockCode || sourceCode)
+      : sourceCode.toUpperCase()).trim();
     const sourceName = source.seoManualProductName ?? source.seoProductName ?? source.productName;
     const sizeMatch = sourceName.match(/(\d{2,3})\s*cm/i) ?? source.productName.match(/(\d{2,3})\s*cm/i);
     if (!sizeMatch) throw new BadRequestException('Kaynak ürün adında boy bulunamadı (örn. "150 Cm").');
@@ -1676,5 +1671,44 @@ Sadece 3 satır ürün adı yaz, başka hiçbir şey yazma.`;
 
     void revalidateSite();
     return { source: sourceSummary, items: created };
+  }
+  // Kaynak ürünü model kodu / stok kodu / barkod ile (büyük-küçük harf duyarsız) bulur.
+  // Önce tam eşleşme, sonra "içerir" araması. Aktif ve ürün kartına bağlı kayıt tercih edilir.
+  private async findSizeSeriesSource(code: string) {
+    const include = { product: { include: { mediaFiles: true } }, productCostDraft: true } as const;
+    const exact = (value: string) => ({ equals: value, mode: 'insensitive' as const });
+    const contains = (value: string) => ({ contains: value, mode: 'insensitive' as const });
+    const pick = <T extends { status: string; productId: number | null }>(rows: T[]) =>
+      rows.sort((a, b) => Number(b.status === 'ACTIVE') - Number(a.status === 'ACTIVE') || Number(!!b.productId) - Number(!!a.productId))[0] ?? null;
+
+    const exactRows = await this.prisma.trendyolProductVariant.findMany({
+      where: { OR: [
+        { currentModelCode: exact(code) },
+        { proposedModelCode: exact(code) },
+        { supplierStockCode: exact(code) },
+        { barcode: code },
+        { product: { modelCode: exact(code) } },
+        { product: { barcode: code } },
+        { product: { trendyolBarcode: code } },
+      ] },
+      include,
+      take: 20,
+    });
+    if (exactRows.length) return pick(exactRows);
+
+    const looseRows = await this.prisma.trendyolProductVariant.findMany({
+      where: { OR: [
+        { currentModelCode: contains(code) },
+        { proposedModelCode: contains(code) },
+        { supplierStockCode: contains(code) },
+        { product: { modelCode: contains(code) } },
+      ] },
+      include,
+      take: 20,
+    });
+    // "ERH-BS2105" araması daha önce açılmış "ERH-BS2105-100" gibi seri ürünlerini de bulur; onları ele.
+    const seriesPattern = new RegExp(`${code.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}-\\d{2,3}$`, 'i');
+    const notSeries = looseRows.filter((row) => ![row.currentModelCode, row.proposedModelCode, row.product?.modelCode].some((value) => value && seriesPattern.test(value)));
+    return pick(notSeries);
   }
 }
