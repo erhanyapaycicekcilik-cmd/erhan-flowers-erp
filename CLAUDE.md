@@ -105,6 +105,11 @@ Sonra tarayıcıda: **http://localhost:3200**
 - **Yeni ürün açarken iki hesaba birden:** Ürün Merkezi'nde (hızlı kayıt + tam form) "Trendyol (Flora)" kanalı = platform kodu `TRENDYOL_FLORA`. `/publishing/send` bu kodu görünce ürünü FLORA Trendyol hesabına da gönderir (barkod aynı, model kodu FL- ön ekli, %-3 fiyat; `DEFAULT_STORES`). Varsayılan olarak işaretli
 - `IntegrationCenterService.storeCredentials(platform, company)`: ERHAN dışı mağazada .env'e **düşmez**, eksik API bilgisi varsa hata verir (Flora işlemi yanlışlıkla Erhan mağazasına gitmesin)
 
+## Siparişler Menüsü (tek giriş + sekmeler)
+
+- Menüde Satış → **Siparişler** (`/orders`); sipariş sayfalarının üstünde `components/OrdersTabs.tsx` sekmeleri: Pazaryeri (`/orders`) · **Web & Telefon** (`/web-siparisler`: web_orders + telefon/WhatsApp/Instagram/dükkan retail_sales; tezgâhta COMPLETED dükkan satışları hariç; durumlar web durumlarına eşlenir, retail için `POST /sales/:id/status`) · **Çıktı Merkezi (A5)** (`/sabah-ciktisi`, tek çıktı yeri) · Telefon Siparişi Gir (`/adres-ciktisi`) · İadeler · EFT · Fotoğraf Arşivi. Personel ekranı (`/staff/orders`) ayrı
+- Ödeme bekleyen (PENDING) web siparişleri personel ekranına / Çıktı Merkezi'ne düşmez
+
 ## Boy Serisi (`/products/boy-serisi`, sadece OWNER)
 
 - Bir ürünü farklı boylarda **ayrı ürün / ayrı ilan** olarak kopyalar: `POST /product-center/size-series/preview` ve `POST /product-center/size-series` (`{modelCode,startCm,endCm,stepCm,priceStep,nameFrom,nameTo}`)

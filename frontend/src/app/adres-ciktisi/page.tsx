@@ -1,5 +1,6 @@
 'use client';
 
+import { OrdersTabs } from '@/components/OrdersTabs';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, ClipboardPaste, FileText, Plus, Printer, RotateCcw, Save, Search, Trash2 } from 'lucide-react';
@@ -519,6 +520,7 @@ export default function AddressPrintPage() {
 
   return (
     <main className="min-h-screen bg-slate-100 text-slate-900">
+      <div className="no-print bg-white px-4 pt-3"><OrdersTabs /></div>
       <div className="no-print sticky top-0 z-20 flex flex-wrap items-center gap-3 bg-slate-900 px-4 py-3">
         <Link href="/orders" className="inline-flex min-h-10 items-center gap-2 rounded-md bg-white px-4 py-2 text-sm font-semibold text-slate-800">
           <ArrowLeft size={17} />

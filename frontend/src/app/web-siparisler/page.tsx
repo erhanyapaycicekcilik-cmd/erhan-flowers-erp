@@ -1,7 +1,10 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { AdminShell } from '@/components/AdminShell'
+import { OrdersTabs } from '@/components/OrdersTabs'
+import { api, apiFileUrl } from '@/lib/api'
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
 
@@ -16,6 +19,42 @@ const STATUS_LABEL: Record<string, { label: string; color: string }> = {
 }
 
 const STATUS_FLOW = ['PENDING', 'CONFIRMED', 'PREPARING', 'READY', 'SHIPPED', 'DELIVERED']
+
+// Telefon / WhatsApp / Instagram / dükkan siparişleri (retail_sales) aynı listede gösterilir.
+// Durumlar web siparişi durumlarına eşlenir.
+const CHANNEL_LABEL: Record<string, string> = {
+  WEBSITE: '🌐 Web Sitesi', PHONE: '📞 Telefon', WHATSAPP: '💬 WhatsApp', INSTAGRAM: '📷 Instagram', STORE: '🏪 Dükkan', OTHER: 'Diğer',
+}
+const RETAIL_TO_WEB: Record<string, string> = {
+  DRAFT: 'PENDING', PAYMENT_PENDING: 'PENDING', CONFIRMED: 'CONFIRMED', PREPARING: 'PREPARING', IN_PRODUCTION: 'PREPARING',
+  READY: 'READY', OUT_FOR_DELIVERY: 'SHIPPED', DELIVERED: 'DELIVERED', COMPLETED: 'DELIVERED', CANCELLED: 'CANCELLED',
+}
+const WEB_TO_RETAIL: Record<string, string> = { PENDING: 'PAYMENT_PENDING', SHIPPED: 'OUT_FOR_DELIVERY' }
+const ALL_RETAIL = 'PAYMENT_PENDING,CONFIRMED,PREPARING,IN_PRODUCTION,READY,OUT_FOR_DELIVERY,DELIVERED,COMPLETED,CANCELLED'
+function retailStatusesFor(webStatus: string) {
+  if (!webStatus) return ALL_RETAIL
+  return Object.entries(RETAIL_TO_WEB).filter(([, w]) => w === webStatus).map(([r]) => r).join(',')
+}
+
+/** retail_sales satırını web siparişi biçimine çevirir */
+function fromRetail(r: any) {
+  return {
+    kind: 'retail',
+    key: `retail-${r.id}`,
+    id: r.id,
+    channel: r.platform,
+    orderNumber: r.saleNumber || `S-${r.id}`,
+    status: RETAIL_TO_WEB[r.status] ?? r.status,
+    rawStatus: r.status,
+    customerName: r.customerName,
+    customerPhone: r.phone ?? '',
+    city: r.city, district: r.district, address: r.fullAddress,
+    note: [r.customerNote, r.internalNote].filter(Boolean).join(' · '),
+    grandTotal: r.grandTotal,
+    createdAt: r.orderDate ?? r.createdAt,
+    items: (r.items ?? []).map((i: any) => ({ ...i, unitPrice: null, lineTotal: null })),
+  }
+}
 
 function fmt(n: number) {
   return '₺' + new Intl.NumberFormat('tr-TR').format(n)
@@ -55,50 +94,67 @@ export default function WebSiparislerPage() {
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<any>(null)
   const [filterStatus, setFilterStatus] = useState('')
+  const [channel, setChannel] = useState<'all' | 'web' | 'phone'>('all')
 
   async function load() {
     setLoading(true)
     try {
       const qs = filterStatus ? `?status=${filterStatus}` : ''
-      const res = await fetch(`${API}/web-orders${qs}`, { credentials: 'include' })
-      const data = await res.json()
-      setOrders(data.orders ?? [])
-      setTotal(data.total ?? 0)
+      const [webData, retail] = await Promise.all([
+        channel === 'phone' ? Promise.resolve({ orders: [], total: 0 }) :
+          fetch(`${API}/web-orders${qs}`, { credentials: 'include' }).then((r) => r.json()).catch(() => ({ orders: [], total: 0 })),
+        channel === 'web' ? Promise.resolve([]) :
+          api<any[]>(`/integrations/retail-orders?limit=200&status=${retailStatusesFor(filterStatus)}`).catch(() => []),
+      ])
+      const web = (webData.orders ?? []).map((o: any) => ({ ...o, kind: 'web', key: `web-${o.id}`, channel: 'WEBSITE' }))
+      // Tezgâhta tamamlanan dükkan satışları (Hızlı Dükkan Satışı) gönderilecek sipariş değildir — listelenmez
+      const phone = (Array.isArray(retail) ? retail : [])
+        .filter((r: any) => !(r.platform === 'STORE' && r.status === 'COMPLETED'))
+        .map(fromRetail)
+      const all = [...web, ...phone].sort((a, b) => new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime())
+      setOrders(all)
+      setTotal((webData.total ?? 0) + phone.length)
     } finally {
       setLoading(false)
     }
   }
 
-  useEffect(() => { load() }, [filterStatus])
+  useEffect(() => { load() }, [filterStatus, channel])
 
   async function selectOrder(order: any) {
+    if (order.kind === 'retail') { setSelected(order); return }
     // Fetch full detail (with items) in case list response was partial
     try {
       const res = await fetch(`${API}/web-orders/${order.id}`, { credentials: 'include' })
-      if (res.ok) { setSelected(await res.json()); return }
+      if (res.ok) { setSelected({ ...(await res.json()), kind: 'web', key: order.key, channel: 'WEBSITE' }); return }
     } catch {}
     setSelected(order)
   }
 
-  async function changeStatus(id: number, status: string) {
-    await fetch(`${API}/web-orders/${id}/status`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({ status }),
-    })
+  async function changeStatus(order: any, status: string) {
+    if (order.kind === 'retail') {
+      await api(`/sales/${order.id}/status`, { method: 'POST', json: { status: WEB_TO_RETAIL[status] ?? status, note: 'Web & Telefon Siparişleri ekranından güncellendi.' } })
+    } else {
+      await fetch(`${API}/web-orders/${order.id}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ status }),
+      })
+    }
     await load()
-    if (selected?.id === id) setSelected((s: any) => ({ ...s, status }))
+    if (selected?.key === order.key) setSelected((s: any) => ({ ...s, status }))
   }
 
   const pendingCount = orders.filter((o) => o.status === 'PENDING').length
 
   return (
-    <AdminShell>
-      <div className="p-6 max-w-7xl mx-auto">
-        <div className="flex items-center justify-between mb-6">
+    <AdminShell title="Siparişler">
+      <div className="max-w-7xl mx-auto">
+        <OrdersTabs />
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Web Siparişleri</h1>
+            <h1 className="text-2xl font-bold text-gray-900">Web & Telefon Siparişleri</h1>
             <p className="text-sm text-gray-500 mt-1">
               {total} toplam sipariş
               {pendingCount > 0 && (
@@ -108,7 +164,24 @@ export default function WebSiparislerPage() {
               )}
             </p>
           </div>
-          <button onClick={load} className="text-sm text-blue-600 hover:underline">Yenile</button>
+          <div className="flex items-center gap-3">
+            <Link href="/adres-ciktisi" className="text-sm font-semibold px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50">+ Telefon Siparişi Gir</Link>
+            <Link href="/sabah-ciktisi" className="text-sm font-semibold px-3 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">🖨️ Çıktı Merkezi</Link>
+            <button onClick={load} className="text-sm text-blue-600 hover:underline">Yenile</button>
+          </div>
+        </div>
+
+        {/* Kanal */}
+        <div className="flex gap-2 mb-3">
+          {([['all', 'Tümü'], ['web', '🌐 Web Sitesi'], ['phone', '📞 Telefon · WhatsApp · Dükkan']] as const).map(([v, l]) => (
+            <button
+              key={v}
+              onClick={() => { setChannel(v); setSelected(null) }}
+              className={`px-4 py-2 rounded-lg text-sm font-bold border ${channel === v ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'}`}
+            >
+              {l}
+            </button>
+          ))}
         </div>
 
         {/* Filtre */}
@@ -140,15 +213,16 @@ export default function WebSiparislerPage() {
                 const s = STATUS_LABEL[order.status] ?? { label: order.status, color: 'bg-gray-100 text-gray-700' }
                 return (
                   <div
-                    key={order.id}
+                    key={order.key}
                     onClick={() => selectOrder(order)}
                     className={`bg-white rounded-xl border p-4 cursor-pointer hover:shadow-md transition-shadow ${
-                      selected?.id === order.id ? 'border-blue-500 ring-1 ring-blue-500' : 'border-gray-200'
+                      selected?.key === order.key ? 'border-blue-500 ring-1 ring-blue-500' : 'border-gray-200'
                     }`}
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 font-semibold">{CHANNEL_LABEL[order.channel] ?? order.channel}</span>
                           <span className="font-mono text-sm font-bold text-gray-800">{order.orderNumber}</span>
                           <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${s.color}`}>{s.label}</span>
                           {order.paymentMethod === 'EFT' && (
@@ -169,7 +243,7 @@ export default function WebSiparislerPage() {
                       </div>
                       <div className="text-right shrink-0">
                         <p className="font-bold text-lg text-gray-900">{fmt(Number(order.grandTotal))}</p>
-                        <p className="text-xs text-gray-400">Kargo ücretsiz</p>
+                        {order.kind === 'web' && <p className="text-xs text-gray-400">Kargo ücretsiz</p>}
                       </div>
                     </div>
                   </div>
@@ -182,7 +256,7 @@ export default function WebSiparislerPage() {
               {selected ? (
                 <div className="bg-white rounded-xl border border-gray-200 p-5 sticky top-6">
                   <div className="flex items-center justify-between mb-4">
-                    <h2 className="font-bold text-gray-900">{selected.orderNumber}</h2>
+                    <h2 className="font-bold text-gray-900">{CHANNEL_LABEL[selected.channel] ?? ''} · {selected.orderNumber}</h2>
                     <button onClick={() => setSelected(null)} className="text-gray-400 hover:text-gray-700 text-xl leading-none">×</button>
                   </div>
 
@@ -229,11 +303,17 @@ export default function WebSiparislerPage() {
                     <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Ürünler</p>
                     {selected.items?.map((item: any) => (
                       <div key={item.id} className="flex justify-between gap-2 text-sm">
-                        <div className="min-w-0">
+                        {(item.productImage || item.imagePath) && (
+                          <img
+                            src={String(item.productImage || item.imagePath).startsWith('http') ? (item.productImage || item.imagePath) : apiFileUrl(item.productImage || item.imagePath)}
+                            alt="" className="w-10 h-10 rounded object-cover shrink-0"
+                          />
+                        )}
+                        <div className="min-w-0 flex-1">
                           <p className="font-medium text-gray-800 line-clamp-2">{item.productName}</p>
-                          <p className="text-gray-400 text-xs">x{item.quantity} · {fmt(Number(item.unitPrice))}</p>
+                          <p className="text-gray-400 text-xs">x{item.quantity}{item.unitPrice != null ? ` · ${fmt(Number(item.unitPrice))}` : ''}</p>
                         </div>
-                        <p className="font-semibold text-gray-900 shrink-0">{fmt(Number(item.lineTotal))}</p>
+                        {item.lineTotal != null && <p className="font-semibold text-gray-900 shrink-0">{fmt(Number(item.lineTotal))}</p>}
                       </div>
                     ))}
                     <div className="flex justify-between font-bold text-gray-900 pt-2 border-t border-gray-100">
@@ -251,7 +331,7 @@ export default function WebSiparislerPage() {
                         return (
                           <button
                             key={s}
-                            onClick={() => changeStatus(selected.id, s)}
+                            onClick={() => changeStatus(selected, s)}
                             className={`py-2 px-3 rounded-lg text-xs font-semibold border transition-all ${
                               selected.status === s
                                 ? info.color + ' border-current'
@@ -263,7 +343,7 @@ export default function WebSiparislerPage() {
                         )
                       })}
                       <button
-                        onClick={() => changeStatus(selected.id, 'CANCELLED')}
+                        onClick={() => changeStatus(selected, 'CANCELLED')}
                         className={`py-2 px-3 rounded-lg text-xs font-semibold border transition-all col-span-2 ${
                           selected.status === 'CANCELLED'
                             ? 'bg-red-100 text-red-800 border-red-200'
@@ -277,7 +357,7 @@ export default function WebSiparislerPage() {
 
                   {/* WhatsApp */}
                   <a
-                    href={`https://wa.me/${selected.customerPhone.replace(/\D/g, '').replace(/^0/, '90')}`}
+                    href={`https://wa.me/${String(selected.customerPhone ?? '').replace(/\D/g, '').replace(/^0/, '90')}`}
                     target="_blank"
                     rel="noreferrer"
                     className="mt-4 flex items-center justify-center gap-2 w-full py-2.5 rounded-xl bg-green-500 text-white text-sm font-semibold hover:bg-green-600 transition-colors"
