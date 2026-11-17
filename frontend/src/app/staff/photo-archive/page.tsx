@@ -1,5 +1,6 @@
 'use client';
 
+import { OrdersTabs } from '@/components/OrdersTabs';
 import { useCallback, useEffect, useState } from 'react';
 import { Search, RefreshCw, Image, Calendar, Video, Download, X, Trash2 } from 'lucide-react';
 import { AdminShell } from '@/components/AdminShell';
@@ -107,6 +108,7 @@ export default function PhotoArchivePage() {
 
   return (
     <AdminShell title="Medya Arşivi">
+      <OrdersTabs />
       <div className="p-4 space-y-4 max-w-5xl mx-auto">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <h1 className="text-xl font-bold flex items-center gap-2">

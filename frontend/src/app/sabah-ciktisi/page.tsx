@@ -1,5 +1,6 @@
 'use client';
 
+import { OrdersTabs } from '@/components/OrdersTabs';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Printer, RefreshCw, ImageOff, CheckSquare, Square, ListChecks } from 'lucide-react';
@@ -270,7 +271,8 @@ export default function SabahCiktisiPage() {
 
   return (
     <>
-    <AdminShell title="Sabah Çıktısı">
+    <AdminShell title="Çıktı Merkezi (A5)">
+      <div className="screen-only"><OrdersTabs /></div>
       <div className="screen-only mx-auto max-w-5xl space-y-4">
         <div className="rounded-xl border bg-white p-4 space-y-3">
           <div className="flex flex-wrap items-center gap-3">

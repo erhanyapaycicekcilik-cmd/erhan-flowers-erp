@@ -1,5 +1,6 @@
 'use client';
 
+import { OrdersTabs } from '@/components/OrdersTabs';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 function useCountdown(due?: string | null, status?: string) {
@@ -465,6 +466,7 @@ export default function OrdersPage() {
 
   return (
     <AdminShell title="Siparişler">
+      <OrdersTabs />
       <div className="space-y-5">
         {message && (
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
@@ -508,53 +510,19 @@ export default function OrdersPage() {
           </div>
         )}
 
-        <section className="panel p-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h2 className="text-lg font-black text-ink">Çıktı Merkezi</h2>
-              <p className="text-sm text-slate-500">Seçili siparişlerden tek ekranda A5 form, kargo etiketi veya A4 sipariş formu alın.</p>
-            </div>
-            <div className="text-sm font-semibold text-slate-600">{selected.length} sipariş seçildi</div>
+        <section className="panel flex flex-wrap items-center gap-3 p-4">
+          <div className="min-w-[220px] flex-1">
+            <h2 className="text-lg font-black text-ink">Çıktılar tek yerde</h2>
+            <p className="text-sm text-slate-500">Pazaryeri, web, telefon, WhatsApp ve dükkan siparişlerinin hepsi Çıktı Merkezi&apos;nden A5 olarak basılır.</p>
           </div>
-          <div className="mt-3 flex items-center gap-2 text-sm">
-            <span className="font-semibold text-slate-600">Çıktı Sıralaması:</span>
-            <button
-              type="button"
-              onClick={() => setPrintSort('number')}
-              className={`rounded-full px-3 py-1 text-xs font-bold border transition ${printSort === 'number' ? 'bg-brand text-white border-brand' : 'bg-white text-slate-600 border-slate-300 hover:border-brand'}`}
-            >
-              Sipariş Numarası
-            </button>
-            <button
-              type="button"
-              onClick={() => setPrintSort('delivery')}
-              className={`rounded-full px-3 py-1 text-xs font-bold border transition ${printSort === 'delivery' ? 'bg-brand text-white border-brand' : 'bg-white text-slate-600 border-slate-300 hover:border-brand'}`}
-            >
-              Kargoya Verme Saati
-            </button>
-          </div>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <button className="btn btn-primary" type="button" onClick={() => openPrint(selected, 'delivery')} disabled={!selected.length}>
-              <Printer size={16} />
-              Seçili A5 Çıktı
-            </button>
-            <button className="btn btn-secondary" type="button" onClick={() => openPrint(selected, 'label')} disabled={!selected.length}>
-              <Tag size={16} />
-              Seçili Kargo Etiketi
-            </button>
-            <button className="btn btn-secondary" type="button" onClick={() => openPrint(selected, 'order')} disabled={!selected.length}>
-              <FileText size={16} />
-              Seçili A4 Form
-            </button>
-            <button className="btn btn-secondary" type="button" onClick={() => exportExcel(selectedOrders.length ? selectedOrders : tabOrders)} disabled={!tabOrders.length}>
-              <FileSpreadsheet size={16} />
-              Listeyi Excel İndir
-            </button>
-            <Link className="btn btn-primary bg-emerald-600 hover:bg-emerald-700" href="/adres-ciktisi">
-              <Tag size={16} />
-              Elle Adres Çıktısı
-            </Link>
-          </div>
+          <Link className="btn btn-primary bg-emerald-600 hover:bg-emerald-700" href="/sabah-ciktisi">
+            <Printer size={16} />
+            Çıktı Merkezi (A5)
+          </Link>
+          <button className="btn btn-secondary" type="button" onClick={() => exportExcel(selectedOrders.length ? selectedOrders : tabOrders)} disabled={!tabOrders.length}>
+            <FileSpreadsheet size={16} />
+            Listeyi Excel İndir
+          </button>
         </section>
 
         <section className="panel overflow-hidden">
