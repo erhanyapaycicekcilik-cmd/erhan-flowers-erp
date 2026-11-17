@@ -2335,6 +2335,9 @@ model MarketplaceOrder {
   items                MarketplaceOrderItem[]
 
   returnNote   String?             @map("return_note") @db.Text
+  /// İade süreci (ERP içi): WAITING | REJECT_REQUESTED | REJECTED | ACCEPTED | CLOSED
+  returnStatus String?             @map("return_status")
+  returnUpdatedAt DateTime?        @map("return_updated_at")
   returnVideos ReturnVideo[]
 
   @@unique([platform, externalOrderId])
