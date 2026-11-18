@@ -53,6 +53,15 @@ export class IntegrationsController {
     return this.integrations.testConnection(platform);
   }
 
+  // Personel ekranı: tüm platformlardan hemen sipariş çek (personel de kullanabilir)
+  @Post('orders/sync-all')
+  async syncAllOrders(@Req() request: AuthenticatedRequest) {
+    HepsiburadaAdapter.clearImageCache();
+    HepsiburadaAdapter.lastImageDiag = '';
+    const out = await this.integrations.syncAllForStaff(request.user!.id);
+    return { ...out, imageDiag: HepsiburadaAdapter.lastImageDiag || null };
+  }
+
   @Post('orders/:platform/sync')
   @UseGuards(OwnerGuard)
   syncOrders(@Param('platform') platform: string, @Req() request: AuthenticatedRequest) {

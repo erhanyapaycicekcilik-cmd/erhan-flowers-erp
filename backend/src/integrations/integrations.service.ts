@@ -104,6 +104,38 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  private staffSyncPromise: Promise<Array<{ label: string; ok: boolean; imported: number; message?: string }>> | null = null;
+  private staffSyncAt = 0;
+
+  /** Personel ekranı "Senkronize Et": tüm platformlardan (Erhan + Flora) siparişleri hemen çeker. Aynı anda tek çalışır. */
+  async syncAllForStaff(userId: number) {
+    if (this.staffSyncPromise) return { results: await this.staffSyncPromise, reused: true };
+    if (Date.now() - this.staffSyncAt < 20_000) return { results: [], reused: true, message: 'Az önce senkronize edildi' };
+    const jobs: Array<{ label: string; platform: string; company: string }> = [
+      ...AUTO_SYNC_PLATFORMS.map((p) => ({ label: this.displayName(p), platform: p, company: 'ERHAN' })),
+      { label: 'Trendyol (Flora)', platform: 'TRENDYOL', company: 'FLORA' },
+      { label: 'n11 (Flora)', platform: 'N11', company: 'FLORA' },
+    ];
+    this.staffSyncPromise = (async () => {
+      const results: Array<{ label: string; ok: boolean; imported: number; message?: string }> = [];
+      for (const job of jobs) {
+        try {
+          const r = await this.syncOrders(job.platform, userId, job.company) as { ok?: boolean; imported?: number; message?: string };
+          results.push({ label: job.label, ok: r.ok !== false, imported: Number(r.imported ?? 0), message: r.ok === false ? r.message : undefined });
+        } catch (error) {
+          results.push({ label: job.label, ok: false, imported: 0, message: this.errorMessage(error) });
+        }
+      }
+      return results;
+    })();
+    try {
+      return { results: await this.staffSyncPromise, reused: false };
+    } finally {
+      this.staffSyncPromise = null;
+      this.staffSyncAt = Date.now();
+    }
+  }
+
   async listConnections() {
     await this.ensureConnectionRows();
     return this.prisma.$queryRaw<Array<Record<string, unknown>>>`
