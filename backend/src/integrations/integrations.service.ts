@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { Cron } from '@nestjs/schedule';
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'crypto';
 import * as XLSX from 'xlsx';
 import { Prisma } from '../generated/prisma-client';
@@ -135,6 +136,154 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
     } finally {
       this.staffSyncPromise = null;
       this.staffSyncAt = Date.now();
+    }
+  }
+
+  private claimSyncRunning = false;
+  private claimSyncAt = 0;
+
+  /** Trendyol durum adı → Türkçe */
+  private claimStatusLabel(status: string) {
+    return ({
+      Created: 'Oluşturuldu', WaitingInAction: 'Aksiyon bekliyor', Accepted: 'Kabul edildi', Rejected: 'Reddedildi',
+      Cancelled: 'İptal edildi', Unresolved: 'İhtilaflı', InAnalysis: 'Analizde', WaitingFraudCheck: 'Kontrolde',
+    } as Record<string, string>)[status] ?? status;
+  }
+
+  /**
+   * Trendyol (Erhan + Flora) iade taleplerini çekip marketplace_orders'a yazar → İadeler ekranı.
+   * Sipariş ERP'de varsa ona işlenir (videosu aynı kayıtta), yoksa iade için yeni kayıt açılır.
+   */
+  async syncReturnClaims(days = 30) {
+    if (this.claimSyncRunning) return { ok: true, results: [], message: 'İade senkronu zaten çalışıyor' };
+    this.claimSyncRunning = true;
+    const results: Array<{ store: string; ok: boolean; claims: number; created: number; updated: number; message?: string }> = [];
+    try {
+      const end = Date.now();
+      const start = end - Math.min(Math.max(days, 1), 90) * 86400000;
+      for (const company of ['ERHAN', 'FLORA']) {
+        const store = company === 'ERHAN' ? 'Trendyol' : 'Trendyol (Flora)';
+        try {
+          const adapter = (company === 'ERHAN' ? await this.adapter('TRENDYOL') : await this.storeAdapter('TRENDYOL', company)) as unknown as {
+            fetchClaims?: (s: number, e: number) => Promise<Array<Record<string, any>>>;
+          };
+          if (typeof adapter.fetchClaims !== 'function') continue;
+          const claims = await adapter.fetchClaims(start, end);
+          let created = 0;
+          let updated = 0;
+          for (const claim of claims) {
+            const r = await this.upsertTrendyolClaim(claim, company);
+            if (r === 'created') created += 1; else if (r === 'updated') updated += 1;
+          }
+          results.push({ store, ok: true, claims: claims.length, created, updated });
+        } catch (error) {
+          const message = this.errorMessage(error);
+          // Mağaza bilgisi girilmemişse hata sayma
+          if (/eksik|missing/i.test(message)) continue;
+          results.push({ store, ok: false, claims: 0, created: 0, updated: 0, message });
+        }
+      }
+    } finally {
+      this.claimSyncRunning = false;
+      this.claimSyncAt = Date.now();
+    }
+    return { ok: results.every((r) => r.ok), results };
+  }
+
+  private async upsertTrendyolClaim(claim: Record<string, any>, company: string): Promise<'created' | 'updated' | 'skipped'> {
+    const claimId = String(claim.id ?? claim.claimId ?? '');
+    const orderNumber = String(claim.orderNumber ?? '');
+    if (!claimId || !orderNumber) return 'skipped';
+    const isFlora = company !== 'ERHAN';
+    const lines = Array.isArray(claim.items) ? claim.items as Array<Record<string, any>> : [];
+    const claimItems = lines.flatMap((l) => (Array.isArray(l.claimItems) ? l.claimItems : []) as Array<Record<string, any>>);
+    const statuses = Array.from(new Set(claimItems.map((ci) => String(ci.claimItemStatus?.name ?? '')).filter(Boolean)));
+    const reasons = Array.from(new Set(claimItems.map((ci) => {
+      const reason = String(ci.customerClaimItemReason?.name ?? ci.trendyolClaimItemReason?.name ?? '');
+      const note = String(ci.customerNote ?? ci.note ?? '').trim();
+      return [reason, note].filter(Boolean).join(': ');
+    }).filter(Boolean)));
+    const claimStatus = statuses.map((x) => this.claimStatusLabel(x)).join(', ') || null;
+    const claimReason = reasons.join(' | ') || null;
+    const claimDate = claim.claimDate ? new Date(Number(claim.claimDate) || String(claim.claimDate)) : null;
+    const customerName = [claim.customerFirstName, claim.customerLastName].filter(Boolean).join(' ') || null;
+    const claimData = {
+      claimId,
+      claimStatus,
+      claimReason,
+      claimDate: claimDate && !Number.isNaN(claimDate.getTime()) ? claimDate : null,
+    };
+
+    // ERP'deki sipariş: Flora kayıtları FLORA_ önekli
+    const existing = await this.prisma.marketplaceOrder.findFirst({
+      where: {
+        platform: 'TRENDYOL',
+        OR: [{ claimId }, { orderNumber }],
+        externalOrderId: isFlora ? { startsWith: 'FLORA_' } : { not: { startsWith: 'FLORA_' } },
+      },
+      orderBy: { id: 'desc' },
+      select: { id: true, returnStatus: true },
+    });
+    if (existing) {
+      await this.prisma.marketplaceOrder.update({
+        where: { id: existing.id },
+        data: {
+          ...claimData,
+          ...(existing.returnStatus ? {} : { returnStatus: 'WAITING', returnUpdatedAt: new Date() }),
+          ...(claim.cargoTrackingNumber ? { cargoTrackingNumber: String(claim.cargoTrackingNumber) } : {}),
+        },
+      });
+      return 'updated';
+    }
+
+    const total = lines.reduce((sum, l) => sum + Number(l.orderLine?.price ?? 0) * Math.max(1, (Array.isArray(l.claimItems) ? l.claimItems.length : 1)), 0);
+    await this.prisma.marketplaceOrder.create({
+      data: {
+        platform: 'TRENDYOL',
+        externalOrderId: `${isFlora ? 'FLORA_' : ''}CLAIM_${claimId}`,
+        orderNumber,
+        status: 'Returned',
+        customerName,
+        totalAmount: total,
+        currency: 'TRY',
+        orderDate: claim.orderDate ? new Date(Number(claim.orderDate) || String(claim.orderDate)) : null,
+        cargoTrackingNumber: claim.cargoTrackingNumber ? String(claim.cargoTrackingNumber) : null,
+        cargoProvider: claim.cargoProviderName ? String(claim.cargoProviderName) : null,
+        rawPayload: claim as object,
+        stockDeducted: true, // iade kaydı: stok düşümü yapılmaz
+        returnStatus: 'WAITING',
+        returnUpdatedAt: new Date(),
+        ...claimData,
+        items: {
+          create: lines.map((l) => {
+            const ol = (l.orderLine ?? {}) as Record<string, any>;
+            const qty = Math.max(1, Array.isArray(l.claimItems) ? l.claimItems.length : 1);
+            const price = Number(ol.price ?? 0);
+            return {
+              productName: String(ol.productName ?? 'Trendyol ürünü'),
+              sku: ol.merchantSku ? String(ol.merchantSku) : null,
+              barcode: ol.barcode ? String(ol.barcode) : null,
+              quantity: qty,
+              unitPrice: price,
+              totalPrice: price * qty,
+            };
+          }),
+        },
+      },
+    });
+    return 'created';
+  }
+
+  /** 30 dakikada bir (her saatin 7. ve 37. dakikası) son 14 günün iadelerini çek */
+  @Cron('7,37 * * * *')
+  async autoSyncReturnClaims() {
+    if (Date.now() - this.claimSyncAt < 10 * 60 * 1000) return;
+    try {
+      const r = await this.syncReturnClaims(14);
+      const failed = r.results.filter((x) => !x.ok);
+      if (failed.length) this.logger.warn(`İade senkronu hatası: ${failed.map((f) => `${f.store}: ${f.message}`).join(' | ')}`);
+    } catch (error) {
+      this.logger.warn(`İade senkronu başarısız: ${this.errorMessage(error)}`);
     }
   }
 

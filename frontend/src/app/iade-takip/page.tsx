@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Camera, Download, ExternalLink, Search, Trash2, Upload, Video } from 'lucide-react'
+import { Camera, Download, ExternalLink, RefreshCw, Search, Trash2, Upload, Video } from 'lucide-react'
 import { AdminShell } from '@/components/AdminShell'
 import { OrdersTabs } from '@/components/OrdersTabs'
 import { api, apiBaseUrl, apiFileUrl, getStoredToken } from '@/lib/api'
@@ -28,6 +28,10 @@ type ReturnOrder = {
   returnNote: string | null
   returnStatus: string | null
   returnUpdatedAt: string | null
+  claimId: string | null
+  claimStatus: string | null
+  claimReason: string | null
+  claimDate: string | null
   items: Item[]
   returnVideos: ReturnVideo[]
 }
@@ -80,6 +84,7 @@ export default function IadeTakipPage() {
   const [videoNote, setVideoNote] = useState('')
   const [progress, setProgress] = useState<number | null>(null)
   const [msg, setMsg] = useState('')
+  const [syncing, setSyncing] = useState(false)
   const cameraRef = useRef<HTMLInputElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
@@ -98,6 +103,23 @@ export default function IadeTakipPage() {
   }, [])
 
   useEffect(() => { void load() }, [load])
+
+  // Platformlardan (Trendyol Erhan + Flora) iade taleplerini çek
+  async function syncReturns() {
+    setSyncing(true)
+    setMsg('')
+    try {
+      const r = await api<{ results: Array<{ store: string; ok: boolean; claims: number; created: number; updated: number; message?: string }>; message?: string }>('/returns/sync?days=30', { method: 'POST' })
+      const parts = (r.results ?? []).map((x) => (x.ok ? `${x.store}: ${x.claims} iade (${x.created} yeni)` : `${x.store}: hata (${(x.message ?? '').slice(0, 80)})`))
+      setMsg(r.message ?? (parts.length ? parts.join(' · ') : 'Bağlı mağaza bulunamadı'))
+      await load('')
+      setQuery('')
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : 'İadeler çekilemedi')
+    } finally {
+      setSyncing(false)
+    }
+  }
 
   const selected = orders.find((o) => o.id === selectedId) ?? null
   const replace = (o: ReturnOrder) => setOrders((prev) => prev.map((x) => (x.id === o.id ? o : x)))
@@ -158,9 +180,12 @@ export default function IadeTakipPage() {
             <div>
               <h1 className="text-xl font-bold text-slate-900">İade Takip</h1>
               <p className="text-sm text-slate-500">
-                İade gelen paketin siparişini bulun, açılış videosunu çekin. Platform (Trendyol, Hepsiburada, n11) iade reddi için video istediğinde buradan indirip yükleyin.
+                Trendyol (Erhan + Flora) iadeleri 30 dakikada bir otomatik çekilir. İade gelen paketin videosunu çekin; platform iade reddi için video istediğinde buradan indirip yükleyin. Hepsiburada / n11 iadesi için siparişi aratın.
               </p>
             </div>
+            <button onClick={() => void syncReturns()} disabled={syncing} className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60">
+              <RefreshCw size={16} className={syncing ? 'animate-spin' : ''} /> {syncing ? 'İadeler çekiliyor…' : 'İadeleri Çek'}
+            </button>
           </div>
           <form
             onSubmit={(e) => { e.preventDefault(); void load(query.trim()) }}
@@ -207,12 +232,15 @@ export default function IadeTakipPage() {
                 >
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-xs font-bold uppercase text-orange-600">{platformLabel(o)}</span>
-                    <span className="text-xs text-slate-400">{fmtDate(o.orderDate ?? o.updatedAt)}</span>
+                    <span className="text-xs text-slate-400">{o.claimDate ? `İade: ${fmtDate(o.claimDate)}` : fmtDate(o.orderDate ?? o.updatedAt)}</span>
                   </div>
                   <div className="mt-1 truncate text-sm font-semibold">{o.customerName ?? '—'}</div>
                   <div className="text-xs text-slate-500">#{o.orderNumber}</div>
+                  {o.items[0] && <div className="truncate text-xs text-slate-600">{o.items.map((i) => i.productName).join(', ')}</div>}
+                  {o.claimReason && <div className="truncate text-xs text-red-700">Sebep: {o.claimReason}</div>}
                   <div className="mt-1 flex flex-wrap items-center gap-1.5">
                     <span className="text-sm font-bold">{fmtAmount(o.totalAmount)}</span>
+                    {o.claimStatus && <span className="rounded border border-purple-300 bg-purple-50 px-1.5 py-0.5 text-[11px] font-semibold text-purple-800">{o.claimStatus}</span>}
                     {p && <span className={`rounded border px-1.5 py-0.5 text-[11px] font-semibold ${p.color}`}>{p.label}</span>}
                     {o.returnVideos.length > 0 && <span className="rounded bg-green-100 px-1.5 py-0.5 text-[11px] font-semibold text-green-700">🎥 {o.returnVideos.length}</span>}
                   </div>
@@ -230,12 +258,13 @@ export default function IadeTakipPage() {
                     <span className="rounded bg-orange-100 px-2 py-0.5 text-xs font-bold uppercase text-orange-700">{platformLabel(selected)}</span>
                     <span className="text-lg font-bold">#{selected.orderNumber}</span>
                     <span className="rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-600">Platform durumu: {selected.status}</span>
+                    {selected.claimStatus && <span className="rounded bg-purple-100 px-2 py-0.5 text-xs font-semibold text-purple-800">İade talebi: {selected.claimStatus}</span>}
                   </div>
                   <div className="mt-1 text-sm text-slate-600">
                     {selected.customerName ?? '—'} · Sipariş: {fmtDate(selected.orderDate)} · Tutar: {fmtAmount(selected.totalAmount)}
                   </div>
                   <div className="text-xs text-slate-500">
-                    Paket no: {selected.externalOrderId.replace(/^FLORA_/, '')}
+                    Paket no: {selected.externalOrderId.replace(/^FLORA_/, '').replace(/^CLAIM_/, 'iade talebi ')}
                     {selected.cargoTrackingNumber ? ` · Kargo: ${[selected.cargoProvider, selected.cargoTrackingNumber].filter(Boolean).join(' ')}` : ''}
                   </div>
                 </div>
@@ -245,6 +274,13 @@ export default function IadeTakipPage() {
                   </a>
                 )}
               </div>
+
+              {selected.claimReason && (
+                <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+                  <b>Müşterinin iade sebebi:</b> {selected.claimReason}
+                  {selected.claimDate && <span className="ml-1 text-xs text-red-600">· {new Date(selected.claimDate).toLocaleString('tr-TR')}</span>}
+                </div>
+              )}
 
               {/* Ürünler */}
               <div className="space-y-2">

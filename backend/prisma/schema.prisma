@@ -2338,11 +2338,17 @@ model MarketplaceOrder {
   /// İade süreci (ERP içi): WAITING | REJECT_REQUESTED | REJECTED | ACCEPTED | CLOSED
   returnStatus String?             @map("return_status")
   returnUpdatedAt DateTime?        @map("return_updated_at")
+  /// Platform iade talebi (Trendyol claims): talep id, durum, sebep, tarih
+  claimId      String?             @map("claim_id")
+  claimStatus  String?             @map("claim_status")
+  claimReason  String?             @map("claim_reason") @db.Text
+  claimDate    DateTime?           @map("claim_date")
   returnVideos ReturnVideo[]
 
   @@unique([platform, externalOrderId])
   @@index([platform, orderDate])
   @@index([platform, status])
+  @@index([claimId])
   @@map("marketplace_orders")
 }
 
