@@ -210,16 +210,20 @@ export default function StaffOrdersPage() {
   const [toastMsg, setToastMsg] = useState('');
   const readySectionRef = useRef<HTMLDivElement>(null);
 
-  async function syncHB() {
+  // Tüm platformlardan (Trendyol Erhan/Flora, Hepsiburada, n11…) siparişleri hemen çek
+  async function syncAll() {
     setSyncing(true);
     setSyncMsg('');
     try {
-      const result = await api<{ ok: boolean; newOrders?: number; imported?: number; message?: string; imageDiag?: string }>('/integrations/hepsiburada/sync-orders', { method: 'POST' });
-      setSyncMsg(`Tamamlandı: ${result.newOrders ?? result.imported ?? 0} sipariş güncellendi`);
+      const result = await api<{ results: Array<{ label: string; ok: boolean; imported: number; message?: string }>; message?: string; imageDiag?: string | null }>('/integrations/orders/sync-all', { method: 'POST' });
+      const rows = result.results ?? [];
+      const imported = rows.reduce((sum, r) => sum + (r.imported || 0), 0);
+      const failed = rows.filter((r) => !r.ok).map((r) => r.label);
+      setSyncMsg(result.message ?? `Tamamlandı: ${imported} yeni sipariş${failed.length ? ` · hata: ${failed.join(', ')}` : ''}`);
       setImageDiag(result.imageDiag ?? '');
       await load();
     } catch {
-      setSyncMsg('Hata oluştu');
+      setSyncMsg('Senkronizasyon başarısız, tekrar deneyin');
     } finally {
       setSyncing(false);
     }
@@ -348,13 +352,16 @@ export default function StaffOrdersPage() {
           <h1 className="text-xl font-bold">Siparişler</h1>
           {imageDiag && (
             <div className="w-full order-last rounded-lg border border-slate-200 bg-slate-50 p-2 text-xs text-slate-600 break-words">
-              <b>HB görsel kontrolü:</b> {imageDiag}
+              <b>Hepsiburada görsel kontrolü:</b> {imageDiag}
             </div>
           )}
           <div className="flex gap-2 items-center flex-wrap">
             {syncMsg && <span className="text-xs text-emerald-600 font-semibold">{syncMsg}</span>}
-            <button onClick={() => void syncHB()} disabled={syncing} className="btn btn-secondary text-sm">
-              <RefreshCw size={14} className={syncing ? 'animate-spin' : ''} /> {syncing ? 'Senkronize ediliyor...' : 'HB Senkronize Et'}
+            <button onClick={() => void load()} disabled={loading} className="btn btn-secondary text-sm">
+              <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> Yenile
+            </button>
+            <button onClick={() => void syncAll()} disabled={syncing} className="btn btn-primary text-sm" title="Tüm platformlardan yeni siparişleri hemen çek">
+              <RefreshCw size={14} className={syncing ? 'animate-spin' : ''} /> {syncing ? 'Senkronize ediliyor...' : 'Senkronize Et'}
             </button>
             <a href="/sabah-ciktisi" className="btn btn-primary text-sm">
               <Printer size={15} /> Sabah Çıktısı (A5)
