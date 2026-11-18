@@ -58,6 +58,22 @@ function platformLabel(o: ReturnOrder) {
   const name = base === 'TRENDYOL' ? 'Trendyol' : base === 'N11' ? 'n11' : base === 'HEPSIBURADA' ? 'Hepsiburada' : base === 'AMAZON' ? 'Amazon' : base
   return flora ? `${name} · Flora` : name
 }
+/** Üstteki platform sekmeleri — her biri ayrı ekran gibi */
+const PLATFORM_TABS: { key: string; label: string; color: string; auto: boolean }[] = [
+  { key: 'ALL', label: 'Tümü', color: 'bg-slate-900 text-white', auto: true },
+  { key: 'TRENDYOL', label: 'Trendyol', color: 'bg-orange-500 text-white', auto: true },
+  { key: 'TRENDYOL_FLORA', label: 'Trendyol (Flora)', color: 'bg-pink-500 text-white', auto: true },
+  { key: 'HEPSIBURADA', label: 'Hepsiburada', color: 'bg-orange-600 text-white', auto: true },
+  { key: 'N11', label: 'n11', color: 'bg-purple-600 text-white', auto: false },
+  { key: 'OTHER', label: 'Diğer', color: 'bg-slate-600 text-white', auto: false },
+]
+function platformKey(o: ReturnOrder) {
+  const flora = String(o.externalOrderId ?? '').startsWith('FLORA_') || o.platform.includes('FLORA')
+  const base = o.platform.replace('_FLORA', '')
+  if (base === 'TRENDYOL') return flora ? 'TRENDYOL_FLORA' : 'TRENDYOL'
+  if (base === 'HEPSIBURADA' || base === 'N11') return base
+  return 'OTHER'
+}
 const panelOf = (o: ReturnOrder) => PANEL[o.platform.replace('_FLORA', '')]
 const fmtDate = (s: string | null) => (s ? new Date(s).toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—')
 const fmtAmount = (s: string) => Number(s).toLocaleString('tr-TR', { style: 'currency', currency: 'TRY' })
@@ -85,6 +101,7 @@ export default function IadeTakipPage() {
   const [progress, setProgress] = useState<number | null>(null)
   const [msg, setMsg] = useState('')
   const [syncing, setSyncing] = useState(false)
+  const [tab, setTab] = useState('ALL')
   const cameraRef = useRef<HTMLInputElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
@@ -121,7 +138,13 @@ export default function IadeTakipPage() {
     }
   }
 
-  const selected = orders.find((o) => o.id === selectedId) ?? null
+  const tabCounts = PLATFORM_TABS.reduce<Record<string, number>>((acc, t) => {
+    acc[t.key] = t.key === 'ALL' ? orders.length : orders.filter((o) => platformKey(o) === t.key).length
+    return acc
+  }, {})
+  const visible = tab === 'ALL' ? orders : orders.filter((o) => platformKey(o) === tab)
+  const activeTab = PLATFORM_TABS.find((t) => t.key === tab) ?? PLATFORM_TABS[0]
+  const selected = visible.find((o) => o.id === selectedId) ?? null
   const replace = (o: ReturnOrder) => setOrders((prev) => prev.map((x) => (x.id === o.id ? o : x)))
 
   async function saveNote(order: ReturnOrder) {
@@ -180,7 +203,7 @@ export default function IadeTakipPage() {
             <div>
               <h1 className="text-xl font-bold text-slate-900">İade Takip</h1>
               <p className="text-sm text-slate-500">
-                Trendyol (Erhan + Flora) iadeleri 30 dakikada bir otomatik çekilir. İade gelen paketin videosunu çekin; platform iade reddi için video istediğinde buradan indirip yükleyin. Hepsiburada / n11 iadesi için siparişi aratın.
+                Trendyol (Erhan + Flora) ve Hepsiburada iadeleri 30 dakikada bir otomatik çekilir. İade gelen paketin videosunu çekin; platform iade reddi için video istediğinde buradan indirip yükleyin. n11 iadesi için siparişi aratın.
               </p>
             </div>
             <button onClick={() => void syncReturns()} disabled={syncing} className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60">
@@ -188,7 +211,7 @@ export default function IadeTakipPage() {
             </button>
           </div>
           <form
-            onSubmit={(e) => { e.preventDefault(); void load(query.trim()) }}
+            onSubmit={(e) => { e.preventDefault(); setTab('ALL'); void load(query.trim()) }}
             className="flex gap-2"
           >
             <div className="relative flex-1">
@@ -210,19 +233,40 @@ export default function IadeTakipPage() {
           )}
         </div>
 
+        {/* Platform sekmeleri — her platform ayrı ekran */}
+        <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+          {PLATFORM_TABS.filter((t) => t.key === 'ALL' || t.key === 'TRENDYOL' || t.key === 'TRENDYOL_FLORA' || t.key === 'HEPSIBURADA' || t.key === 'N11' || tabCounts[t.key] > 0).map((t) => (
+            <button
+              key={t.key}
+              onClick={() => { setTab(t.key); setSelectedId(null) }}
+              className={`flex shrink-0 items-center gap-2 rounded-xl border-2 px-4 py-3 text-sm font-bold transition ${
+                tab === t.key ? `${t.color} border-transparent shadow` : 'border-slate-200 bg-white text-slate-700 hover:border-slate-400'
+              }`}
+            >
+              {t.label}
+              <span className={`rounded-full px-2 py-0.5 text-xs font-black ${tab === t.key ? 'bg-white/25' : 'bg-slate-100 text-slate-600'}`}>{tabCounts[t.key] ?? 0}</span>
+            </button>
+          ))}
+        </div>
+        {!activeTab.auto && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+            {activeTab.label} iadeleri otomatik çekilmiyor (platformun iade servisi doğrulanamadı). İade gelen paketin siparişini yukarıdan aratıp videosunu ekleyin; platform panelinden takip edin.
+          </div>
+        )}
+
         <div className="grid gap-4 lg:grid-cols-[340px_1fr]">
           {/* Liste */}
           <div className="space-y-2 lg:max-h-[calc(100vh-260px)] lg:overflow-y-auto">
             <div className="px-1 text-xs font-semibold uppercase text-slate-500">
-              {searched ? `"${searched}" için ${orders.length} sipariş` : `İade sürecindekiler · ${orders.length}`}
+              {searched ? `"${searched}" için ${visible.length} sipariş` : `${activeTab.label} iadeleri · ${visible.length}`}
             </div>
             {loading ? (
               <div className="py-10 text-center text-slate-400">Yükleniyor…</div>
-            ) : orders.length === 0 ? (
+            ) : visible.length === 0 ? (
               <div className="rounded-xl border border-dashed bg-white p-6 text-center text-sm text-slate-500">
-                {searched ? 'Sipariş bulunamadı. Sipariş/paket numarasını ya da müşteri adını deneyin.' : 'Henüz iade yok. Gelen iade paketinin siparişini yukarıdan aratın.'}
+                {searched ? 'Sipariş bulunamadı. Sipariş/paket numarasını ya da müşteri adını deneyin.' : `${activeTab.key === 'ALL' ? '' : `${activeTab.label}: `}iade yok. "İadeleri Çek" ile güncelleyin ya da gelen paketin siparişini aratın.`}
               </div>
-            ) : orders.map((o) => {
+            ) : visible.map((o) => {
               const p = processLabel(o.returnStatus)
               return (
                 <button

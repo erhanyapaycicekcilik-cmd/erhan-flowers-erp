@@ -151,7 +151,7 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Trendyol (Erhan + Flora) iade taleplerini çekip marketplace_orders'a yazar → İadeler ekranı.
+   * Hepsiburada + Trendyol (Erhan + Flora) iade taleplerini çekip marketplace_orders'a yazar → İadeler ekranı.
    * Sipariş ERP'de varsa ona işlenir (videosu aynı kayıtta), yoksa iade için yeni kayıt açılır.
    */
   async syncReturnClaims(days = 30) {
@@ -161,6 +161,25 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
     try {
       const end = Date.now();
       const start = end - Math.min(Math.max(days, 1), 90) * 86400000;
+      // Hepsiburada (Erhan)
+      try {
+        const hb = (await this.adapter('HEPSIBURADA')) as unknown as { fetchClaims?: () => Promise<Array<Record<string, unknown>>> };
+        if (typeof hb.fetchClaims === 'function') {
+          const claims = await hb.fetchClaims();
+          let created = 0;
+          let updated = 0;
+          for (const claim of claims) {
+            const r = await this.upsertHepsiburadaClaim(claim);
+            if (r === 'created') created += 1; else if (r === 'updated') updated += 1;
+          }
+          const sample = claims.length && !created && !updated ? ` (tanınmayan alanlar: ${Object.keys(claims[0]).slice(0, 15).join(',')})` : '';
+          results.push({ store: 'Hepsiburada', ok: true, claims: claims.length, created, updated, ...(sample ? { message: sample } : {}) });
+        }
+      } catch (error) {
+        const message = this.errorMessage(error);
+        if (!/eksik|missing/i.test(message)) results.push({ store: 'Hepsiburada', ok: false, claims: 0, created: 0, updated: 0, message });
+      }
+
       for (const company of ['ERHAN', 'FLORA']) {
         const store = company === 'ERHAN' ? 'Trendyol' : 'Trendyol (Flora)';
         try {
@@ -188,6 +207,96 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
       this.claimSyncAt = Date.now();
     }
     return { ok: results.every((r) => r.ok), results };
+  }
+
+  /** HB talep durumu → Türkçe */
+  private hbClaimStatusLabel(status: string) {
+    return ({
+      NewRequest: 'Yeni talep', Accepted: 'Kabul edildi', AwaitingAction: 'Aksiyon bekliyor', InDispute: 'İhtilaflı',
+      Rejected: 'Reddedildi', Refunded: 'Para iadesi yapıldı', Cancelled: 'İptal edildi', AwaitingPreApproval: 'Ön onay bekliyor',
+    } as Record<string, string>)[status] ?? status;
+  }
+
+  /** İç içe nesnede ilk dolu alan (ör. 'orderNumber', 'order.orderNumber') */
+  private pickField(obj: Record<string, any>, keys: string[]): string {
+    for (const key of keys) {
+      const v = key.split('.').reduce<any>((acc, k) => (acc && typeof acc === 'object' ? acc[k] : undefined), obj);
+      if (v !== undefined && v !== null && v !== '' && typeof v !== 'object') return String(v);
+      if (v && typeof v === 'object' && !Array.isArray(v) && (v.name || v.value || v.description)) return String(v.name ?? v.value ?? v.description);
+    }
+    return '';
+  }
+
+  private async upsertHepsiburadaClaim(claim: Record<string, any>): Promise<'created' | 'updated' | 'skipped'> {
+    const claimId = this.pickField(claim, ['claimNumber', 'number', 'claimId', 'id']);
+    const orderNumber = this.pickField(claim, ['orderNumber', 'order.orderNumber', 'orderId', 'packageNumber', 'order.number']);
+    if (!claimId || !orderNumber) return 'skipped';
+    const lineArr = (['lineItems', 'items', 'claimLines', 'claimItems', 'lines', 'products'].map((k) => claim[k]).find(Array.isArray) ?? []) as Array<Record<string, any>>;
+    const lines = lineArr.length ? lineArr : [claim];
+    const statusRaw = this.pickField(claim, ['status', 'claimStatus', 'state']);
+    const reasons = Array.from(new Set([claim, ...lineArr].map((x) => {
+      const reason = this.pickField(x, ['reason', 'claimReason', 'reasonName', 'returnReason', 'claimType', 'type']);
+      const note = this.pickField(x, ['explanation', 'customerNote', 'customerExplanation', 'description', 'note']);
+      return [reason, note].filter(Boolean).join(': ');
+    }).filter(Boolean)));
+    const dateRaw = this.pickField(claim, ['claimDate', 'createdAt', 'createDate', 'requestDate', 'date']);
+    const claimDate = dateRaw ? new Date(/^\d{10,}$/.test(dateRaw) ? Number(dateRaw) : dateRaw) : null;
+    const claimData = {
+      claimId,
+      claimStatus: statusRaw ? this.hbClaimStatusLabel(statusRaw) : null,
+      claimReason: reasons.join(' | ') || null,
+      claimDate: claimDate && !Number.isNaN(claimDate.getTime()) ? claimDate : null,
+    };
+    const cargoTracking = this.pickField(claim, ['cargoTrackingNumber', 'trackingNumber', 'returnTrackingNumber', 'cargo.trackingNumber']);
+
+    const existing = await this.prisma.marketplaceOrder.findFirst({
+      where: { platform: 'HEPSIBURADA', OR: [{ claimId }, { orderNumber }, { externalOrderId: orderNumber }] },
+      orderBy: { id: 'desc' },
+      select: { id: true, returnStatus: true },
+    });
+    if (existing) {
+      await this.prisma.marketplaceOrder.update({
+        where: { id: existing.id },
+        data: {
+          ...claimData,
+          ...(existing.returnStatus ? {} : { returnStatus: 'WAITING', returnUpdatedAt: new Date() }),
+          ...(cargoTracking ? { cargoTrackingNumber: cargoTracking } : {}),
+        },
+      });
+      return 'updated';
+    }
+    const items = lines.map((l) => {
+      const qty = Math.max(1, Number(this.pickField(l, ['quantity', 'qty', 'count']) || 1));
+      const price = Number(this.pickField(l, ['price.amount', 'unitPrice.amount', 'price', 'unitPrice', 'amount']) || 0);
+      return {
+        productName: this.pickField(l, ['productName', 'name', 'product.name', 'title']) || 'Hepsiburada ürünü',
+        sku: this.pickField(l, ['merchantSku', 'merchantSKU', 'product.merchantSku']) || null,
+        barcode: this.pickField(l, ['barcode', 'merchantSku', 'merchantSKU']) || null,
+        quantity: qty,
+        unitPrice: price,
+        totalPrice: price * qty,
+        productImageUrl: (this.pickField(l, ['productImageUrlFormat', 'imageUrl', 'productImageUrl']) || '').replace(/\{size\}/gi, '500') || null,
+      };
+    });
+    await this.prisma.marketplaceOrder.create({
+      data: {
+        platform: 'HEPSIBURADA',
+        externalOrderId: `CLAIM_${claimId}`,
+        orderNumber,
+        status: 'Returned',
+        customerName: this.pickField(claim, ['customerName', 'customer.name', 'customer.fullName', 'buyerName']) || null,
+        totalAmount: items.reduce((sum, i) => sum + i.totalPrice, 0),
+        currency: 'TRY',
+        cargoTrackingNumber: cargoTracking || null,
+        rawPayload: claim as object,
+        stockDeducted: true,
+        returnStatus: 'WAITING',
+        returnUpdatedAt: new Date(),
+        ...claimData,
+        items: { create: items },
+      },
+    });
+    return 'created';
   }
 
   private async upsertTrendyolClaim(claim: Record<string, any>, company: string): Promise<'created' | 'updated' | 'skipped'> {
