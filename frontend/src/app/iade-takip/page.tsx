@@ -67,6 +67,15 @@ const PLATFORM_TABS: { key: string; label: string; color: string; auto: boolean 
   { key: 'N11', label: 'n11', color: 'bg-purple-600 text-white', auto: false },
   { key: 'OTHER', label: 'Diğer', color: 'bg-slate-600 text-white', auto: false },
 ]
+/** Durum sekmeleri: varsayılan "Yeni Gelenler" (platformda açık, işlem bekleyen) */
+const STATUS_TABS: { key: string; label: string; match: (o: ReturnOrder) => boolean }[] = [
+  { key: 'NEW', label: '🆕 Yeni Gelenler', match: (o) => o.returnStatus === 'WAITING' },
+  { key: 'DISPUTE', label: 'Red / İtiraz', match: (o) => o.returnStatus === 'REJECT_REQUESTED' },
+  { key: 'DONE', label: 'Kapananlar', match: (o) => ['REJECTED', 'ACCEPTED', 'CLOSED'].includes(o.returnStatus ?? '') },
+  { key: 'ALL', label: 'Tümü', match: () => true },
+]
+const isFresh = (o: ReturnOrder) => !!o.claimDate && Date.now() - new Date(o.claimDate).getTime() < 3 * 86400000
+
 function platformKey(o: ReturnOrder) {
   const flora = String(o.externalOrderId ?? '').startsWith('FLORA_') || o.platform.includes('FLORA')
   const base = o.platform.replace('_FLORA', '')
@@ -102,6 +111,7 @@ export default function IadeTakipPage() {
   const [msg, setMsg] = useState('')
   const [syncing, setSyncing] = useState(false)
   const [tab, setTab] = useState('ALL')
+  const [statusTab, setStatusTab] = useState('NEW')
   const cameraRef = useRef<HTMLInputElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
@@ -138,11 +148,16 @@ export default function IadeTakipPage() {
     }
   }
 
+  // Aramada durum filtresi uygulanmaz (aranan sipariş hangi durumda olursa görünsün)
+  const statusDef = STATUS_TABS.find((t) => t.key === statusTab) ?? STATUS_TABS[0]
+  const byStatus = searched ? orders : orders.filter(statusDef.match)
   const tabCounts = PLATFORM_TABS.reduce<Record<string, number>>((acc, t) => {
-    acc[t.key] = t.key === 'ALL' ? orders.length : orders.filter((o) => platformKey(o) === t.key).length
+    acc[t.key] = t.key === 'ALL' ? byStatus.length : byStatus.filter((o) => platformKey(o) === t.key).length
     return acc
   }, {})
-  const visible = tab === 'ALL' ? orders : orders.filter((o) => platformKey(o) === tab)
+  const byPlatform = tab === 'ALL' ? orders : orders.filter((o) => platformKey(o) === tab)
+  const statusCounts = STATUS_TABS.reduce<Record<string, number>>((acc, t) => { acc[t.key] = byPlatform.filter(t.match).length; return acc }, {})
+  const visible = tab === 'ALL' ? byStatus : byStatus.filter((o) => platformKey(o) === tab)
   const activeTab = PLATFORM_TABS.find((t) => t.key === tab) ?? PLATFORM_TABS[0]
   const selected = visible.find((o) => o.id === selectedId) ?? null
   const replace = (o: ReturnOrder) => setOrders((prev) => prev.map((x) => (x.id === o.id ? o : x)))
@@ -248,6 +263,20 @@ export default function IadeTakipPage() {
             </button>
           ))}
         </div>
+        {/* Durum sekmeleri */}
+        {!searched && (
+          <div className="flex flex-wrap gap-2">
+            {STATUS_TABS.map((t) => (
+              <button
+                key={t.key}
+                onClick={() => { setStatusTab(t.key); setSelectedId(null) }}
+                className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${statusTab === t.key ? (t.key === 'NEW' ? 'bg-red-600 text-white' : 'bg-indigo-600 text-white') : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
+              >
+                {t.label} <span className="ml-1 text-xs font-black opacity-80">{statusCounts[t.key] ?? 0}</span>
+              </button>
+            ))}
+          </div>
+        )}
         {!activeTab.auto && (
           <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
             {activeTab.label} iadeleri otomatik çekilmiyor (platformun iade servisi doğrulanamadı). İade gelen paketin siparişini yukarıdan aratıp videosunu ekleyin; platform panelinden takip edin.
@@ -258,13 +287,13 @@ export default function IadeTakipPage() {
           {/* Liste */}
           <div className="space-y-2 lg:max-h-[calc(100vh-260px)] lg:overflow-y-auto">
             <div className="px-1 text-xs font-semibold uppercase text-slate-500">
-              {searched ? `"${searched}" için ${visible.length} sipariş` : `${activeTab.label} iadeleri · ${visible.length}`}
+              {searched ? `"${searched}" için ${visible.length} sipariş` : `${activeTab.label} · ${statusDef.label} · ${visible.length}`}
             </div>
             {loading ? (
               <div className="py-10 text-center text-slate-400">Yükleniyor…</div>
             ) : visible.length === 0 ? (
               <div className="rounded-xl border border-dashed bg-white p-6 text-center text-sm text-slate-500">
-                {searched ? 'Sipariş bulunamadı. Sipariş/paket numarasını ya da müşteri adını deneyin.' : `${activeTab.key === 'ALL' ? '' : `${activeTab.label}: `}iade yok. "İadeleri Çek" ile güncelleyin ya da gelen paketin siparişini aratın.`}
+                {searched ? 'Sipariş bulunamadı. Sipariş/paket numarasını ya da müşteri adını deneyin.' : statusTab === 'NEW' ? 'Yeni gelen iade yok 👍 "İadeleri Çek" ile güncelleyebilirsiniz.' : `${activeTab.key === 'ALL' ? '' : `${activeTab.label}: `}bu durumda iade yok.`}
               </div>
             ) : visible.map((o) => {
               const p = processLabel(o.returnStatus)
@@ -275,7 +304,10 @@ export default function IadeTakipPage() {
                   className={`w-full rounded-xl border bg-white p-3 text-left transition ${selectedId === o.id ? 'border-emerald-500 ring-1 ring-emerald-500' : 'hover:border-slate-400'}`}
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-bold uppercase text-orange-600">{platformLabel(o)}</span>
+                    <span className="text-xs font-bold uppercase text-orange-600">
+                      {platformLabel(o)}
+                      {isFresh(o) && <span className="ml-1.5 rounded bg-red-600 px-1.5 py-0.5 text-[10px] font-black text-white">YENİ</span>}
+                    </span>
                     <span className="text-xs text-slate-400">{o.claimDate ? `İade: ${fmtDate(o.claimDate)}` : fmtDate(o.orderDate ?? o.updatedAt)}</span>
                   </div>
                   <div className="mt-1 truncate text-sm font-semibold">{o.customerName ?? '—'}</div>
