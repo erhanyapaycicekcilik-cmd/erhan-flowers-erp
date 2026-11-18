@@ -1,4 +1,4 @@
-import { Inject, Injectable, Optional } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { HttpMarketplaceOrderAdapter } from './http-marketplace-order.adapter';
 import { AdapterConnectionResult, ExternalOrder } from './integration-adapter.interface';
 
@@ -90,6 +90,7 @@ export class HepsiburadaAdapter extends HttpMarketplaceOrderAdapter {
   }
 
   // HB katalog (mpop) görsel haritası — merchantSku/barkod/HB SKU → ilk görsel. Mağaza başına 1 saat önbellek.
+  private static readonly hbLog = new Logger('HepsiburadaAdapter');
   private static catalogImageCache = new Map<string, { at: number; map: Map<string, string> }>();
 
   private static normalizeImageUrl(raw: unknown): string | null {
@@ -159,7 +160,7 @@ export class HepsiburadaAdapter extends HttpMarketplaceOrderAdapter {
         let json: Record<string, unknown> | null = null;
         try {
           const res = await fetch(url, { method: 'GET', headers, signal: AbortSignal.timeout(20000) });
-          if (!res.ok) break;
+          if (!res.ok) { HepsiburadaAdapter.hbLog.warn(`HB katalog görsel çağrısı ${res.status} döndü (sayfa ${page})`); break; }
           json = await res.json().catch(() => null) as Record<string, unknown> | null;
         } catch { break; }
         if (!json) break;
@@ -185,6 +186,7 @@ export class HepsiburadaAdapter extends HttpMarketplaceOrderAdapter {
       if (ok) break;
     }
     // Hata durumunda boş haritayı kısa süreli tut (her senkronda API'ye yüklenmesin)
+    HepsiburadaAdapter.hbLog.log(`HB katalog görsel haritası: ${map.size} kod`);
     HepsiburadaAdapter.catalogImageCache.set(merchantId, { at: map.size ? Date.now() : Date.now() - 50 * 60 * 1000, map });
     return map;
   }

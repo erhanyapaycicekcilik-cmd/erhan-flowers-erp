@@ -1015,6 +1015,8 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
                 THEN ${status}::"RetailSaleStatus"
                 -- Personelin ilerlettiği durum (Hazır / yolda) platformun eski "onaylandı" bilgisiyle geri gitmez
                 WHEN status::text IN ('READY','OUT_FOR_DELIVERY') THEN status
+                -- ERP'de "İşleme Al" denen sipariş, platform hâlâ "yeni/onaylandı" diyorsa Yeni'ye geri düşmez
+                WHEN status::text IN ('PREPARING','IN_PRODUCTION') AND ${status}::text IN ('CONFIRMED','PAYMENT_PENDING') THEN status
                 ELSE COALESCE(${status}::"RetailSaleStatus", status)
               END,
               invoice_status = COALESCE(${invoiceStatus}::"RetailInvoiceStatus", invoice_status),
