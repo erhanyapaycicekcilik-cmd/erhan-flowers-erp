@@ -202,6 +202,7 @@ export default function StaffOrdersPage() {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState('');
+  const [imageDiag, setImageDiag] = useState('');
   const [platform, setPlatform] = useState('all');
   const [statusTab, setStatusTab] = useState('all');
   const [category, setCategory] = useState('all');
@@ -213,8 +214,9 @@ export default function StaffOrdersPage() {
     setSyncing(true);
     setSyncMsg('');
     try {
-      const result = await api<{ ok: boolean; newOrders?: number; imported?: number; message?: string }>('/integrations/hepsiburada/sync-orders', { method: 'POST' });
+      const result = await api<{ ok: boolean; newOrders?: number; imported?: number; message?: string; imageDiag?: string }>('/integrations/hepsiburada/sync-orders', { method: 'POST' });
       setSyncMsg(`Tamamlandı: ${result.newOrders ?? result.imported ?? 0} sipariş güncellendi`);
+      setImageDiag(result.imageDiag ?? '');
       await load();
     } catch {
       setSyncMsg('Hata oluştu');
@@ -344,6 +346,11 @@ export default function StaffOrdersPage() {
         {/* Header */}
         <div className="flex items-center justify-between flex-wrap gap-2">
           <h1 className="text-xl font-bold">Siparişler</h1>
+          {imageDiag && (
+            <div className="w-full order-last rounded-lg border border-slate-200 bg-slate-50 p-2 text-xs text-slate-600 break-words">
+              <b>HB görsel kontrolü:</b> {imageDiag}
+            </div>
+          )}
           <div className="flex gap-2 items-center flex-wrap">
             {syncMsg && <span className="text-xs text-emerald-600 font-semibold">{syncMsg}</span>}
             <button onClick={() => void syncHB()} disabled={syncing} className="btn btn-secondary text-sm">
