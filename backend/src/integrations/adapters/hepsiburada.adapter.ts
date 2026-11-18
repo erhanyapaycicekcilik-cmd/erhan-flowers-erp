@@ -119,6 +119,43 @@ export class HepsiburadaAdapter extends HttpMarketplaceOrderAdapter {
     return deduped;
   }
 
+  /**
+   * HB iade talepleri (claims): GET oms-external /claims/merchantid/{merchantId}?offset&limit
+   * (limit zorunlu). Sipariş API'siyle aynı Basic giriş + User-Agent. Ham kayıt listesi döner.
+   */
+  async fetchClaims(): Promise<Array<Record<string, unknown>>> {
+    const merchantId = this.env('MERCHANT_ID');
+    const username = this.env('USERNAME') || this.env('API_KEY') || merchantId;
+    const password = this.env('PASSWORD') || this.env('API_SECRET');
+    if (!merchantId || !username || !password) throw new Error('Hepsiburada API bilgileri eksik');
+    const headers = {
+      Accept: 'application/json',
+      Authorization: `Basic ${Buffer.from(`${username}:${password}`).toString('base64')}`,
+      'User-Agent': this.env('USER_AGENT') || 'ErhanFlowersERP-HB',
+    };
+    const apiBase = (this.env('API_URL') || HB_ORDERS_URL).replace(/\/+$/, '');
+    const all: Array<Record<string, unknown>> = [];
+    const limit = 100;
+    for (let offset = 0; offset < 2000; offset += limit) {
+      const url = `${apiBase}/claims/merchantid/${encodeURIComponent(merchantId)}?offset=${offset}&limit=${limit}`;
+      const res = await fetch(url, { method: 'GET', headers, signal: AbortSignal.timeout(20000) });
+      if (!res.ok) {
+        const body = (await res.text().catch(() => '')).slice(0, 160).replace(/\s+/g, ' ');
+        throw new Error(`Hepsiburada iade listesi alınamadı. HTTP ${res.status} ${body}`);
+      }
+      const json = await res.json().catch(() => null) as unknown;
+      const obj = (json && typeof json === 'object' ? json : {}) as Record<string, unknown>;
+      const list = (Array.isArray(json) ? json
+        : Array.isArray(obj.items) ? obj.items
+        : Array.isArray(obj.data) ? obj.data
+        : Array.isArray(obj.claims) ? obj.claims : []) as Array<Record<string, unknown>>;
+      all.push(...list);
+      const total = Number(obj.totalCount ?? obj.TotalCount ?? 0);
+      if (list.length < limit || (total > 0 && offset + limit >= total)) break;
+    }
+    return all;
+  }
+
   // HB katalog (mpop) görsel haritası — merchantSku/barkod/HB SKU → ilk görsel. Mağaza başına 1 saat önbellek.
   private static readonly hbLog = new Logger('HepsiburadaAdapter');
   /** Son görsel eşleştirme denemesinin özeti (personel ekranında "HB Senkronize Et" sonrası gösterilir) */
