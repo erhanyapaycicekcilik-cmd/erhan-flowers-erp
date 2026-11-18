@@ -637,6 +637,42 @@ export class TrendyolAdapter extends BaseIntegrationAdapter {
     return response.json().catch(() => ({})) as Promise<{ content?: Array<Record<string, any>>; totalPages?: number }>;
   }
 
+  /** Trendyol iade talepleri (claims). Tarih aralığı 14 günlük parçalarla taranır. Ham içerik döner. */
+  async fetchClaims(startMs: number, endMs: number): Promise<Array<Record<string, any>>> {
+    const missing = this.missingKeys();
+    if (missing.length) throw new Error(`Trendyol API bilgileri eksik: ${missing.join(', ')}`);
+    const supplierId = this.env('SUPPLIER_ID');
+    const apiBaseUrl = this.env('API_URL').replace(/\/+$/, '');
+    const headers = {
+      Authorization: `Basic ${Buffer.from(`${this.env('API_KEY')}:${this.env('API_SECRET')}`).toString('base64')}`,
+      'User-Agent': `${supplierId} - SelfIntegration`,
+      Accept: 'application/json',
+    };
+    const chunk = 14 * 86400000 - 1;
+    const all: Array<Record<string, any>> = [];
+    for (let s = startMs; s < endMs; s += chunk + 1) {
+      const e = Math.min(s + chunk, endMs);
+      for (let page = 0; page < 20; page += 1) {
+        const url = new URL(`${apiBaseUrl}/order/sellers/${supplierId}/claims`);
+        url.searchParams.set('startDate', String(s));
+        url.searchParams.set('endDate', String(e));
+        url.searchParams.set('page', String(page));
+        url.searchParams.set('size', '200');
+        let response = await fetch(url, { method: 'GET', headers });
+        if (response.status === 429) {
+          await this.delay(1500);
+          response = await fetch(url, { method: 'GET', headers });
+        }
+        if (!response.ok) throw new Error(`Trendyol iade listesi alınamadı. HTTP ${response.status}: ${await this.safeErrorText(response)}`);
+        const data = await response.json().catch(() => ({})) as { content?: Array<Record<string, any>>; totalPages?: number };
+        const content = Array.isArray(data.content) ? data.content : [];
+        all.push(...content);
+        if (page + 1 >= Number(data.totalPages ?? 1) || content.length === 0) break;
+      }
+    }
+    return all;
+  }
+
   private requestOrders(options: { size: number; page: number; lookbackDays: number }) {
     const supplierId = this.env('SUPPLIER_ID');
     const now = Date.now();

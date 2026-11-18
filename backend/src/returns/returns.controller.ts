@@ -17,6 +17,12 @@ export class ReturnsController {
     return this.svc.listReturns(Number(page) || 1, Number(limit) || 50, q ?? '')
   }
 
+  /** Platformlardan iadeleri çek (Trendyol Erhan + Flora) */
+  @Post('sync')
+  sync(@Query('days') days?: string) {
+    return this.svc.syncFromPlatforms(Number(days) || 30)
+  }
+
   @Get(':id')
   getOne(@Param('id') id: string) {
     return this.svc.getReturn(Number(id))

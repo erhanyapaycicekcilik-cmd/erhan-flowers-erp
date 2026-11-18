@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
+import { IntegrationsService } from '../integrations/integrations.service'
 import * as fs from 'fs'
 import { basename, extname, join } from 'path'
 
@@ -9,7 +10,12 @@ const RETURN_PROCESS = ['WAITING', 'REJECT_REQUESTED', 'REJECTED', 'ACCEPTED', '
 
 @Injectable()
 export class ReturnsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService, private readonly integrations: IntegrationsService) {}
+
+  /** Platformlardan (şimdilik Trendyol Erhan + Flora) iade taleplerini hemen çek */
+  syncFromPlatforms(days = 30) {
+    return this.integrations.syncReturnClaims(days)
+  }
 
   private readonly include = {
     items: { include: { stockCard: { select: { imagePath: true } } } },
@@ -41,6 +47,7 @@ export class ReturnsService {
           OR: [
             { status: { in: RETURN_STATUSES } },
             { returnStatus: { not: null } },
+            { claimId: { not: null } },
             { returnVideos: { some: {} } },
           ],
         }
@@ -48,7 +55,7 @@ export class ReturnsService {
       this.prisma.marketplaceOrder.findMany({
         where,
         include: this.include,
-        orderBy: term ? { orderDate: 'desc' } : { updatedAt: 'desc' },
+        orderBy: term ? { orderDate: 'desc' } : [{ claimDate: { sort: 'desc', nulls: 'last' } }, { updatedAt: 'desc' }],
         skip,
         take: term ? Math.min(limit, 50) : limit,
       }),

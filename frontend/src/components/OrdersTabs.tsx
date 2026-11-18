@@ -13,7 +13,7 @@ const TABS: { href: string; label: string; roles: Role[] }[] = [
   { href: '/web-siparisler', label: 'Web & Telefon Siparişleri', roles: ['OWNER', 'MANAGER'] },
   { href: '/sabah-ciktisi', label: '🖨️ Çıktı Merkezi (A5)', roles: ['OWNER', 'MANAGER', 'STAFF'] },
   { href: '/adres-ciktisi', label: 'Telefon Siparişi Gir · Adres', roles: ['OWNER', 'MANAGER', 'STAFF'] },
-  { href: '/iade-takip', label: 'İadeler', roles: ['OWNER', 'MANAGER'] },
+  { href: '/iade-takip', label: 'İadeler', roles: ['OWNER', 'MANAGER', 'STAFF'] },
   { href: '/eft-yonetim', label: 'EFT Ödemeleri', roles: ['OWNER', 'MANAGER'] },
   { href: '/staff/photo-archive', label: 'Fotoğraf Arşivi', roles: ['OWNER', 'MANAGER', 'STAFF'] },
 ];
