@@ -209,6 +209,29 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
     return { ok: results.every((r) => r.ok), results };
   }
 
+  /**
+   * Platform talep durumlarından ERP iade süreci:
+   * açık (yeni / aksiyon bekliyor) → WAITING = "Yeni Gelenler"; ihtilaf → REJECT_REQUESTED; kapanmış → CLOSED.
+   * Personelin elle verdiği süreç (red talebi vb.) ve videosu olan kayıt ezilmez; sadece boş/WAITING olan güncellenir.
+   */
+  private claimProcess(rawStatuses: string[], current: string | null, hasVideos: boolean): string | null {
+    const OPEN = ['Created', 'WaitingInAction', 'InAnalysis', 'WaitingFraudCheck', 'NewRequest', 'AwaitingAction', 'AwaitingPreApproval'];
+    const DISPUTE = ['Unresolved', 'InDispute'];
+    const CLOSED = ['Accepted', 'Rejected', 'Cancelled', 'Refunded'];
+    let next: string | null = null;
+    if (rawStatuses.some((x) => OPEN.includes(x))) next = 'WAITING';
+    else if (rawStatuses.some((x) => DISPUTE.includes(x))) next = 'REJECT_REQUESTED';
+    else if (rawStatuses.length && rawStatuses.every((x) => CLOSED.includes(x))) next = 'CLOSED';
+    else next = 'WAITING';
+    if (!current) return next;
+    if (current === 'WAITING' && next !== 'WAITING' && !hasVideos) return next;
+    return current;
+  }
+
+  private processPatch(current: string | null, next: string | null) {
+    return next !== current ? { returnStatus: next, returnUpdatedAt: new Date() } : {};
+  }
+
   /** HB talep durumu → Türkçe */
   private hbClaimStatusLabel(status: string) {
     return ({
@@ -252,14 +275,14 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
     const existing = await this.prisma.marketplaceOrder.findFirst({
       where: { platform: 'HEPSIBURADA', OR: [{ claimId }, { orderNumber }, { externalOrderId: orderNumber }] },
       orderBy: { id: 'desc' },
-      select: { id: true, returnStatus: true },
+      select: { id: true, returnStatus: true, _count: { select: { returnVideos: true } } },
     });
     if (existing) {
       await this.prisma.marketplaceOrder.update({
         where: { id: existing.id },
         data: {
           ...claimData,
-          ...(existing.returnStatus ? {} : { returnStatus: 'WAITING', returnUpdatedAt: new Date() }),
+          ...this.processPatch(existing.returnStatus, this.claimProcess(statusRaw ? [statusRaw] : [], existing.returnStatus, existing._count.returnVideos > 0)),
           ...(cargoTracking ? { cargoTrackingNumber: cargoTracking } : {}),
         },
       });
@@ -290,7 +313,7 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
         cargoTrackingNumber: cargoTracking || null,
         rawPayload: claim as object,
         stockDeducted: true,
-        returnStatus: 'WAITING',
+        returnStatus: this.claimProcess(statusRaw ? [statusRaw] : [], null, false),
         returnUpdatedAt: new Date(),
         ...claimData,
         items: { create: items },
@@ -331,14 +354,14 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
         externalOrderId: isFlora ? { startsWith: 'FLORA_' } : { not: { startsWith: 'FLORA_' } },
       },
       orderBy: { id: 'desc' },
-      select: { id: true, returnStatus: true },
+      select: { id: true, returnStatus: true, _count: { select: { returnVideos: true } } },
     });
     if (existing) {
       await this.prisma.marketplaceOrder.update({
         where: { id: existing.id },
         data: {
           ...claimData,
-          ...(existing.returnStatus ? {} : { returnStatus: 'WAITING', returnUpdatedAt: new Date() }),
+          ...this.processPatch(existing.returnStatus, this.claimProcess(statuses, existing.returnStatus, existing._count.returnVideos > 0)),
           ...(claim.cargoTrackingNumber ? { cargoTrackingNumber: String(claim.cargoTrackingNumber) } : {}),
         },
       });
@@ -360,7 +383,7 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
         cargoProvider: claim.cargoProviderName ? String(claim.cargoProviderName) : null,
         rawPayload: claim as object,
         stockDeducted: true, // iade kaydı: stok düşümü yapılmaz
-        returnStatus: 'WAITING',
+        returnStatus: this.claimProcess(statuses, null, false),
         returnUpdatedAt: new Date(),
         ...claimData,
         items: {
