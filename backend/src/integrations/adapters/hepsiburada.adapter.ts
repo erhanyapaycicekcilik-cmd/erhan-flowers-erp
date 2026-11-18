@@ -91,6 +91,9 @@ export class HepsiburadaAdapter extends HttpMarketplaceOrderAdapter {
 
   // HB katalog (mpop) görsel haritası — merchantSku/barkod/HB SKU → ilk görsel. Mağaza başına 1 saat önbellek.
   private static readonly hbLog = new Logger('HepsiburadaAdapter');
+  /** Son görsel eşleştirme denemesinin özeti (personel ekranında "HB Senkronize Et" sonrası gösterilir) */
+  static lastImageDiag = '';
+  static clearImageCache() { HepsiburadaAdapter.catalogImageCache.clear(); }
   private static catalogImageCache = new Map<string, { at: number; map: Map<string, string> }>();
 
   private static normalizeImageUrl(raw: unknown): string | null {
@@ -146,6 +149,9 @@ export class HepsiburadaAdapter extends HttpMarketplaceOrderAdapter {
     ]));
 
     const map = new Map<string, string>();
+    const notes: string[] = [];
+    let productCount = 0;
+    let sampleKeys = '';
     const add = (code: unknown, url: string) => {
       const key = String(code ?? '').trim().toUpperCase();
       if (key && !map.has(key)) map.set(key, url);
@@ -160,17 +166,24 @@ export class HepsiburadaAdapter extends HttpMarketplaceOrderAdapter {
         let json: Record<string, unknown> | null = null;
         try {
           const res = await fetch(url, { method: 'GET', headers, signal: AbortSignal.timeout(20000) });
-          if (!res.ok) { HepsiburadaAdapter.hbLog.warn(`HB katalog görsel çağrısı ${res.status} döndü (sayfa ${page})`); break; }
+          if (!res.ok) {
+            const body = (await res.text().catch(() => '')).slice(0, 120).replace(/\s+/g, ' ');
+            notes.push(`giriş${authCandidates.indexOf(cred) + 1}: HTTP ${res.status} ${body}`);
+            HepsiburadaAdapter.hbLog.warn(`HB katalog görsel çağrısı ${res.status} döndü (sayfa ${page}) ${body}`);
+            break;
+          }
           json = await res.json().catch(() => null) as Record<string, unknown> | null;
-        } catch { break; }
-        if (!json) break;
+        } catch (err) { notes.push(`giriş${authCandidates.indexOf(cred) + 1}: ${(err as Error)?.message ?? 'bağlantı hatası'}`); break; }
+        if (!json) { notes.push('yanıt JSON değil'); break; }
         ok = true;
         const list = (Array.isArray(json.data) ? json.data
           : Array.isArray(json.content) ? json.content
           : Array.isArray(json.products) ? json.products
           : Array.isArray(json.items) ? json.items
           : Array.isArray(json) ? json : []) as Record<string, unknown>[];
-        if (!list.length) break;
+        if (!list.length) { if (page === 0) notes.push(`ürün listesi boş (alanlar: ${Object.keys(json).slice(0, 12).join(',')})`); break; }
+        productCount += list.length;
+        if (!sampleKeys) sampleKeys = Object.keys(list[0]).slice(0, 25).join(',');
         for (const p of list) {
           const attrs = (p.attributes && typeof p.attributes === 'object' && !Array.isArray(p.attributes)) ? p.attributes as Record<string, unknown> : {};
           const img = HepsiburadaAdapter.firstImage(p);
@@ -186,7 +199,10 @@ export class HepsiburadaAdapter extends HttpMarketplaceOrderAdapter {
       if (ok) break;
     }
     // Hata durumunda boş haritayı kısa süreli tut (her senkronda API'ye yüklenmesin)
-    HepsiburadaAdapter.hbLog.log(`HB katalog görsel haritası: ${map.size} kod`);
+    HepsiburadaAdapter.lastImageDiag = `HB katalog: ${productCount} ürün, ${map.size} görselli kod`
+      + (notes.length ? ` | ${notes.join(' | ')}` : '')
+      + (productCount && !map.size ? ` | ürün alanları: ${sampleKeys}` : '');
+    HepsiburadaAdapter.hbLog.log(HepsiburadaAdapter.lastImageDiag);
     HepsiburadaAdapter.catalogImageCache.set(merchantId, { at: map.size ? Date.now() : Date.now() - 50 * 60 * 1000, map });
     return map;
   }
@@ -198,16 +214,25 @@ export class HepsiburadaAdapter extends HttpMarketplaceOrderAdapter {
     username: string,
     password: string,
   ): Promise<void> {
-    const missing = orders.flatMap((o) => o.items).filter((item) => !item.imageUrl);
-    if (!missing.length) return;
+    const all = orders.flatMap((o) => o.items);
+    const missing = all.filter((item) => !item.imageUrl);
+    if (!missing.length) {
+      HepsiburadaAdapter.lastImageDiag = `${all.length} satırın hepsinde görsel siparişle geldi`;
+      return;
+    }
     const map = await this.loadCatalogImages(merchantId, username, password).catch(() => new Map<string, string>());
-    if (!map.size) return;
+    const unmatched: string[] = [];
+    let matched = 0;
     for (const item of missing) {
+      let found = false;
       for (const code of [item.sku, item.barcode, item.modelCode, item.externalVariantId]) {
         const url = code ? map.get(String(code).trim().toUpperCase()) : undefined;
-        if (url) { item.imageUrl = url; break; }
+        if (url) { item.imageUrl = url; found = true; break; }
       }
+      if (found) matched += 1; else unmatched.push(item.sku || item.barcode || '?');
     }
+    HepsiburadaAdapter.lastImageDiag = `${HepsiburadaAdapter.lastImageDiag.split(' || ')[0]} || ${all.length} sipariş satırı, ${missing.length} görselsiz geldi, ${matched} katalogdan bulundu`
+      + (unmatched.length ? `, bulunamayan kodlar: ${Array.from(new Set(unmatched)).slice(0, 5).join(', ')}` : '');
   }
 
   private mapHepsiburadaOrder(order: Record<string, unknown>): ExternalOrder | null {
