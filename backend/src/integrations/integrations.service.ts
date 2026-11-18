@@ -572,7 +572,8 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
               'quantity', i.quantity,
               'unitPrice', i.unit_price,
               'lineTotal', i.line_total,
-              'imagePath', COALESCE(
+              -- HB görsel adresleri {size} yer tutucusuyla gelebilir
+              'imagePath', REPLACE(COALESCE(
                 sc.image_path,
                 (SELECT sci.file_path FROM stock_card_images sci WHERE sci.stock_card_id = sc.id AND sci.is_main = true LIMIT 1),
                 (SELECT sci.file_path FROM stock_card_images sci WHERE sci.stock_card_id = sc.id ORDER BY sci.id LIMIT 1),
@@ -586,8 +587,10 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
                 (SELECT sc2.image_path FROM stock_cards sc2 WHERE i.model_code IS NOT NULL AND i.model_code <> '' AND (UPPER(sc2.sku) = UPPER(REGEXP_REPLACE(i.model_code, '^FL-', '')) OR UPPER(sc2.model) = UPPER(REGEXP_REPLACE(i.model_code, '^FL-', '')) OR UPPER(sc2.old_model_code) = UPPER(REGEXP_REPLACE(i.model_code, '^FL-', ''))) AND sc2.image_path IS NOT NULL AND sc2.image_path <> '' LIMIT 1),
                 -- Son çare: ürün adıyla eşleştir (marka ön eki atılır; çok kısa adlarda yanlış eşleşmeyi önlemek için en az 12 karakter)
                 (SELECT img->>'url' FROM trendyol_product_variants v3, jsonb_array_elements(CASE WHEN jsonb_typeof(v3.images) = 'array' THEN v3.images ELSE '[]'::jsonb END) AS img WHERE LENGTH(REGEXP_REPLACE(LOWER(TRIM(i.product_name_snapshot)), '^(erhan flowers|flora yapay çiçek|flora) +', '')) >= 12 AND LOWER(v3.product_name) LIKE '%' || REGEXP_REPLACE(LOWER(TRIM(i.product_name_snapshot)), '^(erhan flowers|flora yapay çiçek|flora) +', '') || '%' AND img->>'url' IS NOT NULL AND img->>'url' <> '' ORDER BY (LOWER(TRIM(v3.product_name)) = LOWER(TRIM(i.product_name_snapshot))) DESC, LENGTH(v3.product_name) LIMIT 1),
-                (SELECT url FROM products p3, jsonb_array_elements_text(CASE WHEN jsonb_typeof(p3.image_urls) = 'array' THEN p3.image_urls ELSE '[]'::jsonb END) AS url WHERE LENGTH(REGEXP_REPLACE(LOWER(TRIM(i.product_name_snapshot)), '^(erhan flowers|flora yapay çiçek|flora) +', '')) >= 12 AND LOWER(p3.product_name) LIKE '%' || REGEXP_REPLACE(LOWER(TRIM(i.product_name_snapshot)), '^(erhan flowers|flora yapay çiçek|flora) +', '') || '%' AND url IS NOT NULL AND url <> '' LIMIT 1)
-              ),
+                (SELECT url FROM products p3, jsonb_array_elements_text(CASE WHEN jsonb_typeof(p3.image_urls) = 'array' THEN p3.image_urls ELSE '[]'::jsonb END) AS url WHERE LENGTH(REGEXP_REPLACE(LOWER(TRIM(i.product_name_snapshot)), '^(erhan flowers|flora yapay çiçek|flora) +', '')) >= 12 AND LOWER(p3.product_name) LIKE '%' || REGEXP_REPLACE(LOWER(TRIM(i.product_name_snapshot)), '^(erhan flowers|flora yapay çiçek|flora) +', '') || '%' AND url IS NOT NULL AND url <> '' LIMIT 1),
+                -- Stok kartı eşleşti ama satır barkodu (HB/N11 satıcı kodu) Trendyol barkodundan farklıysa
+                (SELECT img->>'url' FROM trendyol_product_variants v4, jsonb_array_elements(CASE WHEN jsonb_typeof(v4.images) = 'array' THEN v4.images ELSE '[]'::jsonb END) AS img WHERE sc.barcode IS NOT NULL AND v4.barcode = sc.barcode AND img->>'url' IS NOT NULL AND img->>'url' <> '' LIMIT 1)
+              ), '{size}', '500'),
               'color', sc.color,
               'trendyolUrl', tpv.trendyol_product_url
             )
@@ -669,7 +672,7 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
               'quantity', moi.quantity,
               'unitPrice', moi.unit_price,
               'lineTotal', moi.total_price,
-              'imagePath', COALESCE(
+              'imagePath', REPLACE(COALESCE(
                 moi.product_image_url,
                 sc.image_path,
                 (SELECT sci.file_path FROM stock_card_images sci WHERE sci.stock_card_id = sc.id AND sci.is_main = true LIMIT 1),
@@ -698,7 +701,7 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
                     ELSE '[]'::jsonb
                   END
                 ) AS line_item WHERE (moi.barcode IS NOT NULL AND (line_item->>'barcode' = moi.barcode OR line_item->>'productCode' = moi.barcode OR line_item->>'hepsiburadaSku' = moi.barcode) OR moi.sku IS NOT NULL AND (line_item->>'merchantSku' = moi.sku OR line_item->>'stockCode' = moi.sku OR line_item->>'productSellerCode' = moi.sku OR line_item->>'hepsiburadaSku' = moi.sku)) AND COALESCE(line_item->>'productImage', line_item->>'imageUrl', line_item->>'productImageUrl', line_item->>'thumbnailUrl', line_item->'images'->0->>'url') IS NOT NULL AND COALESCE(line_item->>'productImage', line_item->>'imageUrl', line_item->>'productImageUrl', line_item->>'thumbnailUrl', line_item->'images'->0->>'url') <> '' LIMIT 1)
-              )
+              ), '{size}', '500')
             )
             ORDER BY moi.id
           ) FILTER (WHERE moi.id IS NOT NULL),
@@ -1025,13 +1028,22 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
         `;
         // Daha önce kaydedilmemiş görsel URL'leri varsa item'lara ekle
         for (const item of order.items) {
-          if (item.imageUrl && item.externalLineId) {
+          if (!item.imageUrl) continue;
+          if (item.externalLineId) {
             await tx.$executeRaw`
               UPDATE retail_sale_items
               SET external_image_url = ${item.imageUrl}
               WHERE sale_id = ${saleId}
                 AND external_line_id = ${item.externalLineId}
-                AND (external_image_url IS NULL OR external_image_url = '')
+                AND (external_image_url IS NULL OR external_image_url = '' OR external_image_url LIKE '%{size}%')
+            `;
+          } else if (item.barcode || item.modelCode) {
+            await tx.$executeRaw`
+              UPDATE retail_sale_items
+              SET external_image_url = ${item.imageUrl}
+              WHERE sale_id = ${saleId}
+                AND (barcode = ${item.barcode ?? null} OR model_code = ${item.modelCode ?? null})
+                AND (external_image_url IS NULL OR external_image_url = '' OR external_image_url LIKE '%{size}%')
             `;
           }
         }
