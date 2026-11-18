@@ -4,8 +4,6 @@ import { IntegrationsService } from '../integrations/integrations.service'
 import * as fs from 'fs'
 import { basename, extname, join } from 'path'
 
-/** Platformların iade/teslim edilemedi durum adları (büyük-küçük harf farklı gelebiliyor) */
-const RETURN_STATUSES = ['RETURNED', 'Returned', 'returned', 'RETURNING', 'Returning', 'UnDelivered', 'UNDELIVERED', 'Undelivered', 'ReturnRequested', 'RETURN_REQUESTED', 'Claimed', 'CLAIMED']
 const RETURN_PROCESS = ['WAITING', 'REJECT_REQUESTED', 'REJECTED', 'ACCEPTED', 'CLOSED']
 
 @Injectable()
@@ -44,11 +42,11 @@ export class ReturnsService {
           ],
         }
       : {
+          // Sadece açık iadeler: platformda "talep oluşturuldu" / "bize ulaştı" olanlar
+          // + platform talebi olmayan, elle iade sürecine alınmış (ör. n11, videosu çekilen) bekleyenler
           OR: [
-            { status: { in: RETURN_STATUSES } },
-            { returnStatus: { not: null } },
-            { claimId: { not: null } },
-            { returnVideos: { some: {} } },
+            { claimStatus: { in: ['Talep oluşturuldu', 'Bize ulaştı'] } },
+            { claimId: null, returnStatus: 'WAITING' },
           ],
         }
     const [items, total] = await Promise.all([
@@ -61,7 +59,39 @@ export class ReturnsService {
       }),
       this.prisma.marketplaceOrder.count({ where }),
     ])
+    await this.fillItemImages(items)
     return { items, total, page, limit }
+  }
+
+  /** İade kayıtlarında görsel gelmez: barkod / stok kodundan Trendyol ürün görseli veya ERP ürün görseli */
+  private async fillItemImages(orders: Array<{ items: Array<{ barcode: string | null; sku: string | null; productImageUrl: string | null; stockCard?: { imagePath: string | null } | null }> }>) {
+    const missing = orders.flatMap((o) => o.items).filter((i) => !i.productImageUrl && !i.stockCard?.imagePath)
+    const codes = Array.from(new Set(missing.flatMap((i) => [i.barcode, i.sku]).filter((x): x is string => !!x)))
+    if (!codes.length) return
+    const rows = await this.prisma.$queryRaw<Array<{ code: string; url: string }>>`
+      SELECT DISTINCT ON (code) code, url FROM (
+        SELECT v.barcode AS code, img->>'url' AS url FROM trendyol_product_variants v,
+          jsonb_array_elements(CASE WHEN jsonb_typeof(v.images) = 'array' THEN v.images ELSE '[]'::jsonb END) AS img
+        WHERE v.barcode = ANY(${codes}) AND img->>'url' IS NOT NULL AND img->>'url' <> ''
+        UNION ALL
+        SELECT v.supplier_stock_code AS code, img->>'url' AS url FROM trendyol_product_variants v,
+          jsonb_array_elements(CASE WHEN jsonb_typeof(v.images) = 'array' THEN v.images ELSE '[]'::jsonb END) AS img
+        WHERE v.supplier_stock_code = ANY(${codes}) AND img->>'url' IS NOT NULL AND img->>'url' <> ''
+        UNION ALL
+        SELECT p.barcode AS code, u AS url FROM products p,
+          jsonb_array_elements_text(CASE WHEN jsonb_typeof(p.image_urls) = 'array' THEN p.image_urls ELSE '[]'::jsonb END) AS u
+        WHERE p.barcode = ANY(${codes}) AND u <> ''
+        UNION ALL
+        SELECT p.model_code AS code, u AS url FROM products p,
+          jsonb_array_elements_text(CASE WHEN jsonb_typeof(p.image_urls) = 'array' THEN p.image_urls ELSE '[]'::jsonb END) AS u
+        WHERE p.model_code = ANY(${codes}) AND u <> ''
+      ) x
+    `.catch(() => [] as Array<{ code: string; url: string }>)
+    const map = new Map(rows.map((r) => [r.code, r.url]))
+    for (const i of missing) {
+      const url = (i.barcode && map.get(i.barcode)) || (i.sku && map.get(i.sku)) || null
+      if (url) i.productImageUrl = url
+    }
   }
 
   async getReturn(id: number) {

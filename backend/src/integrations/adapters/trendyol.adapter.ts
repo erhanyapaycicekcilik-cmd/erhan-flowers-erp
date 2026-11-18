@@ -638,7 +638,7 @@ export class TrendyolAdapter extends BaseIntegrationAdapter {
   }
 
   /** Trendyol iade talepleri (claims). Tarih aralığı 14 günlük parçalarla taranır. Ham içerik döner. */
-  async fetchClaims(startMs: number, endMs: number): Promise<Array<Record<string, any>>> {
+  async fetchClaims(startMs: number, endMs: number, statuses: string[] = []): Promise<Array<Record<string, any>>> {
     const missing = this.missingKeys();
     if (missing.length) throw new Error(`Trendyol API bilgileri eksik: ${missing.join(', ')}`);
     const supplierId = this.env('SUPPLIER_ID');
@@ -650,6 +650,8 @@ export class TrendyolAdapter extends BaseIntegrationAdapter {
     };
     const chunk = 14 * 86400000 - 1;
     const all: Array<Record<string, any>> = [];
+    // Durum filtresi (claimItemStatus) verilirse her durum ayrı sorgulanır; boşsa tümü
+    for (const status of statuses.length ? statuses : ['']) {
     for (let s = startMs; s < endMs; s += chunk + 1) {
       const e = Math.min(s + chunk, endMs);
       for (let page = 0; page < 20; page += 1) {
@@ -658,6 +660,7 @@ export class TrendyolAdapter extends BaseIntegrationAdapter {
         url.searchParams.set('endDate', String(e));
         url.searchParams.set('page', String(page));
         url.searchParams.set('size', '200');
+        if (status) url.searchParams.set('claimItemStatus', status);
         let response = await fetch(url, { method: 'GET', headers });
         if (response.status === 429) {
           await this.delay(1500);
@@ -670,7 +673,9 @@ export class TrendyolAdapter extends BaseIntegrationAdapter {
         if (page + 1 >= Number(data.totalPages ?? 1) || content.length === 0) break;
       }
     }
-    return all;
+    }
+    // Aynı talep birden fazla durum sorgusunda gelebilir
+    return Array.from(new Map(all.map((c) => [String(c.id ?? c.claimId ?? Math.random()), c])).values());
   }
 
   private requestOrders(options: { size: number; page: number; lookbackDays: number }) {

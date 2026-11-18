@@ -139,6 +139,34 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  /** İade ekranının iki bölümü (Trendyol paneli gibi) */
+  static readonly CLAIM_STAGE_CREATED = 'Talep oluşturuldu';
+  static readonly CLAIM_STAGE_ARRIVED = 'Bize ulaştı';
+  /** Platform durumu → bölüm: müşteri talebi açtı (paket yolda) / paket depoya geldi (aksiyon bekliyor) */
+  private claimStage(rawStatuses: string[]): string | null {
+    if (rawStatuses.some((x) => ['WaitingInAction', 'AwaitingAction'].includes(x))) return IntegrationsService.CLAIM_STAGE_ARRIVED;
+    if (rawStatuses.some((x) => ['Created', 'NewRequest', 'AwaitingPreApproval'].includes(x))) return IntegrationsService.CLAIM_STAGE_CREATED;
+    return null;
+  }
+
+  /** Bu senkronda gelmeyen (artık açık olmayan) talepleri kapat: ekrandan kalkar */
+  private async closeMissingClaims(platform: string, storePrefix: 'FLORA' | 'ERHAN', fetchedClaimIds: string[]) {
+    const openLabels = [IntegrationsService.CLAIM_STAGE_CREATED, IntegrationsService.CLAIM_STAGE_ARRIVED, 'Oluşturuldu', 'Aksiyon bekliyor', 'Yeni talep', 'Ön onay bekliyor'];
+    await this.prisma.$executeRaw`
+      UPDATE marketplace_orders mo
+      SET claim_status = 'Kapandı',
+          return_status = CASE
+            WHEN mo.return_status = 'WAITING' AND NOT EXISTS (SELECT 1 FROM return_videos v WHERE v.order_id = mo.id) THEN 'CLOSED'
+            ELSE mo.return_status END,
+          return_updated_at = NOW(), updated_at = NOW()
+      WHERE mo.platform = ${platform}
+        AND mo.claim_id IS NOT NULL
+        AND mo.claim_status IN (${Prisma.join(openLabels)})
+        AND (${storePrefix} = 'ERHAN' AND mo.external_order_id NOT LIKE 'FLORA\\_%' OR ${storePrefix} = 'FLORA' AND mo.external_order_id LIKE 'FLORA\\_%')
+        AND mo.claim_id NOT IN (${fetchedClaimIds.length ? Prisma.join(fetchedClaimIds) : Prisma.sql`'__none__'`})
+    `;
+  }
+
   private claimSyncRunning = false;
   private claimSyncAt = 0;
 
@@ -160,12 +188,15 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
     const results: Array<{ store: string; ok: boolean; claims: number; created: number; updated: number; message?: string }> = [];
     try {
       const end = Date.now();
-      const start = end - Math.min(Math.max(days, 1), 90) * 86400000;
+      // Açık talepler eski olabilir (müşteri kargoyu geç verir): en az 45 gün geriye bak
+      const start = end - Math.min(Math.max(days, 45), 90) * 86400000;
       // Hepsiburada (Erhan)
       try {
-        const hb = (await this.adapter('HEPSIBURADA')) as unknown as { fetchClaims?: () => Promise<Array<Record<string, unknown>>> };
+        const hb = (await this.adapter('HEPSIBURADA')) as unknown as { fetchClaims?: (statuses?: string[]) => Promise<Array<Record<string, unknown>>> };
         if (typeof hb.fetchClaims === 'function') {
-          const claims = await hb.fetchClaims();
+          // Sadece açık talepler: talep oluşturuldu (NewRequest, AwaitingPreApproval) + bize ulaştı (AwaitingAction)
+          const claims = (await hb.fetchClaims(['NewRequest', 'AwaitingPreApproval', 'AwaitingAction']))
+            .filter((c) => this.claimStage([this.pickField(c as Record<string, any>, ['status', 'claimStatus', 'state'])]));
           let created = 0;
           let updated = 0;
           for (const claim of claims) {
@@ -173,6 +204,7 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
             if (r === 'created') created += 1; else if (r === 'updated') updated += 1;
           }
           const sample = claims.length && !created && !updated ? ` (tanınmayan alanlar: ${Object.keys(claims[0]).slice(0, 15).join(',')})` : '';
+          await this.closeMissingClaims('HEPSIBURADA', 'ERHAN', claims.map((c) => this.pickField(c as Record<string, any>, ['claimNumber', 'number', 'claimId', 'id'])).filter(Boolean));
           results.push({ store: 'Hepsiburada', ok: true, claims: claims.length, created, updated, ...(sample ? { message: sample } : {}) });
         }
       } catch (error) {
@@ -184,16 +216,19 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
         const store = company === 'ERHAN' ? 'Trendyol' : 'Trendyol (Flora)';
         try {
           const adapter = (company === 'ERHAN' ? await this.adapter('TRENDYOL') : await this.storeAdapter('TRENDYOL', company)) as unknown as {
-            fetchClaims?: (s: number, e: number) => Promise<Array<Record<string, any>>>;
+            fetchClaims?: (s: number, e: number, statuses?: string[]) => Promise<Array<Record<string, any>>>;
           };
           if (typeof adapter.fetchClaims !== 'function') continue;
-          const claims = await adapter.fetchClaims(start, end);
+          // Sadece açık talepler: Created (talep oluşturuldu, paket yolda) + WaitingInAction (bize ulaştı)
+          const claims = (await adapter.fetchClaims(start, end, ['Created', 'WaitingInAction']))
+            .filter((c) => this.claimStage(this.trendyolClaimStatuses(c)));
           let created = 0;
           let updated = 0;
           for (const claim of claims) {
             const r = await this.upsertTrendyolClaim(claim, company);
             if (r === 'created') created += 1; else if (r === 'updated') updated += 1;
           }
+          await this.closeMissingClaims('TRENDYOL', company === 'ERHAN' ? 'ERHAN' : 'FLORA', claims.map((c) => String(c.id ?? c.claimId ?? '')).filter(Boolean));
           results.push({ store, ok: true, claims: claims.length, created, updated });
         } catch (error) {
           const message = this.errorMessage(error);
@@ -266,7 +301,7 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
     const claimDate = dateRaw ? new Date(/^\d{10,}$/.test(dateRaw) ? Number(dateRaw) : dateRaw) : null;
     const claimData = {
       claimId,
-      claimStatus: statusRaw ? this.hbClaimStatusLabel(statusRaw) : null,
+      claimStatus: this.claimStage(statusRaw ? [statusRaw] : []) ?? (statusRaw ? this.hbClaimStatusLabel(statusRaw) : null),
       claimReason: reasons.join(' | ') || null,
       claimDate: claimDate && !Number.isNaN(claimDate.getTime()) ? claimDate : null,
     };
@@ -322,6 +357,12 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
     return 'created';
   }
 
+  private trendyolClaimStatuses(claim: Record<string, any>): string[] {
+    const lines = Array.isArray(claim.items) ? claim.items as Array<Record<string, any>> : [];
+    return Array.from(new Set(lines.flatMap((l) => (Array.isArray(l.claimItems) ? l.claimItems : []) as Array<Record<string, any>>)
+      .map((ci) => String(ci.claimItemStatus?.name ?? '')).filter(Boolean)));
+  }
+
   private async upsertTrendyolClaim(claim: Record<string, any>, company: string): Promise<'created' | 'updated' | 'skipped'> {
     const claimId = String(claim.id ?? claim.claimId ?? '');
     const orderNumber = String(claim.orderNumber ?? '');
@@ -335,7 +376,7 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
       const note = String(ci.customerNote ?? ci.note ?? '').trim();
       return [reason, note].filter(Boolean).join(': ');
     }).filter(Boolean)));
-    const claimStatus = statuses.map((x) => this.claimStatusLabel(x)).join(', ') || null;
+    const claimStatus = this.claimStage(statuses) ?? (statuses.map((x) => this.claimStatusLabel(x)).join(', ') || null);
     const claimReason = reasons.join(' | ') || null;
     const claimDate = claim.claimDate ? new Date(Number(claim.claimDate) || String(claim.claimDate)) : null;
     const customerName = [claim.customerFirstName, claim.customerLastName].filter(Boolean).join(' ') || null;
@@ -1013,7 +1054,6 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
                 (SELECT sci.file_path FROM stock_card_images sci WHERE sci.stock_card_id = sc.id ORDER BY sci.id LIMIT 1),
                 sc.external_image_url,
                 (SELECT img->>'url' FROM jsonb_array_elements(CASE WHEN jsonb_typeof(tpv.images) = 'array' THEN tpv.images ELSE '[]'::jsonb END) AS img WHERE img->>'url' IS NOT NULL AND img->>'url' <> '' LIMIT 1),
-                (SELECT p.image_url FROM products p WHERE ((moi.barcode IS NOT NULL AND p.barcode = moi.barcode) OR (moi.sku IS NOT NULL AND p.model_code = moi.sku) OR (moi.sku IS NOT NULL AND p.model_code = REGEXP_REPLACE(moi.sku, '^FL-', ''))) AND p.image_url IS NOT NULL AND p.image_url <> '' LIMIT 1),
                 (SELECT url FROM products p, jsonb_array_elements_text(CASE WHEN jsonb_typeof(p.image_urls) = 'array' THEN p.image_urls ELSE '[]'::jsonb END) AS url WHERE ((moi.barcode IS NOT NULL AND p.barcode = moi.barcode) OR (moi.sku IS NOT NULL AND p.model_code = moi.sku) OR (moi.sku IS NOT NULL AND p.model_code = REGEXP_REPLACE(moi.sku, '^FL-', ''))) AND url IS NOT NULL AND url <> '' LIMIT 1),
                 (SELECT sc2.image_path FROM stock_cards sc2 WHERE (sc2.barcode = moi.barcode OR sc2.sku = moi.sku OR (moi.sku IS NOT NULL AND sc2.sku = REGEXP_REPLACE(moi.sku, '^FL-', ''))) AND sc2.image_path IS NOT NULL AND sc2.image_path <> '' LIMIT 1),
                 (SELECT img->>'url' FROM trendyol_product_variants v2, jsonb_array_elements(CASE WHEN jsonb_typeof(v2.images) = 'array' THEN v2.images ELSE '[]'::jsonb END) AS img WHERE moi.sku IS NOT NULL AND moi.sku <> '' AND (UPPER(v2.supplier_stock_code) = UPPER(REGEXP_REPLACE(moi.sku, '^FL-', '')) OR UPPER(v2.current_model_code) = UPPER(REGEXP_REPLACE(moi.sku, '^FL-', ''))) AND img->>'url' IS NOT NULL AND img->>'url' <> '' LIMIT 1),
