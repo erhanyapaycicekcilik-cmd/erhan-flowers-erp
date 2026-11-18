@@ -89,69 +89,123 @@ export class HepsiburadaAdapter extends HttpMarketplaceOrderAdapter {
     return deduped;
   }
 
-  // HB listing API'den ürün görseli çek ve item'lara ekle
+  // HB katalog (mpop) görsel haritası — merchantSku/barkod/HB SKU → ilk görsel. Mağaza başına 1 saat önbellek.
+  private static catalogImageCache = new Map<string, { at: number; map: Map<string, string> }>();
+
+  private static normalizeImageUrl(raw: unknown): string | null {
+    let url = '';
+    if (typeof raw === 'string') url = raw;
+    else if (raw && typeof raw === 'object') {
+      const o = raw as Record<string, unknown>;
+      url = String(o.url ?? o.imageUrl ?? o.link ?? o.src ?? o.path ?? '');
+    }
+    url = url.trim();
+    if (!url) return null;
+    if (url.startsWith('//')) url = `https:${url}`;
+    // HB görsel adresleri boyut yer tutucusuyla gelir: .../s/49/{size}/1100....jpg → tarayıcıda açılmaz
+    url = url.replace(/\{size\}/gi, '500');
+    return url.startsWith('http') ? url : null;
+  }
+
+  private static firstImage(data: Record<string, unknown>): string | null {
+    for (const key of ['images', 'imageList', 'productImages', 'imageUrls']) {
+      const arr = data[key];
+      if (Array.isArray(arr)) {
+        for (const img of arr) {
+          const url = HepsiburadaAdapter.normalizeImageUrl(img);
+          if (url) return url;
+        }
+      }
+    }
+    for (const key of ['imageUrl', 'productImageUrl', 'productImageUrlFormat', 'image', 'mainImage', 'thumbnailUrl', 'Image1']) {
+      const url = HepsiburadaAdapter.normalizeImageUrl(data[key]);
+      if (url) return url;
+    }
+    const attrs = data.attributes;
+    if (attrs && typeof attrs === 'object' && !Array.isArray(attrs)) {
+      const url = HepsiburadaAdapter.normalizeImageUrl((attrs as Record<string, unknown>).Image1);
+      if (url) return url;
+    }
+    return null;
+  }
+
+  // HB katalog API'sinden mağazanın tüm ürünlerini çekip kod → görsel haritası kurar
+  private async loadCatalogImages(merchantId: string, username: string, password: string): Promise<Map<string, string>> {
+    const cached = HepsiburadaAdapter.catalogImageCache.get(merchantId);
+    if (cached && Date.now() - cached.at < 60 * 60 * 1000) return cached.map;
+
+    const userAgent = this.env('USER_AGENT') || 'ErhanFlowersERP-HB';
+    const apiBase = (this.env('PRODUCT_API_URL') || 'https://mpop.hepsiburada.com').replace(/\/+$/, '');
+    const secretKey = this.env('SECRET_KEY');
+    // mpop bazı mağazalarda merchantId:secretKey, bazılarında kullanıcı:şifre ile çalışıyor
+    const authCandidates = Array.from(new Set([
+      ...(secretKey ? [`${merchantId}:${secretKey}`] : []),
+      `${username}:${password}`,
+      `${merchantId}:${password}`,
+    ]));
+
+    const map = new Map<string, string>();
+    const add = (code: unknown, url: string) => {
+      const key = String(code ?? '').trim().toUpperCase();
+      if (key && !map.has(key)) map.set(key, url);
+    };
+
+    for (const cred of authCandidates) {
+      const headers = { Accept: 'application/json', Authorization: `Basic ${Buffer.from(cred).toString('base64')}`, 'User-Agent': userAgent };
+      let ok = false;
+      const size = 1000;
+      for (let page = 0; page < 30; page++) {
+        const url = `${apiBase}/product/api/products/all-products-of-merchant/${encodeURIComponent(merchantId)}?page=${page}&size=${size}`;
+        let json: Record<string, unknown> | null = null;
+        try {
+          const res = await fetch(url, { method: 'GET', headers, signal: AbortSignal.timeout(20000) });
+          if (!res.ok) break;
+          json = await res.json().catch(() => null) as Record<string, unknown> | null;
+        } catch { break; }
+        if (!json) break;
+        ok = true;
+        const list = (Array.isArray(json.data) ? json.data
+          : Array.isArray(json.content) ? json.content
+          : Array.isArray(json.products) ? json.products
+          : Array.isArray(json.items) ? json.items
+          : Array.isArray(json) ? json : []) as Record<string, unknown>[];
+        if (!list.length) break;
+        for (const p of list) {
+          const attrs = (p.attributes && typeof p.attributes === 'object' && !Array.isArray(p.attributes)) ? p.attributes as Record<string, unknown> : {};
+          const img = HepsiburadaAdapter.firstImage(p);
+          if (!img) continue;
+          add(p.merchantSku ?? p.merchantSKU ?? attrs.merchantSku, img);
+          add(p.barcode ?? attrs.Barcode, img);
+          add(p.hbSku ?? p.hepsiburadaSku ?? p.sku, img);
+          add(p.stockCode ?? p.productCode, img);
+        }
+        const totalPages = Number(json.totalPages ?? json.pageCount ?? 0);
+        if (json.last === true || list.length < size || (totalPages > 0 && page + 1 >= totalPages)) break;
+      }
+      if (ok) break;
+    }
+    // Hata durumunda boş haritayı kısa süreli tut (her senkronda API'ye yüklenmesin)
+    HepsiburadaAdapter.catalogImageCache.set(merchantId, { at: map.size ? Date.now() : Date.now() - 50 * 60 * 1000, map });
+    return map;
+  }
+
+  // Sipariş satırlarında görsel gelmiyor: HB katalog API'sinden SKU/barkodla bul
   private async enrichImagesFromListing(
     orders: ExternalOrder[],
     merchantId: string,
     username: string,
     password: string,
   ): Promise<void> {
-    const auth = Buffer.from(`${username}:${password}`).toString('base64');
-    const userAgent = this.env('USER_AGENT') || 'ErhanFlowersERP-HB';
-    const headers = { Accept: 'application/json', Authorization: `Basic ${auth}`, 'User-Agent': userAgent };
-    const listingBase = 'https://listing-external.hepsiburada.com';
-
-    // Görselsiz item'ların benzersiz SKU listesi
-    const skuToItems = new Map<string, Array<ExternalOrder['items'][0]>>();
-    for (const order of orders) {
-      for (const item of order.items) {
-        if (!item.imageUrl && item.sku) {
-          if (!skuToItems.has(item.sku)) skuToItems.set(item.sku, []);
-          skuToItems.get(item.sku)!.push(item);
-        }
+    const missing = orders.flatMap((o) => o.items).filter((item) => !item.imageUrl);
+    if (!missing.length) return;
+    const map = await this.loadCatalogImages(merchantId, username, password).catch(() => new Map<string, string>());
+    if (!map.size) return;
+    for (const item of missing) {
+      for (const code of [item.sku, item.barcode, item.modelCode, item.externalVariantId]) {
+        const url = code ? map.get(String(code).trim().toUpperCase()) : undefined;
+        if (url) { item.imageUrl = url; break; }
       }
     }
-    if (!skuToItems.size) return;
-
-    // Her benzersiz SKU için listing API'ye istek at (paralel, max 5 eşzamanlı)
-    const skus = Array.from(skuToItems.keys());
-    const fetchImage = async (sku: string): Promise<void> => {
-      try {
-        const url = `${listingBase}/listings/merchantid/${encodeURIComponent(merchantId)}/sku/${encodeURIComponent(sku)}`;
-        const res = await fetch(url, { method: 'GET', headers, signal: AbortSignal.timeout(5000) });
-        if (!res.ok) return;
-        const data = await res.json().catch(() => null) as Record<string, unknown> | null;
-        if (!data) return;
-
-        // HB listing yanıtındaki olası görsel alanları
-        const imgUrl = this.extractFirstImageUrl(data);
-        if (imgUrl) {
-          skuToItems.get(sku)?.forEach((item) => { item.imageUrl = imgUrl; });
-        }
-      } catch {
-        // Görsel çekme hatası sessizce geçilir, sipariş yine de işlenir
-      }
-    };
-
-    // 5'li gruplar halinde paralel çek
-    for (let i = 0; i < skus.length; i += 5) {
-      await Promise.all(skus.slice(i, i + 5).map(fetchImage));
-    }
-  }
-
-  private extractFirstImageUrl(data: Record<string, unknown>): string | null {
-    // HB listing yanıtında olası görsel alanları
-    if (Array.isArray(data.images) && data.images.length) {
-      const first = data.images[0];
-      if (typeof first === 'string' && first.startsWith('http')) return first;
-      if (typeof first === 'object' && first !== null) {
-        const obj = first as Record<string, unknown>;
-        const url = String(obj.url ?? obj.imageUrl ?? obj.src ?? '');
-        if (url.startsWith('http')) return url;
-      }
-    }
-    const direct = String(data.imageUrl ?? data.productImageUrl ?? data.image ?? data.mainImage ?? '');
-    return direct.startsWith('http') ? direct : null;
   }
 
   private mapHepsiburadaOrder(order: Record<string, unknown>): ExternalOrder | null {
@@ -206,7 +260,7 @@ export class HepsiburadaAdapter extends HttpMarketplaceOrderAdapter {
           sku: merchantSku || undefined,
           barcode: String(line.barcode ?? line.ean ?? merchantSku) || undefined,
           modelCode: merchantSku || undefined,
-          imageUrl: String(line.imageUrl ?? line.productImageUrl ?? line.productImageUrlFormat ?? line.thumbnailUrl ?? line.img ?? '') || undefined,
+          imageUrl: HepsiburadaAdapter.firstImage(line) ?? HepsiburadaAdapter.normalizeImageUrl(line.img) ?? undefined,
           quantity: Number(line.quantity ?? line.qty ?? 1),
           unitPrice: this.hbPrice(line.price ?? line.unitPrice ?? line.salePrice ?? 0),
         };
