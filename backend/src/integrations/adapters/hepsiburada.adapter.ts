@@ -22,6 +22,14 @@ export class HepsiburadaAdapter extends HttpMarketplaceOrderAdapter {
   // parametreleri HB tarafından reddedildiği için override gerekli.
   /** Son fetchOrders tüm sayfaları hatasız aldı mı? (Eksik listeyle "kargoya verildi" kararı verilmesin) */
   lastFetchComplete = false;
+  /** Önceden satır id'siyle (ürünsüz) kaydedilmiş HB siparişleri: satır id → sipariş no (çift kayıt temizliği için) */
+  regroupedLineIds = new Map<string, string>();
+
+  private isLineShaped(row: Record<string, unknown>): boolean {
+    const hasLineArray = ['orderLineList', 'lines', 'items'].some((k) => Array.isArray(row[k]));
+    if (hasLineArray) return false;
+    return Boolean(row.merchantSKU ?? row.merchantSku ?? row.productImageUrlFormat ?? ((row.name || row.productName) && row.quantity != null));
+  }
 
   override async fetchOrders(): Promise<ExternalOrder[]> {
     this.lastFetchComplete = false;
@@ -43,6 +51,7 @@ export class HepsiburadaAdapter extends HttpMarketplaceOrderAdapter {
     const basePath = `/orders/merchantid/${encodeURIComponent(merchantId)}/openorders`;
 
     const allOrders: ExternalOrder[] = [];
+    const rawLines: Record<string, unknown>[] = [];
     const pageSize = 50;
     const maxPages = 10;
     let offset = 0;
@@ -68,10 +77,15 @@ export class HepsiburadaAdapter extends HttpMarketplaceOrderAdapter {
 
       if (!items.length) { reachedEnd = true; break; }
 
+      // HB OMS listesi sipariş değil ÜRÜN SATIRI döndürür (id = satır, orderNumber, name, merchantSKU,
+      // productImageUrlFormat). Satır biçimindekiler sipariş numarasına göre gruplanır.
+      const lineShaped = items.filter((it) => this.isLineShaped(it));
       for (const order of items) {
+        if (this.isLineShaped(order)) continue;
         const mapped = this.mapHepsiburadaOrder(order);
         if (mapped) allOrders.push(mapped);
       }
+      rawLines.push(...lineShaped);
 
       const totalCount = Number(json.TotalCount ?? json.totalCount ?? 0);
       offset += pageSize;
@@ -79,6 +93,22 @@ export class HepsiburadaAdapter extends HttpMarketplaceOrderAdapter {
       if (items.length < pageSize) { reachedEnd = true; break; }
     }
     this.lastFetchComplete = complete && reachedEnd;
+
+    // Satır biçimindeki kayıtları sipariş numarasıyla grupla
+    this.regroupedLineIds = new Map();
+    const groups = new Map<string, Record<string, unknown>[]>();
+    for (const line of rawLines) {
+      const key = String(line.orderNumber ?? line.orderId ?? line.packageNumber ?? line.id ?? '');
+      if (!key) continue;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(line);
+      const lineId = String(line.id ?? '');
+      if (lineId && lineId !== key) this.regroupedLineIds.set(lineId, key);
+    }
+    for (const [orderNumber, lines] of groups) {
+      const mapped = this.mapHepsiburadaOrder({ ...lines[0], id: orderNumber, orderNumber, orderLineList: lines, totalPrice: undefined, amount: lines.reduce((sum, l) => sum + this.hbPrice(l.totalPrice ?? 0), 0) });
+      if (mapped) allOrders.push(mapped);
+    }
 
     // Tekrarlananları kaldır
     const deduped = Array.from(new Map(allOrders.map((o) => [o.externalOrderId, o])).values());
@@ -217,7 +247,7 @@ export class HepsiburadaAdapter extends HttpMarketplaceOrderAdapter {
     const all = orders.flatMap((o) => o.items);
     const missing = all.filter((item) => !item.imageUrl);
     if (!missing.length) {
-      HepsiburadaAdapter.lastImageDiag = `${all.length} satırın hepsinde görsel siparişle geldi`;
+      HepsiburadaAdapter.lastImageDiag = `${orders.length} açık sipariş, ${all.length} ürün satırı — hepsinin görseli siparişle geldi`;
       return;
     }
     const map = await this.loadCatalogImages(merchantId, username, password).catch(() => new Map<string, string>());
@@ -231,7 +261,7 @@ export class HepsiburadaAdapter extends HttpMarketplaceOrderAdapter {
       }
       if (found) matched += 1; else unmatched.push(item.sku || item.barcode || '?');
     }
-    HepsiburadaAdapter.lastImageDiag = `${HepsiburadaAdapter.lastImageDiag.split(' || ')[0]} || ${all.length} sipariş satırı, ${missing.length} görselsiz geldi, ${matched} katalogdan bulundu`
+    HepsiburadaAdapter.lastImageDiag = `${HepsiburadaAdapter.lastImageDiag.split(' || ')[0]} || ${orders.length} açık sipariş, ${all.length} ürün satırı, ${missing.length} görselsiz geldi, ${matched} katalogdan bulundu`
       + (unmatched.length ? `, bulunamayan kodlar: ${Array.from(new Set(unmatched)).slice(0, 5).join(', ')}` : '');
   }
 
@@ -277,13 +307,14 @@ export class HepsiburadaAdapter extends HttpMarketplaceOrderAdapter {
       cargoProvider: String(order.cargoCompany ?? order.cargoProviderName ?? '') || undefined,
       cargoTrackingNumber: String(order.trackingNumber ?? order.cargoTrackingNumber ?? '') || undefined,
       orderDate: order.orderDate ? new Date(String(order.orderDate)) : undefined,
+      deliveryDueAt: order.dueDate ? new Date(String(order.dueDate)) : undefined,
       items: lines.map((line) => {
         const merchantSku = String(line.merchantSku ?? line.merchantSKU ?? line.supplierStockCode ?? line.sku ?? '');
         // merchantSku hem barcode hem modelCode olarak set ediliyor — hangisi eşleşirse stok düşülsün
         return {
           externalLineId: String(line.id ?? line.lineId ?? '') || undefined,
           externalVariantId: String(line.hepsiburadaSku ?? line.listingId ?? merchantSku) || undefined,
-          productName: String(line.productName ?? line.name ?? 'Hepsiburada Ürünü'),
+          productName: String(line.productName ?? line.name ?? line.productTitle ?? 'Hepsiburada Ürünü'),
           sku: merchantSku || undefined,
           barcode: String(line.barcode ?? line.ean ?? merchantSku) || undefined,
           modelCode: merchantSku || undefined,

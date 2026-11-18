@@ -734,7 +734,8 @@ export class OrderSyncService {
       create: { platform: 'HEPSIBURADA', displayName: 'Hepsiburada', status: 'CONNECTED', lastSyncAt: new Date() },
     });
 
-    const fetchedHbIds = allOrders.map((o) => String(o.id ?? o.orderNumber ?? '')).filter(Boolean);
+    // HB satır listesi: hem satır id'si hem sipariş no "listede var" sayılır (ERP kaydı sipariş no ile tutulur)
+    const fetchedHbIds = Array.from(new Set(allOrders.flatMap((o) => [o.id, o.orderNumber, o.packageNumber].map((v) => String(v ?? '')).filter(Boolean))));
     await this.markMissingAsDelivered('HEPSIBURADA', fetchedHbIds, hbApiSucceeded);
 
     // Doğrudan temizleme: external_order_id NULL olan veya API'de görünmeyen 2+ günlük HB siparişleri → DELIVERED
@@ -742,7 +743,7 @@ export class OrderSyncService {
     if (hbApiSucceeded) {
       const cleaned = await this.prisma.$executeRaw`
         UPDATE retail_sales
-        SET status = 'DELIVERED'::"RetailSaleStatus", updated_at = NOW()
+        SET status = 'OUT_FOR_DELIVERY'::"RetailSaleStatus", updated_at = NOW()
         WHERE channel = 'HEPSIBURADA'::"RetailSaleChannel"
           AND status IN ('CONFIRMED'::"RetailSaleStatus", 'PREPARING'::"RetailSaleStatus", 'IN_PRODUCTION'::"RetailSaleStatus", 'READY'::"RetailSaleStatus")
           AND created_at < NOW() - INTERVAL '2 days'
@@ -767,6 +768,8 @@ export class OrderSyncService {
       WHERE channel = ${platform}::"RetailSaleChannel"
         AND status = 'OUT_FOR_DELIVERY'::"RetailSaleStatus"
         AND external_order_id IS NOT NULL
+        -- Kargoya verilen sipariş en az 3 gün "Kargoda" görünür (platform daha önce teslim derse o kapatır)
+        AND updated_at < NOW() - INTERVAL '3 days'
     `;
     for (const sale of transitSales) {
       if (!fetchedIds.includes(sale.external_order_id)) {
@@ -788,9 +791,9 @@ export class OrderSyncService {
     for (const sale of staleSales) {
       if (!fetchedIds.includes(sale.external_order_id)) {
         await this.prisma.$executeRaw`
-          UPDATE retail_sales SET status = 'DELIVERED'::"RetailSaleStatus", updated_at = NOW() WHERE id = ${sale.id}
+          UPDATE retail_sales SET status = 'OUT_FOR_DELIVERY'::"RetailSaleStatus", updated_at = NOW() WHERE id = ${sale.id}
         `;
-        this.logger.log(`[${platform}] Siparis #${sale.id} (${sale.external_order_id}) API'de yok → DELIVERED olarak isaratlendi.`);
+        this.logger.log(`[${platform}] Siparis #${sale.id} (${sale.external_order_id}) API'de yok → kargoda (OUT_FOR_DELIVERY) yapildi.`);
       }
     }
     // marketplace_orders: 2 günden eski ve API'de görünmeyenleri DELIVERED yap

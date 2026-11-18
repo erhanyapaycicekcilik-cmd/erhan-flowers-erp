@@ -218,7 +218,7 @@ export default function StaffOrdersPage() {
       const result = await api<{ results: Array<{ label: string; ok: boolean; imported: number; message?: string }>; message?: string; imageDiag?: string | null }>('/integrations/orders/sync-all', { method: 'POST' });
       const rows = result.results ?? [];
       const imported = rows.reduce((sum, r) => sum + (r.imported || 0), 0);
-      const failed = rows.filter((r) => !r.ok).map((r) => r.label);
+      const failed = rows.filter((r) => !r.ok).map((r) => `${r.label}${r.message ? ` (${r.message.slice(0, 80)})` : ''}`);
       setSyncMsg(result.message ?? `Tamamlandı: ${imported} yeni sipariş${failed.length ? ` · hata: ${failed.join(', ')}` : ''}`);
       setImageDiag(result.imageDiag ?? '');
       await load();
@@ -356,7 +356,7 @@ export default function StaffOrdersPage() {
             </div>
           )}
           <div className="flex gap-2 items-center flex-wrap">
-            {syncMsg && <span className="text-xs text-emerald-600 font-semibold">{syncMsg}</span>}
+            {syncMsg && <span className={`text-xs font-semibold w-full ${syncMsg.includes('hata') ? 'text-amber-700' : 'text-emerald-600'}`}>{syncMsg}</span>}
             <button onClick={() => void load()} disabled={loading} className="btn btn-secondary text-sm">
               <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> Yenile
             </button>
@@ -366,9 +366,6 @@ export default function StaffOrdersPage() {
             <a href="/sabah-ciktisi" className="btn btn-primary text-sm">
               <Printer size={15} /> Sabah Çıktısı (A5)
             </a>
-            <button onClick={() => void load()} className="btn btn-secondary text-sm">
-              <RefreshCw size={14} /> Yenile
-            </button>
           </div>
         </div>
 

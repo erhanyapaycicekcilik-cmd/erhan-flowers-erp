@@ -120,7 +120,9 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
       const results: Array<{ label: string; ok: boolean; imported: number; message?: string }> = [];
       for (const job of jobs) {
         try {
-          const r = await this.syncOrders(job.platform, userId, job.company) as { ok?: boolean; imported?: number; message?: string };
+          const r = await this.syncOrders(job.platform, userId, job.company) as { ok?: boolean; imported?: number; message?: string; missingKeys?: string[]; status?: string };
+          // API bilgisi girilmemiş / kapalı platform hata sayılmaz
+          if (r.ok === false && ((r.missingKeys?.length ?? 0) > 0 || /eksik|missing|tanımlı değil|kapalı|devre dışı/i.test(r.message ?? ''))) continue;
           results.push({ label: job.label, ok: r.ok !== false, imported: Number(r.imported ?? 0), message: r.ok === false ? r.message : undefined });
         } catch (error) {
           results.push({ label: job.label, ok: false, imported: 0, message: this.errorMessage(error) });
@@ -279,6 +281,7 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
         WHERE channel = ${platform}::"RetailSaleChannel"
           AND status = 'OUT_FOR_DELIVERY'
           AND external_order_id IS NOT NULL
+          AND updated_at < NOW() - INTERVAL '3 days'
       `;
       for (const sale of transitOrders) {
         if (!fetchedExternalIds.includes(sale.external_order_id)) {
@@ -290,6 +293,24 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
             autoDelivered += 1;
           } catch { /* ignore */ }
         }
+      }
+    }
+
+    // HB satır biçimi düzeltmesinden önce her ürün satırı ayrı (ürünsüz) sipariş olarak kaydediliyordu.
+    // Artık sipariş no ile tek kayıt geliyor → eski ürünsüz satır kayıtlarını iptal et (çift görünmesin, ciroya girmesin)
+    if (platform === 'HEPSIBURADA') {
+      const lineIds = Array.from(((adapter as { regroupedLineIds?: Map<string, string> }).regroupedLineIds ?? new Map()).keys());
+      if (lineIds.length) {
+        await this.prisma.$executeRaw`
+          UPDATE retail_sales s
+          SET status = 'CANCELLED'::"RetailSaleStatus", cancelled_at = NOW(),
+              internal_note = COALESCE(s.internal_note, '') || ' | Ürünsüz yinelenen HB kaydı; sipariş no ile yeniden alındı',
+              updated_at = NOW()
+          WHERE s.channel = 'HEPSIBURADA'::"RetailSaleChannel"
+            AND s.external_order_id IN (${Prisma.join(lineIds)})
+            AND s.status::text NOT IN ('CANCELLED','DELIVERED','COMPLETED')
+            AND NOT EXISTS (SELECT 1 FROM retail_sale_items i WHERE i.sale_id = s.id)
+        `.catch(() => 0);
       }
     }
 
