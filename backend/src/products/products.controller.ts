@@ -7,6 +7,7 @@ import { InternalKeyGuard } from '../auth/internal-key.guard';
 import { OwnerGuard } from '../auth/owner.guard';
 import { GeminiContentService } from './gemini-content.service';
 import { ProductsService } from './products.service';
+import { BulkPriceParams, BulkPriceService } from './bulk-price.service';
 import { TrendyolProductSyncService } from '../public-catalog/trendyol-product-sync.service';
 
 @UseGuards(AuthGuard)
@@ -16,6 +17,7 @@ export class ProductsController {
     private readonly products: ProductsService,
     private readonly geminiContent: GeminiContentService,
     private readonly trendyolSync: TrendyolProductSyncService,
+    private readonly bulkPrice: BulkPriceService,
   ) {}
 
   @Get()
@@ -70,6 +72,31 @@ export class ProductsController {
   @Post('identity-check')
   checkIdentity(@Body() body: unknown) {
     return this.products.checkIdentity(body);
+  }
+
+  // ─── Toplu zam / indirim (Trendyol ürünleri → tüm pazaryerleri) ───────────
+  @UseGuards(OwnerGuard)
+  @Post('bulk-price/preview')
+  bulkPricePreview(@Body() body: BulkPriceParams) {
+    return this.bulkPrice.preview(body);
+  }
+
+  @UseGuards(OwnerGuard)
+  @Post('bulk-price/apply')
+  bulkPriceApply(@Body() body: BulkPriceParams & { variantIds?: number[] }) {
+    return this.bulkPrice.apply(body);
+  }
+
+  @UseGuards(OwnerGuard)
+  @Get('bulk-price/status')
+  async bulkPriceStatus() {
+    return { job: this.bulkPrice.status(), lastUndo: await this.bulkPrice.lastUndo() };
+  }
+
+  @UseGuards(OwnerGuard)
+  @Post('bulk-price/undo')
+  bulkPriceUndo() {
+    return this.bulkPrice.undo();
   }
 
   @Post('broadcast-all')

@@ -129,6 +129,13 @@ Sonra tarayıcıda: **http://localhost:3200**
 - Kaynak adındaki boy (`150 Cm`) → yeni boy; model kodu `<kaynak>-<boy>`, yeni EAN-13 barkod; görsel/açıklama/kategori/stok kopyalanır; fiyat her adımda ±priceStep. `trendyolProductUrl` ve `trendyolBarcode` kopyalanmaz (kaynak ilan ezilmesin). Var olan model kodu tekrar oluşturulmaz
 - Sayfa oluşturduktan sonra `/publishing/send` ile Trendyol (Erhan+Flora), N11, HB'ye gönderir
 
+## Toplu Zam / İndirim (`/products/toplu-zam`, sadece OWNER)
+
+- Backend `backend/src/products/bulk-price.service.ts`: `POST /products/bulk-price/preview|apply` (`{mode:'PERCENT'|'AMOUNT', value, search?, minPrice?, maxPrice?, roundTo9?, variantIds?}`), `GET /products/bulk-price/status`, `POST /products/bulk-price/undo`
+- Kapsam: ACTIVE `trendyol_product_variants` (WEB- hariç). Mevcut fiyat = `trendyolSalePrice` (yoksa draft `marketplaceSalePrice`). Uygulayınca `trendyolSalePrice` + draft `marketplaceSalePrice` + Product `marketPrice/listPrice` güncellenir, bağlı pazaryerlerine `pushPrice` (fiyat+stok) arka planda 10'arlı gider. Flora mağazası etkilenmez
+- Eski fiyatlar `app_settings.bulk_price_last` → "Son işlemi geri al"
+- Haftalık Pazar +5 TL cron'u (`ProductsService.weeklyPriceIncrease`, `WEEKLY_PRICE_INCREASE`, 0 = kapalı) bu servisi kullanır
+
 ## e-Dönüşüm / Fatura (`/e-donusum`, sadece OWNER)
 
 - Backend: `backend/src/e-invoices/` — `GET/PUT /e-invoices/settings`, `POST /e-invoices/settings/test`, `GET /e-invoices/pending?days=`, `POST /e-invoices/issue` (`{items:[{sourceType,sourceId}]}` veya `{all:true}`), `GET /e-invoices`, `POST /e-invoices/:id/retry`, `GET /e-invoices/draft/:sourceType/:id`

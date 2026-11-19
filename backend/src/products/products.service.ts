@@ -5,6 +5,7 @@ import { cleanMojibakeDeep } from '../common/mojibake';
 import { Prisma } from '../generated/prisma-client';
 import { PrismaService } from '../prisma/prisma.service';
 import { IntegrationsService } from '../integrations/integrations.service';
+import { BulkPriceService } from './bulk-price.service';
 import { calcPlatformPrice } from '../integrations/platform-fees.config';
 import { SITE_ONLY_MODEL_PREFIX, isSiteOnlyModelCode } from '../common/site-only';
 
@@ -65,6 +66,7 @@ export class ProductsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly integrations: IntegrationsService,
+    private readonly bulkPrice: BulkPriceService,
   ) {}
 
   private async getConnectedPlatforms(): Promise<string[]> {
@@ -1713,35 +1715,20 @@ export class ProductsService {
   }
 
   // ─── Haftalık otomatik fiyat artışı ──────────────────────────────────────────
-  // Her Pazar 08:00'da tüm aktif Trendyol varyantlarına WEEKLY_PRICE_INCREASE TL ekler
-  // ve tüm platformlara yayınlar.
-  static readonly WEEKLY_PRICE_INCREASE = 5; // TL — değiştirmek için bu satırı düzenle
+  // Her Pazar 11:00 (TR) tüm aktif Trendyol ürünlerine WEEKLY_PRICE_INCREASE TL ekler ve
+  // bağlı tüm pazaryerlerine gönderir (Toplu Zam ile aynı servis: ERP fiyatları da güncellenir).
+  static readonly WEEKLY_PRICE_INCREASE = 5; // TL — değiştirmek için bu satırı düzenle (0 = kapalı)
 
   @Cron('0 8 * * 0') // Pazar 08:00 UTC (Türkiye 11:00)
   async weeklyPriceIncrease() {
     const amount = ProductsService.WEEKLY_PRICE_INCREASE;
+    if (!amount) return;
     this.logger.log(`Haftalık fiyat artışı başladı: +${amount} TL`);
-
-    // Trendyol varyantları
-    const updated = await this.prisma.trendyolProductVariant.updateMany({
-      where: { status: 'ACTIVE' },
-      data: { trendyolSalePrice: { increment: amount } },
-    });
-
-    // Ürünler tablosu (marketPrice)
-    await this.prisma.product.updateMany({
-      where: { status: 'ACTIVE', modelCode: { not: { startsWith: 'WEB-' } } },
-      data: { marketPrice: { increment: amount } },
-    });
-
-    this.logger.log(`Fiyat güncellendi: ${updated.count} Trendyol varyantı`);
-
-    // Tüm platformlara yayınla
     try {
-      const result = await this.broadcastAll();
-      this.logger.log(`Haftalık yayın tamamlandı: ${result.sent} gönderildi, ${result.errors} hata`);
+      const result = await this.bulkPrice.applyNow({ mode: 'AMOUNT', value: amount });
+      this.logger.log(`Haftalık fiyat artışı bitti: ${JSON.stringify(result)}`);
     } catch (err) {
-      this.logger.error('Haftalık yayın hatası', err);
+      this.logger.error('Haftalık fiyat artışı hatası', err);
     }
   }
 }
