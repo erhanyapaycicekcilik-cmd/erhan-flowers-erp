@@ -3,6 +3,7 @@ import { createHash, randomBytes, timingSafeEqual } from 'crypto';
 import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service';
 import { GmailOrderService } from '../integrations/services/gmail-order.service';
+import { BankDebtsService } from '../bank-debts/bank-debts.service';
 import { extractSubscriberNo, guessBillType, isBillLikeSms, parseBillEmail, ParsedBill } from './bill-email-parser';
 
 const SMS_TOKEN_KEY = 'bill_sms_token';
@@ -43,6 +44,7 @@ export class BillAccountsService implements OnApplicationBootstrap {
   constructor(
     private prisma: PrismaService,
     private gmail: GmailOrderService,
+    private bankDebts: BankDebtsService,
   ) {}
 
   /**
@@ -398,6 +400,14 @@ export class BillAccountsService implements OnApplicationBootstrap {
     }
     text = text.trim().slice(0, 2000);
     if (!text) throw new BadRequestException('SMS metni boş.');
+
+    // Önce banka SMS'i mi (kart ekstresi / kredi taksiti / kullanılabilir limit)? Eşleşirse Banka Borçları'na yazılır
+    try {
+      const bank = await this.bankDebts.receiveSms(text, from);
+      if (bank) return { ok: true, matched: bank.matched, amount: bank.amount, result: bank.result };
+    } catch (err) {
+      this.logger.warn(`Banka SMS işlenemedi: ${err instanceof Error ? err.message : String(err)}`);
+    }
 
     const digits = text.replace(/[^0-9]/g, ' ');
     const accounts = await this.prisma.billAccount.findMany({ where: { isActive: true, subscriberNo: { not: null } } });
