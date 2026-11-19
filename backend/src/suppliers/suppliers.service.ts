@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, Logger, NotFoundException } from '@nes
 import { Cron } from '@nestjs/schedule';
 import { MailService } from '../mail/mail.service';
 import { SalariesService } from './salaries.service';
+import { BankDebtsService } from '../bank-debts/bank-debts.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -12,6 +13,7 @@ export class SuppliersService {
     private readonly prisma: PrismaService,
     private readonly mail: MailService,
     private readonly salaries: SalariesService,
+    private readonly bankDebts: BankDebtsService,
   ) {}
 
   /**
@@ -47,7 +49,7 @@ export class SuppliersService {
       const tl = (n: number | null) => (n == null ? '—' : `${n.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₺`);
       const rows = a.items.map((i) => `<tr style="${i.overdue ? 'background:#fef2f2' : ''}">
         <td style="padding:6px 10px;border-bottom:1px solid #eee">${new Date(i.dueDate).toLocaleDateString('tr-TR')}</td>
-        <td style="padding:6px 10px;border-bottom:1px solid #eee">${i.kind === 'BILL' ? 'Fatura' : i.kind === 'SALARY' ? 'Maaş' : 'Taksit'}</td>
+        <td style="padding:6px 10px;border-bottom:1px solid #eee">${i.kind === 'BILL' ? 'Fatura' : i.kind === 'SALARY' ? 'Maaş' : i.kind === 'BANK' ? 'Banka' : 'Taksit'}</td>
         <td style="padding:6px 10px;border-bottom:1px solid #eee"><b>${i.title}</b>${i.party ? ` — ${i.party}` : ''}${i.detail ? `<br><small style="color:#888">${i.detail}</small>` : ''}</td>
         <td style="padding:6px 10px;border-bottom:1px solid #eee;text-align:right;white-space:nowrap">${tl(i.amount)}</td>
         <td style="padding:6px 10px;border-bottom:1px solid #eee;color:${i.overdue ? '#dc2626' : '#ea580c'}">${i.overdue ? 'GECİKTİ' : 'Yaklaşıyor'}</td>
@@ -213,7 +215,7 @@ export class SuppliersService {
     const installmentRemaining = installments.reduce((s, i) => s + Number(i.amount), 0);
 
     type Upcoming = {
-      kind: 'INSTALLMENT' | 'BILL' | 'SALARY';
+      kind: 'INSTALLMENT' | 'BILL' | 'SALARY' | 'BANK';
       refId: number;
       title: string;
       party: string | null;
@@ -286,6 +288,24 @@ export class SuppliersService {
       }
     } catch { /* personel tablosu yoksa maaşsız devam */ }
 
+    // Banka: kredi kartı ekstreleri / kredi taksitleri
+    let bankUnpaid = 0;
+    try {
+      for (const b of await this.bankDebts.unpaidForOverview(horizon)) {
+        bankUnpaid += b.amount ?? 0;
+        upcoming.push({
+          kind: 'BANK',
+          refId: b.accountId,
+          title: b.title,
+          party: b.party,
+          dueDate: b.dueDate.toISOString(),
+          amount: b.amount,
+          overdue: b.dueDate < today,
+          detail: b.detail,
+        });
+      }
+    } catch { /* banka tablosu yoksa bankasız devam */ }
+
     upcoming.sort((a, b) => a.dueDate.localeCompare(b.dueDate));
     const r2 = (n: number) => Math.round(n * 100) / 100;
     return {
@@ -293,7 +313,8 @@ export class SuppliersService {
       installmentRemaining: r2(installmentRemaining),
       billsUnpaid: r2(billsUnpaid),
       salaryUnpaid: r2(salaryUnpaid),
-      grandTotal: r2(supplierDebt + installmentRemaining + billsUnpaid + salaryUnpaid),
+      bankUnpaid: r2(bankUnpaid),
+      grandTotal: r2(supplierDebt + installmentRemaining + billsUnpaid + salaryUnpaid + bankUnpaid),
       overdueTotal: r2(upcoming.filter((u) => u.overdue).reduce((s, u) => s + (u.amount ?? 0), 0)),
       upcoming,
     };

@@ -2675,3 +2675,48 @@ model EInvoice {
   @@index([createdAt(sort: Desc)])
   @@map("e_invoices")
 }
+
+// ─── Banka Borçları (kredi kartı / kredi / KMH) ──────────────────────────────
+model BankDebtAccount {
+  id             Int             @id @default(autoincrement())
+  kind           String          // CREDIT_CARD | LOAN | OVERDRAFT | OTHER
+  bankName       String          @map("bank_name")
+  name           String          // Kart / kredi adı: "Bonus Kart", "İşletme Kredisi"
+  accountNo      String?         @map("account_no")       // Kartın son 4 hanesi / kredi-hesap no (SMS eşleştirme)
+  creditLimit    Decimal?        @map("credit_limit") @db.Decimal(14, 2)
+  currentDebt    Decimal?        @map("current_debt") @db.Decimal(14, 2)   // Güncel toplam borç / kalan kredi
+  currentDebtAt  DateTime?       @map("current_debt_at")
+  statementDay   Int?            @map("statement_day")    // Hesap kesim günü
+  dueDay         Int             @map("due_day")          // Son ödeme günü
+  monthlyPayment Decimal?        @map("monthly_payment") @db.Decimal(14, 2) // Kredi taksiti (sabit)
+  endDate        DateTime?       @map("end_date") @db.Date               // Kredi son taksit tarihi
+  interestRate   Decimal?        @map("interest_rate") @db.Decimal(6, 2)  // Aylık faiz %
+  notes          String?
+  isActive       Boolean         @default(true) @map("is_active")
+  createdAt      DateTime        @default(now()) @map("created_at")
+  statements     BankStatement[]
+
+  @@map("bank_debt_accounts")
+}
+
+model BankStatement {
+  id             Int             @id @default(autoincrement())
+  accountId      Int             @map("account_id")
+  year           Int             // Son ödeme tarihinin yılı/ayı
+  month          Int
+  statementDate  DateTime?       @map("statement_date") @db.Date
+  dueDate        DateTime        @map("due_date") @db.Date
+  totalAmount    Decimal         @map("total_amount") @db.Decimal(14, 2)  // Dönem borcu
+  minimumPayment Decimal?        @map("minimum_payment") @db.Decimal(14, 2)
+  paidAt         DateTime?       @map("paid_at")
+  paidAmount     Decimal?        @map("paid_amount") @db.Decimal(14, 2)
+  source         String          @default("MANUAL")  // MANUAL | SMS
+  sourceRef      String?         @map("source_ref")
+  note           String?
+  createdAt      DateTime        @default(now()) @map("created_at")
+  account        BankDebtAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@unique([accountId, year, month])
+  @@index([dueDate])
+  @@map("bank_statements")
+}
