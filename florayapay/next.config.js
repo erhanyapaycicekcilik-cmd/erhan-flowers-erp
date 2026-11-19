@@ -115,6 +115,11 @@ const nextConfig = {
         permanent: true,
       },
 
+      // ── /kategori/<slug> → /urunler?kategori=<slug> (Google Ads site bağlantıları vb.) ──
+      { source: '/kategori/dikey-bahce', destination: '/urunler?kategori=dikey-bahceler', permanent: true },
+      { source: '/kategori/:slug', destination: '/urunler?kategori=:slug', permanent: true },
+      { source: '/kategori/:slug/:sub', destination: '/urunler?kategori=:slug&altkategori=:sub', permanent: true },
+
       // ── Ticimax template URL'i ───────────────────────────────────────────────
       {
         source: '/:lang/Arama',
