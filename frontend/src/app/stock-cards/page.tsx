@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, Fragment, useEffect, useMemo, useState } from 'react';
 import { Edit3, ExternalLink, FileText, History, ImagePlus, Minus, Plus, Printer, Save, Send, Trash2, X } from 'lucide-react';
 import { AdminShell } from '@/components/AdminShell';
 import { api, apiBaseUrl, apiFileUrl } from '@/lib/api';
@@ -1218,17 +1218,43 @@ export default function StockCardsPage() {
 }
 
 function StockCountPrintView({ items, onBack }: { items: StockCard[]; onBack: () => void }) {
+  const [includeZeroStock, setIncludeZeroStock] = useState(false);
+  const [blankRowCount, setBlankRowCount] = useState(15);
+  const [selectedCategory, setSelectedCategory] = useState('');
+  const categoryLabel = (item: StockCard) => item.category?.trim() || 'Kategorisiz';
+  const stockedItems = useMemo(
+    () => items.filter((item) => item.status !== 'PASSIVE' && (includeZeroStock || Number(item.stockQuantity ?? 0) > 0)),
+    [items, includeZeroStock],
+  );
+  const categoryOptions = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const item of stockedItems) counts.set(categoryLabel(item), (counts.get(categoryLabel(item)) ?? 0) + 1);
+    return [...counts.entries()].sort((a, b) => a[0].localeCompare(b[0], 'tr'));
+  }, [stockedItems]);
   const activeItems = useMemo(() => {
-    return [...items]
-      .filter((item) => item.status !== 'PASSIVE')
+    return stockedItems
+      .filter((item) => !selectedCategory || categoryLabel(item) === selectedCategory)
       .sort((a, b) => {
         const categoryCompare = String(a.category ?? '').localeCompare(String(b.category ?? ''), 'tr');
         if (categoryCompare !== 0) return categoryCompare;
         return a.name.localeCompare(b.name, 'tr');
       });
-  }, [items]);
+  }, [stockedItems, selectedCategory]);
   const totalQuantity = activeItems.reduce((sum, item) => sum + Number(item.stockQuantity ?? 0), 0);
+  const missingPriceCount = activeItems.filter((item) => Number(item.purchasePrice ?? 0) <= 0).length;
+  const [brokenImageIds, setBrokenImageIds] = useState<Set<number>>(() => new Set());
+  const noImageCount = activeItems.filter((item) => !stockImages(item)[0]).length;
+  const brokenImageCount = activeItems.filter((item) => stockImages(item)[0] && brokenImageIds.has(item.id)).length;
   const printDate = new Intl.DateTimeFormat('tr-TR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date());
+  const money = (value: number) => value.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const sheetTitle = selectedCategory ? `Stok Sayım - ${selectedCategory}` : 'Stok Sayım - Tüm Kategoriler';
+
+  function printSheet() {
+    const previousTitle = document.title;
+    document.title = sheetTitle;
+    window.print();
+    document.title = previousTitle;
+  }
 
   return (
     <main className="min-h-screen bg-slate-100 text-ink">
@@ -1237,7 +1263,35 @@ function StockCountPrintView({ items, onBack }: { items: StockCard[]; onBack: ()
           <X size={16} />
           Stok Merkezine Dön
         </button>
-        <button className="inline-flex min-h-10 items-center gap-2 rounded-md bg-emerald-600 px-5 py-2 text-sm font-bold text-white" type="button" onClick={() => window.print()}>
+        <label className="inline-flex min-h-10 items-center gap-2 rounded-md bg-slate-800 px-3 py-2 text-sm font-bold text-white">
+          Kategori
+          <select
+            className="max-w-[260px] rounded px-2 py-1 text-slate-900"
+            value={selectedCategory}
+            onChange={(event) => setSelectedCategory(event.target.value)}
+          >
+            <option value="">Tüm kategoriler ({stockedItems.length})</option>
+            {categoryOptions.map(([name, count]) => (
+              <option key={name} value={name}>{name} ({count})</option>
+            ))}
+          </select>
+        </label>
+        <label className="inline-flex min-h-10 items-center gap-2 rounded-md bg-slate-800 px-3 py-2 text-sm font-bold text-white">
+          <input type="checkbox" checked={includeZeroStock} onChange={(event) => setIncludeZeroStock(event.target.checked)} />
+          Stoğu 0 olanları da ekle
+        </label>
+        <label className="inline-flex min-h-10 items-center gap-2 rounded-md bg-slate-800 px-3 py-2 text-sm font-bold text-white">
+          Boş satır (listede olmayanlar)
+          <input
+            className="w-16 rounded px-2 py-1 text-slate-900"
+            type="number"
+            min={0}
+            max={200}
+            value={blankRowCount}
+            onChange={(event) => setBlankRowCount(Math.max(0, Math.min(200, Number(event.target.value) || 0)))}
+          />
+        </label>
+        <button className="inline-flex min-h-10 items-center gap-2 rounded-md bg-emerald-600 px-5 py-2 text-sm font-bold text-white" type="button" onClick={printSheet}>
           <Printer size={16} />
           Yazdır / PDF Kaydet
         </button>
@@ -1247,51 +1301,111 @@ function StockCountPrintView({ items, onBack }: { items: StockCard[]; onBack: ()
         <header className="mb-4 flex items-end justify-between gap-4 border-b border-slate-300 pb-3">
           <div>
             <h1 className="text-2xl font-black tracking-normal">Stok Sayım Listesi</h1>
-            <p className="mt-1 text-sm text-slate-600">Görselli ürün adı ve adet kontrol listesi</p>
+            <div className="mt-1 text-lg font-black text-emerald-700">{selectedCategory || 'Tüm Kategoriler'}</div>
+            <p className="mt-1 text-sm text-slate-600">
+              {includeZeroStock ? 'Tüm aktif stok kartları' : 'Sistemde stoğu olan ürünler'} — rafta sayılan adedi &quot;Sayım&quot; sütununa yazın
+            </p>
           </div>
           <div className="text-right text-xs font-semibold text-slate-600">
             <div>Çıktı: {printDate}</div>
             <div>Ürün: {activeItems.length.toLocaleString('tr-TR')}</div>
             <div>Sistem toplamı: {totalQuantity.toLocaleString('tr-TR')}</div>
+            {missingPriceCount > 0 && <div className="text-red-600">Giriş fiyatı eksik: {missingPriceCount.toLocaleString('tr-TR')}</div>}
+            {noImageCount > 0 && <div className="text-amber-600">Görsel eklenmemiş: {noImageCount.toLocaleString('tr-TR')}</div>}
+            {brokenImageCount > 0 && <div className="text-amber-600">Görsel dosyası bulunamadı: {brokenImageCount.toLocaleString('tr-TR')}</div>}
           </div>
         </header>
 
         <table className="stock-count-table w-full border-collapse text-left">
           <thead>
             <tr>
+              <th>#</th>
               <th>Görsel</th>
               <th>Ürün</th>
-              <th>Stok kodu</th>
-              <th>Kategori</th>
               <th>Sistem adedi</th>
               <th>Sayım</th>
+              <th>Giriş fiyatı</th>
             </tr>
           </thead>
           <tbody>
-            {activeItems.map((item) => {
+            {activeItems.map((item, index) => {
               const image = stockImages(item)[0];
+              const purchasePrice = Number(item.purchasePrice ?? 0);
+              const showCategoryHeader = !selectedCategory && (index === 0 || categoryLabel(activeItems[index - 1]) !== categoryLabel(item));
               return (
-                <tr key={item.id}>
+                <Fragment key={item.id}>
+                {showCategoryHeader && (
+                  <tr className="stock-count-category-row">
+                    <td colSpan={6}>{categoryLabel(item)}</td>
+                  </tr>
+                )}
+                <tr>
+                  <td className="stock-count-index">{index + 1}</td>
                   <td className="stock-count-image-cell">
-                    {image ? (
-                      <img className="stock-count-image" src={apiFileUrl(image.filePath)} alt={item.name} />
+                    {image && !brokenImageIds.has(item.id) ? (
+                      <img
+                        className="stock-count-image"
+                        src={apiFileUrl(image.filePath)}
+                        alt={item.name}
+                        onError={() => setBrokenImageIds((current) => new Set(current).add(item.id))}
+                      />
                     ) : (
-                      <div className="stock-count-no-image">Yok</div>
+                      <div className="stock-count-no-image">{image ? 'Dosya yok' : 'Görsel yok'}</div>
                     )}
                   </td>
                   <td>
                     <div className="stock-count-name">{item.name}</div>
-                    {item.model && <div className="stock-count-sub">Model: {item.model}</div>}
+                    <div className="stock-count-sub">
+                      {[item.sku, item.category || 'Kategorisiz', item.model ? `Model: ${item.model}` : ''].filter(Boolean).join(' · ')}
+                    </div>
                   </td>
-                  <td>{item.sku || '-'}</td>
-                  <td>{item.category || 'Kategorisiz'}</td>
                   <td className="stock-count-quantity">{Number(item.stockQuantity ?? 0).toLocaleString('tr-TR')} {item.unit}</td>
                   <td><div className="stock-count-blank" /></td>
+                  <td className="stock-count-price">
+                    {purchasePrice > 0 ? (
+                      `${money(purchasePrice)} ₺`
+                    ) : (
+                      <div className="stock-count-missing">
+                        <span>EKSİK</span>
+                        <div className="stock-count-blank" />
+                      </div>
+                    )}
+                  </td>
                 </tr>
+                </Fragment>
               );
             })}
           </tbody>
         </table>
+
+        {blankRowCount > 0 && (
+          <div className="stock-count-extra">
+            <h2 className="mb-1 mt-6 text-lg font-black">Sistemde Olmayan Ürünler{selectedCategory ? ` — ${selectedCategory}` : ''}</h2>
+            <p className="mb-2 text-xs text-slate-600">Rafta olup yukarıdaki listede bulunmayan ürünleri buraya yazın (fotoğrafını telefonla çekip numarasını not edin).</p>
+            <table className="stock-count-table w-full border-collapse text-left">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Ürün adı / tarifi</th>
+                  <th>Adet</th>
+                  <th>Giriş fiyatı</th>
+                  <th>Satış fiyatı</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Array.from({ length: blankRowCount }, (_, index) => (
+                  <tr key={`blank-${index}`} className="stock-count-empty-row">
+                    <td className="stock-count-index">Y{index + 1}</td>
+                    <td className="stock-count-wide" />
+                    <td />
+                    <td />
+                    <td />
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </section>
 
       <style jsx>{`
@@ -1313,12 +1427,12 @@ function StockCountPrintView({ items, onBack }: { items: StockCard[]; onBack: ()
           vertical-align: middle;
         }
         .stock-count-image-cell {
-          width: 56px;
+          width: 92px;
         }
         .stock-count-image,
         .stock-count-no-image {
-          width: 44px;
-          height: 44px;
+          width: 80px;
+          height: 80px;
           border: 1px solid #cbd5e1;
           border-radius: 4px;
         }
@@ -1333,6 +1447,7 @@ function StockCountPrintView({ items, onBack }: { items: StockCard[]; onBack: ()
           background: #f8fafc;
           color: #94a3b8;
           font-size: 10px;
+          text-align: center;
           font-weight: 800;
         }
         .stock-count-name {
@@ -1354,6 +1469,38 @@ function StockCountPrintView({ items, onBack }: { items: StockCard[]; onBack: ()
           height: 24px;
           min-width: 74px;
           border-bottom: 1px solid #64748b;
+        }
+        .stock-count-index {
+          width: 28px;
+          color: #64748b;
+          font-weight: 800;
+          text-align: center;
+        }
+        .stock-count-price {
+          white-space: nowrap;
+          font-weight: 800;
+        }
+        .stock-count-missing span {
+          color: #dc2626;
+          font-size: 9px;
+          font-weight: 900;
+        }
+        .stock-count-empty-row td {
+          height: 34px;
+        }
+        .stock-count-wide {
+          width: 50%;
+        }
+        .stock-count-category-row td {
+          background: #ecfdf5;
+          color: #065f46;
+          font-size: 13px;
+          font-weight: 900;
+          padding: 8px;
+        }
+        .stock-count-extra {
+          break-before: page;
+          page-break-before: always;
         }
         @page {
           size: A4 portrait;

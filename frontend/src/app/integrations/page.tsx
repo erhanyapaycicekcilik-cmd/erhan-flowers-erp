@@ -64,7 +64,7 @@ type SyncJob = {
   createdAt: string;
 };
 
-type PlatformCode = 'TRENDYOL' | 'HEPSIBURADA' | 'N11' | 'AMAZON' | 'PAZARAMA' | 'IDEFIX' | 'TEKLIKLE' | 'TRENDRUM';
+type PlatformCode = 'TRENDYOL' | 'HEPSIBURADA' | 'N11' | 'AMAZON' | 'PAZARAMA' | 'IDEFIX' | 'TEKLIKLE' | 'TRENDRUM' | 'KOCTAS';
 type CompanyCode = 'ERHAN' | 'FLORA';
 
 type PlatformSettings = {
@@ -131,6 +131,11 @@ const platformFields: Record<PlatformCode, Array<{ key: string; label: string; t
   TRENDRUM: [
     { key: 'API_KEY', label: 'API Key' },
     { key: 'API_SECRET', label: 'API Secret', type: 'password' },
+  ],
+  // Koçtaş Satış Ortağım (Mirakl): Kişisel ayarlar > API anahtarı. Mağaza ID sadece birden fazla mağaza varsa gerekir
+  KOCTAS: [
+    { key: 'API_KEY', label: 'API Anahtarı', type: 'password' },
+    { key: 'SUPPLIER_ID', label: 'Mağaza ID (isteğe bağlı)' },
   ],
 };
 
@@ -959,6 +964,7 @@ function platformLabel(platform: PlatformCode) {
     IDEFIX: 'Idefix',
     TEKLIKLE: 'Teklikle',
     TRENDRUM: 'Trendrum',
+    KOCTAS: 'Koçtaş',
   };
   return labels[platform] ?? platform;
 }

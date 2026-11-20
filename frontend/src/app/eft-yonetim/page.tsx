@@ -1,5 +1,6 @@
 'use client';
 
+import { OrdersTabs } from '@/components/OrdersTabs';
 import { useCallback, useEffect, useState } from 'react';
 import { CheckCircle2, XCircle, Clock, Eye, RefreshCw, ExternalLink } from 'lucide-react';
 import { AdminShell } from '@/components/AdminShell';
@@ -89,6 +90,7 @@ export default function EftYonetimPage() {
 
   return (
     <AdminShell title="EFT Ödeme Yönetimi">
+      <OrdersTabs />
       <div className="mx-auto max-w-5xl px-4 py-6 space-y-4">
         <div className="flex items-center justify-between">
           <h1 className="text-xl font-black text-slate-800">EFT Ödemeleri</h1>

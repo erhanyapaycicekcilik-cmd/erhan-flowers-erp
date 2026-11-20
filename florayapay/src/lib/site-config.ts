@@ -53,6 +53,7 @@ export interface SiteConfig {
   address: string
   // Kargo
   freeShippingThreshold: number
+  shippingFee: number
   // Çalışma saatleri
   workingHours: string
   // Sosyal medya
@@ -83,6 +84,7 @@ export const DEFAULT_CONFIG: SiteConfig = {
   whatsapp: '905446546220',
   address: 'Sarılar Mah. Cumhuriyet Cad. 2038 Sk. No:52/1/2, Manavgat / Antalya',
   freeShippingThreshold: 1000,
+  shippingFee: 150,
   workingHours: 'Pzt–Cum 09:00–18:00, Cmt 09:00–17:00',
   instagramHandle: 'erhanflowers',
   facebookUrl: 'https://www.facebook.com/erhanflowers',

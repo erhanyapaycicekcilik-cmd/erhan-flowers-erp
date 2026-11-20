@@ -31,6 +31,7 @@ type OrderRow = {
   orderDate?: string | null;
   deliveryDueAt?: string | null;
   cargoProvider?: string | null;
+  cargoTrackingNumber?: string | null;
   companyCode?: string | null;
   companyName?: string | null;
   staffNote?: string | null;
@@ -59,10 +60,14 @@ function matchesPlatform(order: OrderRow, platformKey: string): boolean {
   return order.platform === platformKey;
 }
 
+// Platform kargoya verdi (Trendyol Shipped, HB paketlendi/kargoda, N11 Shipped, web SHIPPED)
+const SHIPPED_STATUSES = ['OUT_FOR_DELIVERY', 'SHIPPED'];
+
 const STATUS_TABS = [
   { key: 'all', label: 'Tümü', statuses: [] },
   { key: 'new', label: 'Yeni', statuses: ['CONFIRMED'] },
   { key: 'preparing', label: 'İşleme Alınan', statuses: ['PREPARING', 'IN_PRODUCTION'] },
+  { key: 'shipped', label: 'Kargoda', statuses: SHIPPED_STATUSES },
 ];
 
 const CATEGORIES = [
@@ -193,9 +198,11 @@ function useUrgentAlarm(orders: OrderRow[]) {
 
 export default function StaffOrdersPage() {
   const [orders, setOrders] = useState<OrderRow[]>([]);
+  const [shippedOrders, setShippedOrders] = useState<OrderRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState('');
+  const [imageDiag, setImageDiag] = useState('');
   const [platform, setPlatform] = useState('all');
   const [statusTab, setStatusTab] = useState('all');
   const [category, setCategory] = useState('all');
@@ -203,15 +210,20 @@ export default function StaffOrdersPage() {
   const [toastMsg, setToastMsg] = useState('');
   const readySectionRef = useRef<HTMLDivElement>(null);
 
-  async function syncHB() {
+  // Tüm platformlardan (Trendyol Erhan/Flora, Hepsiburada, n11…) siparişleri hemen çek
+  async function syncAll() {
     setSyncing(true);
     setSyncMsg('');
     try {
-      const result = await api<{ ok: boolean; newOrders?: number; imported?: number; message?: string }>('/integrations/hepsiburada/sync-orders', { method: 'POST' });
-      setSyncMsg(`Tamamlandı: ${result.newOrders ?? result.imported ?? 0} sipariş güncellendi`);
+      const result = await api<{ results: Array<{ label: string; ok: boolean; imported: number; message?: string }>; message?: string; imageDiag?: string | null }>('/integrations/orders/sync-all', { method: 'POST' });
+      const rows = result.results ?? [];
+      const imported = rows.reduce((sum, r) => sum + (r.imported || 0), 0);
+      const failed = rows.filter((r) => !r.ok).map((r) => `${r.label}${r.message ? ` (${r.message.slice(0, 80)})` : ''}`);
+      setSyncMsg(result.message ?? `Tamamlandı: ${imported} yeni sipariş${failed.length ? ` · hata: ${failed.join(', ')}` : ''}`);
+      setImageDiag(result.imageDiag ?? '');
       await load();
     } catch {
-      setSyncMsg('Hata oluştu');
+      setSyncMsg('Senkronizasyon başarısız, tekrar deneyin');
     } finally {
       setSyncing(false);
     }
@@ -232,33 +244,64 @@ export default function StaffOrdersPage() {
     }
   }
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const knownIdsRef = useRef<Set<string> | null>(null);
+
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
-      const [erpOrders, webOrders, retailOrders] = await Promise.all([
+      const since = new Date(Date.now() - 10 * 86400000).toISOString().slice(0, 10);
+      const [erpOrders, webOrders, retailOrders, shippedErp, shippedWeb] = await Promise.all([
         api<OrderRow[]>('/integrations/orders?limit=200&status=CONFIRMED,PREPARING,IN_PRODUCTION,READY').catch(() => [] as OrderRow[]),
-        api<OrderRow[]>('/integrations/web-orders?limit=200&status=PENDING,CONFIRMED,PREPARING,READY').catch(() => [] as OrderRow[]),
+        api<OrderRow[]>('/integrations/web-orders?limit=200&status=CONFIRMED,PREPARING,READY').catch(() => [] as OrderRow[]),
         api<OrderRow[]>('/integrations/retail-orders?limit=200&status=PAYMENT_PENDING,CONFIRMED,PREPARING,IN_PRODUCTION,READY').catch(() => [] as OrderRow[]),
+        // Kargoda: son 10 günün kargoya verilmiş (henüz teslim edilmemiş) siparişleri
+        api<OrderRow[]>(`/integrations/orders?pageSize=300&status=OUT_FOR_DELIVERY&startDate=${since}`).catch(() => [] as OrderRow[]),
+        api<OrderRow[]>(`/integrations/web-orders?pageSize=100&status=SHIPPED&startDate=${since}`).catch(() => [] as OrderRow[]),
+      ]);
+      setShippedOrders([
+        ...(Array.isArray(shippedErp) ? shippedErp : []),
+        ...(Array.isArray(shippedWeb) ? shippedWeb : []),
       ]);
       const combined = [
         ...(Array.isArray(erpOrders) ? erpOrders : []),
         ...(Array.isArray(webOrders) ? webOrders : []),
         ...(Array.isArray(retailOrders) ? retailOrders : []),
       ];
+      // Yeni gelen siparişleri bildir (ilk yüklemede değil)
+      const ids = new Set(combined.map((o) => `${o.platform}-${o.id}`));
+      if (knownIdsRef.current) {
+        const fresh = combined.filter((o) => !knownIdsRef.current!.has(`${o.platform}-${o.id}`));
+        if (fresh.length) {
+          setToastMsg(`🆕 ${fresh.length} yeni sipariş geldi`);
+          setTimeout(() => setToastMsg(''), 6000);
+        }
+      }
+      knownIdsRef.current = ids;
       setOrders(combined);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, []);
 
   useEffect(() => { void load(); }, [load]);
 
-  const activeOrders = orders.filter((o) => o.status !== 'READY');
-  const readyOrders = orders.filter((o) => o.status === 'READY');
+  // Ekran açıkken 1 dakikada bir ve sekmeye dönünce sessizce yenile — yeni siparişler kendiliğinden düşsün
+  useEffect(() => {
+    const t = setInterval(() => { if (document.visibilityState === 'visible') void load(true); }, 60_000);
+    const onVisible = () => { if (document.visibilityState === 'visible') void load(true); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => { clearInterval(t); document.removeEventListener('visibilitychange', onVisible); };
+  }, [load]);
 
-  const filtered = activeOrders.filter((o) => {
+  const activeOrders = orders.filter((o) => o.status !== 'READY' && !SHIPPED_STATUSES.includes(o.status));
+  const readyOrders = orders.filter((o) => o.status === 'READY');
+  const showingShipped = statusTab === 'shipped';
+  // Kargoda sekmesinde liste kargodaki siparişlerden, diğerlerinde aktif siparişlerden gelir
+  const baseOrders = showingShipped ? shippedOrders : activeOrders;
+
+  const filtered = baseOrders.filter((o) => {
     if (!matchesPlatform(o, platform)) return false;
-    if (statusTab !== 'all') {
+    if (statusTab !== 'all' && !showingShipped) {
       const tab = STATUS_TABS.find(t => t.key === statusTab);
       if (tab && tab.statuses.length > 0 && !tab.statuses.includes(o.status)) return false;
     }
@@ -285,6 +328,7 @@ export default function StaffOrdersPage() {
   // Durum sekmesi sayaçları (sadece aktif siparişler)
   const statusCounts = STATUS_TABS.reduce<Record<string, number>>((acc, tab) => {
     if (tab.key === 'all') { acc[tab.key] = activeOrders.length; return acc; }
+    if (tab.key === 'shipped') { acc[tab.key] = shippedOrders.length; return acc; }
     acc[tab.key] = activeOrders.filter(o => tab.statuses.includes(o.status)).length;
     return acc;
   }, {});
@@ -306,14 +350,22 @@ export default function StaffOrdersPage() {
         {/* Header */}
         <div className="flex items-center justify-between flex-wrap gap-2">
           <h1 className="text-xl font-bold">Siparişler</h1>
+          {imageDiag && (
+            <div className="w-full order-last rounded-lg border border-slate-200 bg-slate-50 p-2 text-xs text-slate-600 break-words">
+              <b>Hepsiburada görsel kontrolü:</b> {imageDiag}
+            </div>
+          )}
           <div className="flex gap-2 items-center flex-wrap">
-            {syncMsg && <span className="text-xs text-emerald-600 font-semibold">{syncMsg}</span>}
-            <button onClick={() => void syncHB()} disabled={syncing} className="btn btn-secondary text-sm">
-              <RefreshCw size={14} className={syncing ? 'animate-spin' : ''} /> {syncing ? 'Senkronize ediliyor...' : 'HB Senkronize Et'}
+            {syncMsg && <span className={`text-xs font-semibold w-full ${syncMsg.includes('hata') ? 'text-amber-700' : 'text-emerald-600'}`}>{syncMsg}</span>}
+            <button onClick={() => void load()} disabled={loading} className="btn btn-secondary text-sm">
+              <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> Yenile
             </button>
-            <button onClick={() => void load()} className="btn btn-secondary text-sm">
-              <RefreshCw size={14} /> Yenile
+            <button onClick={() => void syncAll()} disabled={syncing} className="btn btn-primary text-sm" title="Tüm platformlardan yeni siparişleri hemen çek">
+              <RefreshCw size={14} className={syncing ? 'animate-spin' : ''} /> {syncing ? 'Senkronize ediliyor...' : 'Senkronize Et'}
             </button>
+            <a href="/sabah-ciktisi" className="btn btn-primary text-sm">
+              <Printer size={15} /> Sabah Çıktısı (A5)
+            </a>
           </div>
         </div>
 
@@ -378,8 +430,8 @@ export default function StaffOrdersPage() {
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
           {PLATFORMS.map((p) => {
             const count = p.key === 'all'
-              ? activeOrders.length
-              : activeOrders.filter(o => matchesPlatform(o, p.key)).length;
+              ? baseOrders.length
+              : baseOrders.filter(o => matchesPlatform(o, p.key)).length;
             if (p.key !== 'all' && count === 0) return null;
             const isActive = platform === p.key;
             return (
@@ -421,7 +473,7 @@ export default function StaffOrdersPage() {
         </div>
 
         {/* İstatistik */}
-        <div className="text-sm text-slate-500">{filtered.length} aktif sipariş gösteriliyor</div>
+        <div className="text-sm text-slate-500">{filtered.length} {showingShipped ? 'kargodaki' : 'aktif'} sipariş gösteriliyor</div>
 
         {/* Aktif sipariş kartları */}
         {loading ? (
@@ -429,7 +481,7 @@ export default function StaffOrdersPage() {
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {filtered.map((order) => (
-              <OrderCard key={order.id} order={order} onStatusChange={handleStatusChange} category={category} />
+              <OrderCard key={`${order.platform}-${order.id}`} order={order} onStatusChange={handleStatusChange} category={category} shippedSection={showingShipped} />
             ))}
             {!filtered.length && (
               <div className="col-span-full text-center text-slate-400 py-12">Sipariş bulunamadı</div>
@@ -438,7 +490,7 @@ export default function StaffOrdersPage() {
         )}
 
         {/* Hazır — Kargo Bekleniyor */}
-        {(filteredReady.length > 0 || readyOrders.length > 0) && (
+        {!showingShipped && (filteredReady.length > 0 || readyOrders.length > 0) && (
           <section ref={readySectionRef} className="mt-6">
             <div className="flex items-center gap-3 mb-3">
               <div className="h-1 flex-1 bg-emerald-200 rounded-full" />
@@ -475,6 +527,11 @@ export default function StaffOrdersPage() {
           <span className="text-[10px] text-slate-500 font-semibold">Hazır</span>
         </div>
         <div className="w-px h-8 bg-slate-200" />
+        <button onClick={() => setStatusTab('shipped')} className="flex flex-col items-center">
+          <span className="text-lg font-black text-violet-600">{shippedOrders.length}</span>
+          <span className="text-[10px] text-slate-500 font-semibold">Kargoda</span>
+        </button>
+        <div className="w-px h-8 bg-slate-200" />
         <button onClick={() => void load()} className="flex flex-col items-center text-slate-500 active:text-indigo-600">
           <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
           <span className="text-[10px] font-semibold">Yenile</span>
@@ -484,12 +541,16 @@ export default function StaffOrdersPage() {
   );
 }
 
+function staffStatusLabel(status: string) {
+  return ({ PAYMENT_PENDING: 'Ödeme Bekliyor', CONFIRMED: 'Yeni', PREPARING: 'İşleme Alındı', IN_PRODUCTION: 'İşleme Alındı', READY: 'Hazır', OUT_FOR_DELIVERY: '🚚 Kargoda', SHIPPED: '🚚 Kargoda', DELIVERED: 'Teslim Edildi' } as Record<string, string>)[status] ?? status;
+}
+
 function itemImageSrc(item: OrderItem): string | null {
   if (!item.imagePath) return null;
   return item.imagePath.startsWith('http') ? item.imagePath : apiFileUrl(item.imagePath);
 }
 
-function OrderCard({ order, onStatusChange, readySection, category }: { order: OrderRow; onStatusChange: (id: number, status: string) => void; readySection?: boolean; category?: string }) {
+function OrderCard({ order, onStatusChange, readySection, shippedSection, category }: { order: OrderRow; onStatusChange: (id: number, status: string) => void; readySection?: boolean; shippedSection?: boolean; category?: string }) {
   const countdown = useCountdown(order.deliveryDueAt, order.status);
   const isLate = countdown?.isLate ?? false;
   const isUrgent = countdown?.isUrgent ?? false;
@@ -514,9 +575,19 @@ function OrderCard({ order, onStatusChange, readySection, category }: { order: O
   const [resolvedImgs, setResolvedImgs] = useState<Record<string, string>>({});
   const videoRef = useRef<HTMLInputElement>(null);
 
-  // Her item için görsel çöz: DB'de varsa kullan, yoksa barcode + modelCode ikisini de dene
+  // Açılmayan (kırık) görsel adresleri — bunlar atlanır, katalogdan yedek aranır
+  const [brokenSrcs, setBrokenSrcs] = useState<Set<string>>(new Set());
+  const markBroken = (src: string | null) => {
+    if (!src) return;
+    setBrokenSrcs((prev) => (prev.has(src) ? prev : new Set(prev).add(src)));
+  };
+
+  // Her item için görsel çöz: DB'de varsa kullan, yoksa (veya açılmıyorsa) barcode + modelCode ikisini de dene
   useEffect(() => {
-    const items = order.items.filter((i) => !i.imagePath && (i.barcode || i.modelCode));
+    const items = order.items.filter((i) => {
+      const own = itemImageSrc(i);
+      return (!own || brokenSrcs.has(own)) && (i.barcode || i.modelCode);
+    });
     if (!items.length) return;
 
     const fetchImg = (param: string): Promise<string | null> =>
@@ -543,15 +614,16 @@ function OrderCard({ order, onStatusChange, readySection, category }: { order: O
     ).then((results) => {
       const map: Record<string, string> = {};
       results.forEach((r) => { if (r) map[r[0]] = r[1]; });
-      if (Object.keys(map).length) setResolvedImgs(map);
+      if (Object.keys(map).length) setResolvedImgs((prev) => ({ ...prev, ...map }));
     });
-  }, [order.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [order.id, brokenSrcs.size]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Tüm item'lar için görsel kaynağı: DB → catalog fallback (barkod veya modelCode ile)
   function resolveItemSrc(item: OrderItem): string | null {
-    if (item.imagePath) return itemImageSrc(item);
+    const own = itemImageSrc(item);
+    if (own && !brokenSrcs.has(own)) return own;
     const key = item.barcode || item.modelCode;
-    if (key && resolvedImgs[key]) return resolvedImgs[key];
+    if (key && resolvedImgs[key] && !brokenSrcs.has(resolvedImgs[key])) return resolvedImgs[key];
     return null;
   }
 
@@ -647,6 +719,18 @@ function OrderCard({ order, onStatusChange, readySection, category }: { order: O
     }
   }
 
+  async function markProcessing() {
+    setUploading(true);
+    try {
+      await setOrderStatus('PREPARING', 'İşleme alındı.');
+      onStatusChange(order.id, 'PREPARING');
+    } catch {
+      alert('İşlem başarısız, tekrar deneyin.');
+    } finally {
+      setUploading(false);
+    }
+  }
+
   async function markReadyWithoutPhoto() {
     if (!confirm('Fotoğrafsız olarak hazır işaretlensin mi?')) return;
     setUploading(true);
@@ -726,7 +810,7 @@ function OrderCard({ order, onStatusChange, readySection, category }: { order: O
       {/* Ana görsel */}
       <div className="relative bg-slate-100" style={{ aspectRatio: '1/1' }}>
         {displaySrc ? (
-          <img src={displaySrc} alt="" className="w-full h-full object-cover" />
+          <img src={displaySrc} alt="" className="w-full h-full object-cover" onError={() => markBroken(displaySrc)} />
         ) : (
           <div className="w-full h-full flex items-center justify-center text-slate-300">
             <Package size={56} />
@@ -736,9 +820,10 @@ function OrderCard({ order, onStatusChange, readySection, category }: { order: O
           readySection ? 'bg-emerald-600 text-white' :
           isReady ? 'bg-green-500 text-white' :
           order.status === 'CONFIRMED' ? 'bg-blue-500 text-white' :
-          order.status === 'PREPARING' ? 'bg-amber-500 text-white' :
+          ['PREPARING', 'IN_PRODUCTION'].includes(order.status) ? 'bg-amber-500 text-white' :
+          SHIPPED_STATUSES.includes(order.status) ? 'bg-violet-600 text-white' :
           'bg-slate-500 text-white'
-        }`}>{readySection ? '📦 Kargo Bekleniyor' : isReady ? 'Hazır' : order.status}</span>
+        }`}>{readySection ? '📦 Kargo Bekleniyor' : isReady ? 'Hazır' : staffStatusLabel(order.status)}</span>
 
         {order.platform === 'TRENDYOL' && trendyolUrl && (
           <a href={trendyolUrl} target="_blank" rel="noopener noreferrer"
@@ -772,7 +857,7 @@ function OrderCard({ order, onStatusChange, readySection, category }: { order: O
           {itemsWithSrc.map(({ item, src }, i) => (
             <button key={i} onClick={() => setActiveIdx(i)}
               className={`w-12 h-12 rounded border-2 overflow-hidden shrink-0 ${i === clampedIdx ? 'border-indigo-500' : 'border-transparent'}`}>
-              <img src={src!} alt={item.productName ?? ''} className="w-full h-full object-cover" />
+              <img src={src!} alt={item.productName ?? ''} className="w-full h-full object-cover" onError={() => markBroken(src)} />
             </button>
           ))}
         </div>
@@ -825,6 +910,7 @@ function OrderCard({ order, onStatusChange, readySection, category }: { order: O
           {order.orderDate && <div>Sipariş: {date(order.orderDate)}</div>}
           {order.deliveryDueAt && <div className="text-slate-400">Son çıkış: {date(order.deliveryDueAt)}</div>}
           {order.cargoProvider && <div>Kargo: {order.cargoProvider}</div>}
+          {order.cargoTrackingNumber && <div>Takip no: <span className="font-mono">{order.cargoTrackingNumber}</span></div>}
         </div>
 
         {/* Genişletilebilir detay */}
@@ -876,7 +962,7 @@ function OrderCard({ order, onStatusChange, readySection, category }: { order: O
 
           {/* Kameradan direkt video çekimi */}
           <input ref={videoRef} type="file" accept="video/*" capture="environment" className="hidden" onChange={handlePhoto} />
-          {isReady ? (
+          {shippedSection ? null : isReady ? (
             <>
               <button onClick={() => void markDelivered()} disabled={markingDelivered}
                 className="flex-1 flex items-center justify-center gap-1 text-xs px-2 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition disabled:opacity-60 font-bold">
@@ -890,6 +976,13 @@ function OrderCard({ order, onStatusChange, readySection, category }: { order: O
             </>
           ) : (
             <>
+              {order.status === 'CONFIRMED' && (
+                <button onClick={() => void markProcessing()} disabled={uploading}
+                  title="İşleme al"
+                  className="flex items-center justify-center gap-1 text-xs px-2 py-2 rounded-lg border border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100 transition font-bold">
+                  İşleme Al
+                </button>
+              )}
               <button onClick={() => void markReadyWithoutPhoto()} disabled={uploading}
                 title="Videosuz hazır yap"
                 className="flex items-center justify-center p-2 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-100 transition">

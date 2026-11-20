@@ -11,6 +11,7 @@ export const PLATFORM_FEES: Record<string, { commission: number; buffer: number 
   IDEFIX:        { commission: 0, buffer: 0 },
   TRENDRUM:      { commission: 0, buffer: 0 },
   AMAZON:        { commission: 0, buffer: 0 },
+  KOCTAS:        { commission: 0, buffer: 0 },
 };
 
 /**

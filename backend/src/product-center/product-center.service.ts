@@ -62,8 +62,21 @@ export class ProductCenterService {
     private readonly config: ConfigService,
   ) {}
 
-  async listEntries() {
+  async listEntries(search?: string) {
+    // Liste en son güncellenen 1000 kayıtla sınırlı; arama verilirse TÜM kayıtlarda aranır (eski ürünler de bulunur)
+    const term = search?.trim();
+    const where = term
+      ? {
+          OR: [
+            { productName: { contains: term, mode: 'insensitive' as const } },
+            { barcode: { contains: term } },
+            { currentModelCode: { contains: term, mode: 'insensitive' as const } },
+            { supplierStockCode: { contains: term, mode: 'insensitive' as const } },
+          ],
+        }
+      : undefined;
     const variants = await this.prisma.trendyolProductVariant.findMany({
+      where,
       include: {
         product: { include: { category: true, mediaFiles: true } },
         family: true,
@@ -72,7 +85,7 @@ export class ProductCenterService {
         productCostDraft: { include: { items: true, pots: true } },
       },
       orderBy: { updatedAt: 'desc' },
-      take: 1000,
+      take: term ? 200 : 1000,
     });
 
     return variants.map((variant) => this.entrySummary(variant));
@@ -1451,5 +1464,251 @@ Sadece 3 satır ürün adı yaz, başka hiçbir şey yazma.`;
 
   private money(value: unknown) {
     return `${Number(value || 0).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} TL`;
+  }
+  // ─── Boy serisi: bir ürünü farklı boylarda AYRI ürün (ayrı ilan) olarak kopyalar ───
+  // Örn. ERH-BS2105 (150 cm) → ERH-BS2105-100 … ERH-BS2105-200. Her boyun kendi
+  // model kodu ve barkodu olur; pazaryerlerinde productMainId = model kodu olduğundan
+  // her biri ayrı ilan açılır. Görseller, açıklama ve kategori kaynaktan kopyalanır;
+  // fiyat her `stepCm` için `priceStep` TL artar/azalır. Trendyol ilan linki (contentId)
+  // ve Trendyol barkodu KOPYALANMAZ — yoksa kaynak ilan güncellenirdi.
+  async sizeSeries(body: unknown, apply: boolean) {
+    const input = (body && typeof body === 'object' ? body : {}) as Record<string, unknown>;
+    const sourceCode = this.requiredText(input.modelCode, 'Kaynak model kodu veya barkod zorunludur.');
+    const start = Math.trunc(Number(input.startCm ?? 100));
+    const end = Math.trunc(Number(input.endCm ?? 200));
+    const stepCm = Math.trunc(Number(input.stepCm ?? 10));
+    const priceStep = Number(input.priceStep ?? 100);
+    const nameFrom = String(input.nameFrom ?? '').trim();
+    const nameTo = String(input.nameTo ?? '').trim();
+    if (!(start > 0 && end >= start && stepCm > 0)) throw new BadRequestException('Boy aralığı geçersiz.');
+    if ((end - start) / stepCm > 40) throw new BadRequestException('En fazla 40 boy oluşturulabilir.');
+    if (!Number.isFinite(priceStep)) throw new BadRequestException('Fiyat artışı geçersiz.');
+
+    const source = await this.findSizeSeriesSource(sourceCode);
+    if (!source) {
+      throw new NotFoundException(`"${sourceCode}" ile eşleşen ürün bulunamadı. Ürünler sayfasında ürünü açıp barkodunu buraya yazmayı deneyin.`);
+    }
+
+    // Yeni model kodları kullanıcının yazdığı koddan türetilir (ERH-BS2105 → ERH-BS2105-100);
+    // barkod yazıldıysa ürünün kendi model/stok kodu kullanılır.
+    const enteredIsBarcode = /^\d{8,14}$/.test(sourceCode);
+    const baseModelCode = (enteredIsBarcode
+      ? (source.product?.modelCode || source.proposedModelCode || source.currentModelCode || source.supplierStockCode || sourceCode)
+      : sourceCode.toUpperCase()).trim();
+    const sourceName = source.seoManualProductName ?? source.seoProductName ?? source.productName;
+    const sizeMatch = sourceName.match(/(\d{2,3})\s*cm/i) ?? source.productName.match(/(\d{2,3})\s*cm/i);
+    if (!sizeMatch) throw new BadRequestException('Kaynak ürün adında boy bulunamadı (örn. "150 Cm").');
+    const baseSize = Number(sizeMatch[1]);
+
+    const rename = (value: string | null | undefined, size: number) => {
+      if (value == null) return value ?? null;
+      let text = value.replace(new RegExp(`\\b${baseSize}\\s*cm\\b`, 'gi'), `${size} Cm`);
+      if (nameFrom) text = text.replace(new RegExp(nameFrom.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), nameTo);
+      return text;
+    };
+    const shift = (value: unknown, delta: number) => {
+      const number = Number(value ?? 0);
+      return number > 0 ? Math.max(1, Math.round((number + delta) * 100) / 100) : number;
+    };
+
+    const sizes: number[] = [];
+    for (let size = start; size <= end; size += stepCm) if (size !== baseSize) sizes.push(size);
+
+    const plan = sizes.map((size) => {
+      const delta = ((size - baseSize) / stepCm) * priceStep;
+      return {
+        size,
+        delta,
+        modelCode: `${baseModelCode}-${size}`,
+        productName: rename(source.productName, size) as string,
+        trendyolSalePrice: shift(source.trendyolSalePrice, delta),
+        n11SalePrice: shift(source.n11SalePrice, delta),
+        hepsiburadaSalePrice: shift(source.hepsiburadaSalePrice, delta),
+        shopPrice: shift(source.product?.shopPrice, delta),
+      };
+    });
+
+    const existingRows = await this.prisma.trendyolProductVariant.findMany({
+      where: { OR: [
+        { currentModelCode: { in: plan.map((row) => row.modelCode) } },
+        { proposedModelCode: { in: plan.map((row) => row.modelCode) } },
+        { product: { modelCode: { in: plan.map((row) => row.modelCode) } } },
+      ] },
+      select: { id: true, barcode: true, currentModelCode: true, proposedModelCode: true, product: { select: { modelCode: true } } },
+    });
+    const existingByCode = new Map<string, { id: number; barcode: string }>();
+    for (const row of existingRows) {
+      for (const code of [row.currentModelCode, row.proposedModelCode, row.product?.modelCode]) {
+        if (code) existingByCode.set(code, { id: row.id, barcode: row.barcode });
+      }
+    }
+
+    const sourceSummary = {
+      variantId: source.id,
+      productId: source.productId,
+      modelCode: baseModelCode,
+      productName: source.productName,
+      baseSize,
+      trendyolSalePrice: Number(source.trendyolSalePrice),
+      stockQuantity: source.stockQuantity,
+      imageCount: Array.isArray(source.images) ? source.images.length : 0,
+    };
+
+    if (!apply) {
+      return {
+        source: sourceSummary,
+        items: plan.map((row) => ({ ...row, exists: existingByCode.has(row.modelCode), variantId: existingByCode.get(row.modelCode)?.id ?? null })),
+      };
+    }
+
+    const created = await this.prisma.$transaction(async (tx) => {
+      await tx.$executeRawUnsafe('LOCK TABLE "products", "trendyol_product_variants", "stock_cards", "barcode_logs" IN SHARE ROW EXCLUSIVE MODE');
+      const results: Array<{ size: number; modelCode: string; productName: string; barcode: string; variantId: number; productId: number | null; created: boolean; trendyolSalePrice: number }> = [];
+
+      for (const row of plan) {
+        const existing = existingByCode.get(row.modelCode);
+        if (existing) {
+          results.push({ size: row.size, modelCode: row.modelCode, productName: row.productName, barcode: existing.barcode, variantId: existing.id, productId: null, created: false, trendyolSalePrice: row.trendyolSalePrice });
+          continue;
+        }
+        const barcode = await this.nextEan13Barcode(tx);
+
+        let productId: number | null = null;
+        if (source.product) {
+          const { id: _id, createdAt: _c, updatedAt: _u, mediaFiles, ...productRest } = source.product as any;
+          const product = await tx.product.create({
+            data: {
+              ...productRest,
+              productName: row.productName,
+              modelCode: row.modelCode,
+              barcode,
+              trendyolBarcode: null,
+              description: rename(source.product.description, row.size),
+              productHeight: `${row.size} cm`,
+              shopPrice: row.shopPrice,
+              sitePrice: shift(source.product.sitePrice, row.delta),
+              marketPrice: shift(source.product.marketPrice, row.delta),
+              listPrice: shift(source.product.listPrice, row.delta),
+              imageUrls: (source.product.imageUrls ?? []) as Prisma.InputJsonValue,
+              status: 'ACTIVE',
+            },
+          });
+          productId = product.id;
+          for (const file of (mediaFiles ?? []) as Array<{ fileName: string; filePath: string; fileType: string }>) {
+            await tx.mediaFile.create({ data: { productId, fileName: file.fileName, filePath: file.filePath, folderName: row.modelCode, fileType: file.fileType } });
+          }
+        }
+
+        const json = (value: unknown) => (value == null ? Prisma.JsonNull : (value as Prisma.InputJsonValue));
+        const variant = await tx.trendyolProductVariant.create({
+          data: {
+            productId,
+            barcode,
+            productName: row.productName,
+            currentModelCode: row.modelCode,
+            proposedModelCode: row.modelCode,
+            supplierStockCode: row.modelCode,
+            brand: source.brand,
+            trendyolCategoryName: source.trendyolCategoryName,
+            productColor: source.productColor,
+            productDescription: rename(source.productDescription, row.size),
+            stockQuantity: source.stockQuantity,
+            images: json(source.images),
+            videoUrl: source.videoUrl,
+            suggestedFamilyName: source.suggestedFamilyName,
+            detectedSize: `${row.size} cm`,
+            detectedPot: rename(source.detectedPot, row.size),
+            seoProductName: rename(source.seoProductName, row.size),
+            seoManualProductName: rename(source.seoManualProductName, row.size),
+            seoDistinctiveFeature: rename(source.seoDistinctiveFeature, row.size),
+            seoMarketTitle: rename(source.seoMarketTitle, row.size),
+            seoWebTitle: rename(source.seoWebTitle, row.size),
+            seoShortDescription: rename(source.seoShortDescription, row.size),
+            seoLongDescription: rename(source.seoLongDescription, row.size),
+            seoMetaTitle: rename(source.seoMetaTitle, row.size),
+            seoMetaDescription: rename(source.seoMetaDescription, row.size),
+            seoKeywords: source.seoKeywords,
+            seoImageAltText: rename(source.seoImageAltText, row.size),
+            seoProperties: json(source.seoProperties),
+            seoApprovalStatus: source.seoApprovalStatus,
+            importSource: 'SIZE_SERIES',
+            importedAt: new Date(),
+            familyId: source.familyId,
+            potOptionId: source.potOptionId,
+            templateId: source.templateId,
+            shopCategoryId: source.shopCategoryId,
+            catalogCategory: source.catalogCategory,
+            catalogSubCategory: source.catalogSubCategory,
+            trendyolSalePrice: new Prisma.Decimal(row.trendyolSalePrice),
+            n11SalePrice: new Prisma.Decimal(row.n11SalePrice),
+            hepsiburadaSalePrice: new Prisma.Decimal(row.hepsiburadaSalePrice),
+            commissionPercent: source.commissionPercent,
+            status: 'ACTIVE',
+          },
+        });
+
+        const draft = source.productCostDraft;
+        await tx.productCostDraft.create({
+          data: {
+            variantId: variant.id,
+            salePrice: new Prisma.Decimal(shift(draft?.salePrice, row.delta)),
+            marketplaceSalePrice: new Prisma.Decimal(shift(draft?.marketplaceSalePrice, row.delta)),
+            profitMarginPercent: draft?.profitMarginPercent ?? new Prisma.Decimal(45),
+            commissionPercent: draft?.commissionPercent ?? new Prisma.Decimal(21),
+            vatPercent: draft?.vatPercent ?? new Prisma.Decimal(20),
+            shippingCost: draft?.shippingCost ?? new Prisma.Decimal(0),
+            desi: draft?.desi ?? new Prisma.Decimal(1),
+            marketplaceMarkupPercent: draft?.marketplaceMarkupPercent ?? new Prisma.Decimal(25),
+            campaignBufferPercent: draft?.campaignBufferPercent ?? new Prisma.Decimal(10),
+            status: 'DRAFT',
+          },
+        });
+
+        results.push({ size: row.size, modelCode: row.modelCode, productName: row.productName, barcode, variantId: variant.id, productId, created: true, trendyolSalePrice: row.trendyolSalePrice });
+      }
+      return results;
+    }, { timeout: 60000 });
+
+    void revalidateSite();
+    return { source: sourceSummary, items: created };
+  }
+  // Kaynak ürünü model kodu / stok kodu / barkod ile (büyük-küçük harf duyarsız) bulur.
+  // Önce tam eşleşme, sonra "içerir" araması. Aktif ve ürün kartına bağlı kayıt tercih edilir.
+  private async findSizeSeriesSource(code: string) {
+    const include = { product: { include: { mediaFiles: true } }, productCostDraft: true } as const;
+    const exact = (value: string) => ({ equals: value, mode: 'insensitive' as const });
+    const contains = (value: string) => ({ contains: value, mode: 'insensitive' as const });
+    const pick = <T extends { status: string; productId: number | null }>(rows: T[]) =>
+      rows.sort((a, b) => Number(b.status === 'ACTIVE') - Number(a.status === 'ACTIVE') || Number(!!b.productId) - Number(!!a.productId))[0] ?? null;
+
+    const exactRows = await this.prisma.trendyolProductVariant.findMany({
+      where: { OR: [
+        { currentModelCode: exact(code) },
+        { proposedModelCode: exact(code) },
+        { supplierStockCode: exact(code) },
+        { barcode: code },
+        { product: { modelCode: exact(code) } },
+        { product: { barcode: code } },
+        { product: { trendyolBarcode: code } },
+      ] },
+      include,
+      take: 20,
+    });
+    if (exactRows.length) return pick(exactRows);
+
+    const looseRows = await this.prisma.trendyolProductVariant.findMany({
+      where: { OR: [
+        { currentModelCode: contains(code) },
+        { proposedModelCode: contains(code) },
+        { supplierStockCode: contains(code) },
+        { product: { modelCode: contains(code) } },
+      ] },
+      include,
+      take: 20,
+    });
+    // "ERH-BS2105" araması daha önce açılmış "ERH-BS2105-100" gibi seri ürünlerini de bulur; onları ele.
+    const seriesPattern = new RegExp(`${code.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}-\\d{2,3}$`, 'i');
+    const notSeries = looseRows.filter((row) => ![row.currentModelCode, row.proposedModelCode, row.product?.modelCode].some((value) => value && seriesPattern.test(value)));
+    return pick(notSeries);
   }
 }

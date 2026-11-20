@@ -13,13 +13,24 @@ export class ReturnsController {
   constructor(private readonly svc: ReturnsService) {}
 
   @Get()
-  list(@Query('page') page = '1', @Query('limit') limit = '50') {
-    return this.svc.listReturns(Number(page), Number(limit))
+  list(@Query('page') page = '1', @Query('limit') limit = '50', @Query('q') q = '') {
+    return this.svc.listReturns(Number(page) || 1, Number(limit) || 50, q ?? '')
+  }
+
+  /** Platformlardan iadeleri çek (Trendyol Erhan + Flora) */
+  @Post('sync')
+  sync(@Query('days') days?: string) {
+    return this.svc.syncFromPlatforms(Number(days) || 30)
   }
 
   @Get(':id')
   getOne(@Param('id') id: string) {
     return this.svc.getReturn(Number(id))
+  }
+
+  @Patch(':id/return-status')
+  setStatus(@Param('id') id: string, @Body() body: { status: string | null }) {
+    return this.svc.setReturnStatus(Number(id), body?.status ?? null)
   }
 
   @Patch(':id/note')
@@ -57,12 +68,14 @@ export class ReturnsController {
   }
 
   @Get('videos/:filename/stream')
-  streamVideo(@Param('filename') filename: string, @Res() res: Response) {
+  async streamVideo(@Param('filename') filename: string, @Query('download') download: string | undefined, @Res() res: Response) {
     const filePath = this.svc.getVideoPath(filename)
     if (!fs.existsSync(filePath)) {
       res.status(404).json({ error: 'Not found' })
       return
     }
+    // ?download=1 → platforma yüklemek için anlaşılır adla indir
+    if (download) return res.download(filePath, await this.svc.videoOriginalName(filename))
     res.sendFile(filePath)
   }
 }

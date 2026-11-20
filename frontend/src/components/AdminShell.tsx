@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
+import { PaymentAlertBanner } from './PaymentAlertBanner';
 import {
   BarChart3,
   Boxes,
@@ -60,12 +61,17 @@ const navGroups: { section: string; icon: LucideIcon; items: NavItem[] }[] = [
     items: [
       { href: '/products', label: 'Ürün Merkezi', icon: Boxes, roles: ALL },
       { href: '/products/excel-export', label: 'Excel İndir (Pazaryeri)', icon: Boxes, roles: OWNER_MANAGER },
+      { href: '/products/boy-serisi', label: 'Boy Serisi Oluştur', icon: Boxes, roles: OWNER_ONLY },
+      { href: '/products/toplu-zam', label: 'Toplu Zam / İndirim', icon: Boxes, roles: OWNER_ONLY },
       { href: '/products/excel-import', label: 'Excel\'den Ürün Aktar', icon: Boxes, roles: OWNER_MANAGER },
       { href: '/katalog', label: 'PDF Katalog', icon: Boxes, roles: OWNER_MANAGER },
       { href: '/katalog-gorunu', label: 'Katalog Görünümü', icon: Boxes, roles: OWNER_MANAGER },
       { href: '/stock-cards', label: 'Stok Kartları', icon: Warehouse, roles: OWNER_MANAGER },
       { href: '/stock-cards/upload-images', label: 'Toplu Görsel Yükle', icon: Warehouse, roles: OWNER_MANAGER },
       { href: '/stok-raporu', label: 'Stok Hareketleri', icon: Warehouse, roles: OWNER_ONLY },
+      { href: '/urun-duzenle', label: 'Ürün Düzenle', icon: Edit3, roles: OWNER_MANAGER },
+      { href: '/kategoriler', label: 'Kategoriler', icon: LayoutGrid, roles: OWNER_MANAGER },
+      { href: '/kategori-atama', label: 'Kategori Atama', icon: LayoutGrid, roles: OWNER_MANAGER },
     ],
   },
   {
@@ -80,23 +86,18 @@ const navGroups: { section: string; icon: LucideIcon; items: NavItem[] }[] = [
     section: 'Satış',
     icon: ShoppingCart,
     items: [
-      { href: '/hizli-satis', label: 'Hızlı Dükkan Satışı', icon: ShoppingCart, roles: OWNER_MANAGER },
-      { href: '/web-siparisler', label: 'Web Siparişleri', icon: ShoppingCart, roles: OWNER_MANAGER },
+      // Tüm sipariş sayfaları "Siparişler" içinde üst sekmelerle (OrdersTabs)
       { href: '/orders', label: 'Siparişler', icon: ShoppingCart, roles: OWNER_MANAGER },
-      { href: '/iade-takip', label: 'İade Takip', icon: ShoppingCart, roles: OWNER_MANAGER },
-      { href: '/staff/orders', label: 'Personel Sipariş', icon: ShoppingCart, roles: ALL },
-      { href: '/staff/photo-archive', label: 'Fotoğraf Arşivi', icon: ShoppingCart, roles: ALL },
-      { href: '/adres-ciktisi', label: 'Adres Çıktısı · Müşteri · Fatura', icon: ShoppingCart, roles: ALL },
+      { href: '/staff/orders', label: 'Personel Sipariş Ekranı', icon: ShoppingCart, roles: ALL },
+      { href: '/hizli-satis', label: 'Hızlı Dükkan Satışı', icon: ShoppingCart, roles: OWNER_MANAGER },
+      // Personel menüsünde: sipariş sekmelerinden görebildikleri
+      { href: '/sabah-ciktisi', label: 'Çıktı Merkezi (A5)', icon: ShoppingCart, roles: ['STAFF'] },
+      { href: '/adres-ciktisi', label: 'Telefon Siparişi Gir · Adres', icon: ShoppingCart, roles: ['STAFF'] },
+      { href: '/staff/photo-archive', label: 'Fotoğraf Arşivi', icon: ShoppingCart, roles: ['STAFF'] },
+      { href: '/iade-takip', label: 'İadeler (video)', icon: ShoppingCart, roles: ['STAFF'] },
       { href: '/sales', label: 'Satış Merkezi', icon: ShoppingCart, roles: OWNER_MANAGER, enabled: process.env.NEXT_PUBLIC_ENABLE_SALES_CENTER === 'true' },
       { href: '/crm', label: 'CRM', icon: Users, roles: OWNER_MANAGER },
-      { href: '/eft-yonetim', label: 'EFT Ödemeleri', icon: Landmark, roles: OWNER_MANAGER },
       { href: '/musteri-sorulari', label: 'Müşteri Soruları', icon: MessageSquare, roles: OWNER_MANAGER },
-      { href: '/kategoriler', label: 'Kategoriler', icon: LayoutGrid, roles: OWNER_MANAGER },
-      { href: '/urun-duzenle', label: 'Ürün Düzenle', icon: Edit3, roles: OWNER_MANAGER },
-      { href: '/kategori-atama', label: 'Kategori Atama', icon: LayoutGrid, roles: OWNER_MANAGER },
-      { href: '/referanslar', label: 'Referans Projeler', icon: LayoutGrid, roles: OWNER_MANAGER },
-      { href: '/ziyaretciler', label: 'Ziyaretçiler', icon: Users, roles: OWNER_ONLY },
-      { href: '/kullanicilar', label: 'Kullanıcı Yönetimi', icon: Users, roles: OWNER_ONLY },
     ],
   },
   {
@@ -112,15 +113,20 @@ const navGroups: { section: string; icon: LucideIcon; items: NavItem[] }[] = [
     section: 'Yönetim',
     icon: CircleDollarSign,
     items: [
+      { href: '/reports/ciro', label: 'Günlük Ciro', icon: BarChart3, roles: OWNER_MANAGER },
+      { href: '/reports/hakedis', label: 'Hakedişler', icon: CircleDollarSign, roles: OWNER_MANAGER },
       { href: '/harcama', label: 'Günlük Harcama', icon: Wallet, roles: OWNER_MANAGER },
       { href: '/finance', label: 'Finans', icon: CircleDollarSign, roles: OWNER_ONLY },
       { href: '/faturalar', label: 'Faturalar', icon: CircleDollarSign, roles: OWNER_ONLY },
       { href: '/e-donusum', label: 'e-Dönüşüm (Fatura)', icon: CircleDollarSign, roles: OWNER_ONLY },
       { href: '/personel', label: 'Personel Özlük Dosyası', icon: Users, roles: OWNER_ONLY },
-      { href: '/borclar', label: 'Tedarikçi Borçları', icon: Warehouse, roles: OWNER_ONLY },
+      { href: '/borclar', label: 'Borçlar & Faturalar', icon: Warehouse, roles: OWNER_ONLY },
       { href: '/reports', label: 'Raporlar', icon: BarChart3, roles: OWNER_MANAGER },
       { href: '/staff/tasks', label: 'Personel Görev', icon: ListChecks, roles: OWNER_MANAGER, enabled: process.env.NEXT_PUBLIC_ENABLE_SALES_CENTER === 'true' },
       { href: '/site-admin', label: 'Site Admin Paneli', icon: Globe, roles: OWNER_ONLY },
+      { href: '/referanslar', label: 'Referans Projeler', icon: LayoutGrid, roles: OWNER_MANAGER },
+      { href: '/ziyaretciler', label: 'Ziyaretçiler', icon: Users, roles: OWNER_ONLY },
+      { href: '/kullanicilar', label: 'Kullanıcı Yönetimi', icon: Users, roles: OWNER_ONLY },
       { href: '/settings', label: 'Ayarlar', icon: Settings, roles: OWNER_ONLY },
     ],
   },
@@ -151,9 +157,10 @@ const roleAllowedPaths: Record<UserRole, string[]> = {
     '/dashboard', '/products', '/products/excel-export', '/media', '/model-codes', '/barcodes', '/stock-cards',
     '/hesap-makinesi', '/orders', '/staff/orders', '/sales', '/crm',
     '/integrations', '/market-analizi', '/reports', '/staff/tasks',
-    '/urun-duzenle', '/kategori-atama', '/kategoriler', '/referanslar', '/eft-yonetim', '/musteri-sorulari', '/adres-ciktisi',
+    '/urun-duzenle', '/kategori-atama', '/kategoriler', '/referanslar', '/eft-yonetim', '/musteri-sorulari', '/adres-ciktisi', '/sabah-ciktisi',
+    '/web-siparisler', '/iade-takip', '/staff/photo-archive',
   ],
-  STAFF: ['/staff/orders', '/staff/photo-archive', '/products', '/adres-ciktisi'],
+  STAFF: ['/staff/orders', '/staff/photo-archive', '/products', '/adres-ciktisi', '/sabah-ciktisi', '/iade-takip'],
 };
 
 const roleLabel: Record<UserRole, string> = {
@@ -571,6 +578,7 @@ export function AdminShell({ title, children }: { title: string; children: React
           <div className="mb-5">
             <h1 className="text-xl font-bold text-ink">{title}</h1>
           </div>
+          {user?.role === 'OWNER' && <PaymentAlertBanner />}
           {children}
         </main>
       </div>
@@ -580,6 +588,7 @@ export function AdminShell({ title, children }: { title: string; children: React
         <MobileTopBar title={title} user={user} />
 
         <main className="px-4 py-4 pb-24">
+          {user?.role === 'OWNER' && <PaymentAlertBanner />}
           {children}
         </main>
 

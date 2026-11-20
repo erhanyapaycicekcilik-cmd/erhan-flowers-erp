@@ -8,6 +8,15 @@ import { METAL_POTS } from './metal-pots.data';
 import { DECOR_POT_GROUPS } from './decor-pots.data';
 import type { SiteOnlyGroup, SiteOnlySeries, SiteOnlySimpleProduct } from './site-only-catalog.types';
 
+function slugify(v: string) {
+  return v
+    .toLocaleLowerCase('tr')
+    .replace(/ğ/g, 'g').replace(/ü/g, 'u').replace(/ş/g, 's')
+    .replace(/ı/g, 'i').replace(/ö/g, 'o').replace(/ç/g, 'c')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
 const CATEGORY_NAME = 'Saksı';
 const CATALOG_CATEGORY = 'Saksılar';
 const DEFAULT_STOCK = 100;
@@ -53,6 +62,7 @@ export class SiteOnlyCatalogService implements OnApplicationBootstrap {
       await this.seedSimple(CACTUS_REEDS);
       await this.seedSimple(METAL_POTS);
       await this.seedGroups(DECOR_POT_GROUPS);
+      await this.seedTreeGroups();
     })().catch((err: unknown) => {
       this.logger.error(`Site ürünleri eklenemedi: ${err instanceof Error ? err.message : String(err)}`);
     });
@@ -387,5 +397,100 @@ export class SiteOnlyCatalogService implements OnApplicationBootstrap {
       );
     }
     return { productsCreated, groupsCreated, variantsCreated, imagesUpdated };
+  }
+
+  /**
+   * Ağaçlar kategorisindeki (Bambu hariç) tüm ACTIVE ürünler için ProductGroup oluşturur.
+   * - Her ürün → 1 grup, 1 varyant ("Saksı ile" — mevcut ürün + mevcut görseller)
+   * - Grup zaten varsa atlar (idempotent)
+   * - Saksısız varyant sonradan admin panelden eklenir (görseller hazır olunca)
+   */
+  async seedTreeGroups() {
+    const products = await this.prisma.product.findMany({
+      where: {
+        status: 'ACTIVE',
+        catalogCategory: 'Ağaçlar',
+        // WEB- ön ekli site-only ürünleri değil, gerçek ERP ürünleri
+        modelCode: { not: { startsWith: 'WEB-' } },
+      },
+      select: {
+        id: true,
+        productName: true,
+        modelCode: true,
+        imageUrls: true,
+        productHeight: true,
+        catalogSubCategory: true,
+      },
+      orderBy: [{ catalogSubCategory: 'asc' }, { productName: 'asc' }],
+    });
+
+    // Bambu içeren alt kategorileri atla
+    const BAMBU_KEYWORDS = ['bambu', 'bamboo'];
+    const treeProducts = products.filter((p) => {
+      const sub = (p.catalogSubCategory ?? '').toLowerCase();
+      const name = p.productName.toLowerCase();
+      return !BAMBU_KEYWORDS.some((k) => sub.includes(k) || name.startsWith(k));
+    });
+
+    let groupsCreated = 0;
+    let variantsCreated = 0;
+
+    for (const product of treeProducts) {
+      const baseSlug = slugify(product.productName);
+      const slug = `agac-${baseSlug}`;
+
+      // Grup zaten varsa atla
+      const existing = await this.prisma.productGroup.findUnique({ where: { slug } });
+      if (existing) continue;
+
+      const firstImage = Array.isArray(product.imageUrls) && product.imageUrls.length > 0
+        ? (product.imageUrls[0] as string)
+        : null;
+
+      const group = await this.prisma.productGroup.create({
+        data: {
+          name: product.productName,
+          slug,
+          category: 'Ağaçlar',
+          subCategory: product.catalogSubCategory ?? null,
+          mainImage: firstImage,
+          isActive: true,
+          sortOrder: 0,
+        },
+      });
+      groupsCreated++;
+
+      // "Saksısız" varyantı — görsel henüz yok, fiyat ERP'den gelecek (priceOverride girilince aktif olur)
+      await this.prisma.productGroupVariant.create({
+        data: {
+          groupId: group.id,
+          productId: product.id,
+          sizeLabel: product.productHeight ?? null,
+          potLabel: 'Saksısız',
+          potImage: null, // Saksısız fotoğraf çekilince admin panelden güncellenir
+          isActive: false, // Görsel + fiyat hazır olunca aktif et
+          sortOrder: 0,
+        },
+      });
+
+      // "Saksı ile" varyantı — mevcut ürün, mevcut fiyat
+      await this.prisma.productGroupVariant.create({
+        data: {
+          groupId: group.id,
+          productId: product.id,
+          sizeLabel: product.productHeight ?? null,
+          potLabel: 'Saksı ile',
+          potImage: firstImage,
+          isActive: true,
+          sortOrder: 1,
+        },
+      });
+      variantsCreated++;
+    }
+
+    if (groupsCreated || variantsCreated) {
+      this.logger.log(`Ağaç grupları: ${groupsCreated} grup, ${variantsCreated} varyant eklendi`);
+    }
+    return { groupsCreated, variantsCreated, total: treeProducts.length };
   }
 }

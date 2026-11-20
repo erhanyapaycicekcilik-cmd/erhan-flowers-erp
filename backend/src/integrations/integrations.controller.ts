@@ -10,6 +10,7 @@ import { IntegrationsService } from './integrations.service';
 import { OrderSyncService } from './services/order-sync.service';
 import { GmailOrderService } from './services/gmail-order.service';
 import { HepsiburadaSyncService, HbStockItem, HbPriceItem } from './services/hepsiburada-sync.service';
+import { HepsiburadaAdapter } from './adapters/hepsiburada.adapter';
 
 type AuthenticatedRequest = Request & { user?: { id: number; role: string } };
 
@@ -50,6 +51,15 @@ export class IntegrationsController {
   @UseGuards(OwnerGuard)
   test(@Param('platform') platform: string) {
     return this.integrations.testConnection(platform);
+  }
+
+  // Personel ekranı: tüm platformlardan hemen sipariş çek (personel de kullanabilir)
+  @Post('orders/sync-all')
+  async syncAllOrders(@Req() request: AuthenticatedRequest) {
+    HepsiburadaAdapter.clearImageCache();
+    HepsiburadaAdapter.lastImageDiag = '';
+    const out = await this.integrations.syncAllForStaff(request.user!.id);
+    return { ...out, imageDiag: HepsiburadaAdapter.lastImageDiag || null };
   }
 
   @Post('orders/:platform/sync')
@@ -307,9 +317,19 @@ export class IntegrationsController {
 
   @Post('hepsiburada/sync-orders')
   @UseGuards(OwnerGuard)
-  async hbSyncOrders() {
+  async hbSyncOrders(@Req() request: AuthenticatedRequest) {
     const result = await this.orderSync.runHepsiburadaSync();
-    return { ok: true, newOrders: result.newOrders, message: `${result.newOrders} yeni sipariş, ${result.stockDeductions} stok düşümü.` };
+    // Personel ekranı retail_sales'ten okur: adapter senkronunu da çalıştır (görseller burada yazılır), görsel önbelleğini tazele
+    HepsiburadaAdapter.clearImageCache();
+    HepsiburadaAdapter.lastImageDiag = '';
+    const screen = await this.integrations.syncOrders('HEPSIBURADA', request.user!.id).catch((e: Error) => ({ ok: false, message: e?.message ?? 'hata' }));
+    return {
+      ok: true,
+      newOrders: result.newOrders,
+      message: `${result.newOrders} yeni sipariş, ${result.stockDeductions} stok düşümü.`,
+      screenSync: (screen as { message?: string }).message ?? null,
+      imageDiag: HepsiburadaAdapter.lastImageDiag || 'görsel sorgusu çalışmadı (açık sipariş yok ya da API bilgisi eksik)',
+    };
   }
 
   @Post('hepsiburada/push-stock')

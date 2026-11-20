@@ -8,10 +8,15 @@ type AdapterConfig = {
   defaultOrderPath: string;
   defaultProductPath?: string;
   runtimeCredentials?: Record<string, string>;
+  /** Kaç günlük sipariş çekilsin (env {PREFIX}_ORDER_LOOKBACK_DAYS yoksa). Varsayılan 3 */
+  defaultLookbackDays?: number;
 };
 
 export abstract class HttpMarketplaceOrderAdapter extends BaseIntegrationAdapter {
   platform: IntegrationPlatform;
+  private lookbackOverride: number | null = null;
+  /** Ciro raporu için belirli tarih aralığı (epoch ms); doluysa lookback yerine kullanılır */
+  private rangeOverride: { start: number; end: number } | null = null;
 
   protected constructor(private readonly config: AdapterConfig) {
     super();
@@ -39,8 +44,16 @@ export abstract class HttpMarketplaceOrderAdapter extends BaseIntegrationAdapter
     if (missing.length) return [];
 
     const size = this.numberEnv('ORDER_PAGE_SIZE', 50);
-    const maxPages = this.numberEnv('ORDER_MAX_PAGES', 5);
-    const firstPage = await this.fetchOrderPage(0, size);
+    const maxPages = this.numberEnv('ORDER_MAX_PAGES', (this.config.defaultLookbackDays ?? 3) > 3 ? 10 : 5);
+    let firstPage: Awaited<ReturnType<typeof this.fetchOrderPage>>;
+    try {
+      firstPage = await this.fetchOrderPage(0, size);
+    } catch (error) {
+      // Uzun tarih aralığı reddedilirse eski 3 günlük aralıkla tekrar dene
+      if (this.lookbackOverride != null || (this.config.defaultLookbackDays ?? 3) <= 3) throw error;
+      this.lookbackOverride = 3;
+      firstPage = await this.fetchOrderPage(0, size);
+    }
     const totalPages = Math.min(Math.max(Number(firstPage.totalPages ?? 1), 1), maxPages);
     const content = [...firstPage.content];
 
@@ -51,6 +64,30 @@ export abstract class HttpMarketplaceOrderAdapter extends BaseIntegrationAdapter
 
     const orders = content.map((order) => this.mapGenericOrder(order)).filter((order) => order.externalOrderId && order.platformOrderNumber);
     return Array.from(new Map(orders.map((order) => [order.externalOrderId, order])).values());
+  }
+
+  /**
+   * Belirli tarih aralığındaki tüm siparişler (ciro raporu). 7 günlük parçalar, parça başına en fazla 20 sayfa.
+   * Hata olursa fırlatır — eksik veriyle ciro gösterilmesin.
+   */
+  async fetchOrdersBetween(startMs: number, endMs: number): Promise<ExternalOrder[]> {
+    if (this.missingKeys().length) throw new Error(`${this.platform} API bilgileri eksik`);
+    const size = 100;
+    const chunk = 7 * 86400000;
+    const all: ExternalOrder[] = [];
+    try {
+      for (let s = startMs; s < endMs; s += chunk) {
+        this.rangeOverride = { start: s, end: Math.min(s + chunk - 1, endMs) };
+        const first = await this.fetchOrderPage(0, size);
+        const pages = Math.min(Math.max(Number(first.totalPages ?? 1), 1), 20);
+        const content = [...first.content];
+        for (let page = 1; page < pages; page += 1) content.push(...(await this.fetchOrderPage(page, size)).content);
+        all.push(...content.map((o) => this.mapGenericOrder(o)).filter((o) => o.externalOrderId));
+      }
+    } finally {
+      this.rangeOverride = null;
+    }
+    return Array.from(new Map(all.map((o) => [o.externalOrderId, o])).values());
   }
 
   async pushProduct(payload: unknown): Promise<AdapterConnectionResult> {
@@ -94,9 +131,9 @@ export abstract class HttpMarketplaceOrderAdapter extends BaseIntegrationAdapter
     url.searchParams.set(this.env('PAGE_PARAM') || 'page', String(options.page));
     url.searchParams.set(this.env('SIZE_PARAM') || 'size', String(options.size));
 
-    const lookbackDays = this.numberEnv('ORDER_LOOKBACK_DAYS', 3);
-    const now = Date.now();
-    const start = now - lookbackDays * 24 * 60 * 60 * 1000;
+    const lookbackDays = this.lookbackOverride ?? this.numberEnv('ORDER_LOOKBACK_DAYS', this.config.defaultLookbackDays ?? 3);
+    const now = this.rangeOverride?.end ?? Date.now();
+    const start = this.rangeOverride?.start ?? now - lookbackDays * 24 * 60 * 60 * 1000;
     if (this.booleanEnv('USE_EPOCH_MS_DATES', true)) {
       url.searchParams.set(this.env('START_DATE_PARAM') || 'startDate', String(start));
       url.searchParams.set(this.env('END_DATE_PARAM') || 'endDate', String(now));

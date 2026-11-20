@@ -8,11 +8,12 @@ import { ModelCodesService } from './model-codes.service';
 import { GeminiContentService } from './gemini-content.service';
 import { ProductsController } from './products.controller';
 import { ProductsService } from './products.service';
+import { BulkPriceService } from './bulk-price.service';
 
 @Module({
   imports: [AuthModule, IntegrationsModule, PublicCatalogModule],
   controllers: [ProductsController, ModelCodesController, DriveSyncController],
-  providers: [ProductsService, ModelCodesService, GeminiContentService],
+  providers: [ProductsService, ModelCodesService, GeminiContentService, BulkPriceService],
   exports: [ProductsService, ModelCodesService],
 })
 export class ProductsModule {}

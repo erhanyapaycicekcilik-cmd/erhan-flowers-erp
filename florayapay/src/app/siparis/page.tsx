@@ -1,5 +1,6 @@
 'use client'
 
+import { isValidTcKimlik, isValidTrPhone } from '@/lib/order-validation'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Header } from '@/components/layout/Header'
@@ -8,6 +9,7 @@ import { useCart } from '@/hooks/useCart'
 import Image from 'next/image'
 import Link from 'next/link'
 import { getImageUrl } from '@/lib/api/catalog'
+import { shippingConfig as siteConfig } from '@/lib/shipping'
 
 function fmt(n: number) {
   return '₺' + new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(n)
@@ -63,6 +65,9 @@ export default function SiparisPage() {
     vergiDairesi: '',
   })
   const [faturaKurumsal, setFaturaKurumsal] = useState(false)
+  // Bot koruması: görünmez alan (insanlar doldurmaz) + formun açılış zamanı
+  const [hpWebsite, setHpWebsite] = useState('')
+  const [formOpenedAt] = useState(() => Date.now())
   const [odemeYontemi, setOdemeYontemi] = useState<'whatsapp' | 'eft' | 'kart'>('whatsapp')
   const [loading, setLoading] = useState(false)
   const [errors, setErrors] = useState<Partial<typeof form>>({})
@@ -174,8 +179,9 @@ export default function SiparisPage() {
     : 0
 
   const eftIndirimTutar = total * EFT_INDIRIM
+  const kargoUcreti = total >= siteConfig.freeShippingThreshold ? 0 : (siteConfig.shippingFee ?? 0)
   const genelToplam = Math.max(0,
-    (odemeYontemi === 'eft' ? total - eftIndirimTutar : total) - promoIndirimTutar
+    (odemeYontemi === 'eft' ? total - eftIndirimTutar : total) - promoIndirimTutar + kargoUcreti
   )
 
   function set(key: keyof typeof form, val: string) {
@@ -188,12 +194,14 @@ export default function SiparisPage() {
     if (!form.ad.trim()) e.ad = 'Ad gerekli'
     if (!form.soyad.trim()) e.soyad = 'Soyad gerekli'
     if (!form.telefon.trim()) e.telefon = 'Telefon gerekli'
+    else if (!isValidTrPhone(form.telefon)) e.telefon = 'Geçerli bir cep telefonu girin (05XX XXX XX XX)'
     if (!form.sehir.trim()) e.sehir = 'Şehir gerekli'
     if (!form.adres.trim()) e.adres = 'Adres gerekli'
     if (!form.email.trim()) e.email = 'E-posta gerekli'
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) e.email = 'Geçerli bir e-posta girin'
     if (!form.tcKimlik.trim()) e.tcKimlik = 'TC Kimlik No gerekli'
     else if (!/^\d{11}$/.test(form.tcKimlik.trim())) e.tcKimlik = '11 haneli TC Kimlik No girin'
+    else if (!isValidTcKimlik(form.tcKimlik.trim())) e.tcKimlik = 'TC Kimlik No geçersiz, lütfen kontrol edin'
     if (faturaKurumsal) {
       if (!form.firmaUnvan.trim()) e.firmaUnvan = 'Firma unvanı gerekli'
       if (!form.vergiNo.trim()) e.vergiNo = 'Vergi numarası gerekli'
@@ -228,7 +236,7 @@ export default function SiparisPage() {
       urunler,
       '',
       `*Toplam:* ${fmt(genelToplam)}`,
-      `*Kargo:* Ücretsiz`,
+      `*Kargo:* ${kargoUcreti === 0 ? 'Ücretsiz' : fmt(kargoUcreti)}`,
     ]
       .filter(Boolean)
       .join('\n')
@@ -273,6 +281,8 @@ export default function SiparisPage() {
           promoDiscount: promoIndirimTutar || undefined,
           totalAmount: genelToplam,
           customerId: musteriOturumu?.id || undefined,
+          _hp: hpWebsite || undefined,
+          _t: Date.now() - formOpenedAt,
         }),
       })
 
@@ -363,6 +373,11 @@ export default function SiparisPage() {
           <h1 className="font-display text-3xl font-light text-[#0D1510] mb-8">Sipariş Ver</h1>
 
           <form onSubmit={handleSubmit} noValidate>
+            {/* Bot tuzağı — ekranda görünmez, insanlar doldurmaz */}
+            <div aria-hidden="true" style={{ position: 'absolute', left: '-10000px', top: 'auto', width: 1, height: 1, overflow: 'hidden' }}>
+              <label htmlFor="website">Web sitesi</label>
+              <input id="website" name="website" type="text" tabIndex={-1} autoComplete="off" value={hpWebsite} onChange={(e) => setHpWebsite(e.target.value)} />
+            </div>
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
 
               {/* Sol: form alanları */}
@@ -733,7 +748,10 @@ export default function SiparisPage() {
                     )}
                     <div className="flex justify-between text-[#8C8A82]">
                       <span>Kargo</span>
-                      <span className="text-[#5C7A62] font-medium">Ücretsiz</span>
+                      {kargoUcreti === 0
+                        ? <span className="text-[#5C7A62] font-medium">Ücretsiz</span>
+                        : <span>{fmt(kargoUcreti)}</span>
+                      }
                     </div>
                     <div className="flex justify-between font-bold text-[#0D1510] text-base pt-1 border-t border-[#E0DDD4]">
                       <span>Toplam</span>

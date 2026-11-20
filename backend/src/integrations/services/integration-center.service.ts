@@ -10,6 +10,7 @@ import { TrendyolAdapter } from '../adapters/trendyol.adapter';
 import { TrendrumAdapter } from '../adapters/trendrum.adapter';
 import { PazaramaAdapter } from '../adapters/pazarama.adapter';
 import { IdefixAdapter } from '../adapters/idefix.adapter';
+import { KoctasAdapter } from '../adapters/koctas.adapter';
 import { AmazonAdapter } from '../adapters/amazon.adapter';
 import { MockMarketplaceAdapter } from '../adapters/mock/mock-marketplace.adapter';
 import { CredentialVaultService } from './credential-vault.service';
@@ -64,7 +65,7 @@ type DryRunPayload = {
 const credentialTypes = new Set(['API_KEY', 'API_SECRET', 'SUPPLIER_ID', 'TOKEN', 'UYE_KODU', 'USERNAME', 'PASSWORD', 'OTHER']);
 const accountStatuses = new Set(['NOT_CONFIGURED', 'CONFIGURED', 'CONNECTED', 'FAILED', 'DISABLED']);
 const publicationStatuses = new Set(['DRAFT', 'READY', 'PUBLISHED', 'ERROR', 'PAUSED']);
-const managedPlatforms = ['TRENDYOL', 'HEPSIBURADA', 'N11', 'TICIMAX', 'AMAZON', 'PAZARAMA', 'IDEFIX', 'TEKLIKLE', 'TRENDRUM'] as const;
+const managedPlatforms = ['TRENDYOL', 'HEPSIBURADA', 'N11', 'TICIMAX', 'AMAZON', 'PAZARAMA', 'IDEFIX', 'TEKLIKLE', 'TRENDRUM', 'KOCTAS'] as const;
 const managedPlatformNames: Record<string, string> = {
   TRENDYOL: 'Trendyol',
   HEPSIBURADA: 'Hepsiburada',
@@ -75,6 +76,7 @@ const managedPlatformNames: Record<string, string> = {
   IDEFIX: 'Idefix',
   TEKLIKLE: 'Teklikle',
   TRENDRUM: 'Trendrum',
+  KOCTAS: 'Koçtaş',
 };
 const platformCredentialFields: Record<string, string[]> = {
   TRENDYOL: ['SUPPLIER_ID', 'API_KEY', 'API_SECRET'],
@@ -87,6 +89,8 @@ const platformCredentialFields: Record<string, string[]> = {
   IDEFIX: ['SUPPLIER_ID', 'API_KEY'],
   TEKLIKLE: ['API_KEY', 'API_SECRET'],
   TRENDRUM: ['API_KEY', 'API_SECRET'],
+  // Koçtaş (Mirakl): API_KEY = Kişisel ayarlar > API anahtarı, SUPPLIER_ID = mağaza (shop) ID — isteğe bağlı
+  KOCTAS: ['API_KEY', 'SUPPLIER_ID'],
 };
 const managedCompanies: Record<string, { name: string; legalName: string; domain: string; skipStockDeduction: boolean }> = {
   ERHAN: { name: 'Erhan Flowers', legalName: 'Erhan Flowers', domain: 'erhanflowers.com', skipStockDeduction: false },
@@ -118,7 +122,7 @@ export class IntegrationCenterService {
       ORDER BY CASE sc.code
         WHEN 'TRENDYOL' THEN 1 WHEN 'HEPSIBURADA' THEN 2 WHEN 'N11' THEN 3
         WHEN 'AMAZON' THEN 4 WHEN 'PAZARAMA' THEN 5 WHEN 'IDEFIX' THEN 6
-        WHEN 'TEKLIKLE' THEN 7 WHEN 'TRENDRUM' THEN 8 WHEN 'TICIMAX' THEN 9 ELSE 99 END,
+        WHEN 'TEKLIKLE' THEN 7 WHEN 'TRENDRUM' THEN 8 WHEN 'KOCTAS' THEN 9 WHEN 'TICIMAX' THEN 10 ELSE 99 END,
         cr.credential_type ASC
     `;
 
@@ -877,6 +881,7 @@ export class IntegrationCenterService {
     if (platform === 'PAZARAMA') return new PazaramaAdapter(await this.runtimeCredentials(platform));
     if (platform === 'IDEFIX') return new IdefixAdapter(await this.runtimeCredentials(platform));
     if (platform === 'AMAZON') return new AmazonAdapter(await this.runtimeCredentials(platform));
+    if (platform === 'KOCTAS') return new KoctasAdapter(await this.runtimeCredentials(platform));
     throw new BadRequestException('Platform desteklenmiyor.');
   }
 

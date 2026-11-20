@@ -326,6 +326,34 @@ export class TrendyolAdapter extends BaseIntegrationAdapter {
   // ekleme/birleştirme yapıyor). Bu yüzden istenmeyen görseli kaldırmanın tek
   // yolu Trendyol satıcı panelinden elle silmek. Bu metod, barkoda ait ürünün
   // panel düzenleme linkini (platformListingId ile) canlı olarak sorgular.
+  /** Mağazanın kendi ürün kataloğundan barkodla ilk ürün görseli (sipariş satırlarında görsel gelmediği için). */
+  async fetchProductImageByBarcode(barcode: string): Promise<string | null> {
+    if (!barcode || this.missingKeys().length) return null;
+    const supplierId = this.env('SUPPLIER_ID');
+    const pick = (row: Record<string, unknown> | undefined): string | null => {
+      if (!row) return null;
+      const lists = [row.images, ...(Array.isArray(row.variants) ? (row.variants as Array<Record<string, unknown>>).map((v) => v.images) : [])];
+      for (const list of lists) {
+        if (!Array.isArray(list)) continue;
+        for (const img of list) {
+          const url = typeof img === 'string' ? img : this.text((img as Record<string, unknown>)?.url);
+          if (url.startsWith('http')) return url;
+        }
+      }
+      return null;
+    };
+    for (const path of [`/product/sellers/${supplierId}/v2/products`, `/product/sellers/${supplierId}/products`]) {
+      try {
+        const response = await fetch(`${this.productApiBase()}${path}?barcode=${encodeURIComponent(barcode)}`, { headers: this.productHeaders(supplierId) });
+        if (!response.ok) continue;
+        const body = (await response.json().catch(() => ({}))) as { content?: Array<Record<string, unknown>> };
+        const url = pick(body.content?.[0]);
+        if (url) return url;
+      } catch { /* sonraki uç nokta */ }
+    }
+    return null;
+  }
+
   async getSellerPanelUrl(barcode: string): Promise<AdapterConnectionResult & { panelUrl?: string }> {
     const missing = this.missingKeys();
     if (missing.length) return this.missing(missing);
@@ -517,6 +545,137 @@ export class TrendyolAdapter extends BaseIntegrationAdapter {
         Accept: 'application/json',
       },
     });
+  }
+
+  /**
+   * Belirli tarih aralığındaki tüm paketler (ciro raporu). Trendyol en fazla 2 haftalık aralık kabul ettiği için
+   * 14 günlük parçalar; parça başına en fazla 50 sayfa × 200. Hata olursa fırlatır (eksik veriyle ciro gösterilmesin).
+   */
+  async fetchOrdersBetween(startMs: number, endMs: number): Promise<ExternalOrder[]> {
+    const missing = this.missingKeys();
+    if (missing.length) throw new Error(`Trendyol API bilgileri eksik: ${missing.join(', ')}`);
+    const chunk = 14 * 86400000 - 1;
+    const all: ExternalOrder[] = [];
+    for (let s = startMs; s < endMs; s += chunk + 1) {
+      const e = Math.min(s + chunk, endMs);
+      for (let page = 0; page < 50; page += 1) {
+        const data = await this.requestOrdersRange(s, e, page, 200);
+        const content = Array.isArray(data.content) ? data.content : [];
+        all.push(...content.map((o) => this.mapOrder(o)));
+        if (page + 1 >= Number(data.totalPages ?? 1) || content.length === 0) break;
+      }
+    }
+    return Array.from(new Map(all.filter((o) => o.externalOrderId).map((o) => [o.externalOrderId, o])).values());
+  }
+
+  /**
+   * Muhasebe & Finans (cari hesap ekstresi): `settlements` (Sale, Return, Discount, Coupon…) ve
+   * `otherfinancials` (PaymentOrder, DeductionInvoices…). Trendyol en fazla 15 günlük aralık kabul eder → parçalı çekilir.
+   * Hata olursa fırlatır.
+   */
+  async fetchFinance(kind: 'settlements' | 'otherfinancials', transactionType: string, startMs: number, endMs: number): Promise<Array<Record<string, any>>> {
+    const missing = this.missingKeys();
+    if (missing.length) throw new Error(`Trendyol API bilgileri eksik: ${missing.join(', ')}`);
+    const supplierId = this.env('SUPPLIER_ID');
+    const apiBaseUrl = this.env('API_URL').replace(/\/+$/, '');
+    const chunk = 15 * 86400000 - 1;
+    const all: Array<Record<string, any>> = [];
+    for (let s = startMs; s < endMs; s += chunk + 1) {
+      const e = Math.min(s + chunk, endMs);
+      for (let page = 0; page < 50; page += 1) {
+        const url = new URL(`${apiBaseUrl}/finance/che/sellers/${supplierId}/${kind}`);
+        url.searchParams.set('startDate', String(s));
+        url.searchParams.set('endDate', String(e));
+        url.searchParams.set('transactionType', transactionType);
+        url.searchParams.set('page', String(page));
+        url.searchParams.set('size', '500');
+        let response: Response | null = null;
+        for (let attempt = 1; attempt <= 4; attempt++) {
+          response = await fetch(url, {
+            headers: {
+              Authorization: `Basic ${Buffer.from(`${this.env('API_KEY')}:${this.env('API_SECRET')}`).toString('base64')}`,
+              'User-Agent': `${supplierId} - SelfIntegration`,
+              Accept: 'application/json',
+            },
+          });
+          if (response.status !== 429) break;
+          await this.delay(1500 * attempt);
+        }
+        if (!response || !response.ok) {
+          throw new Error(`Trendyol finans (${kind}/${transactionType}) alınamadı. HTTP ${response?.status}: ${response ? await this.safeErrorText(response) : ''}`);
+        }
+        const data = (await response.json().catch(() => ({}))) as { content?: Array<Record<string, any>>; totalPages?: number };
+        const content = Array.isArray(data.content) ? data.content : [];
+        all.push(...content);
+        if (content.length === 0 || page + 1 >= Number(data.totalPages ?? 1)) break;
+      }
+    }
+    return all;
+  }
+
+  private async requestOrdersRange(start: number, end: number, page: number, size: number, attempt = 1): Promise<{ content?: Array<Record<string, any>>; totalPages?: number }> {
+    const supplierId = this.env('SUPPLIER_ID');
+    const apiBaseUrl = this.env('API_URL').replace(/\/+$/, '');
+    const url = new URL(`${apiBaseUrl}/order/sellers/${supplierId}/v2/orders`);
+    url.searchParams.set('startDate', String(start));
+    url.searchParams.set('endDate', String(end));
+    url.searchParams.set('page', String(page));
+    url.searchParams.set('size', String(size));
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        Authorization: `Basic ${Buffer.from(`${this.env('API_KEY')}:${this.env('API_SECRET')}`).toString('base64')}`,
+        'User-Agent': `${supplierId} - SelfIntegration`,
+        Accept: 'application/json',
+      },
+    });
+    if (response.status === 429 && attempt < 4) {
+      await this.delay(1500 * attempt);
+      return this.requestOrdersRange(start, end, page, size, attempt + 1);
+    }
+    if (!response.ok) throw new Error(`Trendyol sipariş listesi alınamadı. HTTP ${response.status}: ${await this.safeErrorText(response)}`);
+    return response.json().catch(() => ({})) as Promise<{ content?: Array<Record<string, any>>; totalPages?: number }>;
+  }
+
+  /** Trendyol iade talepleri (claims). Tarih aralığı 14 günlük parçalarla taranır. Ham içerik döner. */
+  async fetchClaims(startMs: number, endMs: number, statuses: string[] = []): Promise<Array<Record<string, any>>> {
+    const missing = this.missingKeys();
+    if (missing.length) throw new Error(`Trendyol API bilgileri eksik: ${missing.join(', ')}`);
+    const supplierId = this.env('SUPPLIER_ID');
+    const apiBaseUrl = this.env('API_URL').replace(/\/+$/, '');
+    const headers = {
+      Authorization: `Basic ${Buffer.from(`${this.env('API_KEY')}:${this.env('API_SECRET')}`).toString('base64')}`,
+      'User-Agent': `${supplierId} - SelfIntegration`,
+      Accept: 'application/json',
+    };
+    const chunk = 14 * 86400000 - 1;
+    const all: Array<Record<string, any>> = [];
+    // Durum filtresi (claimItemStatus) verilirse her durum ayrı sorgulanır; boşsa tümü
+    for (const status of statuses.length ? statuses : ['']) {
+    for (let s = startMs; s < endMs; s += chunk + 1) {
+      const e = Math.min(s + chunk, endMs);
+      for (let page = 0; page < 20; page += 1) {
+        const url = new URL(`${apiBaseUrl}/order/sellers/${supplierId}/claims`);
+        url.searchParams.set('startDate', String(s));
+        url.searchParams.set('endDate', String(e));
+        url.searchParams.set('page', String(page));
+        url.searchParams.set('size', '200');
+        if (status) url.searchParams.set('claimItemStatus', status);
+        let response = await fetch(url, { method: 'GET', headers });
+        if (response.status === 429) {
+          await this.delay(1500);
+          response = await fetch(url, { method: 'GET', headers });
+        }
+        if (!response.ok) throw new Error(`Trendyol iade listesi alınamadı. HTTP ${response.status}: ${await this.safeErrorText(response)}`);
+        const data = await response.json().catch(() => ({})) as { content?: Array<Record<string, any>>; totalPages?: number };
+        const content = Array.isArray(data.content) ? data.content : [];
+        all.push(...content);
+        if (page + 1 >= Number(data.totalPages ?? 1) || content.length === 0) break;
+      }
+    }
+    }
+    // Aynı talep birden fazla durum sorgusunda gelebilir
+    return Array.from(new Map(all.map((c) => [String(c.id ?? c.claimId ?? Math.random()), c])).values());
   }
 
   private requestOrders(options: { size: number; page: number; lookbackDays: number }) {

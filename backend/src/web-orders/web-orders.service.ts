@@ -1,6 +1,7 @@
-import { BadRequestException, Injectable, Logger, NotFoundException, UnauthorizedException } from '@nestjs/common'
+import { BadRequestException, Injectable, Logger, NotFoundException, OnApplicationBootstrap, UnauthorizedException } from '@nestjs/common'
 import { createHmac, timingSafeEqual } from 'crypto'
 import { PrismaService } from '../prisma/prisma.service'
+import { isValidTcKimlik, isValidTrPhone } from './order-validation'
 import { MailService } from '../mail/mail.service'
 import { CreateWebOrderDto } from './dto/create-web-order.dto'
 import { PublicCatalogService } from '../public-catalog/public-catalog.service'
@@ -25,7 +26,7 @@ export function isValidSiteKey(given: string | undefined): boolean {
 }
 
 @Injectable()
-export class WebOrdersService {
+export class WebOrdersService implements OnApplicationBootstrap {
   private readonly logger = new Logger(WebOrdersService.name)
 
   constructor(
@@ -36,6 +37,40 @@ export class WebOrdersService {
   ) {}
 
   /** Ürün grubu sayfasından eklenen kalem: grubun o varyant için gösterdiği fiyat (priceOverride dahil) */
+  /**
+   * Tek seferlik (17.11.2026, kullanıcı isteği): bugünden önce açılıp hâlâ açık görünen eski web siparişleri
+   * personel/sipariş ekranından kaldırılır. Kalıcı silme yerine İPTAL + not (geri alınabilir; stok hareketi yapılmaz).
+   * Bugün ve sonrasında gelen siparişlere dokunulmaz.
+   */
+  async onApplicationBootstrap() {
+    const FLAG = 'cleanup_old_web_orders_20261117'
+    try {
+      if (await this.prisma.appSetting.findUnique({ where: { key: FLAG } })) return
+      const cutoff = new Date('2026-11-17T00:00:00+03:00')
+      const ids = await this.prisma.webOrder.findMany({
+        where: { createdAt: { lt: cutoff }, status: { in: ['PENDING', 'CONFIRMED', 'PREPARING', 'READY'] } },
+        select: { id: true, orderNumber: true },
+      })
+      if (ids.length) {
+        await this.prisma.$executeRaw`
+          UPDATE web_orders
+          SET status = 'CANCELLED'::"WebOrderStatus",
+              note = CONCAT_WS(' | ', NULLIF(note, ''), '[17.11.2026 toplu temizlik: eski sipariş ekrandan kaldırıldı]'),
+              updated_at = NOW()
+          WHERE id = ANY(${ids.map((x) => x.id)}::int[])
+        `
+      }
+      await this.prisma.appSetting.upsert({
+        where: { key: FLAG },
+        create: { key: FLAG, value: JSON.stringify(ids.map((x) => x.orderNumber)) },
+        update: { value: JSON.stringify(ids.map((x) => x.orderNumber)) },
+      })
+      this.logger.log(`Eski web siparişleri temizlendi: ${ids.length} sipariş iptal edildi`)
+    } catch (err) {
+      this.logger.error('Eski web siparişi temizliği hatası', err instanceof Error ? err.message : String(err))
+    }
+  }
+
   private async groupPrice(slug: unknown, id: number): Promise<number | null> {
     if (typeof slug !== 'string' || !slug.trim()) return null
     const g = await this.groups.getGroupBySlug(slug.trim()).catch(() => null)
@@ -108,6 +143,10 @@ export class WebOrdersService {
 
   async create(dto: CreateWebOrderDto, siteKey?: string) {
     if (!['WHATSAPP', 'EFT', 'ONLINE'].includes(dto?.paymentMethod)) throw new BadRequestException('Geçersiz ödeme yöntemi.')
+    // Sahte / bot siparişleri: geçerli telefon ve (girildiyse) geçerli TC zorunlu
+    if (!isValidTrPhone(dto.customerPhone)) throw new BadRequestException('Lütfen geçerli bir cep telefonu numarası girin (05XX XXX XX XX).')
+    if (dto.tcKimlik && !isValidTcKimlik(dto.tcKimlik)) throw new BadRequestException('T.C. Kimlik No geçersiz.')
+    if (!/[a-zA-ZçğıöşüÇĞİÖŞÜ]{2,}/.test(String(dto.customerName ?? ''))) throw new BadRequestException('Ad soyad gerekli.')
     if (!dto.customerName?.trim() || !dto.customerPhone?.trim() || !dto.address?.trim() || !dto.city?.trim()) {
       throw new BadRequestException('Ad, telefon, şehir ve adres zorunludur.')
     }

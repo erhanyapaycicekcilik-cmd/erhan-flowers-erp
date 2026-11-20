@@ -84,6 +84,7 @@ Sonra tarayıcıda: **http://localhost:3200**
 | N11 | Aktif | pushPrice: product-create endpoint'i kullanır |
 | Hepsiburada | Aktif | pushPrice: hepsiburadaSku = barcode ?? modelCode |
 | Amazon (TR) | Kod hazır, API bilgisi bekleniyor | SP-API (`adapters/amazon.adapter.ts`), EU endpoint, pazaryeri `A33AVAJ2PDY3EV`. Bilgiler: MERCHANT_ID=Satıcı ID, API_KEY=LWA Client ID, API_SECRET=LWA Client Secret, TOKEN=Refresh Token. pushPrice/pushProduct = Listings PATCH (SKU = barcode, yoksa modelCode; ilan Amazon'da önceden açılmış olmalı). Siparişler 15dk cron `runAmazonSync` → marketplace_orders + retail_sales |
+| Koçtaş (Mirakl) | Kod hazır, API anahtarı bekleniyor | `adapters/koctas.adapter.ts`. API `https://koctas.mirakl.net/api`, başlık `Authorization: <API anahtarı>` (Bearer yok). Bilgiler: API_KEY = Satış Ortağım > Kişisel ayarlar > API anahtarı, SUPPLIER_ID = mağaza (shop) ID, isteğe bağlı. Test A01 `/account`; siparişler OR11 `/orders` → 15dk cron `runKoctasSync` → marketplace_orders (durum = Mirakl `order_state`); fiyat PRI01 `/offers/pricing/imports`, stok STO01 `/offers/stock/imports` (CSV `offer-sku;…`, teklif kodu = barcode ?? modelCode; sadece o alan güncellenir, yeni ilan açmaz). Siparişler Mirakl panelinden **kabul edilmeli** (WAITING_ACCEPTANCE), ERP otomatik kabul etmez |
 
 ## Fiyat/Stok Senkronizasyonu
 
@@ -104,6 +105,37 @@ Sonra tarayıcıda: **http://localhost:3200**
 - **Yeni ürün açarken iki hesaba birden:** Ürün Merkezi'nde (hızlı kayıt + tam form) "Trendyol (Flora)" kanalı = platform kodu `TRENDYOL_FLORA`. `/publishing/send` bu kodu görünce ürünü FLORA Trendyol hesabına da gönderir (barkod aynı, model kodu FL- ön ekli, %-3 fiyat; `DEFAULT_STORES`). Varsayılan olarak işaretli
 - `IntegrationCenterService.storeCredentials(platform, company)`: ERHAN dışı mağazada .env'e **düşmez**, eksik API bilgisi varsa hata verir (Flora işlemi yanlışlıkla Erhan mağazasına gitmesin)
 
+## Siparişler Menüsü (tek giriş + sekmeler)
+
+- Menüde Satış → **Siparişler** (`/orders`); sipariş sayfalarının üstünde `components/OrdersTabs.tsx` sekmeleri: Pazaryeri (`/orders`) · **Web & Telefon** (`/web-siparisler`: web_orders + telefon/WhatsApp/Instagram/dükkan retail_sales; tezgâhta COMPLETED dükkan satışları hariç; durumlar web durumlarına eşlenir, retail için `POST /sales/:id/status`) · **Çıktı Merkezi (A5)** (`/sabah-ciktisi`, tek çıktı yeri) · Telefon Siparişi Gir (`/adres-ciktisi`) · İadeler · EFT · Fotoğraf Arşivi. Personel ekranı (`/staff/orders`) ayrı
+- Ödeme bekleyen (PENDING) web siparişleri personel ekranına / Çıktı Merkezi'ne düşmez
+- **İadeler** (`/iade-takip`, `backend/src/returns/`): `GET /returns?q=` (q yoksa: platform iade durumları + `return_status` dolu + videolu; q varsa tüm marketplace_orders'ta sipariş/paket no, müşteri, kargo kodu, barkod, stok kodu, ürün adı araması), `PATCH /returns/:id/return-status` (WAITING / REJECT_REQUESTED / REJECTED / ACCEPTED / CLOSED / null), `POST /returns/:id/videos` (video/fotoğraf, 500MB; ilk videoda süreç WAITING), `GET /returns/videos/:file/stream?token=&download=1` (indirme adı `iade-<platform>-<siparişNo>-<id>`). Telefonda "Kamerayla Video Çek" (`capture=environment`). Platform panel linkleri: partner.trendyol.com, merchant.hepsiburada.com, so.n11.com
+
+## Günlük Ciro (`/reports/ciro`, OWNER/MANAGER)
+
+- `GET /dashboard/revenue?from=&to=` (`DashboardService.revenueLedger`, en fazla 400 gün): gün × kanal ciro, Türkiye saatiyle gün. Kaynaklar çakışmaz: pazaryerleri `marketplace_orders` (status ~ cancel/iptal/return/iade/undeliver/reject/refund hariç; `FLORA_` önekli → `<PLATFORM>_FLORA`), dükkan/telefon/WhatsApp/Instagram `retail_sales` elle girilenler (STORE/PHONE/WHATSAPP/INSTAGRAM/OTHER, sync NULL/MANUAL, CANCELLED/DRAFT hariç), web `web_orders` ödenmiş/onaylı. Tutar = sipariş tutarı (KDV dahil, komisyon/kargo düşülmez). Ekranda hazır aralıklar, kanal dağılımı, gün tablosu, CSV
+- **Platformdan canlı** (varsayılan, `source=platform`; `source=erp` sadece ERP): Trendyol + n11 (Erhan ve Flora) siparişleri `IntegrationsService.platformRevenue` ile doğrudan API'den (`TrendyolAdapter.fetchOrdersBetween` 14 günlük parçalar, `HttpMarketplaceOrderAdapter.fetchOrdersBetween` 7 günlük); iptal/iade hariç. Başarılı kanalın ERP satırları platform rakamıyla değiştirilir, hata veren kanal ERP'de kalır (`platformErrors`). Flora `storeAdapter` (Erhan bilgisine düşmez). 10 dk önbellek (`refresh=1` yeniler); en fazla 93 gün / son 6 ay. Hepsiburada ve diğerleri ERP kaydından (tarih aralıklı API yok)
+- Not: eski `/reports/gunluk` (dailyReport) retail_sales'in tümünü saydığı için pazaryeri siparişlerini iki kez sayabilir
+
+## Hakedişler (`/reports/hakedis`, OWNER/MANAGER)
+
+- `GET /dashboard/settlements?from=&to=&refresh=1` (en fazla 93 gün, 10 dk önbellek) → `IntegrationsService.platformSettlements`: Trendyol Erhan + Flora (`storeAdapter`) cari hesap ekstresi — `TrendyolAdapter.fetchFinance('settlements'|'otherfinancials', type)` (`${API_URL}/finance/che/sellers/{id}/…`, 15 günlük parçalar). Tipler: Sale (zorunlu), Return, Discount(Cancel), Coupon(Cancel), Provision±; otherfinancials PaymentOrder (yatan ödemeler) + DeductionInvoices (kesinti faturaları)
+- Özet `integrations/settlements.ts` `summarizeSettlements` (tutarlar mutlak, yön işlem tipinden): satış, iade, indirim, komisyon, satıcı hakedişi, kesintiler, net, yatan ödemeler, vadesi gelecek (paymentDate ≥ bugün, paymentOrderId yok)
+- Hepsiburada / n11 hakediş servisi resmi dokümanda doğrulanamadı → ekranda panel linki; diğer pazaryerleri API aktif olunca
+
+## Boy Serisi (`/products/boy-serisi`, sadece OWNER)
+
+- Bir ürünü farklı boylarda **ayrı ürün / ayrı ilan** olarak kopyalar: `POST /product-center/size-series/preview` ve `POST /product-center/size-series` (`{modelCode,startCm,endCm,stepCm,priceStep,nameFrom,nameTo}`)
+- Kaynak adındaki boy (`150 Cm`) → yeni boy; model kodu `<kaynak>-<boy>`, yeni EAN-13 barkod; görsel/açıklama/kategori/stok kopyalanır; fiyat her adımda ±priceStep. `trendyolProductUrl` ve `trendyolBarcode` kopyalanmaz (kaynak ilan ezilmesin). Var olan model kodu tekrar oluşturulmaz
+- Sayfa oluşturduktan sonra `/publishing/send` ile Trendyol (Erhan+Flora), N11, HB'ye gönderir
+
+## Toplu Zam / İndirim (`/products/toplu-zam`, sadece OWNER)
+
+- Backend `backend/src/products/bulk-price.service.ts`: `POST /products/bulk-price/preview|apply` (`{mode:'PERCENT'|'AMOUNT', value, search?, minPrice?, maxPrice?, roundTo9?, variantIds?}`), `GET /products/bulk-price/status`, `POST /products/bulk-price/undo`
+- Kapsam: ACTIVE `trendyol_product_variants` (WEB- hariç). Mevcut fiyat = `trendyolSalePrice` (yoksa draft `marketplaceSalePrice`). Uygulayınca `trendyolSalePrice` + draft `marketplaceSalePrice` + Product `marketPrice/listPrice` güncellenir, bağlı pazaryerlerine `pushPrice` (fiyat+stok) arka planda 10'arlı gider. Flora mağazası etkilenmez
+- Eski fiyatlar `app_settings.bulk_price_last` → "Son işlemi geri al"
+- Haftalık Pazar +5 TL cron'u (`ProductsService.weeklyPriceIncrease`, `WEEKLY_PRICE_INCREASE`, 0 = kapalı) bu servisi kullanır
+
 ## e-Dönüşüm / Fatura (`/e-donusum`, sadece OWNER)
 
 - Backend: `backend/src/e-invoices/` — `GET/PUT /e-invoices/settings`, `POST /e-invoices/settings/test`, `GET /e-invoices/pending?days=`, `POST /e-invoices/issue` (`{items:[{sourceType,sourceId}]}` veya `{all:true}`), `GET /e-invoices`, `POST /e-invoices/:id/retry`, `GET /e-invoices/draft/:sourceType/:id`
@@ -116,6 +148,24 @@ Sonra tarayıcıda: **http://localhost:3200**
 - Her kayıt için ETTN (UUID) bir kez üretilir (`providerRef`) → tekrar denemede çift fatura olmaz (409'da durum sorgulanır)
 - TEST ortamında kesilenler `provider = TRENDYOL_EFATURAM_TEST`: satışı "faturalandı" yapmaz, canlıda tekrar listelenir. Otomatik kesim sadece CANLI'da
 - 15 dk cron (`autoIssue`): aktif + otomatik açık + CANLI ise son 7 günün faturasızlarını keser (3 hatalı denemeden sonra durur)
+
+## Borçlar & Faturalar (`/borclar`, sadece OWNER)
+
+- Sekmeler: **Tüm Borçlar** (özet + 45 günlük ödeme takvimi, `GET /suppliers/overview?days=`), Tedarikçiler (cari), **Taksitli Borçlar**, Faturalar (`BillsPanel`, `/faturalar` da aynı bileşeni kullanır)
+- Taksitli borç: `backend/src/suppliers/installment-debts.*` — `installment_debts` + `debt_installments`. Toplam/taksit sayısı/ilk vade → eşit aylık taksit (kuruş farkı son taksitte, ay sonu taşmasında ayın son günü). `POST /installment-debts/installments/:id/pay` ödendi/geri al, `PUT .../installments/:id` tutar/vade düzelt. Cari bakiyeden bağımsızdır (aynı borcu iki yere girme)
+- Fatura hesapları (`bill_accounts`): tür (Kira/Su/Elektrik/Doğalgaz/Telefon/İnternet/Kredi Kartı/Diğer), kurum, **abone/tesisat no**, opsiyonel gönderen e-posta. Her ay otomatik listelenir; aylık kayıt `bill_payments` (tutar, fatura no, son ödeme tarihi, kaynak MANUAL/EMAIL). `PUT /bill-accounts/:id/month` elle giriş
+- **Gmail'den otomatik fatura**: her sabah 08:20 (`BillAccountsService.scanEmails`, elle `POST /bill-accounts/scan-email`) Gmail'de abone numarasını içeren son 45 günün e-postalarını okur, `bill-email-parser.ts` ile tutar/son ödeme/fatura no çıkarır. Elle girilmiş veya ödenmiş aya dokunmaz. Gmail bağlantısı mevcut `GMAIL_CLIENT_ID/SECRET/REDIRECT_URI` OAuth'unu kullanır (`/integrations/gmail/auth`)
+- Abone no alanına virgülle birden fazla numara girilebilir (ör. CK: hesap no + sözleşme no)
+- **SMS'ten fatura (Android)**: telefondaki SMS Forwarder/MacroDroid → `POST /bill-accounts/sms-webhook?token=…` (JSON `{from,text}`; oturumsuz, token `app_settings.bill_sms_token`, `GET /bill-accounts/sms-settings` OWNER). SMS'teki numara hesapla eşleşir, aynı ayrıştırıcı kullanılır, son 30 SMS `bill_sms_log`'da. Kaynak `SMS`. ASAT su SMS'i gönderen `2728`, CK Akdeniz `252533649`
+- **Tüm SMS'ler** gelebilir: hesapla eşleşmeyen ve fatura olmayan (banka/kod/kargo — `isBillLikeSms`) SMS hiç kaydedilmez. Eşleşmeyen fatura SMS'i/e-postası → günlükte `suggestion` (abone no + tür/kurum tahmini) → UI'da "Hesap olarak ekle"
+- Takip edilen kurumlar: **Vodafone** (cep), **ASAT** (su), **CK Akdeniz** (elektrik), **Türk Telekom** (internet). E-posta keşfi: `scanEmails` sonunda `discoverUnknownBillEmails` (son 10 gün, sadece bu 4 kurumun alan adları, abone no + tutar şart). Hat numarası (5XXXXXXXXX) SMS/e-postada boşluklu/0 ile yazılsa da eşleşir; işlenen id'ler `bill_email_seen`
+- **Uyarılar**: `GET /suppliers/alerts?days=3` → OWNER için tüm sayfalarda üst şerit (`PaymentAlertBanner`); her sabah 09:10 gecikmiş/3 gün içindekiler için `NOTIFY_EMAIL`'e e-posta (`SuppliersService.dailyReminderEmail`, test: `POST /suppliers/alerts/send-test`). Push kullanılmaz (abonelikler kullanıcıya bağlı değil, personele gider)
+- **Birden fazla Gmail**: `/integrations/gmail/auth?purpose=bills` (OAuth `state=bills`) → hesap `app_settings.BILL_GMAIL_ACCOUNTS` (e-posta → token). Sipariş hesabı (`GMAIL_TOKENS`, 'primary') de taranır. Mesaj ref: primary'de id, diğerlerinde `email|id`. `DELETE /bill-accounts/mailboxes/:email`. Bağlanacaklar: erhanyapaycicekcilik@, florayapaycicek@, cheferhansevim@gmail.com (Google OAuth uygulaması test modundaysa bu hesaplar Test kullanıcısı olarak eklenmeli)
+- Vodafone hatları 5446546220 / 5449176220, Türk Telekom internet hesap no 7037200938 (bayraklar `seed_vodafone_v1`, `seed_turktelekom_v1`, `seed_turktelekom_bills_v1`)
+- **Personel maaşları** (Borçlar → Personel Maaşları sekmesi, `SalariesPanel`; backend `suppliers/salaries.*`, OWNER): `employees.net_salary` (Personel Özlük'te girilir) − o ay `salary_advances` = ödenecek; `salary_payments` (employee/yıl/ay, paid_at). Maaş günü `app_settings.salary_payday` (varsayılan 1). `GET /salaries?year&month`, `PUT /salaries/payday`, `POST /salaries/pay|unpay|advances`, `DELETE /salaries/advances/:id`. Ödenmemiş maaşlar `overview` (kind SALARY, `salaryUnpaid`), uyarı şeridi ve sabah e-postasına girer; 17.11.2026 öncesi vadeler sayılmaz. `/suppliers/overview|alerts` artık OWNER
+- **Banka Borçları** (Borçlar → Banka Borçları sekmesi, `BankDebtsPanel`; backend `backend/src/bank-debts/`, OWNER): `bank_debt_accounts` (tür CREDIT_CARD/LOAN/OVERDRAFT/OTHER, banka, kartın son 4 hanesi / kredi no, limit, güncel borç, hesap kesim günü, son ödeme günü, kredi aylık taksit + bitiş) + `bank_statements` (ay = son ödeme tarihinin ayı; hesap kesim, son ödeme, dönem borcu, asgari, ödendi). `GET/POST /bank-debts`, `PUT/DELETE /bank-debts/:id`, `POST /bank-debts/:id/statements` (aynı ay varsa günceller), `PUT|DELETE /bank-debts/statements/:id`, `POST /bank-debts/statements/:id/pay` (ödendi/geri al), `GET /bank-debts/sms-log`. Ödenmemiş ekstreler + ekstresi girilmemiş ayların beklenen son ödeme günü (`unpaidForOverview`, kredi = aylık taksit) `overview` (kind BANK, `bankUnpaid`), uyarı şeridi ve sabah e-postasına girer
+- Bankaların bireysel/işletme kart borcu için açık API'si yok (açık bankacılık lisanslı kuruluş ister) → veri **elle** veya **banka SMS'i** ile gelir: fatura SMS adresi (`/bill-accounts/sms-webhook`) önce `BankDebtsService.receiveSms`'i dener (`bank-sms-parser.ts`): ekstre/taksit SMS'i → o ayın ekstresi (elle girilmiş/ödenmiş aya dokunmaz), "kullanılabilir limit" → güncel borç = limit − kullanılabilir. Eşleşme son 4 hane / kredi no; yoksa o bankada tek hesap. Son 30 kayıt `app_settings.bank_sms_log`
+- Tek seferlik kayıtlar: CK elektrik (Dükkan 1 4577106676 / Dükkan 2 8145873522 / Ev), ASAT su (Dükkan 1 1002112893 / Dükkan 2 1002112894 / Ev), ilk faturalar — bayraklar `seed_ck_electric_v1`, `seed_asat_water_v1`, `seed_initial_bills_v1`
 
 ## Sadece Sitede Satılan Ürünler (`WEB-` model kodu)
 

@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { Cron } from '@nestjs/schedule';
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'crypto';
 import * as XLSX from 'xlsx';
 import { Prisma } from '../generated/prisma-client';
@@ -7,12 +8,14 @@ import { StaffTasksService } from '../staff-tasks/staff-tasks.service';
 import { GenericMarketplaceAdapter } from './adapters/generic-marketplace.adapter';
 import { HepsiburadaAdapter } from './adapters/hepsiburada.adapter';
 import { ExternalOrder, ExternalOrderSummary, IntegrationAdapter, IntegrationPlatform } from './adapters/integration-adapter.interface';
+import { summarizeSettlements, SettlementSummary } from './settlements';
 import { N11Adapter } from './adapters/n11.adapter';
 import { TicimaxAdapter } from './adapters/ticimax.adapter';
 import { TrendyolAdapter } from './adapters/trendyol.adapter';
 import { TrendrumAdapter } from './adapters/trendrum.adapter';
 import { PazaramaAdapter } from './adapters/pazarama.adapter';
 import { IdefixAdapter } from './adapters/idefix.adapter';
+import { KoctasAdapter } from './adapters/koctas.adapter';
 import { AmazonAdapter } from './adapters/amazon.adapter';
 import { IntegrationCenterService } from './services/integration-center.service';
 import { isSiteOnlyModelCode } from '../common/site-only';
@@ -28,6 +31,7 @@ const platforms: Array<{ platform: IntegrationPlatform; displayName: string }> =
   { platform: 'PAZARAMA', displayName: 'Pazarama' },
   { platform: 'IDEFIX', displayName: 'Idefix' },
   { platform: 'TEKLIKLE', displayName: 'Teklikle' },
+  { platform: 'KOCTAS', displayName: 'Koçtaş' },
 ];
 
 const TICIMAX_PLATFORM: IntegrationPlatform = 'TICIMAX';
@@ -98,6 +102,361 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
       }
     } finally {
       this.autoSyncRunning = false;
+    }
+  }
+
+  private staffSyncPromise: Promise<Array<{ label: string; ok: boolean; imported: number; message?: string }>> | null = null;
+  private staffSyncAt = 0;
+
+  /** Personel ekranı "Senkronize Et": tüm platformlardan (Erhan + Flora) siparişleri hemen çeker. Aynı anda tek çalışır. */
+  async syncAllForStaff(userId: number) {
+    if (this.staffSyncPromise) return { results: await this.staffSyncPromise, reused: true };
+    if (Date.now() - this.staffSyncAt < 20_000) return { results: [], reused: true, message: 'Az önce senkronize edildi' };
+    const jobs: Array<{ label: string; platform: string; company: string }> = [
+      ...AUTO_SYNC_PLATFORMS.map((p) => ({ label: this.displayName(p), platform: p, company: 'ERHAN' })),
+      { label: 'Trendyol (Flora)', platform: 'TRENDYOL', company: 'FLORA' },
+      { label: 'n11 (Flora)', platform: 'N11', company: 'FLORA' },
+    ];
+    this.staffSyncPromise = (async () => {
+      const results: Array<{ label: string; ok: boolean; imported: number; message?: string }> = [];
+      for (const job of jobs) {
+        try {
+          const r = await this.syncOrders(job.platform, userId, job.company) as { ok?: boolean; imported?: number; message?: string; missingKeys?: string[]; status?: string };
+          // API bilgisi girilmemiş / kapalı platform hata sayılmaz
+          if (r.ok === false && ((r.missingKeys?.length ?? 0) > 0 || /eksik|missing|tanımlı değil|kapalı|devre dışı/i.test(r.message ?? ''))) continue;
+          results.push({ label: job.label, ok: r.ok !== false, imported: Number(r.imported ?? 0), message: r.ok === false ? r.message : undefined });
+        } catch (error) {
+          results.push({ label: job.label, ok: false, imported: 0, message: this.errorMessage(error) });
+        }
+      }
+      return results;
+    })();
+    try {
+      return { results: await this.staffSyncPromise, reused: false };
+    } finally {
+      this.staffSyncPromise = null;
+      this.staffSyncAt = Date.now();
+    }
+  }
+
+  /** İade ekranının iki bölümü (Trendyol paneli gibi) */
+  static readonly CLAIM_STAGE_CREATED = 'Talep oluşturuldu';
+  static readonly CLAIM_STAGE_ARRIVED = 'Bize ulaştı';
+  /** Platform durumu → bölüm: müşteri talebi açtı (paket yolda) / paket depoya geldi (aksiyon bekliyor) */
+  private claimStage(rawStatuses: string[]): string | null {
+    if (rawStatuses.some((x) => ['WaitingInAction', 'AwaitingAction'].includes(x))) return IntegrationsService.CLAIM_STAGE_ARRIVED;
+    if (rawStatuses.some((x) => ['Created', 'NewRequest', 'AwaitingPreApproval'].includes(x))) return IntegrationsService.CLAIM_STAGE_CREATED;
+    return null;
+  }
+
+  /** Bu senkronda gelmeyen (artık açık olmayan) talepleri kapat: ekrandan kalkar */
+  private async closeMissingClaims(platform: string, storePrefix: 'FLORA' | 'ERHAN', fetchedClaimIds: string[]) {
+    const openLabels = [IntegrationsService.CLAIM_STAGE_CREATED, IntegrationsService.CLAIM_STAGE_ARRIVED, 'Oluşturuldu', 'Aksiyon bekliyor', 'Yeni talep', 'Ön onay bekliyor'];
+    await this.prisma.$executeRaw`
+      UPDATE marketplace_orders mo
+      SET claim_status = 'Kapandı',
+          return_status = CASE
+            WHEN mo.return_status = 'WAITING' AND NOT EXISTS (SELECT 1 FROM return_videos v WHERE v.order_id = mo.id) THEN 'CLOSED'
+            ELSE mo.return_status END,
+          return_updated_at = NOW(), updated_at = NOW()
+      WHERE mo.platform = ${platform}
+        AND mo.claim_id IS NOT NULL
+        AND mo.claim_status IN (${Prisma.join(openLabels)})
+        AND (${storePrefix} = 'ERHAN' AND mo.external_order_id NOT LIKE 'FLORA\\_%' OR ${storePrefix} = 'FLORA' AND mo.external_order_id LIKE 'FLORA\\_%')
+        AND mo.claim_id NOT IN (${fetchedClaimIds.length ? Prisma.join(fetchedClaimIds) : Prisma.sql`'__none__'`})
+    `;
+  }
+
+  private claimSyncRunning = false;
+  private claimSyncAt = 0;
+
+  /** Trendyol durum adı → Türkçe */
+  private claimStatusLabel(status: string) {
+    return ({
+      Created: 'Oluşturuldu', WaitingInAction: 'Aksiyon bekliyor', Accepted: 'Kabul edildi', Rejected: 'Reddedildi',
+      Cancelled: 'İptal edildi', Unresolved: 'İhtilaflı', InAnalysis: 'Analizde', WaitingFraudCheck: 'Kontrolde',
+    } as Record<string, string>)[status] ?? status;
+  }
+
+  /**
+   * Hepsiburada + Trendyol (Erhan + Flora) iade taleplerini çekip marketplace_orders'a yazar → İadeler ekranı.
+   * Sipariş ERP'de varsa ona işlenir (videosu aynı kayıtta), yoksa iade için yeni kayıt açılır.
+   */
+  async syncReturnClaims(days = 30) {
+    if (this.claimSyncRunning) return { ok: true, results: [], message: 'İade senkronu zaten çalışıyor' };
+    this.claimSyncRunning = true;
+    const results: Array<{ store: string; ok: boolean; claims: number; created: number; updated: number; message?: string }> = [];
+    try {
+      const end = Date.now();
+      // Açık talepler eski olabilir (müşteri kargoyu geç verir): en az 45 gün geriye bak
+      const start = end - Math.min(Math.max(days, 45), 90) * 86400000;
+      // Hepsiburada (Erhan)
+      try {
+        const hb = (await this.adapter('HEPSIBURADA')) as unknown as { fetchClaims?: (statuses?: string[]) => Promise<Array<Record<string, unknown>>> };
+        if (typeof hb.fetchClaims === 'function') {
+          // Sadece açık talepler: talep oluşturuldu (NewRequest, AwaitingPreApproval) + bize ulaştı (AwaitingAction)
+          const claims = (await hb.fetchClaims(['NewRequest', 'AwaitingPreApproval', 'AwaitingAction']))
+            .filter((c) => this.claimStage([this.pickField(c as Record<string, any>, ['status', 'claimStatus', 'state'])]));
+          let created = 0;
+          let updated = 0;
+          for (const claim of claims) {
+            const r = await this.upsertHepsiburadaClaim(claim);
+            if (r === 'created') created += 1; else if (r === 'updated') updated += 1;
+          }
+          const sample = claims.length && !created && !updated ? ` (tanınmayan alanlar: ${Object.keys(claims[0]).slice(0, 15).join(',')})` : '';
+          await this.closeMissingClaims('HEPSIBURADA', 'ERHAN', claims.map((c) => this.pickField(c as Record<string, any>, ['claimNumber', 'number', 'claimId', 'id'])).filter(Boolean));
+          results.push({ store: 'Hepsiburada', ok: true, claims: claims.length, created, updated, ...(sample ? { message: sample } : {}) });
+        }
+      } catch (error) {
+        const message = this.errorMessage(error);
+        if (!/eksik|missing/i.test(message)) results.push({ store: 'Hepsiburada', ok: false, claims: 0, created: 0, updated: 0, message });
+      }
+
+      for (const company of ['ERHAN', 'FLORA']) {
+        const store = company === 'ERHAN' ? 'Trendyol' : 'Trendyol (Flora)';
+        try {
+          const adapter = (company === 'ERHAN' ? await this.adapter('TRENDYOL') : await this.storeAdapter('TRENDYOL', company)) as unknown as {
+            fetchClaims?: (s: number, e: number, statuses?: string[]) => Promise<Array<Record<string, any>>>;
+          };
+          if (typeof adapter.fetchClaims !== 'function') continue;
+          // Sadece açık talepler: Created (talep oluşturuldu, paket yolda) + WaitingInAction (bize ulaştı)
+          const claims = (await adapter.fetchClaims(start, end, ['Created', 'WaitingInAction']))
+            .filter((c) => this.claimStage(this.trendyolClaimStatuses(c)));
+          let created = 0;
+          let updated = 0;
+          for (const claim of claims) {
+            const r = await this.upsertTrendyolClaim(claim, company);
+            if (r === 'created') created += 1; else if (r === 'updated') updated += 1;
+          }
+          await this.closeMissingClaims('TRENDYOL', company === 'ERHAN' ? 'ERHAN' : 'FLORA', claims.map((c) => String(c.id ?? c.claimId ?? '')).filter(Boolean));
+          results.push({ store, ok: true, claims: claims.length, created, updated });
+        } catch (error) {
+          const message = this.errorMessage(error);
+          // Mağaza bilgisi girilmemişse hata sayma
+          if (/eksik|missing/i.test(message)) continue;
+          results.push({ store, ok: false, claims: 0, created: 0, updated: 0, message });
+        }
+      }
+    } finally {
+      this.claimSyncRunning = false;
+      this.claimSyncAt = Date.now();
+    }
+    return { ok: results.every((r) => r.ok), results };
+  }
+
+  /**
+   * Platform talep durumlarından ERP iade süreci:
+   * açık (yeni / aksiyon bekliyor) → WAITING = "Yeni Gelenler"; ihtilaf → REJECT_REQUESTED; kapanmış → CLOSED.
+   * Personelin elle verdiği süreç (red talebi vb.) ve videosu olan kayıt ezilmez; sadece boş/WAITING olan güncellenir.
+   */
+  private claimProcess(rawStatuses: string[], current: string | null, hasVideos: boolean): string | null {
+    const OPEN = ['Created', 'WaitingInAction', 'InAnalysis', 'WaitingFraudCheck', 'NewRequest', 'AwaitingAction', 'AwaitingPreApproval'];
+    const DISPUTE = ['Unresolved', 'InDispute'];
+    const CLOSED = ['Accepted', 'Rejected', 'Cancelled', 'Refunded'];
+    let next: string | null = null;
+    if (rawStatuses.some((x) => OPEN.includes(x))) next = 'WAITING';
+    else if (rawStatuses.some((x) => DISPUTE.includes(x))) next = 'REJECT_REQUESTED';
+    else if (rawStatuses.length && rawStatuses.every((x) => CLOSED.includes(x))) next = 'CLOSED';
+    else next = 'WAITING';
+    if (!current) return next;
+    if (current === 'WAITING' && next !== 'WAITING' && !hasVideos) return next;
+    return current;
+  }
+
+  private processPatch(current: string | null, next: string | null) {
+    return next !== current ? { returnStatus: next, returnUpdatedAt: new Date() } : {};
+  }
+
+  /** HB talep durumu → Türkçe */
+  private hbClaimStatusLabel(status: string) {
+    return ({
+      NewRequest: 'Yeni talep', Accepted: 'Kabul edildi', AwaitingAction: 'Aksiyon bekliyor', InDispute: 'İhtilaflı',
+      Rejected: 'Reddedildi', Refunded: 'Para iadesi yapıldı', Cancelled: 'İptal edildi', AwaitingPreApproval: 'Ön onay bekliyor',
+    } as Record<string, string>)[status] ?? status;
+  }
+
+  /** İç içe nesnede ilk dolu alan (ör. 'orderNumber', 'order.orderNumber') */
+  private pickField(obj: Record<string, any>, keys: string[]): string {
+    for (const key of keys) {
+      const v = key.split('.').reduce<any>((acc, k) => (acc && typeof acc === 'object' ? acc[k] : undefined), obj);
+      if (v !== undefined && v !== null && v !== '' && typeof v !== 'object') return String(v);
+      if (v && typeof v === 'object' && !Array.isArray(v) && (v.name || v.value || v.description)) return String(v.name ?? v.value ?? v.description);
+    }
+    return '';
+  }
+
+  private async upsertHepsiburadaClaim(claim: Record<string, any>): Promise<'created' | 'updated' | 'skipped'> {
+    const claimId = this.pickField(claim, ['claimNumber', 'number', 'claimId', 'id']);
+    const orderNumber = this.pickField(claim, ['orderNumber', 'order.orderNumber', 'orderId', 'packageNumber', 'order.number']);
+    if (!claimId || !orderNumber) return 'skipped';
+    const lineArr = (['lineItems', 'items', 'claimLines', 'claimItems', 'lines', 'products'].map((k) => claim[k]).find(Array.isArray) ?? []) as Array<Record<string, any>>;
+    const lines = lineArr.length ? lineArr : [claim];
+    const statusRaw = this.pickField(claim, ['status', 'claimStatus', 'state']);
+    const reasons = Array.from(new Set([claim, ...lineArr].map((x) => {
+      const reason = this.pickField(x, ['reason', 'claimReason', 'reasonName', 'returnReason', 'claimType', 'type']);
+      const note = this.pickField(x, ['explanation', 'customerNote', 'customerExplanation', 'description', 'note']);
+      return [reason, note].filter(Boolean).join(': ');
+    }).filter(Boolean)));
+    const dateRaw = this.pickField(claim, ['claimDate', 'createdAt', 'createDate', 'requestDate', 'date']);
+    const claimDate = dateRaw ? new Date(/^\d{10,}$/.test(dateRaw) ? Number(dateRaw) : dateRaw) : null;
+    const claimData = {
+      claimId,
+      claimStatus: this.claimStage(statusRaw ? [statusRaw] : []) ?? (statusRaw ? this.hbClaimStatusLabel(statusRaw) : null),
+      claimReason: reasons.join(' | ') || null,
+      claimDate: claimDate && !Number.isNaN(claimDate.getTime()) ? claimDate : null,
+    };
+    const cargoTracking = this.pickField(claim, ['cargoTrackingNumber', 'trackingNumber', 'returnTrackingNumber', 'cargo.trackingNumber']);
+
+    const existing = await this.prisma.marketplaceOrder.findFirst({
+      where: { platform: 'HEPSIBURADA', OR: [{ claimId }, { orderNumber }, { externalOrderId: orderNumber }] },
+      orderBy: { id: 'desc' },
+      select: { id: true, returnStatus: true, _count: { select: { returnVideos: true } } },
+    });
+    if (existing) {
+      await this.prisma.marketplaceOrder.update({
+        where: { id: existing.id },
+        data: {
+          ...claimData,
+          ...this.processPatch(existing.returnStatus, this.claimProcess(statusRaw ? [statusRaw] : [], existing.returnStatus, existing._count.returnVideos > 0)),
+          ...(cargoTracking ? { cargoTrackingNumber: cargoTracking } : {}),
+        },
+      });
+      return 'updated';
+    }
+    const items = lines.map((l) => {
+      const qty = Math.max(1, Number(this.pickField(l, ['quantity', 'qty', 'count']) || 1));
+      const price = Number(this.pickField(l, ['price.amount', 'unitPrice.amount', 'price', 'unitPrice', 'amount']) || 0);
+      return {
+        productName: this.pickField(l, ['productName', 'name', 'product.name', 'title']) || 'Hepsiburada ürünü',
+        sku: this.pickField(l, ['merchantSku', 'merchantSKU', 'product.merchantSku']) || null,
+        barcode: this.pickField(l, ['barcode', 'merchantSku', 'merchantSKU']) || null,
+        quantity: qty,
+        unitPrice: price,
+        totalPrice: price * qty,
+        productImageUrl: (this.pickField(l, ['productImageUrlFormat', 'imageUrl', 'productImageUrl']) || '').replace(/\{size\}/gi, '500') || null,
+      };
+    });
+    await this.prisma.marketplaceOrder.create({
+      data: {
+        platform: 'HEPSIBURADA',
+        externalOrderId: `CLAIM_${claimId}`,
+        orderNumber,
+        status: 'Returned',
+        customerName: this.pickField(claim, ['customerName', 'customer.name', 'customer.fullName', 'buyerName']) || null,
+        totalAmount: items.reduce((sum, i) => sum + i.totalPrice, 0),
+        currency: 'TRY',
+        cargoTrackingNumber: cargoTracking || null,
+        rawPayload: claim as object,
+        stockDeducted: true,
+        returnStatus: this.claimProcess(statusRaw ? [statusRaw] : [], null, false),
+        returnUpdatedAt: new Date(),
+        ...claimData,
+        items: { create: items },
+      },
+    });
+    return 'created';
+  }
+
+  private trendyolClaimStatuses(claim: Record<string, any>): string[] {
+    const lines = Array.isArray(claim.items) ? claim.items as Array<Record<string, any>> : [];
+    return Array.from(new Set(lines.flatMap((l) => (Array.isArray(l.claimItems) ? l.claimItems : []) as Array<Record<string, any>>)
+      .map((ci) => String(ci.claimItemStatus?.name ?? '')).filter(Boolean)));
+  }
+
+  private async upsertTrendyolClaim(claim: Record<string, any>, company: string): Promise<'created' | 'updated' | 'skipped'> {
+    const claimId = String(claim.id ?? claim.claimId ?? '');
+    const orderNumber = String(claim.orderNumber ?? '');
+    if (!claimId || !orderNumber) return 'skipped';
+    const isFlora = company !== 'ERHAN';
+    const lines = Array.isArray(claim.items) ? claim.items as Array<Record<string, any>> : [];
+    const claimItems = lines.flatMap((l) => (Array.isArray(l.claimItems) ? l.claimItems : []) as Array<Record<string, any>>);
+    const statuses = Array.from(new Set(claimItems.map((ci) => String(ci.claimItemStatus?.name ?? '')).filter(Boolean)));
+    const reasons = Array.from(new Set(claimItems.map((ci) => {
+      const reason = String(ci.customerClaimItemReason?.name ?? ci.trendyolClaimItemReason?.name ?? '');
+      const note = String(ci.customerNote ?? ci.note ?? '').trim();
+      return [reason, note].filter(Boolean).join(': ');
+    }).filter(Boolean)));
+    const claimStatus = this.claimStage(statuses) ?? (statuses.map((x) => this.claimStatusLabel(x)).join(', ') || null);
+    const claimReason = reasons.join(' | ') || null;
+    const claimDate = claim.claimDate ? new Date(Number(claim.claimDate) || String(claim.claimDate)) : null;
+    const customerName = [claim.customerFirstName, claim.customerLastName].filter(Boolean).join(' ') || null;
+    const claimData = {
+      claimId,
+      claimStatus,
+      claimReason,
+      claimDate: claimDate && !Number.isNaN(claimDate.getTime()) ? claimDate : null,
+    };
+
+    // ERP'deki sipariş: Flora kayıtları FLORA_ önekli
+    const existing = await this.prisma.marketplaceOrder.findFirst({
+      where: {
+        platform: 'TRENDYOL',
+        OR: [{ claimId }, { orderNumber }],
+        externalOrderId: isFlora ? { startsWith: 'FLORA_' } : { not: { startsWith: 'FLORA_' } },
+      },
+      orderBy: { id: 'desc' },
+      select: { id: true, returnStatus: true, _count: { select: { returnVideos: true } } },
+    });
+    if (existing) {
+      await this.prisma.marketplaceOrder.update({
+        where: { id: existing.id },
+        data: {
+          ...claimData,
+          ...this.processPatch(existing.returnStatus, this.claimProcess(statuses, existing.returnStatus, existing._count.returnVideos > 0)),
+          ...(claim.cargoTrackingNumber ? { cargoTrackingNumber: String(claim.cargoTrackingNumber) } : {}),
+        },
+      });
+      return 'updated';
+    }
+
+    const total = lines.reduce((sum, l) => sum + Number(l.orderLine?.price ?? 0) * Math.max(1, (Array.isArray(l.claimItems) ? l.claimItems.length : 1)), 0);
+    await this.prisma.marketplaceOrder.create({
+      data: {
+        platform: 'TRENDYOL',
+        externalOrderId: `${isFlora ? 'FLORA_' : ''}CLAIM_${claimId}`,
+        orderNumber,
+        status: 'Returned',
+        customerName,
+        totalAmount: total,
+        currency: 'TRY',
+        orderDate: claim.orderDate ? new Date(Number(claim.orderDate) || String(claim.orderDate)) : null,
+        cargoTrackingNumber: claim.cargoTrackingNumber ? String(claim.cargoTrackingNumber) : null,
+        cargoProvider: claim.cargoProviderName ? String(claim.cargoProviderName) : null,
+        rawPayload: claim as object,
+        stockDeducted: true, // iade kaydı: stok düşümü yapılmaz
+        returnStatus: this.claimProcess(statuses, null, false),
+        returnUpdatedAt: new Date(),
+        ...claimData,
+        items: {
+          create: lines.map((l) => {
+            const ol = (l.orderLine ?? {}) as Record<string, any>;
+            const qty = Math.max(1, Array.isArray(l.claimItems) ? l.claimItems.length : 1);
+            const price = Number(ol.price ?? 0);
+            return {
+              productName: String(ol.productName ?? 'Trendyol ürünü'),
+              sku: ol.merchantSku ? String(ol.merchantSku) : null,
+              barcode: ol.barcode ? String(ol.barcode) : null,
+              quantity: qty,
+              unitPrice: price,
+              totalPrice: price * qty,
+            };
+          }),
+        },
+      },
+    });
+    return 'created';
+  }
+
+  /** 30 dakikada bir (her saatin 7. ve 37. dakikası) son 14 günün iadelerini çek */
+  @Cron('7,37 * * * *')
+  async autoSyncReturnClaims() {
+    if (Date.now() - this.claimSyncAt < 10 * 60 * 1000) return;
+    try {
+      const r = await this.syncReturnClaims(14);
+      const failed = r.results.filter((x) => !x.ok);
+      if (failed.length) this.logger.warn(`İade senkronu hatası: ${failed.map((f) => `${f.store}: ${f.message}`).join(' | ')}`);
+    } catch (error) {
+      this.logger.warn(`İade senkronu başarısız: ${this.errorMessage(error)}`);
     }
   }
 
@@ -205,6 +564,10 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
       await this.log(platform, 'FETCH_ORDERS', 'FAILED', message);
       return { ok: false, imported: 0, duplicated: 0, unknownStatus: 0, failed: 0, message, missingKeys: [] };
     }
+    // Trendyol sipariş satırlarında görsel genelde gelmez: mağazanın kendi ürün API'sinden barkodla bul
+    // (Flora mağazasında ERP'de eşleşen ürün/stok kartı olmadığı için görsel hiç çıkmıyordu)
+    if (platform === 'TRENDYOL') await this.fillTrendyolLineImages(adapter, orders, companyCode);
+
     let imported = 0;
     let duplicated = 0;
     let unknownStatus = 0;
@@ -240,6 +603,7 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
         WHERE channel = ${platform}::"RetailSaleChannel"
           AND status = 'OUT_FOR_DELIVERY'
           AND external_order_id IS NOT NULL
+          AND updated_at < NOW() - INTERVAL '3 days'
       `;
       for (const sale of transitOrders) {
         if (!fetchedExternalIds.includes(sale.external_order_id)) {
@@ -254,12 +618,48 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
       }
     }
 
+    // HB satır biçimi düzeltmesinden önce her ürün satırı ayrı (ürünsüz) sipariş olarak kaydediliyordu.
+    // Artık sipariş no ile tek kayıt geliyor → eski ürünsüz satır kayıtlarını iptal et (çift görünmesin, ciroya girmesin)
+    if (platform === 'HEPSIBURADA') {
+      const lineIds = Array.from(((adapter as { regroupedLineIds?: Map<string, string> }).regroupedLineIds ?? new Map()).keys());
+      if (lineIds.length) {
+        await this.prisma.$executeRaw`
+          UPDATE retail_sales s
+          SET status = 'CANCELLED'::"RetailSaleStatus", cancelled_at = NOW(),
+              internal_note = COALESCE(s.internal_note, '') || ' | Ürünsüz yinelenen HB kaydı; sipariş no ile yeniden alındı',
+              updated_at = NOW()
+          WHERE s.channel = 'HEPSIBURADA'::"RetailSaleChannel"
+            AND s.external_order_id IN (${Prisma.join(lineIds)})
+            AND s.status::text NOT IN ('CANCELLED','DELIVERED','COMPLETED')
+            AND NOT EXISTS (SELECT 1 FROM retail_sale_items i WHERE i.sale_id = s.id)
+        `.catch(() => 0);
+      }
+    }
+
+    // Hepsiburada /openorders yalnızca henüz paketlenmemiş/kargoya verilmemiş siparişleri döndürür.
+    // Listeden düşen aktif sipariş kargoya verilmiştir → personel ekranından kalksın (yolda).
+    // (Önceden bu sadece ertesi gün ve ayrı bir senkronla yapılıyordu; kargoya verilen siparişler ekranda kalıyordu.)
+    let autoShipped = 0;
+    if (platform === 'HEPSIBURADA' && (adapter as { lastFetchComplete?: boolean }).lastFetchComplete === true) {
+      const openIds = orders.map((o) => o.externalOrderId).filter(Boolean);
+      autoShipped = Number(await this.prisma.$executeRaw`
+        UPDATE retail_sales
+        SET status = 'OUT_FOR_DELIVERY'::"RetailSaleStatus", updated_at = NOW()
+        WHERE channel = 'HEPSIBURADA'::"RetailSaleChannel"
+          AND status IN ('CONFIRMED'::"RetailSaleStatus", 'PREPARING'::"RetailSaleStatus", 'IN_PRODUCTION'::"RetailSaleStatus", 'READY'::"RetailSaleStatus")
+          AND external_order_id IS NOT NULL
+          AND created_at < NOW() - INTERVAL '10 minutes'
+          AND company_id = (SELECT id FROM companies WHERE code = ${companyCode} LIMIT 1)
+          AND external_order_id NOT IN (${openIds.length ? Prisma.join(openIds) : Prisma.sql`'__none__'`})
+      `);
+    }
+
     await this.prisma.$executeRaw`
       UPDATE integration_connections SET status = 'CONNECTED', last_sync_at = NOW(), last_error = NULL, updated_at = NOW()
       WHERE platform = ${platform}
     `;
-    await this.log(platform, 'FETCH_ORDERS', 'SUCCESS', `${imported} yeni, ${duplicated} mükerrer, ${unknownStatus} bilinmeyen durum, ${autoDelivered} otomatik teslim edildi.`, null, null, { imported, duplicated, unknownStatus, autoDelivered });
-    return { ok: true, imported, duplicated, unknownStatus, failed, autoDelivered };
+    await this.log(platform, 'FETCH_ORDERS', 'SUCCESS', `${imported} yeni, ${duplicated} mükerrer, ${unknownStatus} bilinmeyen durum, ${autoDelivered} otomatik teslim edildi${autoShipped ? `, ${autoShipped} kargoya verildi (açık listede yok)` : ''}.`, null, null, { imported, duplicated, unknownStatus, autoDelivered, autoShipped });
+    return { ok: true, imported, duplicated, unknownStatus, failed, autoDelivered, autoShipped };
   }
 
   // Siparişi pazaryerine "hazırlandı/kargolandı" olarak bildirir (paketleme adımı).
@@ -547,22 +947,25 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
               'quantity', i.quantity,
               'unitPrice', i.unit_price,
               'lineTotal', i.line_total,
-              'imagePath', COALESCE(
+              -- HB görsel adresleri {size} yer tutucusuyla gelebilir
+              'imagePath', REPLACE(COALESCE(
                 sc.image_path,
                 (SELECT sci.file_path FROM stock_card_images sci WHERE sci.stock_card_id = sc.id AND sci.is_main = true LIMIT 1),
                 (SELECT sci.file_path FROM stock_card_images sci WHERE sci.stock_card_id = sc.id ORDER BY sci.id LIMIT 1),
                 sc.external_image_url,
                 i.external_image_url,
                 (SELECT img->>'url' FROM jsonb_array_elements(CASE WHEN jsonb_typeof(tpv.images) = 'array' THEN tpv.images ELSE '[]'::jsonb END) AS img WHERE img->>'url' IS NOT NULL AND img->>'url' <> '' LIMIT 1),
-                (SELECT url FROM products p, jsonb_array_elements_text(CASE WHEN jsonb_typeof(p.image_urls) = 'array' THEN p.image_urls ELSE '[]'::jsonb END) AS url WHERE ((i.barcode IS NOT NULL AND p.barcode = i.barcode) OR (i.model_code IS NOT NULL AND p.model_code = i.model_code)) LIMIT 1),
+                (SELECT url FROM products p, jsonb_array_elements_text(CASE WHEN jsonb_typeof(p.image_urls) = 'array' THEN p.image_urls ELSE '[]'::jsonb END) AS url WHERE ((i.barcode IS NOT NULL AND p.barcode = i.barcode) OR (i.model_code IS NOT NULL AND p.model_code = REGEXP_REPLACE(i.model_code, '^FL-', ''))) LIMIT 1),
                 -- HB/N11/Amazon satıcı stok kodu (ör. SD-3030) Trendyol barkodundan farklı olabilir:
                 -- Trendyol varyantının stok/model koduyla ve stok kartının sku/model/eski model koduyla da ara
                 (SELECT img->>'url' FROM trendyol_product_variants v2, jsonb_array_elements(CASE WHEN jsonb_typeof(v2.images) = 'array' THEN v2.images ELSE '[]'::jsonb END) AS img WHERE i.model_code IS NOT NULL AND i.model_code <> '' AND (UPPER(v2.supplier_stock_code) = UPPER(REGEXP_REPLACE(i.model_code, '^FL-', '')) OR UPPER(v2.current_model_code) = UPPER(REGEXP_REPLACE(i.model_code, '^FL-', ''))) AND img->>'url' IS NOT NULL AND img->>'url' <> '' LIMIT 1),
-                (SELECT sc2.image_path FROM stock_cards sc2 WHERE i.model_code IS NOT NULL AND i.model_code <> '' AND (UPPER(sc2.sku) = UPPER(i.model_code) OR UPPER(sc2.model) = UPPER(i.model_code) OR UPPER(sc2.old_model_code) = UPPER(i.model_code)) AND sc2.image_path IS NOT NULL AND sc2.image_path <> '' LIMIT 1),
+                (SELECT sc2.image_path FROM stock_cards sc2 WHERE i.model_code IS NOT NULL AND i.model_code <> '' AND (UPPER(sc2.sku) = UPPER(REGEXP_REPLACE(i.model_code, '^FL-', '')) OR UPPER(sc2.model) = UPPER(REGEXP_REPLACE(i.model_code, '^FL-', '')) OR UPPER(sc2.old_model_code) = UPPER(REGEXP_REPLACE(i.model_code, '^FL-', ''))) AND sc2.image_path IS NOT NULL AND sc2.image_path <> '' LIMIT 1),
                 -- Son çare: ürün adıyla eşleştir (marka ön eki atılır; çok kısa adlarda yanlış eşleşmeyi önlemek için en az 12 karakter)
                 (SELECT img->>'url' FROM trendyol_product_variants v3, jsonb_array_elements(CASE WHEN jsonb_typeof(v3.images) = 'array' THEN v3.images ELSE '[]'::jsonb END) AS img WHERE LENGTH(REGEXP_REPLACE(LOWER(TRIM(i.product_name_snapshot)), '^(erhan flowers|flora yapay çiçek|flora) +', '')) >= 12 AND LOWER(v3.product_name) LIKE '%' || REGEXP_REPLACE(LOWER(TRIM(i.product_name_snapshot)), '^(erhan flowers|flora yapay çiçek|flora) +', '') || '%' AND img->>'url' IS NOT NULL AND img->>'url' <> '' ORDER BY (LOWER(TRIM(v3.product_name)) = LOWER(TRIM(i.product_name_snapshot))) DESC, LENGTH(v3.product_name) LIMIT 1),
-                (SELECT url FROM products p3, jsonb_array_elements_text(CASE WHEN jsonb_typeof(p3.image_urls) = 'array' THEN p3.image_urls ELSE '[]'::jsonb END) AS url WHERE LENGTH(REGEXP_REPLACE(LOWER(TRIM(i.product_name_snapshot)), '^(erhan flowers|flora yapay çiçek|flora) +', '')) >= 12 AND LOWER(p3.product_name) LIKE '%' || REGEXP_REPLACE(LOWER(TRIM(i.product_name_snapshot)), '^(erhan flowers|flora yapay çiçek|flora) +', '') || '%' AND url IS NOT NULL AND url <> '' LIMIT 1)
-              ),
+                (SELECT url FROM products p3, jsonb_array_elements_text(CASE WHEN jsonb_typeof(p3.image_urls) = 'array' THEN p3.image_urls ELSE '[]'::jsonb END) AS url WHERE LENGTH(REGEXP_REPLACE(LOWER(TRIM(i.product_name_snapshot)), '^(erhan flowers|flora yapay çiçek|flora) +', '')) >= 12 AND LOWER(p3.product_name) LIKE '%' || REGEXP_REPLACE(LOWER(TRIM(i.product_name_snapshot)), '^(erhan flowers|flora yapay çiçek|flora) +', '') || '%' AND url IS NOT NULL AND url <> '' LIMIT 1),
+                -- Stok kartı eşleşti ama satır barkodu (HB/N11 satıcı kodu) Trendyol barkodundan farklıysa
+                (SELECT img->>'url' FROM trendyol_product_variants v4, jsonb_array_elements(CASE WHEN jsonb_typeof(v4.images) = 'array' THEN v4.images ELSE '[]'::jsonb END) AS img WHERE sc.barcode IS NOT NULL AND v4.barcode = sc.barcode AND img->>'url' IS NOT NULL AND img->>'url' <> '' LIMIT 1)
+              ), '{size}', '500'),
               'color', sc.color,
               'trendyolUrl', tpv.trendyol_product_url
             )
@@ -579,7 +982,7 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
       LEFT JOIN retail_sale_items i ON i.sale_id = s.id
       LEFT JOIN stock_cards sc ON sc.id = i.stock_card_id
         OR (i.stock_card_id IS NULL AND i.barcode IS NOT NULL AND sc.barcode = i.barcode)
-        OR (i.stock_card_id IS NULL AND i.model_code IS NOT NULL AND sc.sku = i.model_code)
+        OR (i.stock_card_id IS NULL AND i.model_code IS NOT NULL AND sc.sku = REGEXP_REPLACE(i.model_code, '^FL-', ''))
       LEFT JOIN trendyol_product_variants tpv ON tpv.barcode = COALESCE(i.barcode, sc.barcode)
       WHERE (s.integration_sync_status IS NULL OR s.integration_sync_status <> 'MANUAL')
         AND (${companyCode} = '' OR co.code = ${companyCode})
@@ -644,14 +1047,13 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
               'quantity', moi.quantity,
               'unitPrice', moi.unit_price,
               'lineTotal', moi.total_price,
-              'imagePath', COALESCE(
+              'imagePath', REPLACE(COALESCE(
                 moi.product_image_url,
                 sc.image_path,
                 (SELECT sci.file_path FROM stock_card_images sci WHERE sci.stock_card_id = sc.id AND sci.is_main = true LIMIT 1),
                 (SELECT sci.file_path FROM stock_card_images sci WHERE sci.stock_card_id = sc.id ORDER BY sci.id LIMIT 1),
                 sc.external_image_url,
                 (SELECT img->>'url' FROM jsonb_array_elements(CASE WHEN jsonb_typeof(tpv.images) = 'array' THEN tpv.images ELSE '[]'::jsonb END) AS img WHERE img->>'url' IS NOT NULL AND img->>'url' <> '' LIMIT 1),
-                (SELECT p.image_url FROM products p WHERE ((moi.barcode IS NOT NULL AND p.barcode = moi.barcode) OR (moi.sku IS NOT NULL AND p.model_code = moi.sku) OR (moi.sku IS NOT NULL AND p.model_code = REGEXP_REPLACE(moi.sku, '^FL-', ''))) AND p.image_url IS NOT NULL AND p.image_url <> '' LIMIT 1),
                 (SELECT url FROM products p, jsonb_array_elements_text(CASE WHEN jsonb_typeof(p.image_urls) = 'array' THEN p.image_urls ELSE '[]'::jsonb END) AS url WHERE ((moi.barcode IS NOT NULL AND p.barcode = moi.barcode) OR (moi.sku IS NOT NULL AND p.model_code = moi.sku) OR (moi.sku IS NOT NULL AND p.model_code = REGEXP_REPLACE(moi.sku, '^FL-', ''))) AND url IS NOT NULL AND url <> '' LIMIT 1),
                 (SELECT sc2.image_path FROM stock_cards sc2 WHERE (sc2.barcode = moi.barcode OR sc2.sku = moi.sku OR (moi.sku IS NOT NULL AND sc2.sku = REGEXP_REPLACE(moi.sku, '^FL-', ''))) AND sc2.image_path IS NOT NULL AND sc2.image_path <> '' LIMIT 1),
                 (SELECT img->>'url' FROM trendyol_product_variants v2, jsonb_array_elements(CASE WHEN jsonb_typeof(v2.images) = 'array' THEN v2.images ELSE '[]'::jsonb END) AS img WHERE moi.sku IS NOT NULL AND moi.sku <> '' AND (UPPER(v2.supplier_stock_code) = UPPER(REGEXP_REPLACE(moi.sku, '^FL-', '')) OR UPPER(v2.current_model_code) = UPPER(REGEXP_REPLACE(moi.sku, '^FL-', ''))) AND img->>'url' IS NOT NULL AND img->>'url' <> '' LIMIT 1),
@@ -673,7 +1075,7 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
                     ELSE '[]'::jsonb
                   END
                 ) AS line_item WHERE (moi.barcode IS NOT NULL AND (line_item->>'barcode' = moi.barcode OR line_item->>'productCode' = moi.barcode OR line_item->>'hepsiburadaSku' = moi.barcode) OR moi.sku IS NOT NULL AND (line_item->>'merchantSku' = moi.sku OR line_item->>'stockCode' = moi.sku OR line_item->>'productSellerCode' = moi.sku OR line_item->>'hepsiburadaSku' = moi.sku)) AND COALESCE(line_item->>'productImage', line_item->>'imageUrl', line_item->>'productImageUrl', line_item->>'thumbnailUrl', line_item->'images'->0->>'url') IS NOT NULL AND COALESCE(line_item->>'productImage', line_item->>'imageUrl', line_item->>'productImageUrl', line_item->>'thumbnailUrl', line_item->'images'->0->>'url') <> '' LIMIT 1)
-              )
+              ), '{size}', '500')
             )
             ORDER BY moi.id
           ) FILTER (WHERE moi.id IS NOT NULL),
@@ -935,6 +1337,31 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
     `;
   }
 
+  /** barkod → görsel URL (null = bulunamadı); mağaza başına, 6 saat geçerli */
+  private readonly lineImageCache = new Map<string, { url: string | null; at: number }>();
+
+  private async fillTrendyolLineImages(adapter: unknown, orders: ExternalOrder[], companyCode: string) {
+    const a = adapter as { fetchProductImageByBarcode?: (barcode: string) => Promise<string | null> };
+    if (typeof a.fetchProductImageByBarcode !== 'function') return;
+    let lookups = 0;
+    for (const order of orders) {
+      for (const item of order.items) {
+        if (item.imageUrl || !item.barcode) continue;
+        const key = `${companyCode}:${item.barcode}`;
+        const cached = this.lineImageCache.get(key);
+        if (cached && Date.now() - cached.at < 6 * 3600_000) {
+          if (cached.url) item.imageUrl = cached.url;
+          continue;
+        }
+        if (lookups >= 60) continue; // bir senkronda en fazla 60 sorgu (API sınırı)
+        lookups += 1;
+        const url = await a.fetchProductImageByBarcode(item.barcode).catch(() => null);
+        this.lineImageCache.set(key, { url, at: Date.now() });
+        if (url) item.imageUrl = url;
+      }
+    }
+  }
+
   private async importExternalOrder(order: ExternalOrder, userId: number) {
     const companyPrefix = order.companyCode && order.companyCode !== 'ERHAN' ? `${order.companyCode}:` : '';
     const idempotencyKey = `${companyPrefix}${order.platform}:${order.externalOrderId}`;
@@ -954,8 +1381,16 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
         await tx.$executeRaw`
           UPDATE retail_sales
           SET status = CASE
-                WHEN status::text IN ('READY','OUT_FOR_DELIVERY','DELIVERED','COMPLETED','CANCELLED')
-                THEN status
+                -- Kapanmış sipariş değişmez
+                WHEN status::text IN ('DELIVERED','COMPLETED','CANCELLED') THEN status
+                -- Platform kargoya verdi / teslim etti / iptal etti: "Hazır" (fotoğraflı) siparişler de ilerler,
+                -- yoksa kargoya verilmiş sipariş personel ekranında "Kargo Bekleniyor"da takılı kalır
+                WHEN ${status}::text IN ('OUT_FOR_DELIVERY','DELIVERED','COMPLETED','CANCELLED')
+                THEN ${status}::"RetailSaleStatus"
+                -- Personelin ilerlettiği durum (Hazır / yolda) platformun eski "onaylandı" bilgisiyle geri gitmez
+                WHEN status::text IN ('READY','OUT_FOR_DELIVERY') THEN status
+                -- ERP'de "İşleme Al" denen sipariş, platform hâlâ "yeni/onaylandı" diyorsa Yeni'ye geri düşmez
+                WHEN status::text IN ('PREPARING','IN_PRODUCTION') AND ${status}::text IN ('CONFIRMED','PAYMENT_PENDING') THEN status
                 ELSE COALESCE(${status}::"RetailSaleStatus", status)
               END,
               invoice_status = COALESCE(${invoiceStatus}::"RetailInvoiceStatus", invoice_status),
@@ -969,13 +1404,22 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
         `;
         // Daha önce kaydedilmemiş görsel URL'leri varsa item'lara ekle
         for (const item of order.items) {
-          if (item.imageUrl && item.externalLineId) {
+          if (!item.imageUrl) continue;
+          if (item.externalLineId) {
             await tx.$executeRaw`
               UPDATE retail_sale_items
               SET external_image_url = ${item.imageUrl}
               WHERE sale_id = ${saleId}
                 AND external_line_id = ${item.externalLineId}
-                AND (external_image_url IS NULL OR external_image_url = '')
+                AND (external_image_url IS NULL OR external_image_url = '' OR external_image_url LIKE '%{size}%')
+            `;
+          } else if (item.barcode || item.modelCode) {
+            await tx.$executeRaw`
+              UPDATE retail_sale_items
+              SET external_image_url = ${item.imageUrl}
+              WHERE sale_id = ${saleId}
+                AND (barcode = ${item.barcode ?? null} OR model_code = ${item.modelCode ?? null})
+                AND (external_image_url IS NULL OR external_image_url = '' OR external_image_url LIKE '%{size}%')
             `;
           }
         }
@@ -1716,6 +2160,87 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
     };
   }
 
+  /**
+   * Ciro raporu: siparişleri doğrudan platformdan çeker (Trendyol + n11, Erhan ve Flora mağazaları).
+   * İptal / iade / teslim edilemeyen hariç. Gün = Türkiye saatine göre sipariş tarihi.
+   * Bir mağaza hata verirse o kanal `ok:false` döner (rapor o kanalda ERP kaydına düşer).
+   */
+  async platformRevenue(from: string, to: string) {
+    const startMs = new Date(`${from}T00:00:00+03:00`).getTime();
+    const endMs = Math.min(new Date(`${to}T23:59:59.999+03:00`).getTime(), Date.now());
+    const trDay = (d: Date) => new Date(d.getTime() + 3 * 3600000).toISOString().slice(0, 10);
+    const stores: Array<{ channel: string; platform: IntegrationPlatform; company: 'ERHAN' | 'FLORA' }> = [
+      { channel: 'TRENDYOL', platform: 'TRENDYOL', company: 'ERHAN' },
+      { channel: 'TRENDYOL_FLORA', platform: 'TRENDYOL', company: 'FLORA' },
+      { channel: 'N11', platform: 'N11', company: 'ERHAN' },
+      { channel: 'N11_FLORA', platform: 'N11', company: 'FLORA' },
+    ];
+    const results: Array<{ channel: string; ok: boolean; error?: string; days: Record<string, { revenue: number; orders: number }> }> = [];
+    for (const st of stores) {
+      try {
+        // Flora: mağazaya özel bilgi zorunlu (Erhan bilgilerine düşüp Erhan cirosunu Flora diye saymasın)
+        const adapter = (st.company === 'ERHAN' ? await this.adapter(st.platform) : await this.storeAdapter(st.platform, st.company)) as unknown as {
+          fetchOrdersBetween?: (a: number, b: number) => Promise<ExternalOrder[]>;
+        };
+        if (typeof adapter.fetchOrdersBetween !== 'function') throw new Error('Tarih aralığıyla sipariş çekme desteklenmiyor');
+        const orders = await adapter.fetchOrdersBetween(startMs, endMs);
+        const days: Record<string, { revenue: number; orders: number }> = {};
+        for (const o of orders) {
+          if (o.status === 'CANCELLED' || o.invoiceStatus === 'RETURNED' || o.invoiceStatus === 'CANCELLED') continue;
+          if (!o.orderDate) continue;
+          const day = trDay(o.orderDate);
+          if (day < from || day > to) continue;
+          const d = (days[day] ??= { revenue: 0, orders: 0 });
+          d.revenue += Number(o.totalAmount) || 0;
+          d.orders += 1;
+        }
+        results.push({ channel: st.channel, ok: true, days });
+      } catch (error) {
+        results.push({ channel: st.channel, ok: false, error: this.errorMessage(error), days: {} });
+      }
+    }
+    return results;
+  }
+
+  /**
+   * Hakedişler: Trendyol cari hesap ekstresi (Erhan + Flora). Satış/iade/indirim kayıtları + ödemeler + kesinti faturaları.
+   * Satış (Sale) alınamazsa mağaza hatalı sayılır; diğer tipler alınamazsa uyarı olarak eklenir.
+   */
+  async platformSettlements(from: string, to: string) {
+    const startMs = new Date(`${from}T00:00:00+03:00`).getTime();
+    const endMs = Math.min(new Date(`${to}T23:59:59.999+03:00`).getTime(), Date.now());
+    const todayIso = new Date(Date.now() + 3 * 3600000).toISOString().slice(0, 10);
+    const stores: Array<{ channel: string; company: 'ERHAN' | 'FLORA'; label: string }> = [
+      { channel: 'TRENDYOL', company: 'ERHAN', label: 'Trendyol · Erhan Flowers' },
+      { channel: 'TRENDYOL_FLORA', company: 'FLORA', label: 'Trendyol · Flora' },
+    ];
+    const out: Array<{ channel: string; label: string; ok: boolean; error?: string; warnings: string[]; summary?: SettlementSummary }> = [];
+    for (const st of stores) {
+      const warnings: string[] = [];
+      try {
+        const adapter = (st.company === 'ERHAN' ? await this.adapter('TRENDYOL') : await this.storeAdapter('TRENDYOL', st.company)) as unknown as {
+          fetchFinance?: (k: 'settlements' | 'otherfinancials', t: string, a: number, b: number) => Promise<Array<Record<string, any>>>;
+        };
+        if (typeof adapter.fetchFinance !== 'function') throw new Error('Finans servisi desteklenmiyor');
+        const settlements = await adapter.fetchFinance('settlements', 'Sale', startMs, endMs);
+        for (const t of ['Return', 'Discount', 'DiscountCancel', 'Coupon', 'CouponCancel', 'ProvisionPositive', 'ProvisionNegative']) {
+          try { settlements.push(...(await adapter.fetchFinance('settlements', t, startMs, endMs))); }
+          catch (e) { if (t === 'Return') warnings.push(`İadeler alınamadı: ${this.errorMessage(e).slice(0, 120)}`); }
+        }
+        let payments: Array<Record<string, any>> = [];
+        try { payments = await adapter.fetchFinance('otherfinancials', 'PaymentOrder', startMs, endMs); }
+        catch (e) { warnings.push(`Ödemeler alınamadı: ${this.errorMessage(e).slice(0, 120)}`); }
+        let deductions: Array<Record<string, any>> = [];
+        try { deductions = await adapter.fetchFinance('otherfinancials', 'DeductionInvoices', startMs, endMs); }
+        catch (e) { warnings.push(`Kesinti faturaları alınamadı: ${this.errorMessage(e).slice(0, 120)}`); }
+        out.push({ channel: st.channel, label: st.label, ok: true, warnings, summary: summarizeSettlements(settlements, payments, deductions, todayIso) });
+      } catch (error) {
+        out.push({ channel: st.channel, label: st.label, ok: false, error: this.errorMessage(error), warnings });
+      }
+    }
+    return out;
+  }
+
   private async storeAdapter(platform: IntegrationPlatform, companyCode: string): Promise<IntegrationAdapter> {
     const credentials = await this.integrationCenter.storeCredentials(platform, companyCode);
     if (platform === 'TRENDYOL') return new TrendyolAdapter(credentials);
@@ -1732,6 +2257,7 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
     if (platform === 'TRENDRUM') return new TrendrumAdapter(await this.integrationCenter.runtimeCredentials(platform, companyCode));
     if (platform === 'PAZARAMA') return new PazaramaAdapter(await this.integrationCenter.runtimeCredentials(platform, companyCode));
     if (platform === 'IDEFIX') return new IdefixAdapter(await this.integrationCenter.runtimeCredentials(platform, companyCode));
+    if (platform === 'KOCTAS') return new KoctasAdapter(await this.integrationCenter.runtimeCredentials(platform, companyCode));
     if (platform === 'AMAZON') return new AmazonAdapter(await this.integrationCenter.runtimeCredentials(platform, companyCode));
     return new GenericMarketplaceAdapter(platform);
   }
