@@ -221,7 +221,8 @@ export default function AccountsPage() {
     setLoading(true);
     try {
       const res = await fetch(`${API}/integrations/platform-settings?company=${company}`, { credentials: 'include' });
-      setSettings(await res.json());
+      const all: PlatformSetting[] = await res.json();
+      setSettings(all.filter((s) => s.platform !== 'TICIMAX'));
     } finally {
       setLoading(false);
     }

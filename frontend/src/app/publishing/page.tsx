@@ -72,7 +72,6 @@ const platformOptions = [
   { value: 'TRENDYOL', label: 'Trendyol' },
   { value: 'HEPSIBURADA', label: 'Hepsiburada' },
   { value: 'N11', label: 'N11' },
-  { value: 'TICIMAX', label: 'Ticimax' },
 ];
 
 export default function PublishingPage() {
