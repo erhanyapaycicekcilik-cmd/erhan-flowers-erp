@@ -1585,7 +1585,7 @@ export class OrderSyncService {
       return { processed: 0, newOrders: 0 };
     }
 
-    const apiBase = 'https://merchantapi.idefix.com/pim/catalog';
+    const omsBase = 'https://merchantapi.idefix.com/oms';
     const token = Buffer.from(`${apiKey}:${supplierId}`).toString('base64');
     const headers = { 'X-API-KEY': token, Accept: 'application/json', 'Content-Type': 'application/json' };
     const lookback = Date.now() - this.lookbackDays * 24 * 60 * 60 * 1000;
@@ -1593,7 +1593,7 @@ export class OrderSyncService {
     const allOrders: Array<Record<string, unknown>> = [];
     let pageIndex = 0;
     while (pageIndex < 10) {
-      const url = `${apiBase}/${supplierId}/orders?pageSize=50&pageIndex=${pageIndex}&status=New`;
+      const url = `${omsBase}/${supplierId}/list-v2?pageSize=50&pageIndex=${pageIndex}`;
       const res = await fetch(url, { headers, signal: AbortSignal.timeout(15000) }).catch(() => null);
       if (!res || !res.ok) break;
       const data = await res.json() as { data?: Array<Record<string, unknown>>; items?: Array<Record<string, unknown>> } | Array<Record<string, unknown>>;
