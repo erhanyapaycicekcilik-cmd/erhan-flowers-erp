@@ -178,7 +178,6 @@ const platformOptions = [
   { value: 'N11', label: 'N11' },
   { value: 'AMAZON', label: 'Amazon' },
   { value: 'WEBSITE', label: 'Web Site' },
-  { value: 'TICIMAX', label: 'Ticimax' },
   { value: 'PAZARAMA', label: 'Pazarama' },
   { value: 'TRENDRUM', label: 'Trendrum' },
   { value: 'IDEFIX', label: 'İdefix' },

@@ -26,7 +26,7 @@ const platforms: Array<{ platform: IntegrationPlatform; displayName: string }> =
   { platform: 'N11', displayName: 'N11' },
   { platform: 'AMAZON', displayName: 'Amazon' },
   { platform: 'WEBSITE', displayName: 'Web Site' },
-  { platform: 'TICIMAX', displayName: 'Ticimax' },
+  { platform: 'TICIMAX', displayName: 'Ticimax', hidden: true },
   { platform: 'TRENDRUM', displayName: 'Trendrum' },
   { platform: 'PAZARAMA', displayName: 'Pazarama' },
   { platform: 'IDEFIX', displayName: 'Idefix' },

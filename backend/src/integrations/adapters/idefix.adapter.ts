@@ -2,10 +2,12 @@ import { Inject, Injectable, Optional } from '@nestjs/common';
 import { BaseIntegrationAdapter } from './base-adapter';
 import { AdapterConnectionResult, ExternalOrder } from './integration-adapter.interface';
 
-// Idefix Merchant API — https://merchantapi.idefix.com/pim/catalog/{vendorId}/
-// Auth: Authorization: ApiKey <API_KEY>
-// Stok/Fiyat: POST /inventory-upload
+// Idefix Merchant API
+// Siparişler: https://merchantapi.idefix.com/oms/{vendorId}/list-v2
+// Stok/Fiyat: https://merchantapi.idefix.com/pim/catalog/{vendorId}/inventory-upload
+// Auth: X-API-KEY: base64(apiKey:supplierId)
 const IDEFIX_API = 'https://merchantapi.idefix.com/pim/catalog';
+const IDEFIX_OMS_API = 'https://merchantapi.idefix.com/oms';
 
 @Injectable()
 export class IdefixAdapter extends BaseIntegrationAdapter {
@@ -51,7 +53,7 @@ export class IdefixAdapter extends BaseIntegrationAdapter {
 
     try {
       const supplierId = this.env('SUPPLIER_ID');
-      const res = await fetch(`${IDEFIX_API}/${supplierId}/inventory-list?pageSize=1&pageIndex=0`, {
+      const res = await fetch(`${IDEFIX_OMS_API}/${supplierId}/list-v2?pageSize=1&pageIndex=0`, {
         headers: this.apiHeaders(),
         signal: AbortSignal.timeout(10000),
       });
@@ -82,7 +84,7 @@ export class IdefixAdapter extends BaseIntegrationAdapter {
 
     const supplierId = this.env('SUPPLIER_ID');
     try {
-      const res = await fetch(`${IDEFIX_API}/${supplierId}/orders?pageSize=50&pageIndex=0&status=New`, {
+      const res = await fetch(`${IDEFIX_OMS_API}/${supplierId}/list-v2?pageSize=50&pageIndex=0`, {
         headers: this.apiHeaders(),
         signal: AbortSignal.timeout(15000),
       });
