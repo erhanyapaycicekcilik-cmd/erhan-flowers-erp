@@ -1452,22 +1452,34 @@ export class OrderSyncService {
       return { processed: 0, newOrders: 0 };
     }
 
-    // Get Bearer token
-    const PAZARAMA_API = 'https://isortagim.pazarama.com';
+    // Get Bearer token (OAuth2 Basic Auth — adapter ile aynı yöntem)
+    const PAZARAMA_AUTH_URL = 'https://isortagimgiris.pazarama.com/connect/token';
+    const PAZARAMA_API = 'https://isortagimapi.pazarama.com';
     let token: string | null = null;
     try {
-      const tokenBody = new URLSearchParams({ grant_type: 'client_credentials', client_id: apiKey, client_secret: apiSecret });
-      const tokenRes = await fetch(`${PAZARAMA_API}/connect/token`, {
+      const tokenBody = new URLSearchParams({
+        grant_type: 'client_credentials',
+        scope: 'merchantgatewayapi.fullaccess',
+      });
+      const basicAuth = Buffer.from(`${apiKey}:${apiSecret}`).toString('base64');
+      const tokenRes = await fetch(PAZARAMA_AUTH_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Authorization': `Basic ${basicAuth}`,
+        },
         body: tokenBody.toString(),
         signal: AbortSignal.timeout(8000),
       });
       if (tokenRes.ok) {
         const tokenData = await tokenRes.json() as Record<string, unknown>;
-        token = String(tokenData?.access_token ?? tokenData?.accessToken ?? tokenData?.token ?? '') || null;
+        const inner = (tokenData?.data ?? tokenData) as Record<string, unknown>;
+        token = String(inner?.accessToken ?? inner?.access_token ?? tokenData?.access_token ?? tokenData?.token ?? '') || null;
+      } else {
+        const errText = await tokenRes.text().catch(() => '');
+        this.logger.warn(`Pazarama token HTTP ${tokenRes.status}: ${errText.slice(0, 200)}`);
       }
-    } catch { /* skip */ }
+    } catch (err) { this.logger.warn(`Pazarama token hatası: ${err instanceof Error ? err.message : String(err)}`); }
 
     if (!token) {
       this.logger.warn('Pazarama token alınamadı, sync atlanıyor.');
@@ -1480,7 +1492,7 @@ export class OrderSyncService {
     const allOrders: Array<Record<string, unknown>> = [];
     let page = 0;
     while (page < 10) {
-      const url = `${PAZARAMA_API}/api/order/orders?status=1&pageSize=50&pageIndex=${page}`;
+      const url = `${PAZARAMA_API}/order/getOrdersForApi?status=1&pageSize=50&pageIndex=${page}`;
       const res = await fetch(url, { headers }).catch(() => null);
       if (!res || !res.ok) break;
       const data = await res.json() as { data?: { orderList?: Array<Record<string, unknown>> } | Array<Record<string, unknown>> };
