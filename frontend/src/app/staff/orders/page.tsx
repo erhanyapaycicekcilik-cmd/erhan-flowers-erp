@@ -44,6 +44,7 @@ const PLATFORMS = [
   { key: 'FLORA_TRENDYOL', label: '🌸 Flora Trendyol', printKey: 'FLORA_TRENDYOL' },
   { key: 'N11', label: 'N11', printKey: 'N11' },
   { key: 'HEPSIBURADA', label: 'Hepsiburada', printKey: 'HEPSIBURADA' },
+  { key: 'WEB_PHONE', label: '🌐📞 Web & Telefon', printKey: 'WEB_PHONE' },
   { key: 'WEBSITE', label: '🌐 Web Sitesi', printKey: 'WEBSITE' },
   { key: 'WHATSAPP', label: '💬 WhatsApp', printKey: 'WHATSAPP' },
   { key: 'PHONE', label: '📞 Telefon', printKey: 'PHONE' },
@@ -57,6 +58,7 @@ function matchesPlatform(order: OrderRow, platformKey: string): boolean {
   if (platformKey === 'all') return true;
   if (platformKey === 'FLORA_TRENDYOL') return order.platform === 'TRENDYOL' && order.companyCode === 'FLORA';
   if (platformKey === 'TRENDYOL') return order.platform === 'TRENDYOL' && order.companyCode !== 'FLORA';
+  if (platformKey === 'WEB_PHONE') return ['WEBSITE', 'PHONE', 'WHATSAPP', 'INSTAGRAM'].includes(order.platform ?? '');
   return order.platform === platformKey;
 }
 
