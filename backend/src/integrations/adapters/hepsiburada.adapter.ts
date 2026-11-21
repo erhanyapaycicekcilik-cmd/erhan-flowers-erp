@@ -23,12 +23,12 @@ export class HepsiburadaAdapter extends HttpMarketplaceOrderAdapter {
   override async testConnection(): Promise<AdapterConnectionResult> {
     const merchantId = this.env('MERCHANT_ID');
     const username = this.env('USERNAME') || this.env('API_KEY') || merchantId;
-    const password = this.env('PASSWORD') || this.env('API_SECRET');
+    const password = this.env('PASSWORD') || this.env('API_SECRET') || this.env('SECRET_KEY');
     if (!merchantId || !username || !password) {
       const missing: string[] = [];
       if (!merchantId) missing.push('HEPSIBURADA_MERCHANT_ID');
-      if (!username) missing.push('HEPSIBURADA_USERNAME');
-      if (!password) missing.push('HEPSIBURADA_PASSWORD');
+      if (!username) missing.push('HEPSIBURADA_USERNAME / HEPSIBURADA_API_KEY');
+      if (!password) missing.push('HEPSIBURADA_PASSWORD / HEPSIBURADA_API_SECRET / HEPSIBURADA_SECRET_KEY');
       return this.missing(missing);
     }
     const auth = Buffer.from(`${username}:${password}`).toString('base64');
@@ -62,7 +62,7 @@ export class HepsiburadaAdapter extends HttpMarketplaceOrderAdapter {
     this.lastFetchComplete = false;
     const merchantId = this.env('MERCHANT_ID');
     const username = this.env('USERNAME') || this.env('API_KEY') || merchantId;
-    const password = this.env('PASSWORD') || this.env('API_SECRET');
+    const password = this.env('PASSWORD') || this.env('API_SECRET') || this.env('SECRET_KEY');
     if (!merchantId || !username || !password) return [];
 
     const auth = Buffer.from(`${username}:${password}`).toString('base64');
