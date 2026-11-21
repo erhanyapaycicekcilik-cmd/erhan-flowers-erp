@@ -188,7 +188,8 @@ export class IntegrationCenterService {
     const prefix = platform === 'HEPSIBURADA' ? 'HEPSIBURADA' : platform === 'N11' ? 'N11' : platform === 'TRENDYOL' ? 'TRENDYOL' : platform;
     const envFallbacks: Record<string, string> = {
       API_KEY: process.env[`${prefix}_API_KEY`] ?? '',
-      API_SECRET: process.env[`${prefix}_API_SECRET`] ?? '',
+      API_SECRET: process.env[`${prefix}_API_SECRET`] ?? process.env[`${prefix}_SECRET_KEY`] ?? '',
+      SECRET_KEY: process.env[`${prefix}_SECRET_KEY`] ?? '',
       MERCHANT_ID: process.env[`${prefix}_MERCHANT_ID`] ?? '',
       USERNAME: process.env[`${prefix}_USERNAME`] ?? '',
       PASSWORD: process.env[`${prefix}_PASSWORD`] ?? '',
