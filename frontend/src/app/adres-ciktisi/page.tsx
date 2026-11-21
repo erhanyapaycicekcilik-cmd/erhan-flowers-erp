@@ -376,8 +376,8 @@ export default function AddressPrintPage() {
       await saveCustomer(true);
     }
 
-    // Ürün varsa personel ekranına sipariş olarak düş (CONFIRMED)
-    if (filledItems.length > 0 && name.trim() && address.trim()) {
+    // İsim + adres varsa her çıktıda personel ekranına sipariş düş (ürün girilmemiş olsa da)
+    if (name.trim() && address.trim()) {
       try {
         const sale = await api<{ id: number; saleNumber?: string }>('/sales', {
           method: 'POST',
@@ -393,14 +393,16 @@ export default function AddressPrintPage() {
             payments: [{ method: payMethod, amount: invoiceTotal || 0, clientKey: `pay-print-${Date.now()}` }],
             customer: customerPayload(),
             address: addressPayload(),
-            items: filledItems.map((i) => ({
-              productName: i.name.trim(),
-              quantity: Number(i.qty) || 1,
-              unitPrice: Number(i.price.replace(',', '.')) || 0,
-              discountAmount: 0,
-              stockFulfillmentType: 'READY_STOCK',
-              ...(i.productId ? { productId: i.productId } : {}),
-            })),
+            items: filledItems.length > 0
+              ? filledItems.map((i) => ({
+                  productName: i.name.trim(),
+                  quantity: Number(i.qty) || 1,
+                  unitPrice: Number(i.price.replace(',', '.')) || 0,
+                  discountAmount: 0,
+                  stockFulfillmentType: 'READY_STOCK',
+                  ...(i.productId ? { productId: i.productId } : {}),
+                }))
+              : [{ productName: 'Sipariş', quantity: 1, unitPrice: 0, discountAmount: 0, stockFulfillmentType: 'READY_STOCK' }],
             customerNote: note.trim() || undefined,
           },
         });
