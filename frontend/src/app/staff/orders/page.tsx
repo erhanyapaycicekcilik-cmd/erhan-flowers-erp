@@ -208,6 +208,7 @@ export default function StaffOrdersPage() {
   const [category, setCategory] = useState('all');
   const [search, setSearch] = useState('');
   const [toastMsg, setToastMsg] = useState('');
+  const [loadErrors, setLoadErrors] = useState<string[]>([]);
   const readySectionRef = useRef<HTMLDivElement>(null);
 
   // Tüm platformlardan (Trendyol Erhan/Flora, Hepsiburada, n11…) siparişleri hemen çek
@@ -250,14 +251,21 @@ export default function StaffOrdersPage() {
     if (!silent) setLoading(true);
     try {
       const since = new Date(Date.now() - 10 * 86400000).toISOString().slice(0, 10);
+      const errs: string[] = [];
+      const safe = <T,>(label: string, p: Promise<T>, fallback: T): Promise<T> =>
+        p.catch((e: unknown) => {
+          errs.push(`${label}: ${e instanceof Error ? e.message : 'bağlantı hatası'}`);
+          return fallback;
+        });
       const [erpOrders, webOrders, retailOrders, shippedErp, shippedWeb] = await Promise.all([
-        api<OrderRow[]>('/integrations/orders?limit=200&status=CONFIRMED,PREPARING,IN_PRODUCTION,READY').catch(() => [] as OrderRow[]),
-        api<OrderRow[]>('/integrations/web-orders?limit=200&status=CONFIRMED,PREPARING,READY').catch(() => [] as OrderRow[]),
-        api<OrderRow[]>('/integrations/retail-orders?limit=200&status=PAYMENT_PENDING,CONFIRMED,PREPARING,IN_PRODUCTION,READY').catch(() => [] as OrderRow[]),
+        safe('Pazaryeri siparişleri', api<OrderRow[]>('/integrations/orders?limit=200&status=CONFIRMED,PREPARING,IN_PRODUCTION,READY'), [] as OrderRow[]),
+        safe('Web siparişleri', api<OrderRow[]>('/integrations/web-orders?limit=200&status=CONFIRMED,PREPARING,READY'), [] as OrderRow[]),
+        safe('Dükkan siparişleri', api<OrderRow[]>('/integrations/retail-orders?limit=200&status=PAYMENT_PENDING,CONFIRMED,PREPARING,IN_PRODUCTION,READY'), [] as OrderRow[]),
         // Kargoda: son 10 günün kargoya verilmiş (henüz teslim edilmemiş) siparişleri
-        api<OrderRow[]>(`/integrations/orders?pageSize=300&status=OUT_FOR_DELIVERY&startDate=${since}`).catch(() => [] as OrderRow[]),
-        api<OrderRow[]>(`/integrations/web-orders?pageSize=100&status=SHIPPED&startDate=${since}`).catch(() => [] as OrderRow[]),
+        safe('Kargodaki pazaryeri', api<OrderRow[]>(`/integrations/orders?pageSize=300&status=OUT_FOR_DELIVERY&startDate=${since}`), [] as OrderRow[]),
+        safe('Kargodaki web', api<OrderRow[]>(`/integrations/web-orders?pageSize=100&status=SHIPPED&startDate=${since}`), [] as OrderRow[]),
       ]);
+      setLoadErrors(errs);
       setShippedOrders([
         ...(Array.isArray(shippedErp) ? shippedErp : []),
         ...(Array.isArray(shippedWeb) ? shippedWeb : []),
@@ -396,6 +404,20 @@ export default function StaffOrdersPage() {
         {toastMsg && (
           <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[60] bg-emerald-600 text-white text-sm font-semibold px-5 py-3 rounded-2xl shadow-2xl flex items-center gap-2 animate-bounce">
             {toastMsg}
+          </div>
+        )}
+
+        {/* Yükleme hataları */}
+        {loadErrors.length > 0 && (
+          <div className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 flex items-start gap-2 text-xs text-red-700">
+            <span className="mt-0.5">⚠️</span>
+            <div className="flex-1">
+              <span className="font-semibold">Bazı veriler yüklenemedi:</span>
+              <ul className="mt-0.5 space-y-0.5">
+                {loadErrors.map((e, i) => <li key={i}>{e}</li>)}
+              </ul>
+            </div>
+            <button onClick={() => setLoadErrors([])} className="text-red-400 hover:text-red-600 font-bold text-base leading-none">×</button>
           </div>
         )}
 
