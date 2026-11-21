@@ -17,9 +17,36 @@ export class HepsiburadaAdapter extends HttpMarketplaceOrderAdapter {
     });
   }
 
-  // Hepsiburada sipariş API'si tarih filtresi desteklemiyor ve
-  // offset/limit kullanıyor — genel adapter'ın startDate/endDate
-  // parametreleri HB tarafından reddedildiği için override gerekli.
+  // HepsiburadaAdapter fetchOrders'ı ve testConnection'ı tamamen override eder çünkü
+  // base adapter tarihli filtre + sayfalama parametre biçimi HB tarafından desteklenmez
+  // ve bağlantı testi farklı bir endpoint'e gider (/openorders olmadan).
+  override async testConnection(): Promise<AdapterConnectionResult> {
+    const merchantId = this.env('MERCHANT_ID');
+    const username = this.env('USERNAME') || this.env('API_KEY') || merchantId;
+    const password = this.env('PASSWORD') || this.env('API_SECRET');
+    if (!merchantId || !username || !password) {
+      const missing: string[] = [];
+      if (!merchantId) missing.push('HEPSIBURADA_MERCHANT_ID');
+      if (!username) missing.push('HEPSIBURADA_USERNAME');
+      if (!password) missing.push('HEPSIBURADA_PASSWORD');
+      return this.missing(missing);
+    }
+    const auth = Buffer.from(`${username}:${password}`).toString('base64');
+    const apiBase = (this.env('API_URL') || HB_ORDERS_URL).replace(/\/+$/, '');
+    try {
+      const res = await fetch(`${apiBase}/orders/merchantid/${encodeURIComponent(merchantId)}/openorders?offset=0&limit=1`, {
+        headers: { Accept: 'application/json', Authorization: `Basic ${auth}`, 'User-Agent': this.env('USER_AGENT') || 'ErhanFlowersERP-HB' },
+        signal: AbortSignal.timeout(10000),
+      });
+      if (res.ok || res.status === 204) return { ok: true, status: 'CONNECTED', message: 'Hepsiburada API bağlantısı başarılı.' };
+      if (res.status === 401 || res.status === 403) return { ok: false, status: 'MISSING_CREDENTIALS', message: `Hepsiburada kimlik doğrulama başarısız. HTTP ${res.status}` };
+      const body = (await res.text().catch(() => '')).slice(0, 200);
+      return { ok: false, status: 'FAILED', message: `Hepsiburada API testi başarısız. HTTP ${res.status}: ${body}` };
+    } catch (err: unknown) {
+      return { ok: false, status: 'FAILED', message: `Hepsiburada API ulaşılamadı: ${err instanceof Error ? err.message : String(err)}` };
+    }
+  }
+
   /** Son fetchOrders tüm sayfaları hatasız aldı mı? (Eksik listeyle "kargoya verildi" kararı verilmesin) */
   lastFetchComplete = false;
   /** Önceden satır id'siyle (ürünsüz) kaydedilmiş HB siparişleri: satır id → sipariş no (çift kayıt temizliği için) */
