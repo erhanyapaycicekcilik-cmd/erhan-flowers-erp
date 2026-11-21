@@ -260,6 +260,29 @@ export class DashboardService {
       monthOrders: web.length,
     });
 
+    // Telefon / WhatsApp / Instagram / Dükkan — elle girilen siparişler
+    const retailRows = await this.prisma.$queryRaw<Array<{ todayRevenue: number; todayOrders: number; monthRevenue: number; monthOrders: number }>>`
+      SELECT
+        COALESCE(SUM(grand_total) FILTER (WHERE created_at::date = CURRENT_DATE AND status NOT IN ('CANCELLED','DRAFT')), 0)::float AS "todayRevenue",
+        COUNT(*) FILTER (WHERE created_at::date = CURRENT_DATE AND status NOT IN ('CANCELLED','DRAFT'))::int AS "todayOrders",
+        COALESCE(SUM(grand_total) FILTER (WHERE DATE_TRUNC('month', created_at) = DATE_TRUNC('month', CURRENT_DATE) AND status NOT IN ('CANCELLED','DRAFT')), 0)::float AS "monthRevenue",
+        COUNT(*) FILTER (WHERE DATE_TRUNC('month', created_at) = DATE_TRUNC('month', CURRENT_DATE) AND status NOT IN ('CANCELLED','DRAFT'))::int AS "monthOrders"
+      FROM retail_sales
+      WHERE channel::text = ANY(ARRAY['PHONE','WHATSAPP','INSTAGRAM','STORE','OTHER'])
+        AND (integration_sync_status = 'MANUAL' OR integration_sync_status IS NULL)
+    `;
+    const rr = retailRows[0];
+    if (rr && (Number(rr.todayOrders) > 0 || Number(rr.monthOrders) > 0)) {
+      rows.push({
+        companyCode: 'RETAIL',
+        companyName: 'Telefon & Dükkan',
+        todayRevenue: Number(rr.todayRevenue),
+        todayOrders: Number(rr.todayOrders),
+        monthRevenue: Number(rr.monthRevenue),
+        monthOrders: Number(rr.monthOrders),
+      });
+    }
+
     const totalToday = rows.reduce((sum, r) => sum + Number(r.todayRevenue), 0);
     const totalMonth = rows.reduce((sum, r) => sum + Number(r.monthRevenue), 0);
     const totalTodayOrders = rows.reduce((sum, r) => sum + Number(r.todayOrders), 0);

@@ -37,6 +37,7 @@ const CHANNEL_CARD: Record<string, { title: string; sub: string; box: string; he
   ERHAN: { title: 'Erhan Flowers', sub: 'Pazaryerleri', box: 'border-blue-200 bg-blue-50', head: 'text-blue-600', value: 'text-blue-800' },
   FLORA: { title: 'Flora Yapay Çiçek', sub: 'Trendyol', box: 'border-emerald-200 bg-emerald-50', head: 'text-emerald-600', value: 'text-emerald-800' },
   WEB: { title: 'Web Sitesi', sub: 'erhanflowers.com', box: 'border-purple-200 bg-purple-50', head: 'text-purple-600', value: 'text-purple-800' },
+  RETAIL: { title: 'Telefon & Dükkan', sub: 'WhatsApp / Instagram', box: 'border-orange-200 bg-orange-50', head: 'text-orange-600', value: 'text-orange-800' },
 }
 
 type CompanyRevRow = { companyCode: string; companyName: string; todayRevenue: number; todayOrders: number; monthRevenue: number; monthOrders: number };
