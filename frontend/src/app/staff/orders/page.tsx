@@ -315,7 +315,7 @@ export default function StaffOrdersPage() {
   });
 
   const filteredReady = readyOrders.filter((o) => {
-    if (platform !== 'all' && o.platform !== platform) return false;
+    if (!matchesPlatform(o, platform)) return false;
     if (!matchCategory(o, category)) return false;
     if (search) {
       const q = search.toLowerCase();
