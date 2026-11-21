@@ -299,29 +299,30 @@ export default function StaffOrdersPage() {
   // Kargoda sekmesinde liste kargodaki siparişlerden, diğerlerinde aktif siparişlerden gelir
   const baseOrders = showingShipped ? shippedOrders : activeOrders;
 
-  const filtered = baseOrders.filter((o) => {
+  // Arama varsa tüm siparişlerde (aktif + hazır + kargoda) arama yap; platform/durum/kategori filtresi uygulanmaz
+  const matchesSearch = (o: OrderRow) => {
+    if (!search) return true;
+    const q = search.toLowerCase();
+    return [o.saleNumber, o.customerName, o.phone ?? '', ...o.items.map((i) => i.productName ?? '')].join(' ').toLowerCase().includes(q);
+  };
+
+  const allSearchResults = search
+    ? [...orders, ...shippedOrders].filter((o, i, arr) => arr.findIndex(x => x.id === o.id) === i).filter(matchesSearch)
+    : [];
+
+  const filtered = search ? [] : baseOrders.filter((o) => {
     if (!matchesPlatform(o, platform)) return false;
     if (statusTab !== 'all' && !showingShipped) {
       const tab = STATUS_TABS.find(t => t.key === statusTab);
       if (tab && tab.statuses.length > 0 && !tab.statuses.includes(o.status)) return false;
     }
     if (!matchCategory(o, category)) return false;
-    if (search) {
-      const q = search.toLowerCase();
-      const text = [o.saleNumber, o.customerName, o.phone ?? '', ...o.items.map((i) => i.productName ?? '')].join(' ').toLowerCase();
-      if (!text.includes(q)) return false;
-    }
     return true;
   });
 
-  const filteredReady = readyOrders.filter((o) => {
+  const filteredReady = search ? [] : readyOrders.filter((o) => {
     if (!matchesPlatform(o, platform)) return false;
     if (!matchCategory(o, category)) return false;
-    if (search) {
-      const q = search.toLowerCase();
-      const text = [o.saleNumber, o.customerName, o.phone ?? '', ...o.items.map((i) => i.productName ?? '')].join(' ').toLowerCase();
-      if (!text.includes(q)) return false;
-    }
     return true;
   });
 
@@ -473,12 +474,26 @@ export default function StaffOrdersPage() {
         </div>
 
         {/* İstatistik */}
-        <div className="text-sm text-slate-500">{filtered.length} {showingShipped ? 'kargodaki' : 'aktif'} sipariş gösteriliyor</div>
+        <div className="text-sm text-slate-500">
+          {search ? `${allSearchResults.length} sipariş bulundu` : `${filtered.length} ${showingShipped ? 'kargodaki' : 'aktif'} sipariş gösteriliyor`}
+        </div>
+
+        {/* Arama sonuçları — tüm siparişlerde */}
+        {search && (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {allSearchResults.map((order) => (
+              <OrderCard key={`${order.platform}-${order.id}`} order={order} onStatusChange={handleStatusChange} category="all" shippedSection={SHIPPED_STATUSES.includes(order.status)} />
+            ))}
+            {!allSearchResults.length && (
+              <div className="col-span-full text-center text-slate-400 py-12">Sipariş bulunamadı</div>
+            )}
+          </div>
+        )}
 
         {/* Aktif sipariş kartları */}
-        {loading ? (
+        {!search && loading ? (
           <div className="text-center text-slate-400 py-12">Yükleniyor...</div>
-        ) : (
+        ) : !search && (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {filtered.map((order) => (
               <OrderCard key={`${order.platform}-${order.id}`} order={order} onStatusChange={handleStatusChange} category={category} shippedSection={showingShipped} />
@@ -490,7 +505,7 @@ export default function StaffOrdersPage() {
         )}
 
         {/* Hazır — Kargo Bekleniyor */}
-        {!showingShipped && (filteredReady.length > 0 || readyOrders.length > 0) && (
+        {!search && !showingShipped && (filteredReady.length > 0 || readyOrders.length > 0) && (
           <section ref={readySectionRef} className="mt-6">
             <div className="flex items-center gap-3 mb-3">
               <div className="h-1 flex-1 bg-emerald-200 rounded-full" />
