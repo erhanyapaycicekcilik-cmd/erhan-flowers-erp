@@ -594,42 +594,6 @@ export class HepsiburadaAdapter extends HttpMarketplaceOrderAdapter {
     }).filter((url) => /^https?:\/\//i.test(url));
   }
 
-  async testConnection(): Promise<AdapterConnectionResult> {
-    const merchantId = this.env('MERCHANT_ID');
-    const username = this.env('USERNAME') || this.env('API_KEY');
-    const password = this.env('PASSWORD') || this.env('API_SECRET');
-    const userAgent = this.env('USER_AGENT');
-    const missing = [
-      !merchantId ? 'MERCHANT_ID' : '',
-      !username ? 'USERNAME' : '',
-      !password ? 'PASSWORD' : '',
-      !userAgent ? 'USER_AGENT' : '',
-    ].filter(Boolean);
-    if (missing.length) return this.missing(missing);
-
-    const apiBaseUrl = this.env('API_URL') || HB_ORDERS_URL;
-    const orderPath = this.env('ORDER_PATH') || `/orders/merchantid/${encodeURIComponent(merchantId)}`;
-    const resolvedPath = orderPath.replace('{merchantId}', encodeURIComponent(merchantId));
-    const url = new URL(resolvedPath.startsWith('/') ? resolvedPath : `/${resolvedPath}`, `${apiBaseUrl.replace(/\/+$/, '')}/`);
-    url.searchParams.set('offset', '0');
-    url.searchParams.set('limit', '1');
-
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        Accept: 'application/json',
-        Authorization: `Basic ${Buffer.from(`${username}:${password}`).toString('base64')}`,
-        'User-Agent': userAgent,
-      },
-    });
-    if (response.ok) return { ok: true, status: 'CONNECTED', message: 'Hepsiburada API baglantisi dogrulandi.' };
-    return {
-      ok: false,
-      status: response.status === 401 || response.status === 403 ? 'MISSING_CREDENTIALS' : 'FAILED',
-      message: `Hepsiburada API testi basarisiz. HTTP ${response.status}: ${await this.safeErrorText(response)}`,
-    };
-  }
-
   async deleteListing(sku: string): Promise<AdapterConnectionResult> {
     const merchantId = this.env('MERCHANT_ID');
     const secretKey = this.env('SECRET_KEY') || this.env('PASSWORD') || this.env('API_SECRET');
