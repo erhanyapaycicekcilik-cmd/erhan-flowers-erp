@@ -20,7 +20,7 @@ import { AmazonAdapter } from './adapters/amazon.adapter';
 import { IntegrationCenterService } from './services/integration-center.service';
 import { isSiteOnlyModelCode } from '../common/site-only';
 
-const platforms: Array<{ platform: IntegrationPlatform; displayName: string }> = [
+const platforms: Array<{ platform: IntegrationPlatform; displayName: string; hidden?: boolean }> = [
   { platform: 'TRENDYOL', displayName: 'Trendyol' },
   { platform: 'HEPSIBURADA', displayName: 'Hepsiburada' },
   { platform: 'N11', displayName: 'N11' },
