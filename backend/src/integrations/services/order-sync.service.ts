@@ -45,7 +45,7 @@ interface TrendyolOrder {
 export class OrderSyncService {
   private readonly logger = new Logger(OrderSyncService.name);
   private readonly platform = 'TRENDYOL';
-  private readonly lookbackDays = 3;
+  private readonly lookbackDays = 30;
 
   constructor(
     private readonly prisma: PrismaService,
