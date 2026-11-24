@@ -344,9 +344,9 @@ export class EInvoicesService {
           taxOffice: null,
           email: order.customerEmail,
           phone: null,
-          address: (rawAddr?.fullAddress as string | null) ?? (rawAddr?.address as string | null) ?? s.defaultAddress || null,
-          city: (rawAddr?.city as string | null) ?? s.defaultCity || null,
-          district: (rawAddr?.district as string | null) ?? s.defaultDistrict || null,
+          address: ((rawAddr?.fullAddress as string | null) ?? (rawAddr?.address as string | null)) ?? (s.defaultAddress || null),
+          city: ((rawAddr?.city as string | null) ?? s.defaultCity) || null,
+          district: ((rawAddr?.district as string | null) ?? s.defaultDistrict) || null,
           postalCode: (rawAddr?.postalCode as string | null) ?? null,
         },
         internetSale: {
