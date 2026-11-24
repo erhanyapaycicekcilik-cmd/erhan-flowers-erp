@@ -24,12 +24,13 @@ type Settings = {
   defaultCity: string;
   defaultDistrict: string;
   defaultAddress: string;
+  marketplacePlatforms: string[];
 };
 
 type SettingsResponse = { settings: Settings; providerReady: boolean; providerNotice: string | null };
 
 type PendingRow = {
-  sourceType: 'RETAIL_SALE' | 'WEB_ORDER';
+  sourceType: 'RETAIL_SALE' | 'WEB_ORDER' | 'MARKETPLACE_ORDER';
   sourceId: number;
   sourceNumber: string;
   channel: string;
@@ -61,6 +62,7 @@ type InvoiceRow = {
 
 const CHANNEL_LABEL: Record<string, string> = {
   STORE: 'Dükkan', PHONE: 'Telefon', WHATSAPP: 'WhatsApp', INSTAGRAM: 'Instagram', WEBSITE: 'Web (ERP)', OTHER: 'Diğer', WEB: 'Web Sitesi',
+  IDEFIX: 'Idefix', PAZARAMA: 'Pazarama', TICIMAX: 'Ticimax', AMAZON: 'Amazon',
 };
 
 const money = (n: number) => `${n.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} TL`;
@@ -253,6 +255,28 @@ export default function EDonusumPage() {
                     />
                   </label>
                 ))}
+                <div className="md:col-span-3">
+                  <span className="text-xs text-gray-500">Pazaryeri platformları (ERP&apos;den fatura kesilecekler, ör. IDEFIX)</span>
+                  <div className="mt-1 flex flex-wrap gap-2">
+                    {['IDEFIX', 'PAZARAMA', 'TICIMAX', 'AMAZON'].map((p) => {
+                      const active = (form.marketplacePlatforms ?? []).includes(p);
+                      return (
+                        <button
+                          key={p}
+                          type="button"
+                          onClick={() => {
+                            const cur = form.marketplacePlatforms ?? [];
+                            setForm({ ...form, marketplacePlatforms: active ? cur.filter((x) => x !== p) : [...cur, p] });
+                          }}
+                          className={`rounded-full border px-3 py-0.5 text-xs font-medium transition-colors ${active ? 'border-blue-600 bg-blue-600 text-white' : 'border-gray-300 text-gray-600 hover:border-blue-400'}`}
+                        >
+                          {p}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="mt-1 text-xs text-gray-400">Trendyol ve N11 kendi faturalarını kesiyor; burada seçmeyin. Idefix, Pazarama gibi platformları seçin.</p>
+                </div>
                 <p className="text-xs text-gray-500 md:col-span-3">
                   Kullanıcı adı, e-Faturam portalına kayıtlı e-posta adresinizdir. Test ortamı şifresini e-Faturam&apos;ın gönderdiği e-postadaki linkten belirlersiniz.
                   Web sitesi siparişleri &quot;internet satışı&quot; faturası olduğu için kargo firması adı ve VKN&apos;si zorunludur.

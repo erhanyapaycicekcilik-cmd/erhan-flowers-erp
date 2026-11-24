@@ -28,6 +28,8 @@ export type EInvoiceSettings = {
   /** Alıcı adresi yoksa kullanılacak ilçe ve açık adres (dükkan adresi) */
   defaultDistrict: string;
   defaultAddress: string;
+  /** Faturası ERP'den kesilecek pazaryeri platformları (ör. ['IDEFIX']) */
+  marketplacePlatforms: string[];
 };
 
 export type EInvoiceDraftLine = {
@@ -39,7 +41,7 @@ export type EInvoiceDraftLine = {
 };
 
 export type EInvoiceDraft = {
-  sourceType: 'RETAIL_SALE' | 'WEB_ORDER';
+  sourceType: 'RETAIL_SALE' | 'WEB_ORDER' | 'MARKETPLACE_ORDER';
   sourceId: number;
   sourceNumber: string;
   invoiceType: 'E_ARSIV' | 'E_FATURA';
