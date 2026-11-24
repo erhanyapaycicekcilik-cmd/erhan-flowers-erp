@@ -6,7 +6,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { EInvoiceDraft, EInvoiceSettings } from './providers/e-invoice-provider.interface';
 import { TrendyolEFaturamProvider } from './providers/trendyol-efaturam.provider';
 
-type SourceType = 'RETAIL_SALE' | 'WEB_ORDER';
+type SourceType = 'RETAIL_SALE' | 'WEB_ORDER' | 'MARKETPLACE_ORDER';
 type SourceRef = { sourceType: SourceType; sourceId: number };
 
 export type PendingInvoiceRow = {
@@ -50,6 +50,7 @@ const DEFAULT_SETTINGS: EInvoiceSettings = {
   defaultCity: '',
   defaultDistrict: '',
   defaultAddress: '',
+  marketplacePlatforms: [],
 };
 
 @Injectable()
@@ -110,6 +111,9 @@ export class EInvoicesService {
       autoIssue: typeof body.autoIssue === 'boolean' ? body.autoIssue : current.autoIssue,
       issueOn: body.issueOn === 'SHIPPED' || body.issueOn === 'DELIVERED' ? body.issueOn : current.issueOn,
       vatRate: body.vatRate !== undefined && Number.isFinite(Number(body.vatRate)) ? Number(body.vatRate) : current.vatRate,
+      marketplacePlatforms: Array.isArray(body.marketplacePlatforms)
+        ? (body.marketplacePlatforms as string[]).map((p) => String(p).trim().toUpperCase()).filter(Boolean)
+        : current.marketplacePlatforms,
     };
     for (const series of [next.eArchiveSeries, next.eInvoiceSeries]) {
       if (series && !/^[A-Z0-9]{3}$/.test(series)) {
@@ -143,7 +147,8 @@ export class EInvoicesService {
     const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
     const settings = await this.loadSettings();
 
-    const [sales, webOrders, existing] = await Promise.all([
+    const platforms = settings.marketplacePlatforms ?? [];
+    const [sales, webOrders, marketplaceOrders, existing] = await Promise.all([
       this.prisma.retailSale.findMany({
         where: {
           channel: { in: OWN_CHANNELS },
@@ -165,8 +170,21 @@ export class EInvoicesService {
         orderBy: { createdAt: 'desc' },
         take: 500,
       }),
+      platforms.length
+        ? this.prisma.marketplaceOrder.findMany({
+            where: {
+              platform: { in: platforms },
+              status: { in: ['Delivered', 'DELIVERED'] },
+              totalAmount: { gt: 0 },
+              orderDate: { gte: since },
+            },
+            select: { id: true, orderNumber: true, platform: true, totalAmount: true, orderDate: true, createdAt: true, customerName: true },
+            orderBy: { orderDate: 'desc' },
+            take: 500,
+          })
+        : Promise.resolve([]),
       this.prisma.eInvoice.findMany({
-        where: { sourceType: { in: ['RETAIL_SALE', 'WEB_ORDER'] } },
+        where: { sourceType: { in: ['RETAIL_SALE', 'WEB_ORDER', 'MARKETPLACE_ORDER'] } },
         select: { sourceType: true, sourceId: true, status: true, errorMessage: true, attempts: true, provider: true },
       }),
     ]);
@@ -208,6 +226,23 @@ export class EInvoicesService {
         amount: Number(w.grandTotal),
         invoiceType: 'E_ARSIV',
         date: w.createdAt,
+        lastError: inv?.errorMessage ?? null,
+        attempts: inv?.attempts ?? 0,
+      });
+    }
+    for (const m of marketplaceOrders) {
+      if (skipped.has(`MARKETPLACE_ORDER:${m.id}`)) continue;
+      const inv = byKey.get(`MARKETPLACE_ORDER:${m.id}`);
+      if (inv && inv.status !== 'ERROR') continue;
+      rows.push({
+        sourceType: 'MARKETPLACE_ORDER',
+        sourceId: m.id,
+        sourceNumber: m.orderNumber,
+        channel: m.platform,
+        customerName: m.customerName || m.platform,
+        amount: Number(m.totalAmount),
+        invoiceType: 'E_ARSIV',
+        date: m.orderDate ?? m.createdAt,
         lastError: inv?.errorMessage ?? null,
         attempts: inv?.attempts ?? 0,
       });
@@ -282,6 +317,48 @@ export class EInvoicesService {
       };
     }
 
+    if (ref.sourceType === 'MARKETPLACE_ORDER') {
+      const order = await this.prisma.marketplaceOrder.findUnique({ where: { id: ref.sourceId }, include: { items: true } });
+      if (!order) throw new NotFoundException('Pazaryeri siparişi bulunamadı.');
+      if (['Cancelled', 'CANCELLED'].includes(order.status)) throw new BadRequestException('Sipariş iptal edilmiş; fatura kesilemez.');
+      const lines = order.items.map((i) => ({
+        name: i.productName, quantity: Number(i.quantity), unitPriceInclVat: round(Number(i.unitPrice)), vatRate: vat, totalInclVat: Number(i.totalPrice),
+      }));
+      if (Number(order.cargoAmount) > 0) {
+        lines.push({ name: 'Kargo Bedeli', quantity: 1, unitPriceInclVat: Number(order.cargoAmount), vatRate: vat, totalInclVat: Number(order.cargoAmount) });
+      }
+      const raw = order.rawPayload as Record<string, unknown> | null;
+      const rawAddr = (raw?.deliveryAddress ?? raw?.shippingAddress ?? null) as Record<string, unknown> | null;
+      return {
+        sourceType: 'MARKETPLACE_ORDER',
+        sourceId: order.id,
+        sourceNumber: order.orderNumber,
+        invoiceType: 'E_ARSIV',
+        series: s.eArchiveSeries,
+        issueDate: new Date(),
+        orderDate: order.orderDate ?? order.createdAt,
+        currency: order.currency,
+        buyer: {
+          name: order.customerName || order.platform,
+          vknTckn: null,
+          taxOffice: null,
+          email: order.customerEmail,
+          phone: null,
+          address: (rawAddr?.fullAddress as string | null) ?? (rawAddr?.address as string | null) ?? s.defaultAddress || null,
+          city: (rawAddr?.city as string | null) ?? s.defaultCity || null,
+          district: (rawAddr?.district as string | null) ?? s.defaultDistrict || null,
+          postalCode: (rawAddr?.postalCode as string | null) ?? null,
+        },
+        internetSale: {
+          paymentMeans: 'MEDIATOR',
+          paymentDate: order.orderDate ?? order.createdAt,
+          shippedAt: order.updatedAt,
+        },
+        lines,
+        totalInclVat: Number(order.totalAmount),
+      };
+    }
+
     const order = await this.prisma.webOrder.findUnique({ where: { id: ref.sourceId }, include: { items: true } });
     if (!order) throw new NotFoundException('Web siparişi bulunamadı.');
     if (order.status === 'CANCELLED') throw new BadRequestException('Sipariş iptal edilmiş; fatura kesilemez.');
@@ -333,7 +410,7 @@ export class EInvoicesService {
     const settings = await this.loadSettings();
     this.assertReady(settings);
     let refs: SourceRef[] = (body.items ?? []).filter(
-      (r) => (r.sourceType === 'RETAIL_SALE' || r.sourceType === 'WEB_ORDER') && Number.isInteger(Number(r.sourceId)),
+      (r) => (['RETAIL_SALE', 'WEB_ORDER', 'MARKETPLACE_ORDER'] as string[]).includes(r.sourceType) && Number.isInteger(Number(r.sourceId)),
     );
     if (body.all) {
       const pending = await this.listPending(body.days);
