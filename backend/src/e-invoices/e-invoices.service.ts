@@ -174,7 +174,7 @@ export class EInvoicesService {
         ? this.prisma.marketplaceOrder.findMany({
             where: {
               platform: { in: platforms },
-              status: { in: ['Delivered', 'DELIVERED'] },
+              status: { notIn: ['Cancelled', 'CANCELLED', 'Returned', 'RETURNED', 'New', 'NEW', 'Waiting', 'WAITING', 'Processing', 'PROCESSING'] },
               totalAmount: { gt: 0 },
               orderDate: { gte: since },
             },
