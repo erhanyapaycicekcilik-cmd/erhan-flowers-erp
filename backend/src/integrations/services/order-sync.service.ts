@@ -1635,13 +1635,13 @@ export class OrderSyncService {
 
       const shipAddr = (order.shippingAddress ?? order.deliveryAddress ?? {}) as Record<string, unknown>;
       const customerName = String(
-        order.customerName ?? order.buyerName ??
+        order.customerContactName ?? order.customerName ?? order.buyerName ??
         shipAddr.fullName ??
         [shipAddr.firstName, shipAddr.lastName].filter(Boolean).join(' ') ?? ''
       );
 
-      const lines = Array.isArray(order.lines) ? order.lines as Array<Record<string, unknown>>
-        : Array.isArray(order.items) ? order.items as Array<Record<string, unknown>>
+      const lines = Array.isArray(order.items) ? order.items as Array<Record<string, unknown>>
+        : Array.isArray(order.lines) ? order.lines as Array<Record<string, unknown>>
         : Array.isArray(order.orderLines) ? order.orderLines as Array<Record<string, unknown>>
         : Array.isArray(order.orderItems) ? order.orderItems as Array<Record<string, unknown>>
         : [];
@@ -1653,7 +1653,7 @@ export class OrderSyncService {
           orderNumber: String(order.orderNumber ?? externalOrderId),
           status: String(order.status ?? 'New'),
           customerName,
-          totalAmount: Number(order.grandTotal ?? order.totalAmount ?? order.totalPrice ?? order.total ?? order.netTotal ?? 0),
+          totalAmount: Number(order.discountedTotalPrice ?? order.totalPrice ?? order.grandTotal ?? order.totalAmount ?? order.total ?? 0),
           cargoAmount: Number(order.shippingAmount ?? order.cargoAmount ?? 0),
           currency: 'TRY',
           orderDate,
@@ -1665,8 +1665,8 @@ export class OrderSyncService {
       for (const line of lines) {
         const sku = line.merchantSku ?? line.stockCode ?? line.sku ?? line.productSellerCode ?? null;
         const barcode = line.barcode ?? null;
-        const qty = Number(line.quantity ?? 1);
-        const unitPrice = Number(line.unitPrice ?? line.price ?? line.salePrice ?? 0);
+        const qty = Number(line.totalQuantity ?? line.quantity ?? 1);
+        const unitPrice = Number(line.discountedPrice ?? line.unitPrice ?? line.price ?? line.salePrice ?? 0);
 
         let stockCard: { id: number; stockQuantity: unknown; unit: string; imagePath: string | null } | null = null;
         if (barcode) stockCard = await this.prisma.stockCard.findFirst({ where: { barcode: String(barcode), status: 'ACTIVE' }, select: { id: true, stockQuantity: true, unit: true, imagePath: true } });
@@ -1682,7 +1682,7 @@ export class OrderSyncService {
             unitPrice,
             totalPrice: qty * unitPrice,
             stockCardId: stockCard?.id ?? null,
-            productImageUrl: line.imageUrl ? String(line.imageUrl) : (line.productImage ? String(line.productImage) : (stockCard?.imagePath ?? null)),
+            productImageUrl: line.image ? String(line.image).replace('{size}', '200x200') : (line.imageUrl ? String(line.imageUrl) : (line.productImage ? String(line.productImage) : (stockCard?.imagePath ?? null))),
           },
         });
       }
