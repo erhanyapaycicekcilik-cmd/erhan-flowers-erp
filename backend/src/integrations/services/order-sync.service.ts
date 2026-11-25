@@ -1524,31 +1524,73 @@ export class OrderSyncService {
 
       const existing = await this.prisma.marketplaceOrder.findUnique({
         where: { platform_externalOrderId: { platform: 'PAZARAMA', externalOrderId } },
+        include: { items: { take: 1 } },
       });
       if (existing) {
         const newStatus = String(order.status ?? '');
-        if (newStatus && existing.status !== newStatus) {
-          await this.prisma.marketplaceOrder.update({ where: { id: existing.id }, data: { status: newStatus } });
+        const needsRebuild = Number(existing.totalAmount) === 0 && existing.items.length === 0;
+        if (!needsRebuild) {
+          if (newStatus && existing.status !== newStatus) {
+            await this.prisma.marketplaceOrder.update({ where: { id: existing.id }, data: { status: newStatus } });
+          }
+          continue;
         }
-        continue;
+        await this.prisma.marketplaceOrder.delete({ where: { id: existing.id } });
       }
 
       const shipAddr = (order.shippingAddress ?? order.deliveryAddress ?? order.address ?? {}) as Record<string, unknown>;
-      await this.prisma.marketplaceOrder.create({
+      const customerName = String(
+        order.customerName ?? order.buyerName ??
+        shipAddr.fullName ?? shipAddr.name ??
+        [shipAddr.firstName, shipAddr.lastName].filter(Boolean).join(' ') ?? ''
+      );
+
+      const pazaramaLines = Array.isArray(order.items) ? order.items as Array<Record<string, unknown>>
+        : Array.isArray(order.orderLines) ? order.orderLines as Array<Record<string, unknown>>
+        : Array.isArray(order.lines) ? order.lines as Array<Record<string, unknown>>
+        : Array.isArray(order.products) ? order.products as Array<Record<string, unknown>>
+        : [];
+
+      const savedPazaramaOrder = await this.prisma.marketplaceOrder.create({
         data: {
           platform: 'PAZARAMA',
           externalOrderId,
           orderNumber: String(order.orderNumber ?? order.orderCode ?? externalOrderId),
           status: String(order.status ?? 'NEW'),
-          customerName: String(shipAddr.fullName ?? order.customerName ?? order.buyerName ?? ''),
-          totalAmount: Number(order.totalAmount ?? order.total ?? order.totalPrice ?? 0),
-          cargoAmount: 0,
+          customerName,
+          totalAmount: Number(order.totalAmount ?? order.totalPrice ?? order.total ?? order.netTotal ?? 0),
+          cargoAmount: Number(order.shippingAmount ?? order.cargoAmount ?? 0),
           currency: 'TRY',
           orderDate,
           rawPayload: order as object,
         },
       });
       newOrders++;
+
+      for (const line of pazaramaLines) {
+        const sku = line.sku ?? line.productCode ?? line.barcode ?? null;
+        const barcode = line.barcode ?? line.productCode ?? null;
+        const qty = Number(line.quantity ?? line.count ?? 1);
+        const unitPrice = Number(line.price ?? line.salePrice ?? line.unitPrice ?? 0);
+
+        let stockCard: { id: number; imagePath: string | null } | null = null;
+        if (barcode) stockCard = await this.prisma.stockCard.findFirst({ where: { barcode: String(barcode), status: 'ACTIVE' }, select: { id: true, imagePath: true } });
+        if (!stockCard && sku) stockCard = await this.prisma.stockCard.findFirst({ where: { sku: String(sku), status: 'ACTIVE' }, select: { id: true, imagePath: true } });
+
+        await this.prisma.marketplaceOrderItem.create({
+          data: {
+            orderId: savedPazaramaOrder.id,
+            productName: String(line.productName ?? line.name ?? line.title ?? 'Bilinmeyen Ürün'),
+            sku: sku ? String(sku) : null,
+            barcode: barcode ? String(barcode) : null,
+            quantity: qty,
+            unitPrice,
+            totalPrice: qty * unitPrice,
+            stockCardId: stockCard?.id ?? null,
+            productImageUrl: line.imageUrl ? String(line.imageUrl) : (line.image ? String(line.image) : (stockCard?.imagePath ?? null)),
+          },
+        });
+      }
     }
 
     await this.markMissingAsDelivered('PAZARAMA', allOrders.map((o) => String(o.id ?? o.orderId ?? o.orderNumber ?? o.orderCode ?? '')));
@@ -1697,6 +1739,13 @@ export class OrderSyncService {
   async getIdefixDebugRaw(): Promise<unknown> {
     return this.prisma.marketplaceOrder.findFirst({
       where: { platform: 'IDEFIX' },
+      select: { externalOrderId: true, totalAmount: true, rawPayload: true },
+    });
+  }
+
+  async getPazaramaDebugRaw(): Promise<unknown> {
+    return this.prisma.marketplaceOrder.findFirst({
+      where: { platform: 'PAZARAMA' },
       select: { externalOrderId: true, totalAmount: true, rawPayload: true },
     });
   }
