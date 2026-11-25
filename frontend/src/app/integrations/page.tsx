@@ -616,16 +616,28 @@ const [channels, setChannels] = useState<SalesChannel[]>([]);
                       </button>
                     )}
                     {platform === 'PAZARAMA' && (
-                      <button className="btn btn-primary" type="button" onClick={syncTrendyolToPazarama} disabled={loadingPlatform === 'SYNC_PAZARAMA'}>
-                        <Download size={16} />
-                        {loadingPlatform === 'SYNC_PAZARAMA' ? 'Aktarılıyor…' : 'Trendyol\'dan Aktar'}
-                      </button>
+                      <>
+                        <button className="btn btn-primary" type="button" onClick={syncTrendyolToPazarama} disabled={loadingPlatform === 'SYNC_PAZARAMA'}>
+                          <Download size={16} />
+                          {loadingPlatform === 'SYNC_PAZARAMA' ? 'Aktarılıyor…' : 'Trendyol\'dan Aktar'}
+                        </button>
+                        <button className="btn btn-secondary" type="button" onClick={() => sync('PAZARAMA')} disabled={!!loadingPlatform}>
+                          <RefreshCw size={16} />
+                          {loadingPlatform === 'PAZARAMA' ? 'Senkronize ediliyor…' : 'Siparişleri Senkronize Et'}
+                        </button>
+                      </>
                     )}
                     {platform === 'IDEFIX' && (
-                      <button className="btn btn-primary" type="button" onClick={syncTrendyolToIdefix} disabled={loadingPlatform === 'SYNC_IDEFIX'}>
-                        <Download size={16} />
-                        {loadingPlatform === 'SYNC_IDEFIX' ? 'Aktarılıyor…' : 'Trendyol\'dan Aktar'}
-                      </button>
+                      <>
+                        <button className="btn btn-primary" type="button" onClick={syncTrendyolToIdefix} disabled={loadingPlatform === 'SYNC_IDEFIX'}>
+                          <Download size={16} />
+                          {loadingPlatform === 'SYNC_IDEFIX' ? 'Aktarılıyor…' : 'Trendyol\'dan Aktar'}
+                        </button>
+                        <button className="btn btn-secondary" type="button" onClick={() => sync('IDEFIX')} disabled={!!loadingPlatform}>
+                          <RefreshCw size={16} />
+                          {loadingPlatform === 'IDEFIX' ? 'Senkronize ediliyor…' : 'Siparişleri Senkronize Et'}
+                        </button>
+                      </>
                     )}
                     {(platform === 'N11' || platform === 'HEPSIBURADA') && (
                       <button className="btn btn-primary" type="button" disabled={!!loadingPlatform} onClick={async () => {
