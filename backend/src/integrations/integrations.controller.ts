@@ -405,4 +405,10 @@ export class IntegrationsController {
     return { error: `Desteklenmeyen platform: ${platform}` };
   }
 
+  @Get('debug/idefix-raw')
+  @UseGuards(OwnerGuard)
+  async idefixRaw() {
+    return this.orderSync.getIdefixDebugRaw();
+  }
+
 }
