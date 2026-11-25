@@ -363,6 +363,7 @@ export class EInvoicesService {
           paymentMeans: 'OTHER',
           paymentDate: order.orderDate ?? order.createdAt,
           shippedAt: order.updatedAt,
+          paymentAgent: order.platform, // IDEFIX, TRENDYOL, N11 vb. — API zorunlu
         },
         lines,
         totalInclVat: Number(order.totalAmount),

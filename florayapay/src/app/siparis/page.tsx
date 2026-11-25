@@ -43,7 +43,7 @@ export default function SiparisPage() {
             swift: cfg.ibanSwift || '',
           })
         }
-        setTamiAktif(!!(cfg?.tamiAktif || cfg?.iyzicoAktif))
+        setTamiAktif(!!cfg?.tamiAktif)
       })
       .catch(() => {})
   }, [])
