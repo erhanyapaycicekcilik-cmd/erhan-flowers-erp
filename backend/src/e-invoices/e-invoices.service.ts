@@ -360,10 +360,9 @@ export class EInvoicesService {
           postalCode: (rawAddr?.postalCode as string | null) ?? null,
         },
         internetSale: {
-          paymentMeans: 'MEDIATOR',
+          paymentMeans: 'OTHER',
           paymentDate: order.orderDate ?? order.createdAt,
           shippedAt: order.updatedAt,
-          paymentAgent: order.platform, // IDEFIX, TRENDYOL, N11 vb. — API zorunlu
         },
         lines,
         totalInclVat: Number(order.totalAmount),
