@@ -2,6 +2,11 @@ import { NextResponse } from 'next/server'
 import { tamiEnabled } from '@/lib/tami'
 import { createHash } from 'crypto'
 
+// Her istekte çalışsın: aksi halde Next derleme anında bir kez çalıştırıp sonucu sabitliyor
+// (bilgiler sonradan girilse de test hep "eksik" diyordu)
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 const MERCHANT_ID = process.env.TAMI_MERCHANT_ID || ''
 const TERMINAL_ID = process.env.TAMI_TERMINAL_ID || ''
 const SECRET_KEY = process.env.TAMI_SECRET_KEY || ''
