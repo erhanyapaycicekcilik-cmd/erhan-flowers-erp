@@ -39,12 +39,9 @@ export class IdefixAdapter extends BaseIntegrationAdapter {
   }
 
   private apiHeaders(): Record<string, string> {
-    const apiKey = this.env('API_KEY');
-    const supplierId = this.env('SUPPLIER_ID');
-    const bearerToken = Buffer.from(`${supplierId}:${apiKey}`).toString('base64');
+    const token = Buffer.from(`${this.env('API_KEY')}:${this.env('SUPPLIER_ID')}`).toString('base64');
     return {
-      'X-API-KEY': apiKey,
-      'Authorization': `Bearer ${bearerToken}`,
+      'X-API-KEY': token,
       'Content-Type': 'application/json',
       'Accept': 'application/json',
     };
