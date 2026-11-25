@@ -65,6 +65,7 @@ export type EInvoiceDraft = {
     paymentMeans: 'CREDIT_CARD' | 'EFT' | 'ON_DELIVERY' | 'MEDIATOR' | 'OTHER';
     paymentDate: Date | null;
     shippedAt: Date;
+    paymentAgent?: string; // MEDIATOR için zorunlu: Trendyol, Idefix, N11 vb.
   } | null;
   lines: EInvoiceDraftLine[];
   totalInclVat: number;
