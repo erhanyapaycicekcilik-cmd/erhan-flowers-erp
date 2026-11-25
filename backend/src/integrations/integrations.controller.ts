@@ -396,5 +396,13 @@ export class IntegrationsController {
     return this.integrations.deleteAllProducts(p as 'N11' | 'HEPSIBURADA');
   }
 
+  @Post('orders/:platform/sync')
+  @UseGuards(OwnerGuard)
+  async syncPlatformOrders(@Param('platform') platform: string) {
+    const p = platform.toUpperCase();
+    if (p === 'IDEFIX') return this.orderSync.runIdefixSync();
+    if (p === 'PAZARAMA') return this.orderSync.runPazaramaSync();
+    return { error: `Desteklenmeyen platform: ${platform}` };
+  }
 
 }
