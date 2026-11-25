@@ -46,29 +46,42 @@ export default function ProductCostListPage() {
   const [syncing, setSyncing] = useState(false);
   const [sortBy, setSortBy] = useState<'default' | 'orders'>('orders');
   const [downloadingReport, setDownloadingReport] = useState(false);
+  const [loadState, setLoadState] = useState<'loading' | 'ok' | 'error'>('loading');
+  const [loadError, setLoadError] = useState('');
 
   useEffect(() => {
     loadProducts();
   }, []);
 
   function loadProducts() {
+    setLoadState('loading');
     api<Variant[]>('/production-costs/variants').then((data) => {
-      setVariants(data);
+      setVariants(Array.isArray(data) ? data : []);
+      setLoadState('ok');
       const completed = data.filter((v) => {
         const s = v.productCostStatus || v.costStatus || '';
         return s === 'Tamamlandı';
       }).length;
       setProgress({ total: data.length, completed });
-    }).catch(() => setVariants([]));
+    }).catch((error) => {
+      setVariants([]);
+      setLoadState('error');
+      setLoadError(error instanceof Error ? error.message : 'Ürünler yüklenemedi.');
+    });
   }
+
+  const isCompleted = (item: Variant) => (item.productCostStatus || item.costStatus || '') === 'Tamamlandı';
+  const statusCounts = {
+    'Tümü': variants.length,
+    'Tamamlandı': variants.filter(isCompleted).length,
+    'Tamamlanmadı': variants.filter((v) => !isCompleted(v)).length,
+  } as Record<string, number>;
 
   const filtered = useMemo(() => {
     const needle = query.trim().toLocaleLowerCase('tr-TR');
     const result = variants.filter((item) => {
-      const costStatus = item.productCostStatus || item.costStatus || 'Maliyet Girilmedi';
-      if (statusFilter === 'Tamamlandı') return costStatus === 'Tamamlandı';
-      if (statusFilter === 'Tamamlanmadı') return costStatus !== 'Tamamlandı';
-      const statusOk = statusFilter === 'Tümü';
+      // Durum filtresi + arama birlikte uygulanır (önceden Tamamlandı/Tamamlanmadı seçiliyken arama çalışmıyordu)
+      const statusOk = statusFilter === 'Tamamlandı' ? isCompleted(item) : statusFilter === 'Tamamlanmadı' ? !isCompleted(item) : true;
       const queryOk = !needle || [item.productName, item.barcode, item.currentModelCode, item.proposedModelCode, item.supplierStockCode]
         .filter(Boolean)
         .some((value) => String(value).toLocaleLowerCase('tr-TR').includes(needle));
@@ -265,6 +278,40 @@ export default function ProductCostListPage() {
           {message && <div className="mt-3 rounded-md bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800">{message}</div>}
         </section>
       </div>
+
+      <div className="mb-3 grid grid-cols-3 gap-2">
+        {(['Tamamlanmadı', 'Tamamlandı', 'Tümü'] as const).map((key) => (
+          <button
+            key={key}
+            onClick={() => setStatusFilter(key)}
+            className={`flex items-center justify-between gap-2 rounded-xl border-2 px-3 py-2.5 text-left text-sm font-bold transition ${
+              statusFilter === key
+                ? key === 'Tamamlandı' ? 'border-emerald-500 bg-emerald-50 text-emerald-800' : key === 'Tamamlanmadı' ? 'border-amber-500 bg-amber-50 text-amber-800' : 'border-slate-700 bg-slate-50 text-slate-800'
+                : 'border-slate-200 bg-white text-slate-600 hover:border-slate-400'
+            }`}
+          >
+            <span>{key === 'Tamamlandı' ? '✅ Tamamlandı' : key === 'Tamamlanmadı' ? '⏳ Tamamlanmadı' : 'Tümü'}</span>
+            <span className="text-base font-black">{statusCounts[key] ?? 0}</span>
+          </button>
+        ))}
+      </div>
+
+      {loadState === 'loading' && <div className="panel mb-3 p-6 text-center text-sm text-slate-500">Ürünler yükleniyor…</div>}
+      {loadState === 'error' && (
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          <span><b>Ürünler yüklenemedi:</b> {loadError}</span>
+          <button className="btn btn-secondary" onClick={loadProducts}>Tekrar dene</button>
+        </div>
+      )}
+      {loadState === 'ok' && filtered.length === 0 && (
+        <div className="panel mb-3 p-6 text-center text-sm text-slate-500">
+          {variants.length === 0
+            ? 'Listede ürün yok. Bu ekranda sadece Trendyol\'da aktif ve stoğu olan ürünler görünür — "Şimdi Senkronize Et" ile güncelleyin.'
+            : query.trim()
+              ? `"${query.trim()}" için ${statusFilter === 'Tümü' ? '' : `"${statusFilter}" içinde `}ürün bulunamadı.${statusFilter !== 'Tümü' ? ' Filtreyi "Tümü" yapıp tekrar deneyin.' : ''}`
+              : `"${statusFilter}" durumunda ürün yok.`}
+        </div>
+      )}
 
       <div className="mb-3 flex items-center justify-between gap-3 text-sm text-slate-500">
         <span>{filtered.length} ürün gösteriliyor</span>
