@@ -17,7 +17,10 @@ const nextConfig = {
         ],
       },
       {
-        source: '/(.*)',
+        // Ödeme adresleri (/api/payment/...) hariç tüm sayfalar. Aynı adlı başlıkta sonraki kural öncekini ezdiği için
+        // 3D Secure yönlendirme sayfası da bu sıkı CSP'yi alıyordu: form-action yalnız Garanti'ye izin verdiğinden
+        // Tami/banka doğrulama formu tarayıcıda engelleniyor, ödeme "yükleniyor"da kalıyordu.
+        source: '/:path((?!api/payment/).*)',
         headers: [
           // HTTPS zorunluluğu (1 yıl)
           {
