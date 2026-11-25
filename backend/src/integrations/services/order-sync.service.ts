@@ -1586,8 +1586,7 @@ export class OrderSyncService {
     }
 
     const omsBase = 'https://merchantapi.idefix.com/oms';
-    const token = Buffer.from(`${apiKey}:${supplierId}`).toString('base64');
-    const headers = { 'X-API-KEY': token, Accept: 'application/json', 'Content-Type': 'application/json' };
+    const headers = { 'X-API-KEY': apiKey, Accept: 'application/json', 'Content-Type': 'application/json' };
     const lookback = Date.now() - this.lookbackDays * 24 * 60 * 60 * 1000;
 
     const allOrders: Array<Record<string, unknown>> = [];
