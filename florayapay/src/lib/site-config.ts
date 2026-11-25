@@ -118,6 +118,19 @@ export const DEFAULT_CONFIG: SiteConfig = {
   promoCodes: [],
 }
 
+/**
+ * Kart ödeme seçenekleri her zaman sunucudaki gerçek API bilgilerinden hesaplanır.
+ * Kayıtlı site ayarındaki eski "aktif" değeri kullanılmaz: Tami bilgileri yokken
+ * sitede kart seçeneği görünüyor, müşteri ödeme yapamıyordu.
+ */
+function paymentFlags() {
+  const env = process.env
+  return {
+    tamiAktif: !!(env.TAMI_MERCHANT_ID && env.TAMI_TERMINAL_ID && env.TAMI_SECRET_KEY && env.TAMI_JWK_KID && env.TAMI_JWK_K),
+    iyzicoAktif: !!(env.IYZICO_API_KEY && env.IYZICO_SECRET_KEY),
+  }
+}
+
 export function readSiteConfig(): SiteConfig {
   // categories ve mekanlar her zaman derleme zamanındaki kaynak dosyadan gelir
   const sourceOverrides = {
@@ -127,9 +140,9 @@ export function readSiteConfig(): SiteConfig {
   try {
     const raw = readFileSync(CONFIG_PATH, 'utf-8')
     const { categories: _, mekanlar: __, ...dynamicSettings } = JSON.parse(raw) as Partial<SiteConfig>
-    return { ...DEFAULT_CONFIG, ...dynamicSettings, ...sourceOverrides }
+    return { ...DEFAULT_CONFIG, ...dynamicSettings, ...sourceOverrides, ...paymentFlags() }
   } catch {
-    return { ...DEFAULT_CONFIG, ...sourceOverrides }
+    return { ...DEFAULT_CONFIG, ...sourceOverrides, ...paymentFlags() }
   }
 }
 
