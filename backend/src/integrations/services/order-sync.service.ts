@@ -1618,13 +1618,19 @@ export class OrderSyncService {
 
       const existing = await this.prisma.marketplaceOrder.findUnique({
         where: { platform_externalOrderId: { platform: 'IDEFIX', externalOrderId } },
+        include: { items: { take: 1 } },
       });
       if (existing) {
         const newStatus = String(order.status ?? '');
-        if (newStatus && existing.status !== newStatus) {
-          await this.prisma.marketplaceOrder.update({ where: { id: existing.id }, data: { status: newStatus } });
+        const needsRebuild = existing.totalAmount === 0 && existing.items.length === 0;
+        if (!needsRebuild) {
+          if (newStatus && existing.status !== newStatus) {
+            await this.prisma.marketplaceOrder.update({ where: { id: existing.id }, data: { status: newStatus } });
+          }
+          continue;
         }
-        continue;
+        // Tutar 0 ve ürün yok → sil ve yeniden oluştur
+        await this.prisma.marketplaceOrder.delete({ where: { id: existing.id } });
       }
 
       const shipAddr = (order.shippingAddress ?? order.deliveryAddress ?? {}) as Record<string, unknown>;
@@ -1634,21 +1640,52 @@ export class OrderSyncService {
         [shipAddr.firstName, shipAddr.lastName].filter(Boolean).join(' ') ?? ''
       );
 
-      await this.prisma.marketplaceOrder.create({
+      const lines = Array.isArray(order.lines) ? order.lines as Array<Record<string, unknown>>
+        : Array.isArray(order.items) ? order.items as Array<Record<string, unknown>>
+        : Array.isArray(order.orderLines) ? order.orderLines as Array<Record<string, unknown>>
+        : Array.isArray(order.orderItems) ? order.orderItems as Array<Record<string, unknown>>
+        : [];
+
+      const savedIdefixOrder = await this.prisma.marketplaceOrder.create({
         data: {
           platform: 'IDEFIX',
           externalOrderId,
           orderNumber: String(order.orderNumber ?? externalOrderId),
           status: String(order.status ?? 'New'),
           customerName,
-          totalAmount: Number(order.totalAmount ?? order.total ?? 0),
-          cargoAmount: 0,
+          totalAmount: Number(order.grandTotal ?? order.totalAmount ?? order.totalPrice ?? order.total ?? order.netTotal ?? 0),
+          cargoAmount: Number(order.shippingAmount ?? order.cargoAmount ?? 0),
           currency: 'TRY',
           orderDate,
           rawPayload: order as object,
         },
       });
       newOrders++;
+
+      for (const line of lines) {
+        const sku = line.merchantSku ?? line.stockCode ?? line.sku ?? line.productSellerCode ?? null;
+        const barcode = line.barcode ?? null;
+        const qty = Number(line.quantity ?? 1);
+        const unitPrice = Number(line.unitPrice ?? line.price ?? line.salePrice ?? 0);
+
+        let stockCard: { id: number; stockQuantity: unknown; unit: string; imagePath: string | null } | null = null;
+        if (barcode) stockCard = await this.prisma.stockCard.findFirst({ where: { barcode: String(barcode), status: 'ACTIVE' }, select: { id: true, stockQuantity: true, unit: true, imagePath: true } });
+        if (!stockCard && sku) stockCard = await this.prisma.stockCard.findFirst({ where: { sku: String(sku), status: 'ACTIVE' }, select: { id: true, stockQuantity: true, unit: true, imagePath: true } });
+
+        await this.prisma.marketplaceOrderItem.create({
+          data: {
+            orderId: savedIdefixOrder.id,
+            productName: String(line.productName ?? line.name ?? 'Bilinmeyen Ürün'),
+            sku: sku ? String(sku) : null,
+            barcode: barcode ? String(barcode) : null,
+            quantity: qty,
+            unitPrice,
+            totalPrice: qty * unitPrice,
+            stockCardId: stockCard?.id ?? null,
+            productImageUrl: line.imageUrl ? String(line.imageUrl) : (line.productImage ? String(line.productImage) : (stockCard?.imagePath ?? null)),
+          },
+        });
+      }
     }
 
     await this.markMissingAsDelivered('IDEFIX', allOrders.map((o) => String(o.id ?? o.orderId ?? o.orderNumber ?? '')));
