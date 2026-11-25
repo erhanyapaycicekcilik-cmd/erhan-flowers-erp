@@ -39,8 +39,12 @@ export class IdefixAdapter extends BaseIntegrationAdapter {
   }
 
   private apiHeaders(): Record<string, string> {
+    const apiKey = this.env('API_KEY');
+    const supplierId = this.env('SUPPLIER_ID');
+    const bearerToken = Buffer.from(`${supplierId}:${apiKey}`).toString('base64');
     return {
-      'X-API-KEY': this.env('API_KEY'),
+      'X-API-KEY': apiKey,
+      'Authorization': `Bearer ${bearerToken}`,
       'Content-Type': 'application/json',
       'Accept': 'application/json',
     };
@@ -52,22 +56,39 @@ export class IdefixAdapter extends BaseIntegrationAdapter {
 
     try {
       const supplierId = this.env('SUPPLIER_ID');
-      const res = await fetch(`${IDEFIX_OMS_API}/${supplierId}/list-v2?pageSize=1&pageIndex=0`, {
+      // Test OMS (sipariş listesi) — farklı auth deneyerek hata metnini al
+      const omsRes = await fetch(`${IDEFIX_OMS_API}/${supplierId}/list-v2?pageSize=1&pageIndex=0`, {
         headers: this.apiHeaders(),
         signal: AbortSignal.timeout(10000),
       });
+      const omsBody = await omsRes.text().catch(() => '');
 
-      if (res.ok || res.status === 204) {
-        return { ok: true, status: 'CONNECTED', message: 'Idefix API bağlantısı başarılı.' };
+      if (omsRes.ok || omsRes.status === 204) {
+        return { ok: true, status: 'CONNECTED', message: 'Idefix OMS bağlantısı başarılı.' };
       }
-      if (res.status === 401 || res.status === 403) {
-        return { ok: false, status: 'MISSING_CREDENTIALS', message: `Idefix kimlik doğrulama başarısız. HTTP ${res.status}` };
+
+      // Test PIM (stok/fiyat) — hata mesajı karşılaştırması için
+      const pimRes = await fetch(`${IDEFIX_API}/${supplierId}/inventory-upload`, {
+        method: 'POST',
+        headers: this.apiHeaders(),
+        body: JSON.stringify([]),
+        signal: AbortSignal.timeout(10000),
+      });
+      const pimBody = await pimRes.text().catch(() => '');
+
+      if (pimRes.ok || pimRes.status === 204 || pimRes.status === 400) {
+        // 400 = boş payload hatası ama auth OK
+        return { ok: true, status: 'CONNECTED', message: 'Idefix PIM bağlantısı başarılı.' };
       }
-      if (res.status < 500) {
-        return { ok: true, status: 'CONNECTED', message: `Idefix API erişilebilir (HTTP ${res.status}).` };
+
+      const errDetail = `OMS HTTP ${omsRes.status}: ${omsBody.slice(0, 150)} | PIM HTTP ${pimRes.status}: ${pimBody.slice(0, 150)}`;
+      if (omsRes.status === 401 || omsRes.status === 403) {
+        return { ok: false, status: 'MISSING_CREDENTIALS', message: `Idefix kimlik doğrulama başarısız. ${errDetail}` };
       }
-      const body = await res.text().catch(() => '');
-      return { ok: false, status: 'FAILED', message: `Idefix sunucu hatası. HTTP ${res.status}: ${body.slice(0, 200)}` };
+      if (omsRes.status < 500) {
+        return { ok: true, status: 'CONNECTED', message: `Idefix API erişilebilir. ${errDetail}` };
+      }
+      return { ok: false, status: 'FAILED', message: `Idefix sunucu hatası. ${errDetail}` };
     } catch (err: unknown) {
       return {
         ok: false,
