@@ -211,17 +211,19 @@ export class IdefixAdapter extends BaseIntegrationAdapter {
       ''
     );
 
-    const rawItems = Array.isArray(o.items) ? o.items
+    const rawItems = Array.isArray(o.lines) ? o.lines
+      : Array.isArray(o.items) ? o.items
       : Array.isArray(o.orderLines) ? o.orderLines
+      : Array.isArray(o.orderItems) ? o.orderItems
       : [];
 
     const items = (rawItems as Record<string, unknown>[]).map((item) => ({
       externalLineId: String(item.id ?? item.lineId ?? ''),
       productName: String(item.productName ?? item.name ?? ''),
-      sku: String(item.sku ?? item.barcode ?? ''),
-      barcode: String(item.barcode ?? item.sku ?? ''),
+      sku: String(item.merchantSku ?? item.sku ?? item.stockCode ?? item.barcode ?? ''),
+      barcode: String(item.barcode ?? item.merchantSku ?? item.sku ?? ''),
       quantity: Number(item.quantity ?? 1),
-      unitPrice: Number(item.price ?? item.salePrice ?? item.unitPrice ?? 0),
+      unitPrice: Number(item.unitPrice ?? item.price ?? item.salePrice ?? 0),
     }));
 
     return {
@@ -235,8 +237,8 @@ export class IdefixAdapter extends BaseIntegrationAdapter {
       city: String(o.city ?? shipAddr.city ?? ''),
       district: String(o.district ?? shipAddr.district ?? ''),
       addressText: String(shipAddr.address ?? shipAddr.fullAddress ?? ''),
-      totalAmount: Number(o.totalAmount ?? o.total ?? 0),
-      orderDate: o.orderDate ? new Date(String(o.orderDate)) : undefined,
+      totalAmount: Number(o.grandTotal ?? o.totalAmount ?? o.totalPrice ?? o.total ?? o.netTotal ?? 0),
+      orderDate: o.orderDate ?? o.createdAt ? new Date(String(o.orderDate ?? o.createdAt)) : undefined,
       items,
     };
   }
