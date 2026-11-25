@@ -123,6 +123,7 @@ const platformFields: Record<PlatformCode, Array<{ key: string; label: string; t
   IDEFIX: [
     { key: 'SUPPLIER_ID', label: 'Satıcı ID' },
     { key: 'API_KEY', label: 'API Key', type: 'password' },
+    { key: 'API_SECRET', label: 'API Secret', type: 'password' },
   ],
   TEKLIKLE: [
     { key: 'API_KEY', label: 'API Key' },
