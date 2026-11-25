@@ -321,9 +321,19 @@ export class EInvoicesService {
       const order = await this.prisma.marketplaceOrder.findUnique({ where: { id: ref.sourceId }, include: { items: true } });
       if (!order) throw new NotFoundException('Pazaryeri siparişi bulunamadı.');
       if (['Cancelled', 'CANCELLED'].includes(order.status)) throw new BadRequestException('Sipariş iptal edilmiş; fatura kesilemez.');
-      const lines = order.items.map((i) => ({
-        name: i.productName, quantity: Number(i.quantity), unitPriceInclVat: round(Number(i.unitPrice)), vatRate: vat, totalInclVat: Number(i.totalPrice),
-      }));
+      const rawLines = order.items
+        .map((i) => ({
+          name: i.productName || `${order.platform} Ürünü`,
+          quantity: Number(i.quantity) || 1,
+          unitPriceInclVat: round(Number(i.unitPrice) || Number(i.totalPrice) / (Number(i.quantity) || 1)),
+          vatRate: vat,
+          totalInclVat: Number(i.totalPrice) || Number(i.unitPrice) * (Number(i.quantity) || 1),
+        }))
+        .filter((l) => l.totalInclVat > 0);
+      // Fallback: items fiyatsızsa order.totalAmount'tan tek satır oluştur
+      const lines = rawLines.length > 0
+        ? rawLines
+        : [{ name: `${order.platform} Siparişi #${order.orderNumber}`, quantity: 1, unitPriceInclVat: round(Number(order.totalAmount)), vatRate: vat, totalInclVat: Number(order.totalAmount) }];
       if (Number(order.cargoAmount) > 0) {
         lines.push({ name: 'Kargo Bedeli', quantity: 1, unitPriceInclVat: Number(order.cargoAmount), vatRate: vat, totalInclVat: Number(order.cargoAmount) });
       }
