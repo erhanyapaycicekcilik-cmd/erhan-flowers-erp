@@ -405,6 +405,9 @@ export class TrendyolEFaturamProvider implements EInvoiceProvider {
         ...(d.internetSale.paymentMeans === 'MEDIATOR' && d.internetSale.paymentAgent
           ? { paymentAgent: d.internetSale.paymentAgent }
           : {}),
+        ...(d.internetSale.paymentMeans === 'OTHER'
+          ? { instructionNote: 'Pazaryeri uzerinden tahsilat' }
+          : {}),
       };
       body.deliveryInfo = { carrierTaxId: s.carrierTaxId, carrierName: s.carrierName, sentAt: ymd(d.internetSale.shippedAt) };
     }
