@@ -1559,9 +1559,10 @@ export class OrderSyncService {
 
   async runIdefixSync(): Promise<{ processed: number; newOrders: number }> {
     let apiKey = process.env.IDEFIX_API_KEY ?? '';
+    let apiSecret = process.env.IDEFIX_API_SECRET ?? '';
     let supplierId = process.env.IDEFIX_SUPPLIER_ID ?? '';
 
-    if (!apiKey || !supplierId) {
+    if (!apiKey || !apiSecret || !supplierId) {
       try {
         const rows = await this.prisma.$queryRaw<Array<{ credentialType: string; encryptedValue: string }>>`
           SELECT cc.credential_type AS "credentialType", cc.encrypted_value AS "encryptedValue"
@@ -1576,17 +1577,18 @@ export class OrderSyncService {
           try { vals[row.credentialType] = this.credentialVault.decrypt(row.encryptedValue); } catch { /* skip */ }
         }
         apiKey = vals['API_KEY'] || apiKey;
+        apiSecret = vals['API_SECRET'] || apiSecret;
         supplierId = vals['SUPPLIER_ID'] || supplierId;
       } catch { /* skip */ }
     }
 
-    if (!apiKey || !supplierId) {
+    if (!apiKey || !apiSecret || !supplierId) {
       this.logger.warn('Idefix credentials bulunamadi, sync atlanıyor.');
       return { processed: 0, newOrders: 0 };
     }
 
     const omsBase = 'https://merchantapi.idefix.com/oms';
-    const token = Buffer.from(`${apiKey}:${supplierId}`).toString('base64');
+    const token = Buffer.from(`${apiKey}:${apiSecret}`).toString('base64');
     const headers = { 'X-API-KEY': token, Accept: 'application/json', 'Content-Type': 'application/json' };
     const lookback = Date.now() - this.lookbackDays * 24 * 60 * 60 * 1000;
 

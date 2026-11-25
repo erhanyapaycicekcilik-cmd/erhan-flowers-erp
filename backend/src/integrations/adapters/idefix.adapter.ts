@@ -5,7 +5,7 @@ import { AdapterConnectionResult, ExternalOrder } from './integration-adapter.in
 // Idefix Merchant API
 // Siparişler: https://merchantapi.idefix.com/oms/{vendorId}/list-v2
 // Stok/Fiyat: https://merchantapi.idefix.com/pim/catalog/{vendorId}/inventory-upload
-// Auth: X-API-KEY: base64(apiKey:supplierId)
+// Auth: X-API-KEY: base64(apiKey:apiSecret) — developer.idefix.com/authorization
 const IDEFIX_API = 'https://merchantapi.idefix.com/pim/catalog';
 const IDEFIX_OMS_API = 'https://merchantapi.idefix.com/oms';
 
@@ -34,12 +34,13 @@ export class IdefixAdapter extends BaseIntegrationAdapter {
   private missingKeys(): string[] {
     const missing: string[] = [];
     if (!this.env('API_KEY')) missing.push('IDEFIX_API_KEY');
+    if (!this.env('API_SECRET')) missing.push('IDEFIX_API_SECRET');
     if (!this.env('SUPPLIER_ID')) missing.push('IDEFIX_SUPPLIER_ID');
     return missing;
   }
 
   private apiHeaders(): Record<string, string> {
-    const token = Buffer.from(`${this.env('API_KEY')}:${this.env('SUPPLIER_ID')}`).toString('base64');
+    const token = Buffer.from(`${this.env('API_KEY')}:${this.env('API_SECRET')}`).toString('base64');
     return {
       'X-API-KEY': token,
       'Content-Type': 'application/json',

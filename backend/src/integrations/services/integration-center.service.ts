@@ -86,7 +86,7 @@ const platformCredentialFields: Record<string, string[]> = {
   // Amazon SP-API: MERCHANT_ID = Satıcı ID, API_KEY = LWA Client ID, API_SECRET = LWA Client Secret, TOKEN = Refresh Token
   AMAZON: ['MERCHANT_ID', 'API_KEY', 'API_SECRET', 'TOKEN'],
   PAZARAMA: ['API_KEY', 'API_SECRET'],
-  IDEFIX: ['SUPPLIER_ID', 'API_KEY'],
+  IDEFIX: ['SUPPLIER_ID', 'API_KEY', 'API_SECRET'],
   TEKLIKLE: ['API_KEY', 'API_SECRET'],
   TRENDRUM: ['API_KEY', 'API_SECRET'],
   // Koçtaş (Mirakl): API_KEY = Kişisel ayarlar > API anahtarı, SUPPLIER_ID = mağaza (shop) ID — isteğe bağlı
