@@ -1694,6 +1694,13 @@ export class OrderSyncService {
     return { processed: allOrders.length, newOrders };
   }
 
+  async getIdefixDebugRaw(): Promise<unknown> {
+    return this.prisma.marketplaceOrder.findFirst({
+      where: { platform: 'IDEFIX' },
+      select: { externalOrderId: true, totalAmount: true, rawPayload: true },
+    });
+  }
+
   /** Koçtaş Satış Ortağım (Mirakl): son 14 günde güncellenen siparişleri marketplace_orders'a yazar, durumları günceller */
   async runKoctasSync(): Promise<{ configured: boolean; processed: number; newOrders: number }> {
     const creds: Record<string, string> = {};
