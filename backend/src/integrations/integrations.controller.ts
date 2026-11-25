@@ -411,4 +411,10 @@ export class IntegrationsController {
     return this.orderSync.getIdefixDebugRaw();
   }
 
+  @Get('debug/pazarama-raw')
+  @UseGuards(OwnerGuard)
+  async pazaramaRaw() {
+    return this.orderSync.getPazaramaDebugRaw();
+  }
+
 }
