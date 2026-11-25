@@ -1622,7 +1622,7 @@ export class OrderSyncService {
       });
       if (existing) {
         const newStatus = String(order.status ?? '');
-        const needsRebuild = existing.totalAmount === 0 && existing.items.length === 0;
+        const needsRebuild = Number(existing.totalAmount) === 0 && existing.items.length === 0;
         if (!needsRebuild) {
           if (newStatus && existing.status !== newStatus) {
             await this.prisma.marketplaceOrder.update({ where: { id: existing.id }, data: { status: newStatus } });
