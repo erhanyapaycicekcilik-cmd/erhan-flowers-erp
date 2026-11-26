@@ -617,7 +617,7 @@ export class PublicCatalogService {
     images?: string[];
     videoUrl?: string | null;
   }) {
-    const modelCode = data.modelCode?.trim() || `URUN-${Date.now()}`;
+    const modelCode = data.modelCode?.trim() || `WEB-${Date.now()}`;
     // categoryId zorunlu — ilk kategoriyi default olarak kullan
     let defaultCategory = await this.prisma.category.findFirst({ orderBy: { id: 'asc' } });
     if (!defaultCategory) {
