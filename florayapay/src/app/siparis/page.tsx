@@ -464,18 +464,26 @@ export default function SiparisPage() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <Field label="Ad *" error={errors.ad}>
                       <input value={form.ad} onChange={(e) => set('ad', e.target.value)}
+                        onInput={(e) => set('ad', (e.target as HTMLInputElement).value)}
+                        name="given-name" autoComplete="given-name"
                         placeholder="Adınız" className={inputCls(!!errors.ad)} />
                     </Field>
                     <Field label="Soyad *" error={errors.soyad}>
                       <input value={form.soyad} onChange={(e) => set('soyad', e.target.value)}
+                        onInput={(e) => set('soyad', (e.target as HTMLInputElement).value)}
+                        name="family-name" autoComplete="family-name"
                         placeholder="Soyadınız" className={inputCls(!!errors.soyad)} />
                     </Field>
                     <Field label="Telefon *" error={errors.telefon}>
                       <input value={form.telefon} onChange={(e) => set('telefon', e.target.value)}
+                        onInput={(e) => set('telefon', (e.target as HTMLInputElement).value)}
+                        name="tel" autoComplete="tel"
                         placeholder="05XX XXX XX XX" type="tel" className={inputCls(!!errors.telefon)} />
                     </Field>
                     <Field label="E-posta *" error={errors.email}>
                       <input value={form.email} onChange={(e) => set('email', e.target.value)}
+                        onInput={(e) => set('email', (e.target as HTMLInputElement).value)}
+                        name="email" autoComplete="email"
                         placeholder="ornek@email.com" type="email" className={inputCls(!!errors.email)} />
                     </Field>
                   </div>
@@ -525,19 +533,27 @@ export default function SiparisPage() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <Field label="Şehir *" error={errors.sehir}>
                       <input value={form.sehir} onChange={(e) => set('sehir', e.target.value)}
+                        onInput={(e) => set('sehir', (e.target as HTMLInputElement).value)}
+                        name="address-level1" autoComplete="address-level1"
                         placeholder="Antalya" className={inputCls(!!errors.sehir)} />
                     </Field>
                     <Field label="İlçe">
                       <input value={form.ilce} onChange={(e) => set('ilce', e.target.value)}
+                        onInput={(e) => set('ilce', (e.target as HTMLInputElement).value)}
+                        name="address-level2" autoComplete="address-level2"
                         placeholder="Manavgat" className={inputCls(false)} />
                     </Field>
                     <Field label="Adres *" error={errors.adres} className="sm:col-span-2">
                       <textarea value={form.adres} onChange={(e) => set('adres', e.target.value)}
+                        onInput={(e) => set('adres', (e.target as HTMLTextAreaElement).value)}
+                        name="street-address" autoComplete="street-address"
                         placeholder="Mahalle, cadde, sokak, bina no, daire no"
                         rows={3} className={inputCls(!!errors.adres) + ' resize-none'} />
                     </Field>
                     <Field label="Posta Kodu">
                       <input value={form.postaKodu} onChange={(e) => set('postaKodu', e.target.value)}
+                        onInput={(e) => set('postaKodu', (e.target as HTMLInputElement).value)}
+                        name="postal-code" autoComplete="postal-code"
                         placeholder="07600" className={inputCls(false)} />
                     </Field>
                   </div>
