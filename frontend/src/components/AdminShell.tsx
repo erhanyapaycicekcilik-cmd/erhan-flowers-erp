@@ -90,6 +90,7 @@ const navGroups: { section: string; icon: LucideIcon; items: NavItem[] }[] = [
       { href: '/orders', label: 'Siparişler', icon: ShoppingCart, roles: OWNER_MANAGER },
       { href: '/staff/orders', label: 'Personel Sipariş Ekranı', icon: ShoppingCart, roles: ALL },
       { href: '/hizli-satis', label: 'Hızlı Dükkan Satışı', icon: ShoppingCart, roles: OWNER_MANAGER },
+      { href: '/fiyat-teklifi', label: 'Fiyat Teklifi', icon: ShoppingCart, roles: OWNER_MANAGER },
       // Personel menüsünde: sipariş sekmelerinden görebildikleri
       { href: '/sabah-ciktisi', label: 'Çıktı Merkezi (A5)', icon: ShoppingCart, roles: ['STAFF'] },
       { href: '/adres-ciktisi', label: 'Telefon Siparişi Gir · Adres', icon: ShoppingCart, roles: ['STAFF'] },
