@@ -88,7 +88,8 @@ export class BulkPriceService {
   }
 
   private async rows(params: BulkPriceParams): Promise<Row[]> {
-    const where: Prisma.TrendyolProductVariantWhereInput = { status: 'ACTIVE' };
+    // Sadece Erhan Flowers ürünleri — Flora mağazası etkilenmez
+    const where: Prisma.TrendyolProductVariantWhereInput = { status: 'ACTIVE', storeCode: 'ERHAN' };
     if (params.search) {
       where.OR = [
         { productName: { contains: params.search, mode: 'insensitive' } },
@@ -212,9 +213,10 @@ export class BulkPriceService {
     try {
       const v = await this.prisma.trendyolProductVariant.findUnique({
         where: { id: variantId },
-        select: { id: true, barcode: true, currentModelCode: true, productName: true, stockQuantity: true, status: true, productCostDraft: { select: { id: true } } },
+        select: { id: true, barcode: true, currentModelCode: true, productName: true, stockQuantity: true, status: true, storeCode: true, productCostDraft: { select: { id: true } } },
       });
       if (!v || v.status !== 'ACTIVE') throw new Error('ürün aktif değil');
+      if (v.storeCode !== 'ERHAN') throw new Error('Flora mağazası ürünü');
       if (isSiteOnlyModelCode(v.currentModelCode)) throw new Error('WEB- ürünü');
 
       // ERP fiyatları: sonraki yayınlar eski fiyata döndürmesin

@@ -25,11 +25,13 @@ type CreatedItem = { size: number; modelCode: string; productName: string; barco
 
 type SendResult = { id: number; platform: string; ok: boolean; errorMessage?: string | null };
 
+// Kopyalar kaynak ürünün mağazasında açılır ve o mağazanın hesaplarına gider
+// (Erhan ürünü → Erhan hesapları, Flora ürünü (FL-) → Flora hesapları).
 const PLATFORMS = [
-  { key: 'TRENDYOL', label: 'Trendyol (Erhan)' },
-  { key: 'TRENDYOL_FLORA', label: 'Trendyol (Flora)' },
+  { key: 'TRENDYOL', label: 'Trendyol' },
   { key: 'N11', label: 'N11' },
   { key: 'HEPSIBURADA', label: 'Hepsiburada' },
+  { key: 'TRENDRUM', label: 'Trendrum (sadece Flora)' },
 ];
 
 const money = (value: number) => `${Number(value || 0).toLocaleString('tr-TR', { maximumFractionDigits: 2 })} TL`;
@@ -44,7 +46,7 @@ export default function SizeSeriesPage() {
     nameFrom: 'Antrasit Saksıda',
     nameTo: 'Siyah Mat Saksıda',
   });
-  const [platforms, setPlatforms] = useState<string[]>(PLATFORMS.map((item) => item.key));
+  const [platforms, setPlatforms] = useState<string[]>(['TRENDYOL', 'N11', 'HEPSIBURADA']);
   const [preview, setPreview] = useState<Preview | null>(null);
   const [created, setCreated] = useState<CreatedItem[]>([]);
   const [sendResults, setSendResults] = useState<SendResult[]>([]);
@@ -98,7 +100,7 @@ export default function SizeSeriesPage() {
     }
   }
 
-  const labelOf = (key: string) => PLATFORMS.find((item) => item.key === key)?.label ?? key;
+  const labelOf = (key: string) => (key === 'TRENDYOL_FLORA' ? 'Trendyol (Flora)' : PLATFORMS.find((item) => item.key === key)?.label ?? key);
 
   return (
     <AdminShell title="Boy Serisi Oluştur">

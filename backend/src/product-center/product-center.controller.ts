@@ -13,8 +13,8 @@ export class ProductCenterController {
   constructor(private readonly productCenter: ProductCenterService) {}
 
   @Get('entries')
-  entries(@Query('search') search?: string) {
-    return this.productCenter.listEntries(search);
+  entries(@Query('search') search?: string, @Query('store') store?: string) {
+    return this.productCenter.listEntries(search, store);
   }
 
   @Get('entries/:id')
@@ -97,8 +97,8 @@ export class ProductCenterController {
   @Post('entries/:id/trendyol-publish')
   @UseGuards(OwnerGuard)
   trendyolPublish(@Param('id') id: string, @Body() body: unknown) {
-    const { companyCode = 'ERHAN', ...rest } = (body ?? {}) as Record<string, unknown>;
-    return this.productCenter.trendyolPublish(Number(id), rest, String(companyCode));
+    const { companyCode = '', ...rest } = (body ?? {}) as Record<string, unknown>;
+    return this.productCenter.trendyolPublish(Number(id), rest, String(companyCode ?? ''));
   }
 
   @Get('trendyol-batch/:batchId')

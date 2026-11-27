@@ -84,6 +84,12 @@ export class OrderSyncService {
     try { await this.runFloraN11Sync(); } catch (err) {
       this.logger.error('FLORA N11 sync hatasi', err instanceof Error ? err.message : String(err));
     }
+    try { await this.runFloraHepsiburadaSync(); } catch (err) {
+      this.logger.error('FLORA Hepsiburada sync hatasi', err instanceof Error ? err.message : String(err));
+    }
+    try { await this.runFloraTrendrumSync(); } catch (err) {
+      this.logger.error('FLORA Trendrum sync hatasi', err instanceof Error ? err.message : String(err));
+    }
     try { await this.runTrendrumSync(); } catch (err) {
       this.logger.error('Trendrum sync hatasi', err instanceof Error ? err.message : String(err));
     }
@@ -759,9 +765,26 @@ export class OrderSyncService {
     return { processed: allOrders.length, newOrders, stockDeductions };
   }
 
-  private async markMissingAsDelivered(platform: string, fetchedIds: string[], forceCleanup = false): Promise<void> {
+  // store: ERHAN = FLORA_ önekli siparişlere dokunmaz; FLORA = sadece FLORA_ önekli marketplace_orders
+  // (fetchedIds ham platform id'leridir; FLORA'da önek burada eklenir)
+  private async markMissingAsDelivered(platform: string, fetchedIds: string[], forceCleanup = false, store: 'ERHAN' | 'FLORA' = 'ERHAN'): Promise<void> {
     // fetchedIds boşsa ve API başarılı değilse temizleme yapma (API hatası olabilir)
     if (fetchedIds.length === 0 && !forceCleanup) return;
+    if (store === 'FLORA') {
+      const floraIds = new Set(fetchedIds.map((id) => `FLORA_${id}`));
+      const stale = await this.prisma.$queryRaw<Array<{ id: number; external_order_id: string }>>`
+        SELECT id, external_order_id FROM marketplace_orders
+        WHERE platform = ${platform}
+          AND external_order_id LIKE 'FLORA\\_%'
+          AND status NOT IN ('Delivered', 'DELIVERED', 'Cancelled', 'CANCELLED', 'Returned', 'RETURNED')
+          AND created_at < NOW() - INTERVAL '2 days'
+      `;
+      for (const order of stale) {
+        if (floraIds.has(order.external_order_id)) continue;
+        await this.prisma.$executeRaw`UPDATE marketplace_orders SET status = 'Delivered', updated_at = NOW() WHERE id = ${order.id}`;
+      }
+      return;
+    }
     // retail_sales: OUT_FOR_DELIVERY → DELIVERED
     const transitSales = await this.prisma.$queryRaw<Array<{ id: number; external_order_id: string }>>`
       SELECT id, external_order_id FROM retail_sales
@@ -802,6 +825,7 @@ export class OrderSyncService {
       WHERE platform = ${platform}
         AND status NOT IN ('Delivered', 'DELIVERED', 'Cancelled', 'CANCELLED', 'Returned', 'RETURNED')
         AND external_order_id IS NOT NULL
+        AND external_order_id NOT LIKE 'FLORA\\_%'
         AND created_at < NOW() - INTERVAL '2 days'
     `;
     for (const order of staleOrders) {
@@ -1108,7 +1132,7 @@ export class OrderSyncService {
     return Number.isNaN(parsed.getTime()) ? null : parsed;
   }
 
-  private async loadFloraCredentials(platform: 'TRENDYOL' | 'N11'): Promise<Record<string, string> | null> {
+  private async loadFloraCredentials(platform: 'TRENDYOL' | 'N11' | 'HEPSIBURADA' | 'TRENDRUM'): Promise<Record<string, string> | null> {
     const rows = await this.prisma.$queryRaw<Array<{ credentialType: string; encryptedValue: string; externalAccountId: string | null }>>`
       SELECT cc.credential_type AS "credentialType", cc.encrypted_value AS "encryptedValue",
              ca.external_account_id AS "externalAccountId"
@@ -1127,6 +1151,7 @@ export class OrderSyncService {
         if (row.credentialType === 'API_KEY') creds.API_KEY = val;
         if (row.credentialType === 'API_SECRET') creds.API_SECRET = val;
         if (row.credentialType === 'SUPPLIER_ID') creds.SUPPLIER_ID = val;
+        if (!creds[row.credentialType]) creds[row.credentialType] = val;
       } catch { /* skip */ }
     }
     if (!creds.SUPPLIER_ID && rows[0]?.externalAccountId) creds.SUPPLIER_ID = rows[0].externalAccountId;
@@ -1173,7 +1198,13 @@ export class OrderSyncService {
       const existing = await this.prisma.marketplaceOrder.findUnique({
         where: { platform_externalOrderId: { platform: 'TRENDYOL', externalOrderId: `FLORA_${externalOrderId}` } },
       });
-      if (existing) continue;
+      if (existing) {
+        const newStatus = this.text(order.status);
+        if (newStatus && existing.status !== newStatus) {
+          await this.prisma.marketplaceOrder.update({ where: { id: existing.id }, data: { status: newStatus } });
+        }
+        continue;
+      }
 
       const shipmentAddress = (order.shipmentAddress ?? {}) as Record<string, unknown>;
       const invoiceAddress = (order.invoiceAddress ?? {}) as Record<string, unknown>;
@@ -1313,7 +1344,13 @@ export class OrderSyncService {
       const existing = await this.prisma.marketplaceOrder.findUnique({
         where: { platform_externalOrderId: { platform: 'N11', externalOrderId: `FLORA_${externalOrderId}` } },
       });
-      if (existing) continue;
+      if (existing) {
+        const newStatus = String(order.shipmentPackageStatus ?? order.status ?? '');
+        if (newStatus && existing.status !== newStatus) {
+          await this.prisma.marketplaceOrder.update({ where: { id: existing.id }, data: { status: newStatus } });
+        }
+        continue;
+      }
 
       await this.prisma.marketplaceOrder.create({
         data: {
@@ -1335,6 +1372,171 @@ export class OrderSyncService {
 
     this.logger.log(`FLORA N11 sync tamamlandi: ${newOrders} yeni siparis.`);
     return { processed: allOrders.length, newOrders };
+  }
+
+  // ── Flora Yapay Çiçek: Hepsiburada siparişleri ─────────────────────────
+  // Flora'nın kendi HB hesabı (Entegrasyon → Flora → Hepsiburada). Kayıt: marketplace_orders,
+  // external_order_id = FLORA_<id> (Erhan siparişleriyle karışmaz). Erhan .env bilgisine DÜŞMEZ.
+  async runFloraHepsiburadaSync(): Promise<{ processed: number; newOrders: number }> {
+    const creds = await this.loadFloraCredentials('HEPSIBURADA');
+    const merchantId = creds?.MERCHANT_ID || creds?.SUPPLIER_ID || '';
+    const username = creds?.USERNAME || creds?.API_KEY || merchantId;
+    const password = creds?.PASSWORD || creds?.API_SECRET || '';
+    if (!creds || !merchantId || !password) return { processed: 0, newOrders: 0 };
+
+    const apiBase = (process.env.HEPSIBURADA_API_URL ?? 'https://oms-external.hepsiburada.com').replace(/\/+$/, '');
+    const auth = Buffer.from(`${username}:${password}`).toString('base64');
+    const headers = { Accept: 'application/json', Authorization: `Basic ${auth}`, 'User-Agent': creds.USER_AGENT || 'FloraYapayCicekERP-HB' };
+    const lookback = Date.now() - this.lookbackDays * 24 * 60 * 60 * 1000;
+
+    const allOrders: Array<Record<string, unknown>> = [];
+    let offset = 0;
+    let hbOk = false;
+    while (offset < 500) {
+      const url = new URL(`/orders/merchantid/${encodeURIComponent(merchantId)}/openorders`, apiBase);
+      url.searchParams.set('offset', String(offset));
+      url.searchParams.set('limit', '50');
+      const res = await fetch(url.toString(), { method: 'GET', headers });
+      if (!res.ok) { this.logger.warn(`FLORA Hepsiburada openorders API hatasi: HTTP ${res.status}`); break; }
+      hbOk = true;
+      const data = await res.json() as { data?: Array<Record<string, unknown>>; items?: Array<Record<string, unknown>> };
+      const items = data.data ?? data.items ?? [];
+      if (!Array.isArray(items) || items.length === 0) break;
+      allOrders.push(...items);
+      if (items.length < 50) break;
+      offset += 50;
+    }
+
+    let newOrders = 0;
+    for (const order of allOrders) {
+      const id = String(order.id ?? order.orderNumber ?? '');
+      if (!id) continue;
+      const rawDate = order.orderDate ?? order.createdAt;
+      const orderDate = rawDate ? new Date(String(rawDate)) : null;
+      if (orderDate && orderDate.getTime() < lookback) continue;
+      const externalOrderId = `FLORA_${id}`;
+      const status = String(order.status ?? 'Created');
+
+      const existing = await this.prisma.marketplaceOrder.findUnique({
+        where: { platform_externalOrderId: { platform: 'HEPSIBURADA', externalOrderId } },
+      });
+      if (existing) {
+        if (status && existing.status !== status) await this.prisma.marketplaceOrder.update({ where: { id: existing.id }, data: { status } });
+        continue;
+      }
+
+      const lines = Array.isArray(order.lines) ? order.lines as Array<Record<string, unknown>>
+        : Array.isArray(order.orderlines) ? order.orderlines as Array<Record<string, unknown>> : [];
+      const saved = await this.prisma.marketplaceOrder.create({
+        data: {
+          platform: 'HEPSIBURADA',
+          externalOrderId,
+          orderNumber: String(order.orderNumber ?? id),
+          status,
+          customerName: String((order.shippingAddress as Record<string, unknown>)?.fullName ?? order.buyerName ?? ''),
+          totalAmount: Number(order.totalPrice ?? order.amount ?? 0),
+          cargoAmount: Number(order.cargoPrice ?? order.shippingAmount ?? 0),
+          currency: 'TRY',
+          orderDate,
+          rawPayload: { ...order as object, _company: 'FLORA' },
+          stockDeducted: true,
+        },
+      });
+      newOrders++;
+      for (const line of lines) {
+        const qty = Number(line.quantity ?? 1);
+        const unitPrice = Number(line.price ?? line.salePrice ?? 0);
+        const barcode = line.barcode ? String(line.barcode) : null;
+        await this.prisma.marketplaceOrderItem.create({
+          data: {
+            orderId: saved.id,
+            productName: String(line.productName ?? line.name ?? 'Bilinmeyen Urun'),
+            sku: line.merchantSku ? String(line.merchantSku) : null,
+            barcode,
+            quantity: qty,
+            unitPrice,
+            totalPrice: qty * unitPrice,
+            productImageUrl: line.imageUrl ? String(line.imageUrl) : line.productImageUrl ? String(line.productImageUrl) : null,
+          },
+        });
+        // Flora ürününün kendi stoğu (Erhan stok kartlarına dokunmaz)
+        if (barcode) await this.deductFloraProductStock(barcode, qty, `FLORA_HB_ORDER_${saved.id}`, `Flora Hepsiburada siparis: ${saved.orderNumber}`);
+      }
+    }
+    if (hbOk) {
+      const ids = Array.from(new Set(allOrders.flatMap((o) => [o.id, o.orderNumber].map((v) => String(v ?? '')).filter(Boolean))));
+      await this.markMissingAsDelivered('HEPSIBURADA', ids, true, 'FLORA');
+    }
+    if (allOrders.length || newOrders) this.logger.log(`FLORA Hepsiburada: ${allOrders.length} siparis, ${newOrders} yeni.`);
+    return { processed: allOrders.length, newOrders };
+  }
+
+  // ── Flora Yapay Çiçek: Trendrum siparişleri ────────────────────────────
+  async runFloraTrendrumSync(): Promise<{ processed: number; newOrders: number }> {
+    const creds = await this.loadFloraCredentials('TRENDRUM');
+    if (!creds?.API_KEY || !creds?.API_SECRET) return { processed: 0, newOrders: 0 };
+
+    const apiBase = (process.env.TRENDRUM_API_URL ?? 'https://api.trendruum.com/api/v1/integration').replace(/\/+$/, '');
+    const auth = Buffer.from(`${creds.API_KEY}:${creds.API_SECRET}`).toString('base64');
+    const headers = { Accept: 'application/json', Authorization: `Basic ${auth}`, 'Content-Type': 'application/json' };
+    const lookback = Date.now() - this.lookbackDays * 24 * 60 * 60 * 1000;
+
+    const allOrders: Array<Record<string, unknown>> = [];
+    let page = 0;
+    while (page < 10) {
+      const res = await fetch(`${apiBase}/orders?status=OPEN&page=${page}&size=50`, { headers }).catch(() => null);
+      if (!res || !res.ok) break;
+      const data = await res.json() as { content?: Array<Record<string, unknown>>; orders?: Array<Record<string, unknown>> };
+      const items = data.content ?? data.orders ?? [];
+      if (!Array.isArray(items) || items.length === 0) break;
+      allOrders.push(...items);
+      if (items.length < 50) break;
+      page++;
+    }
+
+    let newOrders = 0;
+    for (const order of allOrders) {
+      const id = String(order.id ?? order.orderId ?? order.orderNumber ?? '');
+      if (!id) continue;
+      const rawDate = order.orderDate ?? order.createdAt;
+      const orderDate = rawDate ? new Date(String(rawDate)) : null;
+      if (orderDate && orderDate.getTime() < lookback) continue;
+      const externalOrderId = `FLORA_${id}`;
+      const status = String(order.status ?? 'NEW');
+      const existing = await this.prisma.marketplaceOrder.findUnique({
+        where: { platform_externalOrderId: { platform: 'TRENDRUM', externalOrderId } },
+      });
+      if (existing) {
+        if (status && existing.status !== status) await this.prisma.marketplaceOrder.update({ where: { id: existing.id }, data: { status } });
+        continue;
+      }
+      await this.prisma.marketplaceOrder.create({
+        data: {
+          platform: 'TRENDRUM',
+          externalOrderId,
+          orderNumber: String(order.orderNumber ?? id),
+          status,
+          customerName: String((order.shippingAddress as Record<string, unknown>)?.fullName ?? order.customerName ?? ''),
+          totalAmount: Number(order.totalAmount ?? order.total ?? 0),
+          cargoAmount: 0,
+          currency: 'TRY',
+          orderDate,
+          rawPayload: { ...order as object, _company: 'FLORA' },
+          stockDeducted: true,
+        },
+      });
+      newOrders++;
+    }
+    await this.markMissingAsDelivered('TRENDRUM', allOrders.map((o) => String(o.id ?? o.orderId ?? o.orderNumber ?? '')), false, 'FLORA');
+    if (allOrders.length || newOrders) this.logger.log(`FLORA Trendrum: ${allOrders.length} siparis, ${newOrders} yeni.`);
+    return { processed: allOrders.length, newOrders };
+  }
+
+  // Flora siparişi sadece Flora mağazasının ürün stoğunu düşer
+  private async deductFloraProductStock(barcode: string, qty: number, orderPrefix: string, note: string): Promise<void> {
+    const product = await this.prisma.product.findFirst({ where: { barcode, storeCode: 'FLORA' }, select: { id: true } });
+    if (!product) return;
+    await this.deductProductStock(barcode, qty, orderPrefix, note);
   }
 
   async runTrendrumSync(): Promise<{ processed: number; newOrders: number }> {

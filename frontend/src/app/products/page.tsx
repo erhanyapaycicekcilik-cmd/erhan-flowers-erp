@@ -36,7 +36,22 @@ type Entry = {
   totalCost: number;
   seoApprovalStatus: string;
   status: 'ACTIVE' | 'PASSIVE';
+  storeCode?: StoreCode;
 };
+
+// Mağazalar birbirinden bağımsız: ürün ya Erhan Flowers'a ya Flora Yapay Çiçek'e aittir.
+type StoreCode = 'ERHAN' | 'FLORA';
+const STORES: Array<{ code: StoreCode; label: string; brand: string }> = [
+  { code: 'ERHAN', label: 'Erhan Flowers', brand: 'Erhan Flowers' },
+  { code: 'FLORA', label: 'Flora Yapay Çiçek', brand: 'Flora Yapay Çiçek' },
+];
+const storeLabel = (code?: string) => STORES.find((s) => s.code === code)?.label ?? 'Erhan Flowers';
+// Mağazaya göre ürün gönderilebilen pazaryerleri
+const STORE_QUICK_PLATFORMS: Record<StoreCode, Array<{ value: string; label: string }>> = {
+  ERHAN: [{ value: 'TRENDYOL', label: 'Trendyol' }, { value: 'N11', label: 'N11' }, { value: 'HEPSIBURADA', label: 'Hepsiburada' }],
+  FLORA: [{ value: 'TRENDYOL', label: 'Trendyol' }, { value: 'HEPSIBURADA', label: 'Hepsiburada' }, { value: 'N11', label: 'N11' }, { value: 'TRENDRUM', label: 'Trendrum' }],
+};
+const FLORA_FULL_CHANNELS = ['TRENDYOL', 'HEPSIBURADA', 'N11', 'TRENDRUM'];
 
 type Family = {
   id: number;
@@ -175,6 +190,7 @@ type QuickForm = {
   initialStockQuantity: number;
   mainImageUrl: string;
   platforms: string[];
+  storeCode: StoreCode;
 };
 
 type QuickResult = {
@@ -230,6 +246,7 @@ type CompositeBuilder = {
 type CompositeProductKind = 'TREE' | 'PLANT' | 'BAMBOO';
 
 const emptyForm = {
+  storeCode: 'ERHAN' as StoreCode,
   variantId: '',
   productId: '',
   productName: '',
@@ -277,7 +294,8 @@ const emptyQuickForm: QuickForm = {
   sitePrice: 0,
   initialStockQuantity: 0,
   mainImageUrl: '',
-  platforms: ['TRENDYOL', 'TRENDYOL_FLORA'],
+  platforms: ['TRENDYOL'],
+  storeCode: 'ERHAN',
 };
 
 const emptyPriceResearch: PriceResearch = {
@@ -411,6 +429,8 @@ export default function ProductsPage() {
   const [sendResults, setSendResults] = useState<Array<{ platform: string; rawPlatform: string; ok: boolean; message: string; batchId: string | null }>>([]);
   const [sendingChannels, setSendingChannels] = useState(false);
   const [quickForm, setQuickForm] = useState(emptyQuickForm);
+  // Seçili mağaza: liste, yeni ürün ve gönderim kanalları buna göre
+  const [activeStore, setActiveStore] = useState<StoreCode>('ERHAN');
   const [quickResult, setQuickResult] = useState<QuickResult | null>(null);
   const [quickSaving, setQuickSaving] = useState(false);
   const [quickKeepCategory, setQuickKeepCategory] = useState(true);
@@ -443,6 +463,28 @@ export default function ProductsPage() {
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [missingPanelOpen, setMissingPanelOpen] = useState(false);
   const costSectionRef = useRef<HTMLDivElement | null>(null);
+
+  function newFormFor(store: StoreCode) {
+    return { ...emptyForm, storeCode: store, brand: STORES.find((s) => s.code === store)!.brand };
+  }
+
+  function switchStore(store: StoreCode) {
+    setActiveStore(store);
+    try { window.localStorage.setItem('productCenterStore', store); } catch { /* yok say */ }
+    setQuickForm((current) => ({ ...current, storeCode: store, platforms: ['TRENDYOL'] }));
+    setQuickResult(null);
+    // Diğer mağazanın ürünü açıksa formu o mağaza için boşalt
+    setForm((current) => (current.variantId && current.storeCode !== store ? newFormFor(store) : { ...current, storeCode: store, brand: current.variantId ? current.brand : STORES.find((s) => s.code === store)!.brand }));
+    setSelectedChannels(store === 'FLORA' ? [...FLORA_FULL_CHANNELS] : ['SHOP', 'SITE', 'TRENDYOL', 'HEPSIBURADA', 'N11', 'TRENDRUM', 'PAZARAMA']);
+  }
+
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem('productCenterStore');
+      if (saved === 'FLORA') switchStore('FLORA');
+    } catch { /* yok say */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function load() {
     const [entryData, categoryData, shopCategoryData, familyData, mediaData, stockCardData, defaultExpenseData, userData, imageStatusData] = await Promise.all([
@@ -650,12 +692,12 @@ export default function ProductsPage() {
   }, [query]);
   const visibleEntries = useMemo(() => {
     const needle = query.trim().toLocaleLowerCase('tr-TR');
-    let base = showPassiveEntries ? entries : entries.filter((entry) => entry.status !== 'PASSIVE');
+    let base = (showPassiveEntries ? entries : entries.filter((entry) => entry.status !== 'PASSIVE')).filter((entry) => (entry.storeCode ?? 'ERHAN') === activeStore);
     if (entryFilter === 'done') base = base.filter((e) => e.costStatus === 'Tamamlandı');
     if (entryFilter === 'missing') base = base.filter((e) => e.costStatus !== 'Tamamlandı');
     if (needle) base = base.filter((entry) => [entry.productName, entry.barcode, entry.modelCode, entry.familyName, entry.categoryName].filter(Boolean).join(' ').toLocaleLowerCase('tr-TR').includes(needle));
     return [...base].sort((a, b) => b.variantId - a.variantId);
-  }, [entries, query, showPassiveEntries, entryFilter]);
+  }, [entries, query, showPassiveEntries, entryFilter, activeStore]);
   const copySources = useMemo(() => entries.filter((entry) => entry.variantId !== Number(form.variantId) && entry.costStatus !== 'Maliyet Girilmedi'), [entries, form.variantId]);
   const activeDraft = costDetail?.costDraft ?? defaultCostDraft(Number(form.salePrice), Number(form.commissionPercent));
   const currentCostStatus = costDetail?.hasSavedCostDraft
@@ -961,6 +1003,7 @@ export default function ProductsPage() {
       shopPrice: quickKeepPrices ? current.shopPrice : 0,
       sitePrice: quickKeepPrices ? current.sitePrice : 0,
       platforms: current.platforms,
+      storeCode: current.storeCode,
     }));
     setQuickResult(null);
   }
@@ -1002,8 +1045,14 @@ export default function ProductsPage() {
 
   function editEntry(entry: Entry) {
     setSalePriceManual(Number(entry.salePrice || 0) > 0);
+    const entryStore: StoreCode = entry.storeCode === 'FLORA' ? 'FLORA' : 'ERHAN';
+    if (entryStore !== activeStore) {
+      setActiveStore(entryStore);
+      setSelectedChannels(entryStore === 'FLORA' ? [...FLORA_FULL_CHANNELS] : ['SHOP', 'SITE', 'TRENDYOL', 'HEPSIBURADA', 'N11', 'TRENDRUM', 'PAZARAMA']);
+    }
     setForm({
       ...emptyForm,
+      storeCode: entryStore,
       variantId: String(entry.variantId),
       productId: entry.productId ? String(entry.productId) : '',
       productName: entry.productName,
@@ -1016,7 +1065,7 @@ export default function ProductsPage() {
       sizeOptionId: entry.sizeOptionId ? String(entry.sizeOptionId) : '',
       potOptionId: entry.potOptionId ? String(entry.potOptionId) : '',
       templateId: entry.templateId ? String(entry.templateId) : '',
-      brand: entry.brand || 'Erhan Flowers',
+      brand: entry.brand || STORES.find((st) => st.code === entryStore)!.brand,
       channelCategoryName: entry.channelCategoryName || '',
       colorVariant: entry.colorVariant || '',
       description: entry.description || '',
@@ -1361,7 +1410,7 @@ export default function ProductsPage() {
     await api<{ ok: boolean }>(`/product-center/entries/${entry.variantId}/passive`, { method: 'POST' });
     setEntries((current) => current.map((item) => item.variantId === entry.variantId ? { ...item, status: 'PASSIVE' } : item));
     if (form.variantId === String(entry.variantId)) {
-      setForm(emptyForm); setSalePriceManual(false);
+      setForm(newFormFor(activeStore)); setSalePriceManual(false);
       setCostDetail(null);
       setStep(0);
     }
@@ -1759,6 +1808,7 @@ export default function ProductsPage() {
       ? autoDesc + '\n\nNot: Ürün saksısız gönderilmektedir.'
       : autoDesc;
     setProductTrendyolEntry(entry);
+    setProductTrendyolCompany(entry.storeCode === 'FLORA' ? 'FLORA' : 'ERHAN');
     setProductTrendyolResult(null);
     setProductTrendyolForm({
       categoryId: '',
@@ -2143,6 +2193,30 @@ export default function ProductsPage() {
           <button className="ml-3 text-purple-500 hover:underline" onClick={() => setBroadcastImagesResult(null)}>×</button>
         </div>
       )}
+      {/* Mağaza seçimi — Erhan Flowers ve Flora Yapay Çiçek ürünleri birbirinden bağımsız */}
+      <div className={`mb-4 rounded-md border-2 p-3 ${activeStore === 'FLORA' ? 'border-pink-300 bg-pink-50' : 'border-emerald-300 bg-emerald-50'}`}>
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="text-sm font-black text-slate-700">Mağaza:</span>
+          {STORES.map((store) => (
+            <button
+              key={store.code}
+              type="button"
+              onClick={() => switchStore(store.code)}
+              className={`rounded-md border-2 px-4 py-2 text-sm font-black transition ${activeStore === store.code
+                ? store.code === 'FLORA' ? 'border-pink-600 bg-pink-600 text-white' : 'border-emerald-700 bg-emerald-700 text-white'
+                : 'border-line bg-white text-slate-600 hover:border-slate-400'}`}
+            >
+              {store.label}
+              <span className="ml-2 rounded bg-white/20 px-1.5 text-xs">{entries.filter((e) => (e.storeCode ?? 'ERHAN') === store.code && e.status !== 'PASSIVE').length}</span>
+            </button>
+          ))}
+          <span className="text-xs font-semibold text-slate-600">
+            {activeStore === 'FLORA'
+              ? 'Flora ürünleri: model kodu FL- ile başlar, sadece Flora\'nın Trendyol / Hepsiburada / N11 / Trendrum hesaplarına gider. Erhan sitesinde ve Erhan hesaplarında görünmez.'
+              : 'Erhan Flowers ürünleri: Erhan\'ın pazaryeri hesaplarına ve erhanflowers.com sitesine gider. Flora\'ya gönderilmez.'}
+          </span>
+        </div>
+      </div>
       {message && <div className="mb-4 rounded-md bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800">{message}</div>}
 
       <div className="mb-4 flex flex-wrap gap-2 rounded-md border border-line bg-white p-3">
@@ -2156,7 +2230,7 @@ export default function ProductsPage() {
       <section className={quickFormOpen ? 'mb-6 rounded-md border border-emerald-200 bg-emerald-50 p-4' : 'hidden'}>
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 className="text-lg font-black">Hızlı Yeni Ürün Kaydı</h2>
+            <h2 className="text-lg font-black">Hızlı Yeni Ürün Kaydı — {storeLabel(quickForm.storeCode)}</h2>
             <p className="text-sm text-slate-500">Model kodu, stok kodu ve barkod kayıtta otomatik oluşur.</p>
           </div>
           <div className="flex flex-wrap gap-2 text-xs font-semibold text-slate-600">
@@ -2184,7 +2258,8 @@ export default function ProductsPage() {
           <div className="lg:col-span-4">
             <div className="mb-3 flex flex-wrap items-center gap-3">
               <span className="text-sm font-semibold text-slate-600">Kanallara gönder:</span>
-              {[{ value: 'TRENDYOL', label: 'Trendyol (Erhan Flowers)' }, { value: 'TRENDYOL_FLORA', label: 'Trendyol (Flora)' }, { value: 'N11', label: 'N11' }, { value: 'HEPSIBURADA', label: 'Hepsiburada' }].map((p) => (
+              <span className={`rounded-md px-2 py-1 text-xs font-black ${quickForm.storeCode === 'FLORA' ? 'bg-pink-100 text-pink-700' : 'bg-emerald-100 text-emerald-700'}`}>{storeLabel(quickForm.storeCode)} hesapları</span>
+              {STORE_QUICK_PLATFORMS[quickForm.storeCode].map((p) => (
                 <label key={p.value} className="flex cursor-pointer items-center gap-1.5 rounded-md border border-line bg-white px-3 py-1.5 text-sm font-semibold">
                   <input type="checkbox" checked={quickForm.platforms.includes(p.value)} onChange={() => toggleQuickPlatform(p.value)} />
                   {p.label}
@@ -2301,7 +2376,7 @@ export default function ProductsPage() {
             <Boxes size={15} />
             {productListOpen ? 'Ürün listesini kapat' : 'Ürün listesini aç'}
           </button>
-          <button type="button" className="btn btn-secondary min-h-9 px-3 text-xs" onClick={() => { setForm(emptyForm); setSalePriceManual(false); setCostDetail(null); setStep(0); }}>
+          <button type="button" className="btn btn-secondary min-h-9 px-3 text-xs" onClick={() => { setForm(newFormFor(activeStore)); setSalePriceManual(false); setCostDetail(null); setStep(0); }}>
             <PackagePlus size={15} />
             Yeni ürün
           </button>
@@ -2421,6 +2496,7 @@ export default function ProductsPage() {
                   <div className="min-w-0 flex-1">
                     <div className="line-clamp-2 font-bold">{entry.productName}</div>
                     <div className="mt-1 text-xs text-slate-500">{entry.barcode} / {entry.modelCode || '-'}</div>
+                    {entry.storeCode === 'FLORA' && <span className="mt-1 inline-block rounded bg-pink-100 px-2 py-0.5 text-[11px] font-black text-pink-700">Flora Yapay Çiçek</span>}
                     <div className="mt-2 flex flex-wrap gap-1 text-xs">
                       <span className="rounded bg-emerald-50 px-2 py-1 text-emerald-700">{money(entry.salePrice)}</span>
                       {entry.costStatus && entry.costStatus !== 'Maliyet Girilmedi' && (
@@ -2936,7 +3012,7 @@ export default function ProductsPage() {
                   {identityGenerating && <div className="mt-2 flex items-center gap-2 text-xs font-semibold text-slate-500"><RefreshCw size={14} /> Barkod, model kodu ve stok kodu hazırlanıyor.</div>}
                 </div>
                 <div className="grid gap-2 md:grid-cols-4">
-                  {channels.map((channel) => (
+                  {(form.storeCode === 'FLORA' ? FLORA_FULL_CHANNELS : (channels as readonly string[])).map((channel) => (
                     <label key={channel} className="flex items-center gap-2 rounded-md border border-line px-3 py-2 text-sm font-semibold">
                       <input type="checkbox" checked={selectedChannels.includes(channel)} onChange={(event) => setSelectedChannels((current) => event.target.checked ? [...current, channel] : current.filter((item) => item !== channel))} />
                       {channelLabel(channel)}
@@ -3013,7 +3089,7 @@ export default function ProductsPage() {
             )}
 
             <div className="mt-6 flex flex-wrap justify-between gap-2 border-t border-line pt-4">
-              <button type="button" className="btn btn-secondary" onClick={() => { setForm(emptyForm); setSalePriceManual(false); setCostDetail(null); setStep(0); }}><PackagePlus size={16} /> Yeni Ürün</button>
+              <button type="button" className="btn btn-secondary" onClick={() => { setForm(newFormFor(activeStore)); setSalePriceManual(false); setCostDetail(null); setStep(0); }}><PackagePlus size={16} /> Yeni Ürün</button>
               <div className="flex gap-2">
                 <button type="button" className="hidden" onClick={goToPreviousStep}>Geri</button>
                 <button
@@ -3383,20 +3459,8 @@ export default function ProductsPage() {
                 )}
               </div>
 
-              <div className="mt-4">
-                <div className="mb-1 text-xs font-semibold text-slate-500">Hesap Seçimi</div>
-                <div className="flex gap-2">
-                  {([['ERHAN', 'Erhan Flowers'], ['FLORA', 'Florayapaycicek'], ['BOTH', 'Her İkisi']] as const).map(([code, label]) => (
-                    <button
-                      key={code}
-                      type="button"
-                      onClick={() => setProductTrendyolCompany(code)}
-                      className={`flex-1 rounded-md border px-2 py-1.5 text-xs font-semibold transition-colors ${productTrendyolCompany === code ? 'border-brand bg-brand text-white' : 'border-line bg-white text-slate-600 hover:border-brand/40'}`}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
+              <div className="mt-4 rounded-md border border-line bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-600">
+                Hesap: <span className="font-black text-slate-800">{storeLabel(productTrendyolEntry?.storeCode)}</span> Trendyol — ürün sadece kendi mağazasının hesabına gönderilir.
               </div>
 
               {productTrendyolResult && (
@@ -4850,7 +4914,7 @@ function channelLabel(value: string) {
   const labels: Record<string, string> = {
     SHOP: 'Dükkan',
     SITE: 'Web sitesi',
-    TRENDYOL: 'Trendyol (Erhan Flowers)',
+    TRENDYOL: 'Trendyol',
     TRENDYOL_FLORA: 'Trendyol (Flora)',
     HEPSIBURADA: 'Hepsiburada',
     N11: 'N11',

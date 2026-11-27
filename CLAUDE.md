@@ -102,8 +102,18 @@ Sonra tarayıcıda: **http://localhost:3200**
 - Satmayanları kapatma = **silme değil**, stok 0 (Trendyol toplu, N11/HB ERP kaydı olanlar). ERHAN'da kapatılan varyant `PASSIVE` olur; `broadcastPriceStock` ve `broadcastApprovedCost` PASSIVE ürünleri tekrar açmaz
 - Satış verisi `marketplace_orders` tablosundan; FLORA siparişleri `external_order_id LIKE 'FLORA\_%'`
 - İki mağaza yayını: `PublishingService.sendToStores` (`POST /publishing/send-to-stores`). Varsayılan barkod iki mağazada aynı; FLORA'da model/stok kodu `FL-` ön ekli + %-3 fiyat. FLORA'da contentId/trendyolBarcode gönderilmez (yeni ürün açılır)
-- **Yeni ürün açarken iki hesaba birden:** Ürün Merkezi'nde (hızlı kayıt + tam form) "Trendyol (Flora)" kanalı = platform kodu `TRENDYOL_FLORA`. `/publishing/send` bu kodu görünce ürünü FLORA Trendyol hesabına da gönderir (barkod aynı, model kodu FL- ön ekli, %-3 fiyat; `DEFAULT_STORES`). Varsayılan olarak işaretli
+- ~~Yeni ürünü iki hesaba birden açma (`TRENDYOL_FLORA`)~~ kaldırıldı → "İki Bağımsız Mağaza" bölümüne bakın
 - `IntegrationCenterService.storeCredentials(platform, company)`: ERHAN dışı mağazada .env'e **düşmez**, eksik API bilgisi varsa hata verir (Flora işlemi yanlışlıkla Erhan mağazasına gitmesin)
+
+## İki Bağımsız Mağaza: Erhan Flowers / Flora Yapay Çiçek (11.2026)
+
+- Her ürün tek mağazaya aittir: `products.store_code` + `trendyol_product_variants.store_code` (`ERHAN` varsayılan / `FLORA`), `backend/src/common/store.ts`
+- **Ürün Merkezi** (`/products`) en üstte **Mağaza** seçici: liste, hızlı kayıt, tam form ve gönderim kanalları seçili mağazaya göre. Yeni Flora ürünü: model kodu `FL-` ön ekli, marka "Flora Yapay Çiçek", yeni barkod. Kayıtlı ürünün mağazası sonradan değişmez
+- `/publishing/send`: ürün **kendi mağazasının** hesaplarına gider (`variant.storeCode`). Flora: Trendyol, Hepsiburada, N11, Trendrum (`storeCredentials(…,'FLORA')`, Erhan .env'ine düşmez). Erhan ürününde `TRENDYOL_FLORA` reddedilir (eski "aynı ürünü Flora'ya kopyala" kaldırıldı — hesap kapatma riski). `sendToStores` ve `trendyol-publish` de mağaza dışına göndermez
+- Koruma: `IntegrationsService.pushPrice/pushProduct` (Erhan hesapları) Flora ürününü DB'den kontrol edip reddeder (`isFloraPayload`). Flora ürünü kaydı/maliyet onayı → `pushPriceForStore('FLORA')` (sadece fiyat/stok, API bilgisi olmayan platform atlanır)
+- Flora ürünleri hariç: `broadcastAll`, görsel yayını, platform Excel'i, toplu zam/indirim (ve haftalık +5 TL), Erhan Trendyol senkronunun PASİF yapması, erhanflowers.com sitesi
+- **Siparişler** (`/orders`) mağaza sekmesi "Flora Yapay Çiçek": Flora'nın tüm pazaryeri siparişleri tek listede (`/integrations/marketplace-orders?company=FLORA`, `external_order_id LIKE 'FLORA\_%'`), kanal filtreleri Flora (Trendyol/Hepsiburada/N11/Trendrum). Flora HB ve Trendrum siparişleri 15 dk cron'da `runFloraHepsiburadaSync` / `runFloraTrendrumSync`; Flora siparişi sadece Flora ürününün stoğunu düşer. Erhan'ın `markMissingAsDelivered`'ı `FLORA_` siparişlere dokunmaz
+- Flora API bilgileri: Entegrasyon Merkezi → Florayapaycicek sekmesi (Trendyol: SUPPLIER_ID+API_KEY+API_SECRET, HB: MERCHANT_ID+şifre, N11: API_KEY+API_SECRET, Trendrum: API_KEY+API_SECRET)
 
 ## Siparişler Menüsü (tek giriş + sekmeler)
 
