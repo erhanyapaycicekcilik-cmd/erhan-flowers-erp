@@ -4,6 +4,8 @@ import { GoogleGenAI } from '@google/genai';
 import { geminiModelCandidates, resolveGeminiModel } from '../common/gemini-model';
 
 type GeminiContentPayload = {
+  // Ürünün mağaza markası (Erhan Flowers / Flora Yapay Çiçek) — içerikte sadece bu marka geçer
+  brand?: string;
   productName?: string;
   productHeight?: string;
   potType?: string;
@@ -65,7 +67,7 @@ export class GeminiContentService {
             responseMimeType: 'application/json',
           },
         });
-        return this.parseResponse(response.text ?? '', data.productName);
+        return this.enforceBrand(this.parseResponse(response.text ?? '', data.productName), data.brand);
       } catch (error) {
         lastError = error;
         this.logger.warn(`Gemini içerik üretimi başarısız, sıradaki model denenecek. model=${model} apiKeyLength=${apiKey.length}`, this.errorDetails(error));
@@ -76,6 +78,19 @@ export class GeminiContentService {
   }
 
   /** Ayarlı model kapatılmış/erişilemez olsa bile güncel modellerle tekrar dene. */
+  // Flora ürününde içerikte Erhan Flowers adı kalmasın (ve tersi)
+  private enforceBrand(result: GeminiContentResult, brand?: string): GeminiContentResult {
+    const target = brand || 'Erhan Flowers';
+    const other = /flora/i.test(target) ? /erhan\s*flowers/gi : /flora\s*yapay\s*çiçek/gi;
+    const fix = (text: string) => text.replace(other, target);
+    return {
+      ...result,
+      productName: fix(result.productName ?? ''),
+      description: fix(result.description ?? ''),
+      hashtags: result.hashtags?.map((tag) => (/#(erhanflowers|florayapaycicek)/i.test(tag) ? `#${target.replace(/ç/gi, 'c').replace(/[^A-Za-z0-9]/g, '')}` : tag)),
+    };
+  }
+
   private candidateModels() {
     return geminiModelCandidates(this.config.get<string>('GEMINI_MODEL'));
   }
@@ -121,6 +136,7 @@ export class GeminiContentService {
       comesWith: this.text(body.comesWith),
       cleaningTip: this.text(body.cleaningTip),
       extraNotes: this.text(body.extraNotes),
+      brand: this.text(body.brand) || 'Erhan Flowers',
     };
   }
 
@@ -136,7 +152,8 @@ export class GeminiContentService {
 
   private prompt(data: GeminiContentPayload) {
     const lines = [
-      'Erhan Flowers ERP için Türkçe e-ticaret ürün içeriği üret.',
+      `${data.brand ?? 'Erhan Flowers'} markası için Türkçe e-ticaret ürün içeriği üret.`,
+      `Marka adı olarak SADECE "${data.brand ?? 'Erhan Flowers'}" kullan; başka hiçbir marka/mağaza adı yazma.`,
       'Yalnızca geçerli JSON döndür. Markdown, açıklama veya kod bloğu kullanma.',
       'JSON şeması: {"productName":"...","description":"...","hashtags":["#etiket1","#etiket2"]}',
       'productName: SEO uyumlu, doğal, aranabilir ve Trendyol/N11/HB pazaryeri formatına uygun olsun.',
