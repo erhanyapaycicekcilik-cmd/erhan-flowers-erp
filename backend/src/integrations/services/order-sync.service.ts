@@ -1900,6 +1900,11 @@ export class OrderSyncService {
         : Array.isArray(order.orderItems) ? order.orderItems as Array<Record<string, unknown>>
         : [];
 
+      // Idefix: indirim düşülmüş tutarı hesapla
+      const idefixGross = Number(order.totalPrice ?? order.grandTotal ?? order.totalAmount ?? order.total ?? 0);
+      const idefixDiscount = Number(order.discountAmount ?? order.platformDiscountAmount ?? order.promotionDiscountAmount ?? order.totalDiscountAmount ?? order.campaignDiscountAmount ?? 0);
+      const idefixTotal = Number(order.discountedTotalPrice ?? (idefixGross > 0 && idefixDiscount > 0 ? idefixGross - idefixDiscount : idefixGross));
+
       const savedIdefixOrder = await this.prisma.marketplaceOrder.create({
         data: {
           platform: 'IDEFIX',
@@ -1907,7 +1912,7 @@ export class OrderSyncService {
           orderNumber: String(order.orderNumber ?? externalOrderId),
           status: String(order.status ?? 'New'),
           customerName,
-          totalAmount: Number(order.discountedTotalPrice ?? order.totalPrice ?? order.grandTotal ?? order.totalAmount ?? order.total ?? 0),
+          totalAmount: idefixTotal,
           cargoAmount: Number(order.shippingAmount ?? order.cargoAmount ?? 0),
           currency: 'TRY',
           orderDate,
