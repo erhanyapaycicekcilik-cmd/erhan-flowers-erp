@@ -1152,6 +1152,8 @@ export class OrderSyncService {
         if (row.credentialType === 'API_SECRET') creds.API_SECRET = val;
         if (row.credentialType === 'SUPPLIER_ID') creds.SUPPLIER_ID = val;
         if (!creds[row.credentialType]) creds[row.credentialType] = val;
+        // HB User-Agent (entegratör kullanıcı adı) 'OTHER' tipiyle saklanır
+        if (row.credentialType === 'OTHER' && platform === 'HEPSIBURADA' && !creds.USER_AGENT) creds.USER_AGENT = val;
       } catch { /* skip */ }
     }
     if (!creds.SUPPLIER_ID && rows[0]?.externalAccountId) creds.SUPPLIER_ID = rows[0].externalAccountId;
@@ -1386,7 +1388,7 @@ export class OrderSyncService {
 
     const apiBase = (process.env.HEPSIBURADA_API_URL ?? 'https://oms-external.hepsiburada.com').replace(/\/+$/, '');
     const auth = Buffer.from(`${username}:${password}`).toString('base64');
-    const headers = { Accept: 'application/json', Authorization: `Basic ${auth}`, 'User-Agent': creds.USER_AGENT || 'FloraYapayCicekERP-HB' };
+    const headers = { Accept: 'application/json', Authorization: `Basic ${auth}`, 'User-Agent': creds.USER_AGENT || process.env.HEPSIBURADA_USER_AGENT || 'erhanflowers_dev' };
     const lookback = Date.now() - this.lookbackDays * 24 * 60 * 60 * 1000;
 
     const allOrders: Array<Record<string, unknown>> = [];
