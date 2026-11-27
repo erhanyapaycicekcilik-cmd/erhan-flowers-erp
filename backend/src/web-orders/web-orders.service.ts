@@ -10,6 +10,8 @@ import { ProductGroupsService } from '../public-catalog/product-groups.service'
 const MAX_LINES = 50
 const MAX_QTY = 999
 const EFT_FACTOR = 0.97
+/** Bu tutarın altındaki web siparişlerinde kargo alıcı ödemeli (site: florayapay/src/lib/shipping.ts) */
+const FREE_SHIPPING_THRESHOLD = Number(process.env.FREE_SHIPPING_THRESHOLD || 1000)
 const round2 = (n: number) => Math.round(n * 100) / 100
 
 /** Site sunucusu ↔ ERP ortak anahtarı. Ayrı anahtar yoksa TAMI_SECRET_KEY kullanılır (ikisinde de tanımlı). */
@@ -159,7 +161,14 @@ export class WebOrdersService implements OnApplicationBootstrap {
       : 0
     const grandTotal = round2(Math.max(0, afterEft - promoDiscount))
     const orderNumber = 'WEB-' + Date.now().toString(36).toUpperCase()
-    const note = [dto.note?.slice(0, 2000), promo ? `Promosyon: ${promo.code} (−${round2(promoDiscount)} TL)` : null]
+    // Ücretsiz kargo eşiği altındaki siparişlerde kargo sitede tahsil edilmez, ALICI ÖDEMELİ gönderilir
+    // (sitedeki eşikle aynı: florayapay/src/lib/shipping.ts)
+    const buyerPaysShipping = subtotal < FREE_SHIPPING_THRESHOLD
+    const note = [
+      buyerPaysShipping ? 'Kargo: ALICI ÖDEMELİ' : null,
+      dto.note?.slice(0, 2000),
+      promo ? `Promosyon: ${promo.code} (−${round2(promoDiscount)} TL)` : null,
+    ]
       .filter(Boolean).join('\n') || undefined
 
     const order = await this.prisma.webOrder.create({
