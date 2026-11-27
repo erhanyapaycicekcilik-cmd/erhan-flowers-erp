@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { resolveGeminiModel } from '../common/gemini-model';
 import { SITE_ONLY_MODEL_PREFIX, isSiteOnlyModelCode } from '../common/site-only';
+import { SITE_VISIBLE_STORE_WHERE } from '../common/store';
 import { productSitePrice, sitePriceFromTrendyol, TRENDYOL_COMPARE_LABEL } from '../common/site-pricing';
 
 // Sadece ürün grubu sayfasında (boyut/renk seçimiyle) satılan site ürünleri
@@ -443,7 +444,8 @@ export class PublicCatalogService {
       stockQuantity: { gt: 0 },
       trendyolSalePrice: { gt: 0 },
       status: 'ACTIVE', // sadece Trendyol'da satışta olanlar
-      storeCode: 'ERHAN', // Flora mağazası ürünleri bu sitede yok
+      // Erhan ürünleri + sadece Flora'nın saksısız ağaçları (diğer Flora ürünleri bu sitede yok)
+      AND: [SITE_VISIBLE_STORE_WHERE],
       // ERP ürün kaydıyla eşleşen Trendyol ürünü, ERP kaydı üzerinden listelenir (çift görünmesin)
       id: { notIn: tyIndex.shadowedVariantIds },
     };
@@ -971,7 +973,7 @@ export class PublicCatalogService {
     const [variants, products] = await Promise.all([
       this.prisma.trendyolProductVariant.findMany({
         // Sadece Erhan Flowers ürünleri — Flora Yapay Çiçek ürünleri bu sitede satılmaz
-        where: { trendyolSalePrice: { gt: 0 }, storeCode: 'ERHAN' },
+        where: { trendyolSalePrice: { gt: 0 }, ...SITE_VISIBLE_STORE_WHERE },
         select: { id: true, productId: true, barcode: true, currentModelCode: true, trendyolSalePrice: true, status: true, stockQuantity: true },
       }),
       this.prisma.product.findMany({
@@ -1018,7 +1020,7 @@ export class PublicCatalogService {
     return {
       productId: null,
       status: 'ACTIVE' as const,
-      storeCode: 'ERHAN',
+      AND: [SITE_VISIBLE_STORE_WHERE],
       stockQuantity: { gt: 0 },
       trendyolSalePrice: { gt: 0 },
       id: { notIn: idx.shadowedVariantIds },
