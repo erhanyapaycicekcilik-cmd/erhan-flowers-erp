@@ -51,6 +51,8 @@ type QuickEntryPayload = {
   sizeVariant?: unknown;
   shopPrice?: unknown;
   sitePrice?: unknown;
+  marketplaceSalePrice?: unknown;
+  description?: unknown;
   initialStockQuantity?: unknown;
   mainImageUrl?: unknown;
   storeCode?: unknown;
@@ -291,6 +293,8 @@ export class ProductCenterService {
     const sizeVariant = this.requiredText(payload.sizeVariant, 'Olcu veya varyant zorunludur.');
     const shopPrice = this.requiredPositiveNumber(payload.shopPrice, 'Dukkan satis fiyati zorunludur.');
     const sitePrice = this.requiredPositiveNumber(payload.sitePrice, 'Site satis fiyati zorunludur.');
+    const marketplaceSalePrice = this.optionalNumber(payload.marketplaceSalePrice);
+    const description = this.text(payload.description) || undefined;
     const initialStockQuantity = this.requiredNonNegativeNumber(payload.initialStockQuantity, 'Baslangic stok miktari zorunludur.');
     const mainImageUrl = this.requiredText(payload.mainImageUrl, 'Ana urun gorseli zorunludur.');
     const variantId = this.optionalInt(payload.variantId);
@@ -337,6 +341,7 @@ export class ProductCenterService {
         warrantyMonths: 0,
         warrantyType: 'Uretici',
         status: 'ACTIVE' as const,
+        ...(description ? { description } : {}),
       };
 
       const product = existing.productId
@@ -357,9 +362,10 @@ export class ProductCenterService {
         productColor: sizeVariant,
         stockQuantity: Math.trunc(initialStockQuantity),
         images,
-        trendyolSalePrice: new Prisma.Decimal(Math.round(sitePrice * 1.25)),
-        n11SalePrice: new Prisma.Decimal(Math.round(sitePrice * 1.25)),
-        hepsiburadaSalePrice: new Prisma.Decimal(Math.round(sitePrice * 1.25)),
+        trendyolSalePrice: new Prisma.Decimal(Math.round(marketplaceSalePrice || sitePrice * 1.25)),
+        n11SalePrice: new Prisma.Decimal(Math.round(marketplaceSalePrice || sitePrice * 1.25)),
+        hepsiburadaSalePrice: new Prisma.Decimal(Math.round(marketplaceSalePrice || sitePrice * 1.25)),
+        ...(description ? { productDescription: description } : {}),
         commissionPercent: new Prisma.Decimal(20),
         status: 'ACTIVE' as const,
       };
