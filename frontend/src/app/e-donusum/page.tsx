@@ -370,8 +370,8 @@ export default function EDonusumPage() {
             </div>
           </div>
           <p className="mt-2 text-sm text-gray-500">
-            Dükkan, telefon, WhatsApp, Instagram satışları ve web sitesi siparişlerinden tamamlanmış ama e-Dönüşüm faturası kesilmemiş olanlar.
-            Pazaryeri (Trendyol, N11, HB) siparişleri burada listelenmez.
+            Dükkan, telefon, WhatsApp, Instagram satışları, web sitesi siparişleri ve yukarıda seçilen pazaryeri platformlarının tamamlanmış siparişleri listelenir.
+            Trendyol kendi faturasını kesiyor; burada seçmeyin.
           </p>
 
           {pending.length === 0 ? (
