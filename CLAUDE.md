@@ -182,6 +182,13 @@ Sonra tarayıcıda: **http://localhost:3200**
 - **WEB- ürünleri pazaryerine KESİNLİKLE gönderilmez** (sadece bu ürünler, diğerleri etkilenmez): ek olarak `IntegrationsService.pushPrice/pushProduct` WEB- kodlu yükü reddeder, Entegrasyon Merkezi `syncAllFromTrendyol` (Pazarama/İdefix/N11/HB/Trendrum toplu gönderim) WEB- ürünlerini almaz
 - Web siparişinde fiyatı 0 olan kalem varsa sipariş reddedilir (`WebOrdersService.create`)
 
+## Site Sipariş Akışı — Koruma Kuralları (11.2026 olayı)
+
+- `POST /public/orders` = **sitenin sepet/ödeme siparişleri** (`backend/src/web-orders/web-orders.controller.ts`, + `/:orderNumber/payable`, `/payment-confirmed`). Başka controller bu adrese bağlanmamalı. `/hizli-siparis` formu `POST /public/quick-orders` (`backend/src/public-orders/`). 22–27.11.2026 arasında hızlı sipariş formu `public/orders`'a bağlıydı → site siparişleri "Ad soyad zorunludur" ile reddedildi
+- NestJS aynı yöntem+adrese iki uç noktayı uyarmadan kabul eder (ilk kaydedilen kazanır). `node scripts/check-duplicate-routes.js` çakışmayı bulur; deploy'un ilk adımı bu, çakışma varsa deploy durur
+- Deploy sonrası `scripts/smoke-test.sh` (workflow'daki `smoke-test` işi): site ana sayfa/sepet/sipariş, ürün API'si, `POST /public/orders` boş istekte 400 (ve "Ad soyad" değil), Tami testi. Başarısızsa iş kırmızı + GitHub e-postası
+- Site güvenlik başlıkları (`florayapay/next.config.js`) `/api/payment/...` adreslerine uygulanmaz (3D Secure formu engelleniyordu). Kart seçeneği (`tamiAktif`) her zaman sunucu `.env`'indeki 5 `TAMI_*` değerinden hesaplanır; `/api/payment/tami/test` `force-dynamic`
+
 ## Veritabanı
 
 - **PostgreSQL 16** Docker container'da (`erhan-flowers-postgres-prod`)
