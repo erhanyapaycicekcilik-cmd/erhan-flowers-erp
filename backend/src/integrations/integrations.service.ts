@@ -1167,6 +1167,15 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
     `);
   }
 
+  async updateMarketplaceOrderAmount(id: number, totalAmount: number) {
+    const amount = Number(totalAmount);
+    if (!id || isNaN(amount) || amount <= 0) throw new Error('Geçersiz tutar veya ID.');
+    await this.prisma.$executeRaw`
+      UPDATE marketplace_orders SET total_amount = ${amount} WHERE id = ${id}
+    `;
+    return { ok: true, id, totalAmount: amount };
+  }
+
   async listRetailOrders(query: Record<string, string>) {
     const take = Math.min(Number(query.limit ?? 200), 500);
     const page = Math.max(1, Number(query.page ?? 1));
