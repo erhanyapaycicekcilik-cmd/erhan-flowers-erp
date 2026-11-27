@@ -237,7 +237,11 @@ export class IdefixAdapter extends BaseIntegrationAdapter {
       city: String(o.city ?? shipAddr.city ?? ''),
       district: String(o.district ?? shipAddr.district ?? ''),
       addressText: String(shipAddr.address ?? shipAddr.fullAddress ?? ''),
-      totalAmount: Number(o.discountedTotalPrice ?? o.totalPrice ?? o.grandTotal ?? o.totalAmount ?? o.total ?? 0),
+      totalAmount: (() => {
+        const gross = Number(o.totalPrice ?? o.grandTotal ?? o.totalAmount ?? o.total ?? 0);
+        const discount = Number(o.discountAmount ?? o.platformDiscountAmount ?? o.promotionDiscountAmount ?? o.totalDiscountAmount ?? o.campaignDiscountAmount ?? 0);
+        return Number(o.discountedTotalPrice ?? (gross > 0 && discount > 0 ? gross - discount : gross));
+      })(),
       orderDate: o.orderDate ?? o.createdAt ? new Date(String(o.orderDate ?? o.createdAt)) : undefined,
       items,
     };
