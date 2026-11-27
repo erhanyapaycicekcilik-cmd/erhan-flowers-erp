@@ -41,7 +41,7 @@ export default function HizliSiparisPage() {
     setBusy(true)
     setResult(null)
     try {
-      const res = await fetch(`${API_URL}/public/orders`, {
+      const res = await fetch(`${API_URL}/public/quick-orders`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
