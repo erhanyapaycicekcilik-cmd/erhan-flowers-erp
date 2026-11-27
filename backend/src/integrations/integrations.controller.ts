@@ -65,6 +65,11 @@ export class IntegrationsController {
   @Post('orders/:platform/sync')
   @UseGuards(OwnerGuard)
   syncOrders(@Param('platform') platform: string, @Req() request: AuthenticatedRequest) {
+    // Idefix / Pazarama kendi senkronunu kullanır (Entegrasyon sayfasındaki buton). Önceden bu adres
+    // iki ayrı metoda bağlıydı; ikincisi hiç çalışmıyordu.
+    const p = platform.toUpperCase();
+    if (p === 'IDEFIX') return this.orderSync.runIdefixSync();
+    if (p === 'PAZARAMA') return this.orderSync.runPazaramaSync();
     return this.integrations.syncOrders(platform, request.user!.id);
   }
 
@@ -394,15 +399,6 @@ export class IntegrationsController {
     const p = platform.toUpperCase();
     if (p !== 'N11' && p !== 'HEPSIBURADA') throw new Error('Sadece N11 ve HEPSIBURADA destekleniyor.');
     return this.integrations.deleteAllProducts(p as 'N11' | 'HEPSIBURADA');
-  }
-
-  @Post('orders/:platform/sync')
-  @UseGuards(OwnerGuard)
-  async syncPlatformOrders(@Param('platform') platform: string) {
-    const p = platform.toUpperCase();
-    if (p === 'IDEFIX') return this.orderSync.runIdefixSync();
-    if (p === 'PAZARAMA') return this.orderSync.runPazaramaSync();
-    return { error: `Desteklenmeyen platform: ${platform}` };
   }
 
   @Get('debug/idefix-raw')
