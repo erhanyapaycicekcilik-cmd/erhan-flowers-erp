@@ -1701,19 +1701,22 @@ export class OrderSyncService {
     const lookback = Date.now() - this.lookbackDays * 24 * 60 * 60 * 1000;
 
     const allOrders: Array<Record<string, unknown>> = [];
-    let page = 0;
-    while (page < 10) {
-      const url = `${PAZARAMA_API}/order/getOrdersForApi?status=1&pageSize=50&pageIndex=${page}`;
-      const res = await fetch(url, { headers }).catch(() => null);
-      if (!res || !res.ok) break;
-      const data = await res.json() as { data?: { orderList?: Array<Record<string, unknown>> } | Array<Record<string, unknown>> };
-      const items: Array<Record<string, unknown>> = Array.isArray(data.data)
-        ? data.data
-        : (data.data as any)?.orderList ?? [];
-      if (!Array.isArray(items) || items.length === 0) break;
-      allOrders.push(...items);
-      if (items.length < 50) break;
-      page++;
+    // Tüm durumları çek: 1=Alındı, 2=Hazırlanıyor, 3=Kargoya Verildi, 4=Teslim Edildi, 5=İptal
+    for (const statusCode of [1, 2, 3, 4, 5]) {
+      let page = 0;
+      while (page < 10) {
+        const url = `${PAZARAMA_API}/order/getOrdersForApi?status=${statusCode}&pageSize=50&pageIndex=${page}`;
+        const res = await fetch(url, { headers }).catch(() => null);
+        if (!res || !res.ok) break;
+        const data = await res.json() as { data?: { orderList?: Array<Record<string, unknown>> } | Array<Record<string, unknown>> };
+        const items: Array<Record<string, unknown>> = Array.isArray(data.data)
+          ? data.data
+          : (data.data as any)?.orderList ?? [];
+        if (!Array.isArray(items) || items.length === 0) break;
+        allOrders.push(...items);
+        if (items.length < 50) break;
+        page++;
+      }
     }
 
     this.logger.log(`Pazarama'dan ${allOrders.length} siparis cekildi.`);
@@ -1730,12 +1733,17 @@ export class OrderSyncService {
         where: { platform_externalOrderId: { platform: 'PAZARAMA', externalOrderId } },
         include: { items: { take: 1 } },
       });
+      const pazaramaStatusMap: Record<string, string> = {
+        '1': 'CONFIRMED', '2': 'PREPARING', '3': 'OUT_FOR_DELIVERY', '4': 'DELIVERED', '5': 'CANCELLED',
+      };
+      const rawStatusCode = String(order.status ?? '');
+      const erpStatus = pazaramaStatusMap[rawStatusCode] ?? 'CONFIRMED';
+
       if (existing) {
-        const newStatus = String(order.status ?? '');
         const needsRebuild = Number(existing.totalAmount) === 0 && existing.items.length === 0;
         if (!needsRebuild) {
-          if (newStatus && existing.status !== newStatus) {
-            await this.prisma.marketplaceOrder.update({ where: { id: existing.id }, data: { status: newStatus } });
+          if (erpStatus && existing.status !== erpStatus) {
+            await this.prisma.marketplaceOrder.update({ where: { id: existing.id }, data: { status: erpStatus } });
           }
           continue;
         }
@@ -1760,7 +1768,7 @@ export class OrderSyncService {
           platform: 'PAZARAMA',
           externalOrderId,
           orderNumber: String(order.orderNumber ?? order.orderCode ?? externalOrderId),
-          status: String(order.status ?? 'NEW'),
+          status: erpStatus,
           customerName,
           totalAmount: Number(order.totalAmount ?? order.totalPrice ?? order.total ?? order.netTotal ?? 0),
           cargoAmount: Number(order.shippingAmount ?? order.cargoAmount ?? 0),
