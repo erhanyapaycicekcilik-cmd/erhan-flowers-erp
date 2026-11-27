@@ -297,6 +297,7 @@ export class EInvoicesService {
         sourceType: 'RETAIL_SALE',
         sourceId: sale.id,
         sourceNumber: sale.saleNumber,
+        retailChannel: sale.channel,
         invoiceType,
         series: invoiceType === 'E_FATURA' ? s.eInvoiceSeries : s.eArchiveSeries,
         issueDate: new Date(),
@@ -506,6 +507,10 @@ export class EInvoicesService {
       return false;
     }
 
+    const channel: string | null = draft.sourceType === 'MARKETPLACE_ORDER'
+      ? (draft.internetSale?.paymentAgent ?? null)
+      : draft.sourceType === 'WEB_ORDER' ? 'WEB'
+      : (draft as any).retailChannel ?? null;
     const base = {
       provider: tag,
       sourceNumber: draft.sourceNumber,
@@ -514,6 +519,7 @@ export class EInvoicesService {
       invoiceType: draft.invoiceType,
       status: 'PENDING',
       errorMessage: null,
+      ...(channel ? { channel } : {}),
     };
     // ETTN (UUID) kayıt başına bir kez üretilir; tekrar denemelerde aynı ETTN gider, fatura iki kez kesilmez
     const documentUuid = (sameEnv && existing?.status !== 'ISSUED' && existing?.providerRef) || randomUUID();
