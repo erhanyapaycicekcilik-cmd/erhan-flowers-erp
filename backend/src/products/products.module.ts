@@ -1,3 +1,4 @@
+import { SharedStockService } from './shared-stock.service';
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import { IntegrationsModule } from '../integrations/integrations.module';
@@ -13,7 +14,7 @@ import { BulkPriceService } from './bulk-price.service';
 @Module({
   imports: [AuthModule, IntegrationsModule, PublicCatalogModule],
   controllers: [ProductsController, ModelCodesController, DriveSyncController],
-  providers: [ProductsService, ModelCodesService, GeminiContentService, BulkPriceService],
+  providers: [ProductsService, ModelCodesService, GeminiContentService, BulkPriceService, SharedStockService],
   exports: [ProductsService, ModelCodesService],
 })
 export class ProductsModule {}
