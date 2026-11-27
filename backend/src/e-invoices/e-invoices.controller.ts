@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, ParseIntPipe, Post, Put, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, ParseIntPipe, Post, Put, Query, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '../auth/auth.guard';
 import { OwnerGuard } from '../auth/owner.guard';
 import { EInvoicesService } from './e-invoices.service';
@@ -62,5 +62,12 @@ export class EInvoicesController {
   @Post(':id/retry')
   retry(@Param('id', ParseIntPipe) id: number) {
     return this.service.retry(id);
+  }
+
+  /** Faturayı iptal et (DB kaydını sil → bekleyenler listesine düşer) */
+  @Delete(':id/cancel')
+  @UseGuards(OwnerGuard)
+  cancel(@Param('id', ParseIntPipe) id: number) {
+    return this.service.cancelInvoice(id);
   }
 }

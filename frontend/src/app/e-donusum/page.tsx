@@ -485,14 +485,27 @@ export default function EDonusumPage() {
                       <td className="px-3 py-2">{date(r.issuedAt ?? r.createdAt)}</td>
                       <td className="px-3 py-2 text-right">
                         {r.status === 'ISSUED' && (
-                          <button
-                            disabled={busy !== null}
-                            onClick={() => run(`pdf-${r.id}`, async () => {
-                              const res = await api<{ url: string }>(`/e-invoices/${r.id}/pdf`);
-                              window.open(res.url, '_blank', 'noopener');
-                            })}
-                            className="inline-flex items-center gap-1 text-xs text-blue-600 disabled:opacity-40"
-                          ><ExternalLink className="h-3.5 w-3.5" /> PDF</button>
+                          <div className="inline-flex items-center gap-2">
+                            <button
+                              disabled={busy !== null}
+                              onClick={() => run(`pdf-${r.id}`, async () => {
+                                const res = await api<{ url: string }>(`/e-invoices/${r.id}/pdf`);
+                                window.open(res.url, '_blank', 'noopener');
+                              })}
+                              className="inline-flex items-center gap-1 text-xs text-blue-600 disabled:opacity-40"
+                            ><ExternalLink className="h-3.5 w-3.5" /> PDF</button>
+                            <button
+                              disabled={busy !== null}
+                              title="Platformda iptal edilen faturayı ERP'den sil — sipariş bekleyenler listesine düşer"
+                              onClick={() => run(`cancel-inv-${r.id}`, async () => {
+                                if (!confirm(`${r.sourceNumber} fatura kaydı silinsin mi?\n\nSipariş bekleyenler listesine düşer, yeni fatura kesilebilir.\n\nBu işlem sadece platformda zaten iptal edilmiş faturalar için kullanılmalıdır.`)) return;
+                                await api(`/e-invoices/${r.id}/cancel`, { method: 'DELETE' });
+                                await Promise.all([loadPending(), loadInvoices()]);
+                                return `${r.sourceNumber} fatura kaydı silindi, sipariş bekleyenler listesine alındı.`;
+                              })}
+                              className="inline-flex items-center gap-1 rounded-md border border-orange-200 bg-orange-50 px-2 py-0.5 text-xs text-orange-700 disabled:opacity-40"
+                            >Kaydı Sil</button>
+                          </div>
                         )}
                         {r.provider.endsWith('_TEST') && r.sourceType === 'RETAIL_SALE' && r.status !== 'CANCELLED' && (
                           <button
