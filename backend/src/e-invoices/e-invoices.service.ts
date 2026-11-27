@@ -463,6 +463,14 @@ export class EInvoicesService {
     return { ok: true };
   }
 
+  /** Fatura kaydını sil → sipariş bekleyenler listesine düşer (platform üzerinde iptal edilen faturalar için) */
+  async cancelInvoice(id: number) {
+    const inv = await this.prisma.eInvoice.findUnique({ where: { id } });
+    if (!inv) throw new NotFoundException('Fatura kaydı bulunamadı.');
+    await this.prisma.eInvoice.delete({ where: { id } });
+    return { deleted: true, sourceType: inv.sourceType, sourceId: inv.sourceId };
+  }
+
   async retry(id: number) {
     const inv = await this.prisma.eInvoice.findUnique({ where: { id } });
     if (!inv) throw new NotFoundException('Fatura kaydı bulunamadı.');
