@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException, OnApplicationBootstrap } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { GoogleGenAI } from '@google/genai';
 import { revalidateSite } from '../common/site-revalidate';
@@ -14,7 +14,7 @@ import { ProductionCostsService } from '../production-costs/production-costs.ser
 import { IntegrationCenterService } from '../integrations/services/integration-center.service';
 import { TrendyolAdapter } from '../integrations/adapters/trendyol.adapter';
 import { resolveGeminiModel } from '../common/gemini-model';
-import { STORE_DEFAULT_BRAND, normalizeStoreCode, storeFilter, withFloraPrefix } from '../common/store';
+import { FLORA_SITE_CATEGORY, FLORA_SITE_SUBCATEGORY, STORE_DEFAULT_BRAND, normalizeStoreCode, storeFilter, withFloraPrefix } from '../common/store';
 
 type EntryPayload = {
   variantId?: unknown;
@@ -61,7 +61,36 @@ type QuickEntryPayload = {
 };
 
 @Injectable()
-export class ProductCenterService {
+export class ProductCenterService implements OnApplicationBootstrap {
+  private readonly storeLogger = new Logger('ProductCenterStore');
+
+  onApplicationBootstrap() {
+    void this.assignFloraSiteTrees();
+  }
+
+  // Flora'nın saksısız ağaçları erhanflowers.com'da "Ağaçlar → Saksısız Ağaçlar" kategorisinde satılır.
+  // Adında "saksısız" geçen ve alt kategorisi boş Flora ürünlerine bu kategori atanır (elle verilen kategoriye dokunmaz).
+  async assignFloraSiteTrees() {
+    try {
+      const products = await this.prisma.$executeRaw`
+        UPDATE products SET catalog_category = ${FLORA_SITE_CATEGORY}, catalog_sub_category = ${FLORA_SITE_SUBCATEGORY}, updated_at = NOW()
+        WHERE store_code = 'FLORA' AND COALESCE(catalog_sub_category, '') = '' AND product_name ~* 'saks[ıiIİ]s[ıiIİ]z'
+      `;
+      const variants = await this.prisma.$executeRaw`
+        UPDATE trendyol_product_variants v SET catalog_category = ${FLORA_SITE_CATEGORY}, catalog_sub_category = ${FLORA_SITE_SUBCATEGORY}, updated_at = NOW()
+        WHERE v.store_code = 'FLORA' AND COALESCE(v.catalog_sub_category, '') = ''
+          AND (v.product_name ~* 'saks[ıiIİ]s[ıiIİ]z'
+            OR EXISTS (SELECT 1 FROM products p WHERE p.id = v.product_id AND p.catalog_sub_category = ${FLORA_SITE_SUBCATEGORY}))
+      `;
+      if (products || variants) {
+        this.storeLogger.log(`Flora saksısız ağaçlar sitede Saksısız Ağaçlar kategorisine bağlandı: ${products} ürün, ${variants} varyant`);
+        void revalidateSite();
+      }
+    } catch (error) {
+      this.storeLogger.warn(`Flora saksısız ağaç kategorisi atanamadı: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly productionCosts: ProductionCostsService,
@@ -242,6 +271,9 @@ export class ProductCenterService {
       const result = { ok: true, entry: await this.findEntry(tx, variant.id) };
       // sitePrice > 0 ise site cache'ini anında sıfırla
       void revalidateSite();
+      return result;
+    }).then(async (result) => {
+      if ((result.entry as any)?.storeCode === 'FLORA') await this.assignFloraSiteTrees();
       return result;
     });
   }
@@ -430,6 +462,9 @@ export class ProductCenterService {
       };
       // sitePrice > 0 ise siteyi anında güncelle
       if (sitePrice > 0 && storeCode === 'ERHAN') void revalidateSite();
+      return result;
+    }).then(async (result) => {
+      if (result.storeCode === 'FLORA') await this.assignFloraSiteTrees();
       return result;
     });
   }

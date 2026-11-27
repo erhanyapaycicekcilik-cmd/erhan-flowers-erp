@@ -40,3 +40,23 @@ export function withFloraPrefix(code: string): string {
   if (!text) return text;
   return text.startsWith(FLORA_MODEL_PREFIX) ? text : `${FLORA_MODEL_PREFIX}${text}`;
 }
+
+// ── erhanflowers.com sitesinde satılan Flora ürünleri ──────────────────────
+// Flora ürünleri normalde sitede yoktur. İSTİSNA: Flora'nın saksısız ağaçları sitede
+// Ağaçlar → "Saksısız Ağaçlar" kategorisinde satılır (fiyat = sitenin normal kuralı).
+export const FLORA_SITE_CATEGORY = 'Ağaçlar'; // catalog_category etiket olarak saklanır
+export const FLORA_SITE_SUBCATEGORY = 'Saksısız Ağaçlar';
+
+// Ürün adında "saksısız" geçen Flora ağaçları bu kategoriye otomatik bağlanır
+export function isFloraSiteTreeName(name?: string | null): boolean {
+  const text = String(name ?? '').toLocaleLowerCase('tr-TR');
+  return /saks[ıi]s[ıi]z/.test(text);
+}
+
+// Sitede görünebilecek ürünler (Prisma where parçası): Erhan ürünleri + Flora saksısız ağaçları
+export const SITE_VISIBLE_STORE_WHERE = {
+  OR: [
+    { storeCode: 'ERHAN' },
+    { storeCode: 'FLORA', catalogSubCategory: FLORA_SITE_SUBCATEGORY },
+  ],
+};
