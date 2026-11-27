@@ -470,7 +470,6 @@ export default function ProductsPage() {
 
   function switchStore(store: StoreCode) {
     setActiveStore(store);
-    try { window.localStorage.setItem('productCenterStore', store); } catch { /* yok say */ }
     setQuickForm((current) => ({ ...current, storeCode: store, platforms: ['TRENDYOL'] }));
     setQuickResult(null);
     // Diğer mağazanın ürünü açıksa formu o mağaza için boşalt
@@ -478,13 +477,6 @@ export default function ProductsPage() {
     setSelectedChannels(store === 'FLORA' ? [...FLORA_FULL_CHANNELS] : ['SHOP', 'SITE', 'TRENDYOL', 'HEPSIBURADA', 'N11', 'TRENDRUM', 'PAZARAMA']);
   }
 
-  useEffect(() => {
-    try {
-      const saved = window.localStorage.getItem('productCenterStore');
-      if (saved === 'FLORA') switchStore('FLORA');
-    } catch { /* yok say */ }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   async function load() {
     const [entryData, categoryData, shopCategoryData, familyData, mediaData, stockCardData, defaultExpenseData, userData, imageStatusData] = await Promise.all([
@@ -2193,30 +2185,19 @@ export default function ProductsPage() {
           <button className="ml-3 text-purple-500 hover:underline" onClick={() => setBroadcastImagesResult(null)}>×</button>
         </div>
       )}
-      {/* Mağaza seçimi — Erhan Flowers ve Flora Yapay Çiçek ürünleri birbirinden bağımsız */}
-      <div className={`mb-4 rounded-md border-2 p-3 ${activeStore === 'FLORA' ? 'border-pink-300 bg-pink-50' : 'border-emerald-300 bg-emerald-50'}`}>
-        <div className="flex flex-wrap items-center gap-3">
-          <span className="text-sm font-black text-slate-700">Mağaza:</span>
-          {STORES.map((store) => (
-            <button
-              key={store.code}
-              type="button"
-              onClick={() => switchStore(store.code)}
-              className={`rounded-md border-2 px-4 py-2 text-sm font-black transition ${activeStore === store.code
-                ? store.code === 'FLORA' ? 'border-pink-600 bg-pink-600 text-white' : 'border-emerald-700 bg-emerald-700 text-white'
-                : 'border-line bg-white text-slate-600 hover:border-slate-400'}`}
-            >
-              {store.label}
-              <span className="ml-2 rounded bg-white/20 px-1.5 text-xs">{entries.filter((e) => (e.storeCode ?? 'ERHAN') === store.code && e.status !== 'PASSIVE').length}</span>
-            </button>
-          ))}
-          <span className="text-xs font-semibold text-slate-600">
-            {activeStore === 'FLORA'
-              ? 'Flora ürünleri: model kodu FL- ile başlar, sadece Flora\'nın Trendyol / Hepsiburada / N11 / Trendrum hesaplarına gider. Erhan sitesinde ve Erhan hesaplarında görünmez.'
-              : 'Erhan Flowers ürünleri: Erhan\'ın pazaryeri hesaplarına ve erhanflowers.com sitesine gider. Flora\'ya gönderilmez.'}
-          </span>
+      {/* Bu sayfa Erhan Flowers ürünleri içindir. Flora Yapay Çiçek ürünleri ayrı sayfada: /flora/urunler */}
+      {activeStore === 'FLORA' ? (
+        <div className="mb-4 flex flex-wrap items-center gap-3 rounded-md border-2 border-pink-300 bg-pink-50 p-3 text-sm font-semibold text-pink-800">
+          Açık olan ürün Flora Yapay Çiçek ürünü. Flora ürünlerini ayrı sayfadan yönetin.
+          <a href="/flora/urunler" className="btn bg-pink-600 text-white">Flora Ürün Yükleme</a>
+          <button type="button" className="btn btn-secondary" onClick={() => switchStore('ERHAN')}>Erhan Flowers ürünlerine dön</button>
         </div>
-      </div>
+      ) : (
+        <div className="mb-4 flex flex-wrap items-center gap-3 rounded-md border border-emerald-300 bg-emerald-50 p-3 text-sm font-semibold text-emerald-800">
+          Bu sayfa sadece <b>Erhan Flowers</b> ürünleri içindir.
+          <a href="/flora/urunler" className="ml-auto rounded-md border border-pink-300 bg-white px-3 py-1.5 text-pink-700 hover:bg-pink-50">Flora Yapay Çiçek ürünleri → ayrı sayfa</a>
+        </div>
+      )}
       {message && <div className="mb-4 rounded-md bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800">{message}</div>}
 
       <div className="mb-4 flex flex-wrap gap-2 rounded-md border border-line bg-white p-3">

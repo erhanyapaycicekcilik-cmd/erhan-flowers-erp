@@ -295,6 +295,11 @@ export default function OrdersPage() {
 
   useEffect(() => {
     api<CurrentUser>('/auth/me').then(setCurrentUser).catch(() => null);
+    // Menüdeki "Flora Siparişleri" → /orders?magaza=FLORA
+    try {
+      const magaza = new URLSearchParams(window.location.search).get('magaza');
+      if (magaza === 'FLORA' || magaza === 'ERHAN') setActiveCompany(magaza);
+    } catch { /* yok say */ }
   }, []);
 
   const isMarketplacePlatform = marketplacePlatforms.has(appliedFilters.platform);

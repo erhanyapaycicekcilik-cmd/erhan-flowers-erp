@@ -54,6 +54,10 @@ type QuickEntryPayload = {
   initialStockQuantity?: unknown;
   mainImageUrl?: unknown;
   storeCode?: unknown;
+  // Flora ürün sayfası: açıklama, ek görseller ve doğrudan pazaryeri satış fiyatı
+  description?: unknown;
+  imageUrls?: unknown;
+  marketPrice?: unknown;
 };
 
 @Injectable()
@@ -289,8 +293,17 @@ export class ProductCenterService {
     const categoryId = this.requiredInt(payload.categoryId, 'Ana kategori zorunludur.');
     const productType = this.requiredText(payload.productType, 'Urun turu zorunludur.');
     const sizeVariant = this.requiredText(payload.sizeVariant, 'Olcu veya varyant zorunludur.');
-    const shopPrice = this.requiredPositiveNumber(payload.shopPrice, 'Dukkan satis fiyati zorunludur.');
-    const sitePrice = this.requiredPositiveNumber(payload.sitePrice, 'Site satis fiyati zorunludur.');
+    // Pazaryeri satış fiyatı doğrudan verilirse (Flora sayfası) dükkan/site fiyatı zorunlu değil
+    const marketPriceInput = this.optionalNumber(payload.marketPrice) ?? 0;
+    const shopPrice = marketPriceInput > 0 && !(this.optionalNumber(payload.shopPrice) ?? 0)
+      ? marketPriceInput
+      : this.requiredPositiveNumber(payload.shopPrice, 'Dukkan satis fiyati zorunludur.');
+    const sitePrice = marketPriceInput > 0 && !(this.optionalNumber(payload.sitePrice) ?? 0)
+      ? marketPriceInput
+      : this.requiredPositiveNumber(payload.sitePrice, 'Site satis fiyati zorunludur.');
+    const channelPrice = marketPriceInput > 0 ? Math.round(marketPriceInput) : Math.round(sitePrice * 1.25);
+    const quickDescription = this.text(payload.description) || undefined;
+    const extraImages = this.stringArray(payload.imageUrls);
     const initialStockQuantity = this.requiredNonNegativeNumber(payload.initialStockQuantity, 'Baslangic stok miktari zorunludur.');
     const mainImageUrl = this.requiredText(payload.mainImageUrl, 'Ana urun gorseli zorunludur.');
     const variantId = this.optionalInt(payload.variantId);
@@ -308,7 +321,7 @@ export class ProductCenterService {
       const modelCode = existing.modelCode || (storeCode === 'FLORA' ? withFloraPrefix(await this.nextModelCode(tx, category)) : await this.nextModelCode(tx, category));
       const stockCode = existing.stockCode || await this.nextStockCode(tx, modelCode, sizeVariant);
       const barcode = existing.barcode || await this.nextEan13Barcode(tx);
-      const images = [mainImageUrl];
+      const images = Array.from(new Set([mainImageUrl, ...extraImages].filter(Boolean)));
 
       if (!existing.productId) {
         await this.ensureQuickIdentityIsAvailable(tx, { modelCode, stockCode, barcode });
@@ -331,6 +344,7 @@ export class ProductCenterService {
         imageUrls: images,
         brand,
         storeCode,
+        ...(quickDescription ? { description: quickDescription } : {}),
         vatRate: 20,
         origin: 'Turkiye',
         colorVariant: sizeVariant,
@@ -357,9 +371,10 @@ export class ProductCenterService {
         productColor: sizeVariant,
         stockQuantity: Math.trunc(initialStockQuantity),
         images,
-        trendyolSalePrice: new Prisma.Decimal(Math.round(sitePrice * 1.25)),
-        n11SalePrice: new Prisma.Decimal(Math.round(sitePrice * 1.25)),
-        hepsiburadaSalePrice: new Prisma.Decimal(Math.round(sitePrice * 1.25)),
+        ...(quickDescription ? { productDescription: quickDescription } : {}),
+        trendyolSalePrice: new Prisma.Decimal(channelPrice),
+        n11SalePrice: new Prisma.Decimal(channelPrice),
+        hepsiburadaSalePrice: new Prisma.Decimal(channelPrice),
         commissionPercent: new Prisma.Decimal(20),
         status: 'ACTIVE' as const,
       };
