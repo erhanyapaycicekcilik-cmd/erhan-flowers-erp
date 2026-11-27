@@ -12,6 +12,7 @@ import {
   ChevronRight,
   CircleDollarSign,
   Factory,
+  Flower2,
   Globe,
   Home,
   Edit3,
@@ -102,6 +103,15 @@ const navGroups: { section: string; icon: LucideIcon; items: NavItem[] }[] = [
     ],
   },
   {
+    // Flora Yapay Çiçek mağazası — Erhan Flowers'tan tamamen ayrı ekranlar
+    section: 'Flora',
+    icon: Flower2,
+    items: [
+      { href: '/flora/urunler', label: 'Flora Ürün Yükleme', icon: Flower2, roles: OWNER_MANAGER },
+      { href: '/orders?magaza=FLORA', label: 'Flora Siparişleri', icon: ShoppingCart, roles: OWNER_MANAGER },
+    ],
+  },
+  {
     section: 'Pazaryeri',
     icon: PlugZap,
     items: [
@@ -159,7 +169,7 @@ const roleAllowedPaths: Record<UserRole, string[]> = {
     '/hesap-makinesi', '/orders', '/staff/orders', '/sales', '/crm',
     '/integrations', '/market-analizi', '/reports', '/staff/tasks',
     '/urun-duzenle', '/kategori-atama', '/kategoriler', '/referanslar', '/eft-yonetim', '/musteri-sorulari', '/adres-ciktisi', '/sabah-ciktisi',
-    '/web-siparisler', '/iade-takip', '/staff/photo-archive',
+    '/web-siparisler', '/iade-takip', '/staff/photo-archive', '/flora',
   ],
   STAFF: ['/staff/orders', '/staff/photo-archive', '/products', '/adres-ciktisi', '/sabah-ciktisi', '/iade-takip'],
 };
