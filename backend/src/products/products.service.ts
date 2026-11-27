@@ -341,7 +341,8 @@ export class ProductsService {
         include: { productCostDraft: true },
         take: 5,
       });
-      const cardFallbackPrice = Number(Number(card.salePrice) > 0 ? card.salePrice : card.purchasePrice ?? 0);
+      // Alış fiyatı (purchasePrice) ASLA pazaryeri satış fiyatı olarak kullanılmaz — Trendyol fiyatlarını aşağı çekiyordu.
+      const cardFallbackPrice = Number(card.salePrice ?? 0) > 0 ? Number(card.salePrice) : 0;
       if (variants.length > 0) {
         for (const variant of variants) {
           const salePrice = Number(
@@ -361,7 +362,7 @@ export class ProductsService {
           }
           await this.broadcastPriceStock({ barcode: variant.barcode, modelCode: variant.currentModelCode, marketPrice: salePrice, sitePrice: sitePriceArg, stockQuantity: Number(card.stockQuantity) }).catch(() => undefined);
         }
-      } else {
+      } else if (cardFallbackPrice > 0) {
         await this.broadcastPriceStock({ barcode: card.barcode, modelCode: card.sku ?? card.oldModelCode, marketPrice: cardFallbackPrice, stockQuantity: Number(card.stockQuantity) }).catch(() => undefined);
       }
     }
