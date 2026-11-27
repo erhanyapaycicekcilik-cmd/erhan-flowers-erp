@@ -106,6 +106,8 @@ export default function EDonusumPage() {
   const [invoiceTotal, setInvoiceTotal] = useState(0);
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
+  const [editingAmountId, setEditingAmountId] = useState<number | null>(null);
+  const [editingAmountVal, setEditingAmountVal] = useState('');
 
   const loadSettings = useCallback(async () => {
     const res = await api<SettingsResponse>('/e-invoices/settings');
@@ -394,7 +396,48 @@ export default function EDonusumPage() {
                         {r.customerName}
                         {r.lastError && <div className="mt-1 max-w-md text-xs text-red-600">Son deneme hatası: {r.lastError}</div>}
                       </td>
-                      <td className="px-3 py-2">{money(r.amount)}</td>
+                      <td className="px-3 py-2">
+                        {editingAmountId === r.sourceId && r.sourceType === 'MARKETPLACE_ORDER' ? (
+                          <span className="flex items-center gap-1">
+                            <input
+                              type="number"
+                              step="0.01"
+                              className="w-28 rounded border px-1 py-0.5 text-sm"
+                              value={editingAmountVal}
+                              onChange={(e) => setEditingAmountVal(e.target.value)}
+                              autoFocus
+                            />
+                            <button
+                              className="rounded bg-green-600 px-1.5 py-0.5 text-xs text-white"
+                              onClick={() => run(`fix-amount-${r.sourceId}`, async () => {
+                                const v = parseFloat(editingAmountVal.replace(',', '.'));
+                                if (!v || v <= 0) throw new Error('Geçersiz tutar');
+                                await api(`/integrations/marketplace-orders/${r.sourceId}/total-amount`, {
+                                  method: 'PATCH', json: { totalAmount: v },
+                                });
+                                setEditingAmountId(null);
+                                await loadPending();
+                                return `Tutar ${money(v)} olarak güncellendi.`;
+                              })}
+                            >✓</button>
+                            <button
+                              className="rounded border px-1.5 py-0.5 text-xs text-gray-500"
+                              onClick={() => setEditingAmountId(null)}
+                            >✕</button>
+                          </span>
+                        ) : (
+                          <span className="flex items-center gap-1">
+                            {money(r.amount)}
+                            {r.sourceType === 'MARKETPLACE_ORDER' && (
+                              <button
+                                title="Tutarı düzelt (platform indirimi düşülmemişse)"
+                                className="ml-1 rounded border px-1 py-0.5 text-xs text-orange-600"
+                                onClick={() => { setEditingAmountId(r.sourceId); setEditingAmountVal(String(r.amount)); }}
+                              >Düzelt</button>
+                            )}
+                          </span>
+                        )}
+                      </td>
                       <td className="px-3 py-2">{typeLabel(r.invoiceType)}</td>
                       <td className="px-3 py-2">{date(r.date)}</td>
                       <td className="px-3 py-2 text-right">

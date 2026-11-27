@@ -132,6 +132,15 @@ export class IntegrationsController {
     return this.integrations.listMarketplaceOrders(query);
   }
 
+  @UseGuards(OwnerGuard)
+  @Patch('marketplace-orders/:id/total-amount')
+  updateMarketplaceOrderAmount(
+    @Param('id') id: string,
+    @Body() body: { totalAmount: number },
+  ) {
+    return this.integrations.updateMarketplaceOrderAmount(Number(id), body.totalAmount);
+  }
+
   @Get('retail-orders')
   retailOrders(@Query() query: Record<string, string>) {
     return this.integrations.listRetailOrders(query);
