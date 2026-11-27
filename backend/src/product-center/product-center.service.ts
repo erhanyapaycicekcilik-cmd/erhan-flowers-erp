@@ -155,7 +155,7 @@ export class ProductCenterService {
         || existingVariant?.currentModelCode
         || existingVariant?.proposedModelCode
         || existingVariant?.product?.modelCode
-        || await this.nextModelCode(tx, category)).toUpperCase();
+        || await this.nextModelCodeForStore(tx, category, storeCode)).toUpperCase();
       if (storeCode === 'FLORA' && !existingVariant) modelCode = withFloraPrefix(modelCode);
       const defaultBrand = STORE_DEFAULT_BRAND[storeCode];
       const stockCode = this.text(payload.stockCode)
@@ -164,7 +164,7 @@ export class ProductCenterService {
       const barcode = this.text(payload.barcode)
         || existingVariant?.barcode
         || existingVariant?.product?.barcode
-        || await this.nextEan13Barcode(tx);
+        || await this.nextEan13Barcode(tx, storeCode);
 
       await this.ensureProductIdentityIsAvailable({ modelCode, stockCode, barcode, productId: effectiveProductId, variantId }, tx);
 
@@ -255,9 +255,10 @@ export class ProductCenterService {
       await tx.$executeRawUnsafe('LOCK TABLE "products", "trendyol_product_variants", "stock_cards", "barcode_logs" IN SHARE ROW EXCLUSIVE MODE');
       const category = await tx.category.findUnique({ where: { id: categoryId } });
       if (!category) throw new BadRequestException('Kategori bulunamadi.');
-      const modelCode = await this.nextModelCode(tx, category);
+      const storeCode = normalizeStoreCode(payload.storeCode);
+      const modelCode = await this.nextModelCodeForStore(tx, category, storeCode);
       const stockCode = await this.nextStockCode(tx, modelCode, sizeVariant);
-      const barcode = await this.nextEan13Barcode(tx);
+      const barcode = await this.nextEan13Barcode(tx, storeCode);
       return { modelCode, stockCode, barcode };
     });
   }
@@ -318,9 +319,9 @@ export class ProductCenterService {
       const existing = await this.findExistingQuickEntry(tx, productId, variantId);
       const storeCode = existing.variantId || existing.productId ? existing.storeCode : normalizeStoreCode(payload.storeCode);
       const brand = STORE_DEFAULT_BRAND[storeCode];
-      const modelCode = existing.modelCode || (storeCode === 'FLORA' ? withFloraPrefix(await this.nextModelCode(tx, category)) : await this.nextModelCode(tx, category));
+      const modelCode = existing.modelCode || await this.nextModelCodeForStore(tx, category, storeCode);
       const stockCode = existing.stockCode || await this.nextStockCode(tx, modelCode, sizeVariant);
-      const barcode = existing.barcode || await this.nextEan13Barcode(tx);
+      const barcode = existing.barcode || await this.nextEan13Barcode(tx, storeCode);
       const images = Array.from(new Set([mainImageUrl, ...extraImages].filter(Boolean)));
 
       if (!existing.productId) {
@@ -972,6 +973,29 @@ export class ProductCenterService {
   // Model kodu prensibi: ERH-XXXX, kategori bazinda ayrilmis numara serisi
   // (orn. Agaclar 1000'ler, Bambu Saksili 2000'ler). Kategori.startCode/currentCode
   // serinin sinirini ve son kullanilan numarayi tutar.
+  private nextModelCodeForStore(tx: Prisma.TransactionClient, category: { id: number; codePrefix: string; startCode: number; currentCode: number }, store: string) {
+    return normalizeStoreCode(store) === 'FLORA' ? this.nextFloraModelCode(tx) : this.nextModelCode(tx, category);
+  }
+
+  // Flora Yapay Çiçek'in kendi model kodu serisi: FL-10001, FL-10002… (Erhan'ın kategori kodu/sayacı kullanılmaz)
+  private async nextFloraModelCode(tx: Prisma.TransactionClient) {
+    const rows = await tx.$queryRaw<Array<{ code: string | null }>>`
+      SELECT model_code AS code FROM products WHERE model_code ~ '^FL-[0-9]+$'
+      UNION ALL SELECT current_model_code FROM trendyol_product_variants WHERE current_model_code ~ '^FL-[0-9]+$'
+      UNION ALL SELECT proposed_model_code FROM trendyol_product_variants WHERE proposed_model_code ~ '^FL-[0-9]+$'
+    `;
+    let next = rows.reduce((highest, row) => Math.max(highest, Number(String(row.code ?? '').slice(3)) || 0), 10000) + 1;
+    for (let attempt = 0; attempt < 10000; attempt += 1) {
+      const modelCode = `FL-${next}`;
+      const duplicate = await tx.product.findFirst({ where: { modelCode }, select: { id: true } })
+        || await tx.trendyolProductVariant.findFirst({ where: { OR: [{ currentModelCode: modelCode }, { proposedModelCode: modelCode }] }, select: { id: true } })
+        || await tx.stockCard.findFirst({ where: { OR: [{ sku: modelCode }, { model: modelCode }] }, select: { id: true } });
+      if (!duplicate) return modelCode;
+      next += 1;
+    }
+    throw new BadRequestException('Benzersiz Flora model kodu uretilemedi.');
+  }
+
   private async nextModelCode(tx: Prisma.TransactionClient, category: { id: number; codePrefix: string; startCode: number; currentCode: number }) {
     const prefix = category.codePrefix || 'ERH';
     let next = Math.max(category.currentCode + 1, category.startCode);
@@ -997,8 +1021,14 @@ export class ProductCenterService {
     return exists ? modelCode : candidate;
   }
 
-  private async nextEan13Barcode(tx: Prisma.TransactionClient) {
+  // Barkod serileri ayrı: Flora Yapay Çiçek yeni barkodları 8699… aralığından (seri no 900000000+),
+  // Erhan Flowers kendi aralığından devam eder. Her barkod tüm tablolarda tekillik kontrolünden geçer.
+  private async nextEan13Barcode(tx: Prisma.TransactionClient, store: string = 'ERHAN') {
     const prefix = '869';
+    const isFlora = normalizeStoreCode(store) === 'FLORA';
+    const seriesMin = isFlora ? 900000000 : 0;
+    const seriesMax = isFlora ? 999999999 : 899999999;
+    const seriesStart = isFlora ? 900000000 : 100000;
     const rows = await Promise.all([
       tx.product.findMany({ where: { barcode: { startsWith: prefix } }, select: { barcode: true } }),
       tx.stockCard.findMany({ where: { barcode: { startsWith: prefix } }, select: { barcode: true } }),
@@ -1008,8 +1038,10 @@ export class ProductCenterService {
     let next = rows.flat().reduce((highest, item) => {
       const value = String(item.barcode ?? '');
       if (!/^\d{13}$/.test(value) || !this.hasValidEan13Checksum(value)) return highest;
-      return Math.max(highest, Number(value.slice(3, 12)));
-    }, 100000) + 1;
+      const serial = Number(value.slice(3, 12));
+      if (serial < seriesMin || serial > seriesMax) return highest;
+      return Math.max(highest, serial);
+    }, seriesStart) + 1;
 
     for (let attempt = 0; attempt < 10000; attempt += 1) {
       const barcode = this.ean13(`${prefix}${String(next).padStart(9, '0')}`);
@@ -1611,7 +1643,7 @@ Sadece 3 satır ürün adı yaz, başka hiçbir şey yazma.`;
           results.push({ size: row.size, modelCode: row.modelCode, productName: row.productName, barcode: existing.barcode, variantId: existing.id, productId: null, created: false, trendyolSalePrice: row.trendyolSalePrice });
           continue;
         }
-        const barcode = await this.nextEan13Barcode(tx);
+        const barcode = await this.nextEan13Barcode(tx, normalizeStoreCode((source as any).storeCode));
 
         let productId: number | null = null;
         if (source.product) {
