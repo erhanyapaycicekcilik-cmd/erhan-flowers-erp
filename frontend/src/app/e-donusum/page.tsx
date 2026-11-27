@@ -258,7 +258,7 @@ export default function EDonusumPage() {
                 <div className="md:col-span-3">
                   <span className="text-xs text-gray-500">Pazaryeri platformları (ERP&apos;den fatura kesilecekler, ör. IDEFIX)</span>
                   <div className="mt-1 flex flex-wrap gap-2">
-                    {['IDEFIX', 'PAZARAMA', 'TICIMAX', 'AMAZON'].map((p) => {
+                    {['N11', 'HEPSIBURADA', 'IDEFIX', 'PAZARAMA', 'TICIMAX', 'AMAZON'].map((p) => {
                       const active = (form.marketplacePlatforms ?? []).includes(p);
                       return (
                         <button
@@ -275,7 +275,7 @@ export default function EDonusumPage() {
                       );
                     })}
                   </div>
-                  <p className="mt-1 text-xs text-gray-400">Trendyol ve N11 kendi faturalarını kesiyor; burada seçmeyin. Idefix, Pazarama gibi platformları seçin.</p>
+                  <p className="mt-1 text-xs text-gray-400">ERP üzerinden fatura kesmek istediğiniz pazaryerlerini seçin. Trendyol kendi faturasını kesiyor; burada seçmeyin.</p>
                 </div>
                 <p className="text-xs text-gray-500 md:col-span-3">
                   Kullanıcı adı, e-Faturam portalına kayıtlı e-posta adresinizdir. Test ortamı şifresini e-Faturam&apos;ın gönderdiği e-postadaki linkten belirlersiniz.
