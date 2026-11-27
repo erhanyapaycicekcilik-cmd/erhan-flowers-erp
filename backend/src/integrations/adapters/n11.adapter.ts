@@ -240,6 +240,44 @@ export class N11Adapter extends HttpMarketplaceOrderAdapter {
     }
   }
 
+  async uploadInvoice(params: {
+    packageId: string;
+    invoiceNumber: string;
+    invoiceDate: string; // 'YYYY-MM-DD'
+    totalAmount: number;
+  }): Promise<AdapterConnectionResult> {
+    const appKey = this.env('API_KEY') || this.env('USERNAME');
+    const appSecret = this.env('API_SECRET') || this.env('PASSWORD');
+    if (!appKey || !appSecret) return this.missing(['N11_API_KEY', 'N11_API_SECRET']);
+    const apiUrl = this.env('API_URL') || 'https://api.n11.com';
+
+    try {
+      const response = await fetch(new URL(`/rest/delivery/v1/shipmentPackages/${params.packageId}/invoice`, apiUrl), {
+        method: 'PUT',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          appkey: appKey,
+          appsecret: appSecret,
+          'User-Agent': 'ErhanFlowersERP-N11',
+        },
+        body: JSON.stringify({
+          invoiceNumber: params.invoiceNumber,
+          invoiceDate: params.invoiceDate,
+          invoiceAmount: params.totalAmount,
+        }),
+      });
+
+      if (response.ok || response.status === 200) {
+        return { ok: true, status: 'CONNECTED', message: `N11 fatura yüklendi: ${params.invoiceNumber}` };
+      }
+      const txt = await response.text().catch(() => '');
+      return { ok: false, status: 'FAILED', message: `N11 fatura yükleme HTTP ${response.status}: ${txt.slice(0, 300)}` };
+    } catch (e) {
+      return { ok: false, status: 'FAILED', message: `N11 fatura yükleme hatası: ${String(e)}` };
+    }
+  }
+
   async testConnection(): Promise<AdapterConnectionResult> {
     const appKey = this.env('API_KEY') || this.env('USERNAME');
     const appSecret = this.env('API_SECRET') || this.env('PASSWORD');
