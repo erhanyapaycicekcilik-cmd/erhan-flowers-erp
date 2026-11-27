@@ -236,7 +236,7 @@ export class BulkPriceService {
       for (const platform of platforms) {
         const salePrice = calcPlatformPrice(price, platform);
         const res = await this.integrations
-          .pushPrice(platform, { barcode: v.barcode, salePrice, listPrice: Math.ceil(salePrice * 1.1), stockQuantity: Number(v.stockQuantity ?? 0) })
+          .pushPrice(platform, { barcode: v.barcode, salePrice, listPrice: Math.ceil(salePrice * 1.1), stockQuantity: Number(v.stockQuantity ?? 0), allowPriceDrop: true })
           .catch((e: unknown) => ({ ok: false, message: e instanceof Error ? e.message : String(e) }));
         if (!res.ok) failures.push(`${platform}: ${String(res.message ?? '').slice(0, 120)}`);
       }
