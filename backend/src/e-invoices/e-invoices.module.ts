@@ -4,9 +4,10 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { EInvoicesController } from './e-invoices.controller';
 import { EInvoicesService } from './e-invoices.service';
 import { TrendyolEFaturamProvider } from './providers/trendyol-efaturam.provider';
+import { IntegrationsModule } from '../integrations/integrations.module';
 
 @Module({
-  imports: [AuthModule, PrismaModule],
+  imports: [AuthModule, PrismaModule, IntegrationsModule],
   controllers: [EInvoicesController],
   providers: [EInvoicesService, TrendyolEFaturamProvider],
 })

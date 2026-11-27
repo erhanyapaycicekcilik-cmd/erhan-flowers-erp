@@ -1,10 +1,11 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { Cron } from '@nestjs/schedule';
 import { Prisma, RetailSaleChannel, RetailSaleStatus, WebOrderStatus } from '../generated/prisma-client';
 import { PrismaService } from '../prisma/prisma.service';
 import { EInvoiceDraft, EInvoiceSettings } from './providers/e-invoice-provider.interface';
 import { TrendyolEFaturamProvider } from './providers/trendyol-efaturam.provider';
+import { N11Adapter } from '../integrations/adapters/n11.adapter';
 
 type SourceType = 'RETAIL_SALE' | 'WEB_ORDER' | 'MARKETPLACE_ORDER';
 type SourceRef = { sourceType: SourceType; sourceId: number };
@@ -61,6 +62,7 @@ export class EInvoicesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly provider: TrendyolEFaturamProvider,
+    @Optional() private readonly n11Adapter: N11Adapter,
   ) {}
 
   // ─── Ayarlar ────────────────────────────────────────────────────────────
@@ -295,6 +297,7 @@ export class EInvoicesService {
         sourceType: 'RETAIL_SALE',
         sourceId: sale.id,
         sourceNumber: sale.saleNumber,
+        retailChannel: sale.channel,
         invoiceType,
         series: invoiceType === 'E_FATURA' ? s.eInvoiceSeries : s.eArchiveSeries,
         issueDate: new Date(),
@@ -504,6 +507,10 @@ export class EInvoicesService {
       return false;
     }
 
+    const channel: string | null = draft.sourceType === 'MARKETPLACE_ORDER'
+      ? (draft.internetSale?.paymentAgent ?? null)
+      : draft.sourceType === 'WEB_ORDER' ? 'WEB'
+      : (draft as any).retailChannel ?? null;
     const base = {
       provider: tag,
       sourceNumber: draft.sourceNumber,
@@ -512,6 +519,7 @@ export class EInvoicesService {
       invoiceType: draft.invoiceType,
       status: 'PENDING',
       errorMessage: null,
+      ...(channel ? { channel } : {}),
     };
     // ETTN (UUID) kayıt başına bir kez üretilir; tekrar denemelerde aynı ETTN gider, fatura iki kez kesilmez
     const documentUuid = (sameEnv && existing?.status !== 'ISSUED' && existing?.providerRef) || randomUUID();
@@ -541,6 +549,27 @@ export class EInvoicesService {
             invoiceNote: `${draft.invoiceType === 'E_FATURA' ? 'e-Fatura' : 'e-Arşiv'} ${result.invoiceNumber}`,
           },
         });
+      }
+      // N11 siparişleri için fatura otomatik yükle
+      if (ref.sourceType === 'MARKETPLACE_ORDER' && result.invoiceNumber && this.n11Adapter) {
+        const order = await this.prisma.marketplaceOrder.findUnique({
+          where: { id: ref.sourceId },
+          select: { platform: true, externalOrderId: true, totalAmount: true, orderDate: true },
+        });
+        if (order?.platform === 'N11' && order.externalOrderId) {
+          const invoiceDate = (order.orderDate ?? new Date()).toISOString().slice(0, 10);
+          const uploadResult = await this.n11Adapter.uploadInvoice({
+            packageId: order.externalOrderId,
+            invoiceNumber: result.invoiceNumber,
+            invoiceDate,
+            totalAmount: Number(order.totalAmount),
+          });
+          if (!uploadResult.ok) {
+            this.logger.warn(`N11 fatura yükleme başarısız (sipariş ${order.externalOrderId}): ${uploadResult.message}`);
+          } else {
+            this.logger.log(`N11 fatura yüklendi: sipariş ${order.externalOrderId}, fatura ${result.invoiceNumber}`);
+          }
+        }
       }
       return true;
     } catch (e) {

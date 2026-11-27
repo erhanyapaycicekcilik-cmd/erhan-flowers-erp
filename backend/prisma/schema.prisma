@@ -2662,6 +2662,7 @@ model EInvoice {
   sourceType    String    @map("source_type")
   sourceId      Int       @map("source_id")
   sourceNumber  String    @map("source_number")
+  channel       String?
   customerName  String?   @map("customer_name")
   amount        Decimal   @default(0) @db.Decimal(14, 2)
   invoiceType   String    @default("E_ARSIV") @map("invoice_type")
