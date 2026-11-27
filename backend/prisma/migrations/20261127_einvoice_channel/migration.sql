@@ -1,0 +1,1 @@
+ALTER TABLE "e_invoices" ADD COLUMN IF NOT EXISTS "channel" TEXT;

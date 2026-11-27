@@ -48,6 +48,7 @@ type InvoiceRow = {
   sourceId: number;
   sourceType: string;
   sourceNumber: string;
+  channel: string | null;
   customerName: string | null;
   amount: number;
   invoiceType: string;
@@ -62,8 +63,26 @@ type InvoiceRow = {
 
 const CHANNEL_LABEL: Record<string, string> = {
   STORE: 'Dükkan', PHONE: 'Telefon', WHATSAPP: 'WhatsApp', INSTAGRAM: 'Instagram', WEBSITE: 'Web (ERP)', OTHER: 'Diğer', WEB: 'Web Sitesi',
-  IDEFIX: 'Idefix', PAZARAMA: 'Pazarama', TICIMAX: 'Ticimax', AMAZON: 'Amazon',
+  N11: 'N11', HEPSIBURADA: 'Hepsiburada', IDEFIX: 'Idefix', PAZARAMA: 'Pazarama', TICIMAX: 'Ticimax', AMAZON: 'Amazon',
 };
+
+const CHANNEL_COLOR: Record<string, string> = {
+  N11: 'bg-purple-100 text-purple-800',
+  HEPSIBURADA: 'bg-orange-100 text-orange-800',
+  IDEFIX: 'bg-sky-100 text-sky-800',
+  PAZARAMA: 'bg-pink-100 text-pink-800',
+  TICIMAX: 'bg-teal-100 text-teal-800',
+  AMAZON: 'bg-yellow-100 text-yellow-800',
+  WEB: 'bg-blue-100 text-blue-800',
+  WHATSAPP: 'bg-green-100 text-green-800',
+  INSTAGRAM: 'bg-rose-100 text-rose-800',
+};
+
+function ChannelBadge({ channel }: { channel: string }) {
+  const label = CHANNEL_LABEL[channel] ?? channel;
+  const color = CHANNEL_COLOR[channel] ?? 'bg-gray-100 text-gray-700';
+  return <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${color}`}>{label}</span>;
+}
 
 const money = (n: number) => `${n.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} TL`;
 const date = (s: string | null) => (s ? new Date(s).toLocaleDateString('tr-TR') : '-');
@@ -370,7 +389,7 @@ export default function EDonusumPage() {
                   {pending.map((r) => (
                     <tr key={`${r.sourceType}-${r.sourceId}`} className="border-t align-top">
                       <td className="px-3 py-2 font-medium">{r.sourceNumber}</td>
-                      <td className="px-3 py-2">{CHANNEL_LABEL[r.channel] ?? r.channel}</td>
+                      <td className="px-3 py-2"><ChannelBadge channel={r.channel} /></td>
                       <td className="px-3 py-2">
                         {r.customerName}
                         {r.lastError && <div className="mt-1 max-w-md text-xs text-red-600">Son deneme hatası: {r.lastError}</div>}
@@ -444,7 +463,7 @@ export default function EDonusumPage() {
               <table className="w-full min-w-[900px] text-sm">
                 <thead className="bg-gray-50 text-left text-xs uppercase text-gray-500">
                   <tr>
-                    <th className="px-3 py-2">Fatura No</th><th className="px-3 py-2">Satış No</th><th className="px-3 py-2">Müşteri</th>
+                    <th className="px-3 py-2">Fatura No</th><th className="px-3 py-2">Kanal</th><th className="px-3 py-2">Satış No</th><th className="px-3 py-2">Müşteri</th>
                     <th className="px-3 py-2">Tutar</th><th className="px-3 py-2">Tür</th><th className="px-3 py-2">Durum</th>
                     <th className="px-3 py-2">Tarih</th><th className="px-3 py-2" />
                   </tr>
@@ -453,6 +472,7 @@ export default function EDonusumPage() {
                   {invoices.map((r) => (
                     <tr key={r.id} className="border-t align-top">
                       <td className="px-3 py-2 font-medium">{r.invoiceNumber ?? '-'}</td>
+                      <td className="px-3 py-2"><ChannelBadge channel={r.channel ?? r.sourceType} /></td>
                       <td className="px-3 py-2">{r.sourceNumber}</td>
                       <td className="px-3 py-2">{r.customerName ?? '-'}</td>
                       <td className="px-3 py-2">{money(r.amount)}</td>
