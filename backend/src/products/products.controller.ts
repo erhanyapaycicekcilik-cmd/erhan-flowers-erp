@@ -8,6 +8,7 @@ import { OwnerGuard } from '../auth/owner.guard';
 import { GeminiContentService } from './gemini-content.service';
 import { ProductsService } from './products.service';
 import { BulkPriceParams, BulkPriceService } from './bulk-price.service';
+import { SharedStockService } from './shared-stock.service';
 import { TrendyolProductSyncService } from '../public-catalog/trendyol-product-sync.service';
 
 @UseGuards(AuthGuard)
@@ -18,6 +19,7 @@ export class ProductsController {
     private readonly geminiContent: GeminiContentService,
     private readonly trendyolSync: TrendyolProductSyncService,
     private readonly bulkPrice: BulkPriceService,
+    private readonly sharedStock: SharedStockService,
   ) {}
 
   @Get()
@@ -72,6 +74,31 @@ export class ProductsController {
   @Post('identity-check')
   checkIdentity(@Body() body: unknown) {
     return this.products.checkIdentity(body);
+  }
+
+  // ─── Ortak stok (Erhan + Flora aynı depo, ilan adedi reçeteden) ───────────
+  @UseGuards(OwnerGuard)
+  @Get('shared-stock/settings')
+  sharedStockSettings() {
+    return this.sharedStock.getSettings();
+  }
+
+  @UseGuards(OwnerGuard)
+  @Post('shared-stock/settings')
+  sharedStockUpdateSettings(@Body() body: { mode?: 'OFF' | 'PREVIEW' | 'ON'; buffer?: number }) {
+    return this.sharedStock.updateSettings(body);
+  }
+
+  @UseGuards(OwnerGuard)
+  @Get('shared-stock/preview')
+  sharedStockPreview(@Query('store') store?: string, @Query('onlyChanged') onlyChanged?: string, @Query('q') q?: string) {
+    return this.sharedStock.preview({ store, onlyChanged: onlyChanged === '1' || onlyChanged === 'true', search: q });
+  }
+
+  @UseGuards(OwnerGuard)
+  @Post('shared-stock/run')
+  sharedStockRun() {
+    return this.sharedStock.runNow();
   }
 
   // ─── Toplu zam / indirim (Trendyol ürünleri → tüm pazaryerleri) ───────────
