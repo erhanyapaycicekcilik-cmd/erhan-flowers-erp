@@ -51,11 +51,11 @@ type QuickEntryPayload = {
   sizeVariant?: unknown;
   shopPrice?: unknown;
   sitePrice?: unknown;
+  marketplaceSalePrice?: unknown;
+  description?: unknown;
   initialStockQuantity?: unknown;
   mainImageUrl?: unknown;
   storeCode?: unknown;
-  // Flora ürün sayfası: açıklama, ek görseller ve doğrudan pazaryeri satış fiyatı
-  description?: unknown;
   imageUrls?: unknown;
   marketPrice?: unknown;
 };
@@ -294,7 +294,7 @@ export class ProductCenterService {
     const productType = this.requiredText(payload.productType, 'Urun turu zorunludur.');
     const sizeVariant = this.requiredText(payload.sizeVariant, 'Olcu veya varyant zorunludur.');
     // Pazaryeri satış fiyatı doğrudan verilirse (Flora sayfası) dükkan/site fiyatı zorunlu değil
-    const marketPriceInput = this.optionalNumber(payload.marketPrice) ?? 0;
+    const marketPriceInput = this.optionalNumber(payload.marketPrice) ?? this.optionalNumber(payload.marketplaceSalePrice) ?? 0;
     const shopPrice = marketPriceInput > 0 && !(this.optionalNumber(payload.shopPrice) ?? 0)
       ? marketPriceInput
       : this.requiredPositiveNumber(payload.shopPrice, 'Dukkan satis fiyati zorunludur.');
@@ -303,7 +303,7 @@ export class ProductCenterService {
       : this.requiredPositiveNumber(payload.sitePrice, 'Site satis fiyati zorunludur.');
     const channelPrice = marketPriceInput > 0 ? Math.round(marketPriceInput) : Math.round(sitePrice * 1.25);
     const quickDescription = this.text(payload.description) || undefined;
-    const extraImages = this.stringArray(payload.imageUrls);
+    const extraImages = this.stringArray((payload as any).extraImages);
     const initialStockQuantity = this.requiredNonNegativeNumber(payload.initialStockQuantity, 'Baslangic stok miktari zorunludur.');
     const mainImageUrl = this.requiredText(payload.mainImageUrl, 'Ana urun gorseli zorunludur.');
     const variantId = this.optionalInt(payload.variantId);

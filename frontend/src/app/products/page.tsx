@@ -187,6 +187,8 @@ type QuickForm = {
   sizeVariant: string;
   shopPrice: number;
   sitePrice: number;
+  marketplaceSalePrice: number;
+  description: string;
   initialStockQuantity: number;
   mainImageUrl: string;
   platforms: string[];
@@ -292,6 +294,8 @@ const emptyQuickForm: QuickForm = {
   sizeVariant: '',
   shopPrice: 0,
   sitePrice: 0,
+  marketplaceSalePrice: 0,
+  description: '',
   initialStockQuantity: 0,
   mainImageUrl: '',
   platforms: ['TRENDYOL'],
@@ -2226,6 +2230,7 @@ export default function ProductsPage() {
           <Field label="Ana kategori"><select className="field" value={quickForm.categoryId} onChange={(event) => updateQuick('categoryId', event.target.value)} required><option value="">Seçin</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></Field>
           <Field label="Ürün türü"><input className="field" value={quickForm.productType} onChange={(event) => updateQuick('productType', event.target.value)} placeholder="Yapay ağaç, çiçek, saksı" required /></Field>
           <Field label="Ölçü veya varyant"><input className="field" value={quickForm.sizeVariant} onChange={(event) => updateQuick('sizeVariant', event.target.value)} placeholder="180 cm, beyaz, 30x30" required /></Field>
+          <Field label="Pazaryeri satış fiyatı (TL)"><MoneyInput value={quickForm.marketplaceSalePrice} onChange={(value) => updateQuick('marketplaceSalePrice', value)} /></Field>
           <Field label="Dükkan satış fiyatı"><MoneyInput value={quickForm.shopPrice} onChange={(value) => updateQuick('shopPrice', value)} /></Field>
           <Field label="Site satış fiyatı"><MoneyInput value={quickForm.sitePrice} onChange={(value) => updateQuick('sitePrice', value)} /></Field>
           <Field label="Başlangıç stok"><input className="field" type="number" min="0" step="1" value={Number(quickForm.initialStockQuantity || 0)} onChange={(event) => updateQuick('initialStockQuantity', decimalValue(event.target.value))} required /></Field>
@@ -2236,6 +2241,7 @@ export default function ProductsPage() {
               <input className="hidden" type="file" accept="image/*" onChange={(event) => uploadQuickImage(event.target.files)} />
             </label>
           </Field>
+          <label className="block text-sm font-semibold text-slate-600 lg:col-span-4"><span className="mb-1 block">Açıklama (pazaryerinde görünür)</span><textarea className="field min-h-[72px] w-full resize-y" value={quickForm.description} onChange={(event) => updateQuick('description', event.target.value)} placeholder="Ürün açıklaması — Trendyol, N11, HB ilanlarında görünür" /></label>
           <div className="lg:col-span-4">
             <div className="mb-3 flex flex-wrap items-center gap-3">
               <span className="text-sm font-semibold text-slate-600">Kanallara gönder:</span>
