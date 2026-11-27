@@ -4,7 +4,7 @@ import { IntegrationsService } from '../integrations/integrations.service'
 import * as fs from 'fs'
 import { basename, extname, join } from 'path'
 
-const RETURN_PROCESS = ['WAITING', 'REJECT_REQUESTED', 'REJECTED', 'ACCEPTED', 'CLOSED']
+const RETURN_PROCESS = ['WAITING', 'REJECT_REQUESTED', 'REJECTED', 'ACCEPTED', 'CANCELLED', 'CLOSED']
 
 @Injectable()
 export class ReturnsService {

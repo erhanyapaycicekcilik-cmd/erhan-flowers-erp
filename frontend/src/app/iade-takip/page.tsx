@@ -41,6 +41,7 @@ const PROCESS: { key: string; label: string; color: string }[] = [
   { key: 'REJECT_REQUESTED', label: 'Red talebi gönderildi', color: 'bg-orange-100 text-orange-800 border-orange-300' },
   { key: 'REJECTED', label: 'İade reddedildi', color: 'bg-green-100 text-green-800 border-green-300' },
   { key: 'ACCEPTED', label: 'İade kabul edildi', color: 'bg-slate-100 text-slate-700 border-slate-300' },
+  { key: 'CANCELLED', label: 'İptal edildi', color: 'bg-red-100 text-red-700 border-red-300' },
   { key: 'CLOSED', label: 'Kapandı', color: 'bg-slate-100 text-slate-500 border-slate-300' },
 ]
 const processLabel = (k: string | null) => PROCESS.find((p) => p.key === k)
