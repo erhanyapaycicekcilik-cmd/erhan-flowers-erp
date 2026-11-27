@@ -2,8 +2,10 @@ import { BadRequestException, Body, Controller, Post } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { PublicOrdersService } from './public-orders.service';
 
-// AuthGuard YOK — müşteri sipariş formu (herkese açık)
-@Controller('public/orders')
+// AuthGuard YOK — müşteri sipariş formu (herkese açık), /hizli-siparis sayfası.
+// DİKKAT: 'public/orders' sitenin sepet/ödeme siparişleri (web-orders) içindir; bu form oraya bağlanırsa
+// site siparişleri bu kontrole düşer ve "Ad soyad zorunludur" hatası verir (25-27.11.2026 olayı).
+@Controller('public/quick-orders')
 export class PublicOrdersController {
   constructor(private readonly service: PublicOrdersService) {}
 
