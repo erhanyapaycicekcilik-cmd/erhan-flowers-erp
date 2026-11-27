@@ -19,6 +19,7 @@ import { KoctasAdapter } from './adapters/koctas.adapter';
 import { AmazonAdapter } from './adapters/amazon.adapter';
 import { IntegrationCenterService } from './services/integration-center.service';
 import { isSiteOnlyModelCode } from '../common/site-only';
+import { FLORA_MODEL_PREFIX, FLORA_PLATFORMS, StoreCode } from '../common/store';
 
 const platforms: Array<{ platform: IntegrationPlatform; displayName: string; hidden?: boolean }> = [
   { platform: 'TRENDYOL', displayName: 'Trendyol' },
@@ -64,6 +65,8 @@ type TicimaxSettingsRow = {
 
 const AUTO_SYNC_PLATFORMS: IntegrationPlatform[] = ['TRENDYOL', 'HEPSIBURADA', 'N11', 'TICIMAX'];
 const AUTO_SYNC_INTERVAL_MS = 60 * 1000;
+
+const FLORA_BLOCK_MESSAGE = `Flora Yapay Çiçek mağazasının ürünü (${FLORA_MODEL_PREFIX}) Erhan Flowers hesabına gönderilmez.`;
 
 @Injectable()
 export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
@@ -702,6 +705,7 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
   async pushPrice(platformValue: string, payload: { barcode?: string; salePrice?: number; listPrice?: number; stockQuantity?: number }) {
     const platform = this.platform(platformValue);
     if (this.isSiteOnlyPayload(payload)) return { ok: false, message: 'Sadece sitede satılan ürün (WEB-), pazaryerine gönderilmez.' };
+    if (await this.isFloraPayload(payload)) return { ok: false, message: FLORA_BLOCK_MESSAGE };
     const adapter = await this.adapter(platform);
     const result = await adapter.pushPrice(payload);
     await this.log(platform, 'PUSH_PRICE', result.ok ? 'SUCCESS' : 'FAILED', result.message, payload.barcode ?? null, null, { salePrice: payload.salePrice, stockQuantity: payload.stockQuantity });
@@ -711,11 +715,66 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
   async pushProduct(platformValue: string, payload: unknown) {
     const platform = this.platform(platformValue);
     if (this.isSiteOnlyPayload(payload)) return { ok: false, message: 'Sadece sitede satılan ürün (WEB-), pazaryerine gönderilmez.' };
+    if (await this.isFloraPayload(payload)) return { ok: false, message: FLORA_BLOCK_MESSAGE };
     const adapter = await this.adapter(platform);
     const result = await adapter.pushProduct(payload);
     const barcode = (payload as Record<string, unknown>)?.barcode as string | undefined;
     await this.log(platform, 'PUSH_PRODUCT', result.ok ? 'SUCCESS' : 'FAILED', result.message, barcode ?? null, null, {});
     return result;
+  }
+
+  // ── Mağaza ayrımı ─────────────────────────────────────────────
+  // pushPrice / pushProduct ERHAN hesaplarına gider. Flora mağazasının ürünleri (store_code = FLORA)
+  // buradan ASLA geçmez; Flora ürünleri pushPriceForStore / publishing üzerinden Flora hesaplarına gider.
+  async isFloraPayload(payload: unknown): Promise<boolean> {
+    const p = (payload ?? {}) as Record<string, unknown>;
+    if (String(p.companyCode ?? '').toUpperCase() === 'FLORA') return true;
+    const values = ['modelCode', 'productMainId', 'stockCode', 'barcode', 'sku', 'productCode', 'trendyolBarcode']
+      .map((key) => (typeof p[key] === 'string' ? (p[key] as string).trim().toUpperCase() : ''))
+      .filter(Boolean);
+    if (values.length === 0) return false;
+    // Doğrudan veritabanı (önbellek yok): yeni açılan Flora ürünü ilk dakikada bile Erhan'a kaçmasın
+    const [variant, product] = await Promise.all([
+      this.prisma.trendyolProductVariant.findFirst({
+        where: { storeCode: 'FLORA', OR: [{ barcode: { in: values } }, { currentModelCode: { in: values, mode: 'insensitive' } }, { supplierStockCode: { in: values, mode: 'insensitive' } }] },
+        select: { id: true },
+      }),
+      this.prisma.product.findFirst({
+        where: { storeCode: 'FLORA', OR: [{ barcode: { in: values } }, { modelCode: { in: values, mode: 'insensitive' } }] },
+        select: { id: true },
+      }),
+    ]);
+    return !!(variant || product);
+  }
+
+  // Flora ürününün fiyat/stoğunu Flora'nın KENDİ hesaplarına gönderir (ürün açmaz, sadece günceller).
+  // API bilgisi girilmemiş platformlar atlanır.
+  async pushPriceForStore(store: StoreCode, payload: { barcode?: string; modelCode?: string; salePrice?: number; listPrice?: number; stockQuantity?: number }, platforms: readonly string[] = FLORA_PLATFORMS) {
+    if (store === 'ERHAN') {
+      const results = [];
+      for (const platform of platforms) results.push({ platform, ...(await this.pushPrice(platform, payload)) });
+      return results;
+    }
+    if (this.isSiteOnlyPayload(payload)) return [];
+    const results: Array<{ platform: string; ok: boolean; message: string; skipped?: boolean }> = [];
+    for (const value of platforms) {
+      const platform = this.platform(value);
+      let adapter: IntegrationAdapter;
+      try {
+        adapter = await this.storeAdapter(platform, store);
+      } catch (error) {
+        results.push({ platform, ok: false, skipped: true, message: this.errorMessage(error) });
+        continue;
+      }
+      try {
+        const result = await adapter.pushPrice(payload);
+        await this.log(`${platform}_${store}`, 'PUSH_PRICE', result.ok ? 'SUCCESS' : 'FAILED', result.message, payload.barcode ?? null, null, { salePrice: payload.salePrice, stockQuantity: payload.stockQuantity });
+        results.push({ platform, ok: result.ok, message: result.message });
+      } catch (error) {
+        results.push({ platform, ok: false, message: this.errorMessage(error) });
+      }
+    }
+    return results;
   }
 
   // Sadece bu ürünler: model kodu / barkod / stok kodu WEB- ile başlayan site ürünleri (diğer ürünler etkilenmez)
@@ -1008,7 +1067,11 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
   }
 
   async listMarketplaceOrders(query: Record<string, string>) {
-    const platform = this.text(query.platform).toUpperCase();
+    // Mağaza: FLORA siparişleri external_order_id = FLORA_<id>. platform=FLORA_TRENDYOL gibi değerler de kabul edilir.
+    let platform = this.text(query.platform).toUpperCase();
+    let company = this.text(query.company).toUpperCase();
+    if (platform.startsWith('FLORA_')) { platform = platform.slice(6); company = 'FLORA'; }
+    if (company !== 'FLORA' && company !== 'ERHAN') company = '';
     const q = this.text(query.q);
     const take = Math.min(Number(query.pageSize ?? 200), 500);
     const page = Math.max(1, Number(query.page ?? 1));
@@ -1037,6 +1100,7 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
         mo.created_at AS "createdAt",
         mo.cargo_tracking_number AS "cargoTrackingNumber",
         mo.cargo_provider AS "cargoProvider",
+        CASE WHEN mo.external_order_id LIKE 'FLORA\\_%' THEN 'FLORA' ELSE 'ERHAN' END AS "companyCode",
         COALESCE(
           jsonb_agg(
             jsonb_build_object(
@@ -1086,6 +1150,9 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
       LEFT JOIN stock_cards sc ON sc.barcode = moi.barcode OR (moi.barcode IS NULL AND sc.sku = moi.sku) OR (moi.barcode IS NULL AND moi.sku IS NOT NULL AND sc.sku = REGEXP_REPLACE(moi.sku, '^FL-', ''))
       LEFT JOIN trendyol_product_variants tpv ON tpv.barcode = COALESCE(moi.barcode, sc.barcode)
       WHERE (${platform} = '' OR mo.platform = ${platform})
+        AND (${company} = ''
+          OR (${company} = 'FLORA' AND mo.external_order_id LIKE 'FLORA\\_%')
+          OR (${company} = 'ERHAN' AND mo.external_order_id NOT LIKE 'FLORA\\_%'))
         AND (${q} = '' OR mo.order_number ILIKE ${`%${q}%`} OR mo.customer_name ILIKE ${`%${q}%`} OR mo.external_order_id ILIKE ${`%${q}%`})
         AND (${startDate} = '' OR COALESCE(mo.order_date, mo.created_at)::date >= ${startDate}::date)
         AND (${endDate} = '' OR COALESCE(mo.order_date, mo.created_at)::date <= ${endDate}::date)
@@ -2246,6 +2313,7 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
     if (platform === 'TRENDYOL') return new TrendyolAdapter(credentials);
     if (platform === 'HEPSIBURADA') return new HepsiburadaAdapter(credentials);
     if (platform === 'N11') return new N11Adapter(credentials);
+    if (platform === 'TRENDRUM') return new TrendrumAdapter(credentials);
     throw new BadRequestException(`${platform} için mağaza seçimi desteklenmiyor.`);
   }
 

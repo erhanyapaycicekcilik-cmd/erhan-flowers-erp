@@ -177,6 +177,7 @@ export class TrendyolProductSyncService {
         const deactivated = await this.prisma.product.updateMany({
           where: {
             status: 'ACTIVE',
+            storeCode: 'ERHAN', // Flora mağazası ürünleri Erhan Trendyol'unda yok — kapatma
             modelCode: { notIn: Array.from(activeTrendyolCodes) },
             // Sadece sitede satılan ürünler Trendyol'da yok — onları kapatma
             NOT: { modelCode: { startsWith: SITE_ONLY_MODEL_PREFIX } },

@@ -44,6 +44,8 @@ export type EInvoiceDraft = {
   sourceType: 'RETAIL_SALE' | 'WEB_ORDER' | 'MARKETPLACE_ORDER';
   sourceId: number;
   sourceNumber: string;
+  // Dükkan/telefon satışının kanalı (STORE, PHONE…) — listede kanal rozeti için
+  retailChannel?: string | null;
   invoiceType: 'E_ARSIV' | 'E_FATURA';
   series: string;
   issueDate: Date;

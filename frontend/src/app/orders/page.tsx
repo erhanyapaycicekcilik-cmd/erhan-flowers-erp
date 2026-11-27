@@ -182,10 +182,12 @@ const platformOptions = [
   { value: 'TRENDRUM', label: 'Trendrum' },
   { value: 'IDEFIX', label: 'İdefix' },
   { value: 'FLORA_TRENDYOL', label: 'Flora (Trendyol)' },
+  { value: 'FLORA_HEPSIBURADA', label: 'Flora (Hepsiburada)' },
   { value: 'FLORA_N11', label: 'Flora (N11)' },
+  { value: 'FLORA_TRENDRUM', label: 'Flora (Trendrum)' },
 ];
 
-const marketplacePlatforms = new Set(['PAZARAMA', 'TRENDRUM', 'IDEFIX', 'FLORA_TRENDYOL', 'FLORA_N11']);
+const marketplacePlatforms = new Set(['PAZARAMA', 'TRENDRUM', 'IDEFIX', 'FLORA_TRENDYOL', 'FLORA_N11', 'FLORA_HEPSIBURADA', 'FLORA_TRENDRUM']);
 const webPlatforms = new Set(['WEBSITE']);
 
 const statusRank: Record<string, number> = {
@@ -204,7 +206,7 @@ const statusRank: Record<string, number> = {
 const companyTabs = [
   { key: '', label: 'Tüm Firmalar' },
   { key: 'ERHAN', label: 'Erhan Flowers' },
-  { key: 'FLORA', label: 'Florayapaycicek' },
+  { key: 'FLORA', label: 'Flora Yapay Çiçek' },
 ];
 
 export default function OrdersPage() {
@@ -306,11 +308,17 @@ export default function OrdersPage() {
     else setLoading(true);
     setMessage('');
     try {
-      const usingMarketplace = marketplacePlatforms.has(appliedFilters.platform);
+      // Flora sekmesi: Flora'nın tüm pazaryeri siparişleri (Trendyol, Hepsiburada, N11, Trendrum) tek listede
+      const usingMarketplace = marketplacePlatforms.has(appliedFilters.platform) || (activeCompany === 'FLORA' && !appliedFilters.platform);
       const usingWeb = webPlatforms.has(appliedFilters.platform);
       if (usingMarketplace) {
-        const data = await api<OrderRow[]>(`/integrations/marketplace-orders?${params}`);
-        setOrders(data.map((order) => ({ ...order, items: Array.isArray(order.items) ? order.items : [] })));
+        const data = await api<Array<OrderRow & { companyCode?: string }>>(`/integrations/marketplace-orders?${params}`);
+        setOrders(data.map((order) => ({
+          ...order,
+          // Flora siparişi kanal adında belli olsun: "Flora (Hepsiburada)"
+          platform: order.companyCode === 'FLORA' && !String(order.platform ?? '').startsWith('FLORA_') ? `FLORA_${order.platform}` : order.platform,
+          items: Array.isArray(order.items) ? order.items : [],
+        })));
         setSummary(null);
       } else if (usingWeb) {
         const data = await api<OrderRow[]>(`/integrations/web-orders?${params}`);
@@ -334,7 +342,7 @@ export default function OrdersPage() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [params, summaryParams, appliedFilters.platform]);
+  }, [params, summaryParams, appliedFilters.platform, activeCompany]);
 
   useEffect(() => {
     loadOrders();
@@ -531,7 +539,14 @@ export default function OrdersPage() {
               <button
                 key={ct.key}
                 type="button"
-                onClick={() => { setActiveCompany(ct.key); setPage(1); }}
+                onClick={() => {
+                  setActiveCompany(ct.key);
+                  setPage(1);
+                  // Mağaza değişince diğer mağazanın kanal filtresi kalmasın
+                  const keep = (value: string) => !value || (ct.key === 'FLORA' ? value.startsWith('FLORA_') : ct.key === 'ERHAN' ? !value.startsWith('FLORA_') : true);
+                  setFilters((f) => (keep(f.platform) ? f : { ...f, platform: '' }));
+                  setAppliedFilters((f) => (keep(f.platform) ? f : { ...f, platform: '' }));
+                }}
                 className={`px-5 py-2.5 text-sm font-bold rounded-t-lg border-b-2 transition whitespace-nowrap -mb-0.5 ${
                   activeCompany === ct.key
                     ? 'border-emerald-600 text-emerald-700 bg-white'
@@ -545,7 +560,10 @@ export default function OrdersPage() {
 
           {/* Platform sekmeleri */}
           <div className="flex gap-2 px-4 pt-3 pb-0 border-b border-line overflow-x-auto">
-            {platformOptions.map((p) => (
+            {platformOptions
+              // Mağaza sekmesine göre: Flora'da sadece Flora kanalları, Erhan'da Flora kanalları gizli
+              .filter((p) => !p.value || (activeCompany === 'FLORA' ? p.value.startsWith('FLORA_') : activeCompany === 'ERHAN' ? !p.value.startsWith('FLORA_') : true))
+              .map((p) => (
               <button
                 key={p.value}
                 type="button"
@@ -955,7 +973,7 @@ function invoiceStatusLabel(status?: string | null) {
 }
 
 function platformLabel(platform: string) {
-  return ({ TRENDYOL: 'Trendyol', HEPSIBURADA: 'Hepsiburada', N11: 'N11', AMAZON: 'Amazon', WEBSITE: 'Web Site', TICIMAX: 'Ticimax', STORE: 'Mağaza', PHONE: 'Telefon', WHATSAPP: 'WhatsApp', INSTAGRAM: 'Instagram', PAZARAMA: 'Pazarama', TRENDRUM: 'Trendrum', IDEFIX: 'İdefix', FLORA_TRENDYOL: 'Flora (Trendyol)', FLORA_N11: 'Flora (N11)' } as Record<string, string>)[platform] ?? (platform || '-');
+  return ({ TRENDYOL: 'Trendyol', HEPSIBURADA: 'Hepsiburada', N11: 'N11', AMAZON: 'Amazon', WEBSITE: 'Web Site', TICIMAX: 'Ticimax', STORE: 'Mağaza', PHONE: 'Telefon', WHATSAPP: 'WhatsApp', INSTAGRAM: 'Instagram', PAZARAMA: 'Pazarama', TRENDRUM: 'Trendrum', IDEFIX: 'İdefix', FLORA_TRENDYOL: 'Flora (Trendyol)', FLORA_N11: 'Flora (N11)', FLORA_HEPSIBURADA: 'Flora (Hepsiburada)', FLORA_TRENDRUM: 'Flora (Trendrum)' } as Record<string, string>)[platform] ?? (platform || '-');
 }
 
 function customerTypeLabel(value?: string | null) {

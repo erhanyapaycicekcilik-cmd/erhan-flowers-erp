@@ -114,7 +114,7 @@ export class ProductionCostsService {
     }
 
     const passivatedMissing = await this.prisma.trendyolProductVariant.updateMany({
-      where: { status: 'ACTIVE', barcode: { notIn: [...byBarcode.keys()] } },
+      where: { status: 'ACTIVE', storeCode: 'ERHAN', barcode: { notIn: [...byBarcode.keys()] } }, // Flora ürünleri Erhan kataloğunda yok, dokunma
       data: { status: 'PASSIVE' },
     });
 
@@ -857,6 +857,12 @@ export class ProductionCostsService {
       categoryId: 0,
     };
 
+    // Flora ürünü: Erhan hesaplarına gitmez; Flora hesaplarında fiyat/stok güncellenir
+    if (variant.storeCode === 'FLORA') {
+      const results = await this.integrations.pushPriceForStore('FLORA', payload);
+      return { results: results.map((r) => ({ platform: `${r.platform} (Flora)`, ok: r.ok, message: r.message })) };
+    }
+
     const connections = await this.prisma.$queryRaw<Array<{ platform: string }>>`
       SELECT platform FROM integration_connections
       WHERE status = 'CONNECTED' AND platform IN ('TRENDYOL', 'N11', 'HEPSIBURADA')
@@ -894,6 +900,12 @@ export class ProductionCostsService {
       listPrice: product.listPrice,
       stockQuantity: product.stockQuantity,
     };
+    // Flora ürünü → sadece Flora'nın kendi hesapları
+    if (await this.integrations.isFloraPayload(payload)) {
+      const results = await this.integrations.pushPriceForStore('FLORA', payload);
+      for (const r of results) if (!r.ok && !r.skipped) this.logger.warn(`FLORA ${r.platform} maliyet yayını başarısız: ${r.message}`);
+      return;
+    }
     const connections = await this.prisma.$queryRaw<Array<{ platform: string }>>`
       SELECT platform FROM integration_connections
       WHERE status = 'CONNECTED' AND platform IN ('TRENDYOL', 'N11', 'HEPSIBURADA')

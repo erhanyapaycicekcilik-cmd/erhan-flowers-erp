@@ -245,6 +245,7 @@ export class IntegrationCenterService {
       TRENDYOL: ['SUPPLIER_ID', 'API_KEY', 'API_SECRET'],
       N11: ['API_KEY', 'API_SECRET'],
       HEPSIBURADA: ['MERCHANT_ID', 'PASSWORD'],
+      TRENDRUM: ['API_KEY', 'API_SECRET'],
     };
     const missing = (required[platform] ?? []).filter((key) => !values[key]);
     if (missing.length) {

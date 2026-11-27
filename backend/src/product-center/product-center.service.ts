@@ -14,6 +14,7 @@ import { ProductionCostsService } from '../production-costs/production-costs.ser
 import { IntegrationCenterService } from '../integrations/services/integration-center.service';
 import { TrendyolAdapter } from '../integrations/adapters/trendyol.adapter';
 import { resolveGeminiModel } from '../common/gemini-model';
+import { STORE_DEFAULT_BRAND, normalizeStoreCode, storeFilter, withFloraPrefix } from '../common/store';
 
 type EntryPayload = {
   variantId?: unknown;
@@ -38,6 +39,7 @@ type EntryPayload = {
   commissionPercent?: unknown;
   images?: unknown;
   status?: unknown;
+  storeCode?: unknown;
 };
 
 type QuickEntryPayload = {
@@ -51,6 +53,7 @@ type QuickEntryPayload = {
   sitePrice?: unknown;
   initialStockQuantity?: unknown;
   mainImageUrl?: unknown;
+  storeCode?: unknown;
 };
 
 @Injectable()
@@ -62,10 +65,11 @@ export class ProductCenterService {
     private readonly config: ConfigService,
   ) {}
 
-  async listEntries(search?: string) {
+  async listEntries(search?: string, store?: string) {
     // Liste en son güncellenen 1000 kayıtla sınırlı; arama verilirse TÜM kayıtlarda aranır (eski ürünler de bulunur)
     const term = search?.trim();
-    const where = term
+    const storeCode = storeFilter(store);
+    const searchWhere = term
       ? {
           OR: [
             { productName: { contains: term, mode: 'insensitive' as const } },
@@ -74,7 +78,8 @@ export class ProductCenterService {
             { supplierStockCode: { contains: term, mode: 'insensitive' as const } },
           ],
         }
-      : undefined;
+      : {};
+    const where = storeCode ? { ...searchWhere, storeCode } : searchWhere;
     const variants = await this.prisma.trendyolProductVariant.findMany({
       where,
       include: {
@@ -139,12 +144,16 @@ export class ProductCenterService {
       if (!category) throw new BadRequestException('Kategori bulunamadi.');
 
       const effectiveProductId = productId || existingVariant?.productId || undefined;
+      // Mağaza: kayıtlı üründe değişmez (Erhan ürünü sonradan Flora'ya taşınmaz), yeni üründe seçilen mağaza
+      const storeCode = existingVariant ? normalizeStoreCode((existingVariant as any).storeCode) : normalizeStoreCode(payload.storeCode);
       const sizeVariant = this.text(payload.colorVariant) || productName;
-      const modelCode = (this.text(payload.modelCode)?.toUpperCase()
+      let modelCode = (this.text(payload.modelCode)?.toUpperCase()
         || existingVariant?.currentModelCode
         || existingVariant?.proposedModelCode
         || existingVariant?.product?.modelCode
         || await this.nextModelCode(tx, category)).toUpperCase();
+      if (storeCode === 'FLORA' && !existingVariant) modelCode = withFloraPrefix(modelCode);
+      const defaultBrand = STORE_DEFAULT_BRAND[storeCode];
       const stockCode = this.text(payload.stockCode)
         || existingVariant?.supplierStockCode
         || await this.nextStockCode(tx, modelCode, sizeVariant);
@@ -165,7 +174,8 @@ export class ProductCenterService {
         salePrice,
         shippingCost,
         marketPrice,
-        brand: this.text(payload.brand) || 'Erhan Flowers',
+        brand: this.text(payload.brand) || defaultBrand,
+        storeCode,
         colorVariant: this.text(payload.colorVariant),
         description: this.text(payload.description),
         stockQuantity: this.optionalInt(payload.stockQuantity) ?? 0,
@@ -180,7 +190,8 @@ export class ProductCenterService {
         currentModelCode: modelCode,
         proposedModelCode: modelCode,
         supplierStockCode: stockCode,
-        brand: this.text(payload.brand) || 'Erhan Flowers',
+        brand: this.text(payload.brand) || defaultBrand,
+        storeCode,
         trendyolCategoryName: this.text(payload.channelCategoryName),
         productColor: this.text(payload.colorVariant),
         productDescription: this.text(payload.description),
@@ -292,7 +303,9 @@ export class ProductCenterService {
       if (!category) throw new BadRequestException('Ana kategori bulunamadi.');
 
       const existing = await this.findExistingQuickEntry(tx, productId, variantId);
-      const modelCode = existing.modelCode || await this.nextModelCode(tx, category);
+      const storeCode = existing.variantId || existing.productId ? existing.storeCode : normalizeStoreCode(payload.storeCode);
+      const brand = STORE_DEFAULT_BRAND[storeCode];
+      const modelCode = existing.modelCode || (storeCode === 'FLORA' ? withFloraPrefix(await this.nextModelCode(tx, category)) : await this.nextModelCode(tx, category));
       const stockCode = existing.stockCode || await this.nextStockCode(tx, modelCode, sizeVariant);
       const barcode = existing.barcode || await this.nextEan13Barcode(tx);
       const images = [mainImageUrl];
@@ -316,7 +329,8 @@ export class ProductCenterService {
         marketPrice: sitePrice,
         listPrice: sitePrice,
         imageUrls: images,
-        brand: 'Erhan Flowers',
+        brand,
+        storeCode,
         vatRate: 20,
         origin: 'Turkiye',
         colorVariant: sizeVariant,
@@ -337,7 +351,8 @@ export class ProductCenterService {
         currentModelCode: modelCode,
         proposedModelCode: modelCode,
         supplierStockCode: stockCode,
-        brand: 'Erhan Flowers',
+        brand,
+        storeCode,
         trendyolCategoryName: category.name,
         productColor: sizeVariant,
         stockQuantity: Math.trunc(initialStockQuantity),
@@ -389,6 +404,7 @@ export class ProductCenterService {
         variantId: variant.id,
         stockCardId: null,
         productName,
+        storeCode,
         modelCode,
         stockCode,
         barcode,
@@ -397,7 +413,7 @@ export class ProductCenterService {
         sitePrice,
       };
       // sitePrice > 0 ise siteyi anında güncelle
-      if (sitePrice > 0) void revalidateSite();
+      if (sitePrice > 0 && storeCode === 'ERHAN') void revalidateSite();
       return result;
     });
   }
@@ -660,6 +676,7 @@ export class ProductCenterService {
     stockQuantity: number;
     status: 'ACTIVE' | 'PASSIVE';
     catalogCategory?: string;
+    storeCode?: string;
   }) {
     const payload = {
       productName: data.productName,
@@ -687,6 +704,7 @@ export class ProductCenterService {
       status: data.status,
       description: data.description,
       catalogCategory: data.catalogCategory ?? undefined,
+      storeCode: data.storeCode ?? 'ERHAN',
     };
 
     if (data.productId) return tx.product.update({ where: { id: data.productId }, data: payload });
@@ -716,6 +734,7 @@ export class ProductCenterService {
       variantId: variant.id,
       productId: product?.id ?? null,
       productName: variant.productName,
+      storeCode: normalizeStoreCode(variant.storeCode),
       barcode: variant.barcode,
       modelCode: variant.currentModelCode ?? variant.proposedModelCode ?? product?.modelCode ?? '',
       stockCode: variant.supplierStockCode ?? variant.currentModelCode ?? variant.proposedModelCode ?? product?.modelCode ?? '',
@@ -837,6 +856,7 @@ export class ProductCenterService {
       modelCode,
       stockCode,
       barcode,
+      storeCode: normalizeStoreCode(variant?.storeCode ?? product?.storeCode),
     };
   }
 
@@ -1183,7 +1203,12 @@ export class ProductCenterService {
       });
     }
 
-    const credentials = await this.integrationCenter.runtimeCredentials('TRENDYOL', companyCode);
+    // Ürün her zaman kendi mağazasının hesabına gider (Flora ürünü Erhan'a, Erhan ürünü Flora'ya gitmez)
+    const store = normalizeStoreCode((entry as any).storeCode);
+    if (companyCode && normalizeStoreCode(companyCode) !== store) {
+      throw new BadRequestException(`Bu ürün ${store} mağazasına ait; ${companyCode.toUpperCase()} hesabına gönderilmez.`);
+    }
+    const credentials = await this.integrationCenter.storeCredentials('TRENDYOL', store);
     const adapter = new TrendyolAdapter(credentials);
     return adapter.pushProduct(payload);
   }
@@ -1609,6 +1634,7 @@ Sadece 3 satır ürün adı yaz, başka hiçbir şey yazma.`;
             proposedModelCode: row.modelCode,
             supplierStockCode: row.modelCode,
             brand: source.brand,
+            storeCode: (source as any).storeCode ?? 'ERHAN',
             trendyolCategoryName: source.trendyolCategoryName,
             productColor: source.productColor,
             productDescription: rename(source.productDescription, row.size),

@@ -11,6 +11,8 @@ import { TicimaxAdapter } from '../integrations/adapters/ticimax.adapter';
 import { TrendyolAdapter } from '../integrations/adapters/trendyol.adapter';
 import { IntegrationCenterService } from '../integrations/services/integration-center.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { TrendrumAdapter } from '../integrations/adapters/trendrum.adapter';
+import { FLORA_PLATFORMS, STORE_LABELS, normalizeStoreCode } from '../common/store';
 
 export type StorePublishOption = {
   companyCode: string;
@@ -85,6 +87,9 @@ export class PublishingService {
 
   async testUpdate(variantId: number, userId: number) {
     const variant = await this.getVariant(variantId);
+    if (normalizeStoreCode((variant as any).storeCode) !== 'ERHAN') {
+      throw new BadRequestException('Test güncellemesi Erhan Flowers hesabını kullanır; Flora ürünlerinde "Kanallara Gönder" kullanın.');
+    }
     const payload = this.buildPayload(variant);
     const missingFields = this.missingFields(variant, payload);
     if (missingFields.length > 0) {
@@ -95,44 +100,57 @@ export class PublishingService {
     return this.sendToTrendyol(variant.id, userId, 'TEST_UPDATE', payload, missingFields);
   }
 
+  // Ürün kendi mağazasının hesaplarına gider (variant.storeCode):
+  //  - ERHAN ürünü → Erhan Flowers'ın Trendyol / N11 / HB / Ticimax / Trendrum hesapları
+  //  - FLORA ürünü → Flora Yapay Çiçek'in Trendyol / N11 / HB / Trendrum hesapları
+  // Mağazalar bağımsızdır: Erhan ürünü Flora'ya, Flora ürünü Erhan'a GÖNDERİLMEZ.
+  // "TRENDYOL_FLORA" eski kanal adı: Flora ürününde Trendyol (Flora) anlamına gelir, Erhan ürününde reddedilir.
   async send(variantIds: number[], userId: number, options: { allowIncomplete?: boolean; platforms?: IntegrationPlatform[] } = {}) {
     const ids = Array.from(new Set(variantIds.map(Number).filter((id) => Number.isFinite(id))));
-    // "TRENDYOL_FLORA" = aynı ürünü Flora mağazasının Trendyol hesabına da aç.
     const requested = Array.isArray(options.platforms) ? options.platforms.map((item) => String(item).toUpperCase()) : [];
-    const includeFlora = requested.includes(FLORA_TRENDYOL_CHANNEL);
+    const wantsFloraTrendyol = requested.includes(FLORA_TRENDYOL_CHANNEL);
     const mainRequested = requested.filter((item) => item !== FLORA_TRENDYOL_CHANNEL);
-    const platforms = includeFlora && mainRequested.length === 0 ? [] : this.cleanPlatforms(mainRequested as IntegrationPlatform[]);
     const allowIncomplete = options.allowIncomplete === true;
     if (ids.length === 0) throw new BadRequestException('Gönderilecek ürün seçilmelidir.');
 
     const results = [];
     for (const id of ids) {
       const variant = await this.getVariant(id);
-      const payload = this.buildPayload(variant);
-      if (includeFlora) {
-        const floraPayload = this.storePayload(payload, DEFAULT_STORES.find((store) => store.companyCode === 'FLORA')!);
-        const missingFields = this.missingFields(variant, floraPayload, 'TRENDYOL');
-        if (missingFields.length > 0 && !allowIncomplete) {
-          const log = await this.createLog(variant.id, userId, 'LIVE_SEND', 'BLOCKED', floraPayload, null, missingFields, 'FLORA: eksik alanlar var.');
-          results.push({ id, platform: FLORA_TRENDYOL_CHANNEL, ok: false, missingFields, errorMessage: `Eksik alanlar: ${missingFields.join(', ')}`, logId: log.id });
-        } else {
-          try {
-            const result = await this.sendToPlatform('TRENDYOL', variant.id, userId, 'LIVE_SEND', floraPayload, missingFields, allowIncomplete, 'FLORA');
-            results.push({ id, platform: FLORA_TRENDYOL_CHANNEL, ...result });
-          } catch (error) {
-            results.push({ id, platform: FLORA_TRENDYOL_CHANNEL, ok: false, missingFields, errorMessage: error instanceof Error ? error.message : String(error) });
+      const store = normalizeStoreCode((variant as any).storeCode);
+      const payload = { ...this.buildPayload(variant), companyCode: store };
+      let platforms: IntegrationPlatform[];
+      if (store === 'FLORA') {
+        const list = [...mainRequested, ...(wantsFloraTrendyol ? ['TRENDYOL'] : [])];
+        for (const item of Array.from(new Set(list))) {
+          if (!(FLORA_PLATFORMS as readonly string[]).includes(item)) {
+            results.push({ id, platform: item, companyCode: store, ok: false, missingFields: [], errorMessage: `${STORE_LABELS.FLORA} için ${item} desteklenmiyor (Trendyol, Hepsiburada, N11, Trendrum).` });
           }
         }
+        const allowed = list.filter((item) => (FLORA_PLATFORMS as readonly string[]).includes(item)) as IntegrationPlatform[];
+        platforms = allowed.length > 0 ? this.cleanPlatforms(allowed) : [];
+      } else {
+        if (wantsFloraTrendyol) {
+          results.push({ id, platform: FLORA_TRENDYOL_CHANNEL, companyCode: store, ok: false, missingFields: [], errorMessage: `Bu ürün ${STORE_LABELS.ERHAN} ürünü; Flora mağazasına gönderilmez. Flora için Ürün Merkezi'nde mağaza olarak "${STORE_LABELS.FLORA}" seçip ayrı ürün açın.` });
+        }
+        // Erhan'da Trendrum ürün açma daha önce olduğu gibi kapalı (fiyat/stok senkronu ayrı çalışır)
+        const erhanRequested = mainRequested.filter((item) => item !== 'TRENDRUM') as IntegrationPlatform[];
+        platforms = (wantsFloraTrendyol || mainRequested.includes('TRENDRUM')) && erhanRequested.length === 0 ? [] : this.cleanPlatforms(erhanRequested);
       }
+
       for (const platform of platforms) {
+        const resultPlatform = store === 'FLORA' && platform === 'TRENDYOL' ? FLORA_TRENDYOL_CHANNEL : platform;
         const missingFields = this.missingFields(variant, payload, platform);
         if (missingFields.length > 0 && !allowIncomplete) {
-          const log = await this.createLog(variant.id, userId, 'LIVE_SEND', 'BLOCKED', payload, null, missingFields, 'Eksik alanlar var.');
-          results.push({ id, platform, ok: false, missingFields, errorMessage: `Eksik alanlar: ${missingFields.join(', ')}`, logId: log.id });
+          const log = await this.createLog(variant.id, userId, 'LIVE_SEND', 'BLOCKED', payload, null, missingFields, `${store}: eksik alanlar var.`);
+          results.push({ id, platform: resultPlatform, companyCode: store, ok: false, missingFields, errorMessage: `Eksik alanlar: ${missingFields.join(', ')}`, logId: log.id });
           continue;
         }
-        const result = await this.sendToPlatform(platform, variant.id, userId, 'LIVE_SEND', payload, missingFields, allowIncomplete);
-        results.push({ id, platform, ...result });
+        try {
+          const result = await this.sendToPlatform(platform, variant.id, userId, 'LIVE_SEND', payload, missingFields, allowIncomplete, store);
+          results.push({ id, platform: resultPlatform, companyCode: store, ...result });
+        } catch (error) {
+          results.push({ id, platform: resultPlatform, companyCode: store, ok: false, missingFields, errorMessage: error instanceof Error ? error.message : String(error) });
+        }
       }
     }
 
@@ -151,15 +169,25 @@ export class PublishingService {
     const ids = Array.from(new Set(variantIds.map(Number).filter((id) => Number.isFinite(id))));
     if (ids.length === 0) throw new BadRequestException('Gönderilecek ürün seçilmelidir.');
     const platforms = this.cleanPlatforms(options.platforms);
-    const stores = this.cleanStores(options.stores);
+    const explicitStores = Array.isArray(options.stores) && options.stores.length > 0;
     const allowIncomplete = options.allowIncomplete === true;
 
     const results = [];
     for (const id of ids) {
       const variant = await this.getVariant(id);
+      const variantStore = normalizeStoreCode((variant as any).storeCode);
       const basePayload = this.buildPayload(variant);
+      // Mağaza belirtilmemişse ürünün kendi mağazası
+      const stores = explicitStores ? this.cleanStores(options.stores) : [{ companyCode: variantStore, barcodePrefix: '', priceMultiplier: 1 }];
       for (const store of stores) {
-        const payload = this.storePayload(basePayload, store);
+        // Mağazalar bağımsız: ürün yalnızca kendi mağazasının hesaplarına gider
+        if (store.companyCode !== variantStore) {
+          for (const platform of platforms) {
+            results.push({ id, companyCode: store.companyCode, platform, barcode: basePayload.barcode, ok: false, missingFields: [], errorMessage: `Ürün ${STORE_LABELS[variantStore]} mağazasına ait; ${store.companyCode} mağazasına gönderilmez.` });
+          }
+          continue;
+        }
+        const payload = variantStore === 'ERHAN' ? this.storePayload(basePayload, store) : { ...basePayload, companyCode: variantStore };
         for (const platform of platforms) {
           const missingFields = this.missingFields(variant, payload, platform);
           if (missingFields.length > 0 && !allowIncomplete) {
@@ -282,7 +310,8 @@ export class PublishingService {
       : platform === 'HEPSIBURADA' ? (payload.hepsiburadaSalePrice ?? payload.salePrice)
       : (platform === 'TRENDRUM' || platform === 'PAZARAMA') ? noCommissionPrice
       : payload.salePrice;
-    const platformPayload = { ...payload, salePrice: platformPrice, listPrice: platformPrice, platform, allowIncomplete };
+    const platformPayload: Record<string, unknown> = { ...payload, salePrice: platformPrice, listPrice: platformPrice, platform, allowIncomplete, companyCode };
+    if (platform === 'TRENDRUM' && !platformPayload.imageUrls) platformPayload.imageUrls = this.imageUrls(payload.images);
     if (platform === 'TRENDYOL' && companyCode === 'ERHAN' && this.useLegacyTrendyolPublisher()) {
       return this.sendToTrendyol(variantId, userId, actionType, platformPayload, missingFields);
     }
@@ -314,6 +343,7 @@ export class PublishingService {
     if (platform === 'TRENDYOL') return new TrendyolAdapter(await this.integrationCenter.storeCredentials(platform, companyCode));
     if (platform === 'HEPSIBURADA') return new HepsiburadaAdapter(await this.integrationCenter.storeCredentials(platform, companyCode));
     if (platform === 'N11') return new N11Adapter(await this.integrationCenter.storeCredentials(platform, companyCode));
+    if (platform === 'TRENDRUM') return new TrendrumAdapter(await this.integrationCenter.storeCredentials(platform, companyCode));
     if (platform === 'TICIMAX') {
       if (companyCode !== 'ERHAN') throw new BadRequestException('Ticimax yalnızca Erhan Flowers mağazası için tanımlı.');
       return new TicimaxAdapter(await this.integrationCenter.ticimaxRuntimeCredentials());
@@ -368,7 +398,7 @@ export class PublishingService {
   }
 
   private cleanPlatforms(value?: IntegrationPlatform[]): IntegrationPlatform[] {
-    const allowed: IntegrationPlatform[] = ['TRENDYOL', 'HEPSIBURADA', 'N11', 'TICIMAX'];
+    const allowed: IntegrationPlatform[] = ['TRENDYOL', 'HEPSIBURADA', 'N11', 'TICIMAX', 'TRENDRUM'];
     const selected = Array.isArray(value) ? value.filter((item): item is IntegrationPlatform => allowed.includes(item as IntegrationPlatform)) : [];
     return selected.length > 0 ? Array.from(new Set(selected)) : ['TRENDYOL'];
   }

@@ -460,6 +460,8 @@ model Product {
   leafCount            Int?                    @map("leaf_count")
   catalogCategory      String?                 @map("catalog_category")
   catalogSubCategory   String?                 @map("catalog_sub_category")
+  // Hangi mağazanın ürünü: ERHAN (Erhan Flowers) veya FLORA (Flora Yapay Çiçek). Mağazalar birbirinden bağımsızdır.
+  storeCode            String                  @default("ERHAN") @map("store_code")
   status               RecordStatus            @default(ACTIVE)
   description          String?
   createdAt            DateTime                @default(now()) @map("created_at")
@@ -940,6 +942,8 @@ model TrendyolProductVariant {
   trendyolFavoriteCount Int                       @default(0) @map("trendyol_favorite_count")
   trendyolStatsSyncedAt DateTime?                 @map("trendyol_stats_synced_at")
   driveFolderId         String?                   @map("drive_folder_id")
+  // ERHAN veya FLORA — FLORA ürünleri yalnızca Flora'nın kendi pazaryeri hesaplarına gider
+  storeCode             String                    @default("ERHAN") @map("store_code")
   status                RecordStatus              @default(ACTIVE)
   createdAt             DateTime                  @default(now()) @map("created_at")
   updatedAt             DateTime                  @updatedAt @map("updated_at")
@@ -955,6 +959,7 @@ model TrendyolProductVariant {
   retailSaleItems       RetailSaleItem[]
   stockMovements        StockMovement[]
 
+  @@index([storeCode])
   @@map("trendyol_product_variants")
 }
 

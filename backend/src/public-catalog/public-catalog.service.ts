@@ -443,6 +443,7 @@ export class PublicCatalogService {
       stockQuantity: { gt: 0 },
       trendyolSalePrice: { gt: 0 },
       status: 'ACTIVE', // sadece Trendyol'da satışta olanlar
+      storeCode: 'ERHAN', // Flora mağazası ürünleri bu sitede yok
       // ERP ürün kaydıyla eşleşen Trendyol ürünü, ERP kaydı üzerinden listelenir (çift görünmesin)
       id: { notIn: tyIndex.shadowedVariantIds },
     };
@@ -969,7 +970,8 @@ export class PublicCatalogService {
   private async buildTrendyolIndex(): Promise<TrendyolIndex> {
     const [variants, products] = await Promise.all([
       this.prisma.trendyolProductVariant.findMany({
-        where: { trendyolSalePrice: { gt: 0 } },
+        // Sadece Erhan Flowers ürünleri — Flora Yapay Çiçek ürünleri bu sitede satılmaz
+        where: { trendyolSalePrice: { gt: 0 }, storeCode: 'ERHAN' },
         select: { id: true, productId: true, barcode: true, currentModelCode: true, trendyolSalePrice: true, status: true, stockQuantity: true },
       }),
       this.prisma.product.findMany({
@@ -1016,6 +1018,7 @@ export class PublicCatalogService {
     return {
       productId: null,
       status: 'ACTIVE' as const,
+      storeCode: 'ERHAN',
       stockQuantity: { gt: 0 },
       trendyolSalePrice: { gt: 0 },
       id: { notIn: idx.shadowedVariantIds },

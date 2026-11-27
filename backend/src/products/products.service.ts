@@ -404,6 +404,13 @@ export class ProductsService {
     const barcode = product.barcode ?? product.trendyolBarcode ?? undefined;
     const modelCode = product.modelCode ?? undefined;
 
+    // Flora Yapay Çiçek ürünü: Erhan hesaplarına gitmez, Flora'nın kendi hesaplarında fiyat/stok güncellenir
+    if (await this.integrations.isFloraPayload({ barcode, modelCode })) {
+      const results = await this.integrations.pushPriceForStore('FLORA', { barcode: barcode ?? modelCode, modelCode, salePrice, listPrice, stockQuantity });
+      for (const r of results) if (!r.ok && !r.skipped) this.logger.warn(`FLORA ${r.platform} yayın başarısız: ${r.message}`);
+      return;
+    }
+
     // Katalog stratejisi ekranından satışa kapatılan (PASSIVE) ürün, ürün kaydı
     // sırasında stokla tekrar satışa açılmasın.
     if (barcode) {
@@ -687,7 +694,7 @@ export class ProductsService {
 
     // 1) Trendyol varyantları — bunlar ana katalog
     const variants = await this.prisma.trendyolProductVariant.findMany({
-      where: { status: 'ACTIVE' },
+      where: { status: 'ACTIVE', storeCode: 'ERHAN' }, // Flora mağazası ürünleri hariç
       include: { productCostDraft: true },
     });
 
@@ -718,12 +725,13 @@ export class ProductsService {
 
     // 2) Ürünler tablosu — Trendyol'da olmayan ürünleri de kapsa
     const products = await this.prisma.product.findMany({
-      where: { status: 'ACTIVE' },
+      where: { status: 'ACTIVE', storeCode: 'ERHAN' }, // Flora mağazası ürünleri hariç
       select: { id: true, barcode: true, modelCode: true, productName: true, marketPrice: true, listPrice: true, shopPrice: true, sitePrice: true, stockQuantity: true, imageUrls: true, brand: true },
     });
 
     for (const product of products) {
       if (isSiteOnlyModelCode(product.modelCode)) { skipped++; continue; } // sadece sitede satılıyor
+      if ((product as any).storeCode === 'FLORA') { skipped++; continue; } // Flora mağazasının ürünü
       const key = product.barcode ?? product.modelCode;
       if (!key || payloadMap.has(key)) continue; // Trendyol varyantında varsa zaten eklendi
       const salePrice = Math.round(Number(product.sitePrice ?? product.marketPrice ?? product.shopPrice ?? 0));
@@ -1205,7 +1213,7 @@ export class ProductsService {
 
   async sendToPazarama(): Promise<{ total: number; sent: number; errors: number; details: Record<string, string> }> {
     const products = await (this.prisma.product as any).findMany({
-      where: { status: 'ACTIVE' },
+      where: { status: 'ACTIVE', storeCode: 'ERHAN' }, // Flora mağazası ürünleri hariç
       include: { category: true, mediaFiles: true, productCostDraft: true },
     }) as any[];
 
@@ -1516,7 +1524,7 @@ export class ProductsService {
 
   async exportExcel(platform: string): Promise<Buffer> {
     const products = await this.prisma.product.findMany({
-      where: { status: 'ACTIVE' },
+      where: { status: 'ACTIVE', storeCode: 'ERHAN' }, // Flora mağazası ürünleri hariç
       select: {
         id: true,
         productName: true,
@@ -1551,6 +1559,7 @@ export class ProductsService {
 
     for (const product of products) {
       if (isSiteOnlyModelCode(product.modelCode)) continue; // sadece sitede satılıyor
+      if ((product as any).storeCode === 'FLORA') continue; // Flora mağazasının ürünü
       const sku = product.barcode ?? product.modelCode;
       const variant = product.productCenterVariant;
       const variantActive = variant?.status === 'ACTIVE';
