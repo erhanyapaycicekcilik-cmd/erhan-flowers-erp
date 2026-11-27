@@ -35,6 +35,7 @@ type OrderRow = {
   companyCode?: string | null;
   companyName?: string | null;
   staffNote?: string | null;
+  internalNote?: string | null;
   items: OrderItem[];
 };
 
@@ -949,6 +950,9 @@ function OrderCard({ order, onStatusChange, readySection, shippedSection, catego
           {order.orderDate && <div>Sipariş: {date(order.orderDate)}</div>}
           {order.deliveryDueAt && <div className="text-slate-400">Son çıkış: {date(order.deliveryDueAt)}</div>}
           {order.cargoProvider && <div>Kargo: {order.cargoProvider}</div>}
+          {/ALICI ÖDEMELİ/i.test(order.internalNote ?? '') && (
+            <div className="mt-1 inline-block rounded bg-amber-100 px-2 py-0.5 text-[11px] font-black text-amber-800">📦 KARGO ALICI ÖDEMELİ</div>
+          )}
           {order.cargoTrackingNumber && <div>Takip no: <span className="font-mono">{order.cargoTrackingNumber}</span></div>}
         </div>
 

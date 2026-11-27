@@ -144,10 +144,9 @@ function OrderSummary({ total }: { total: number }) {
   const kdvDahil = total
   const kdvTutar = kdvDahil - kdvDahil / (1 + kdvOrani)
   const threshold = siteConfig.freeShippingThreshold
-  const shippingFee = siteConfig.shippingFee ?? 0
   const isFreeShipping = total >= threshold
-  const kargo = isFreeShipping ? 0 : shippingFee
-  const grandTotal = total + kargo
+  // Eşik altında kargo alıcı ödemeli: toplama eklenmez, teslimatta kargoya ödenir
+  const grandTotal = total
 
   return (
     <div className="bg-white rounded-2xl p-6 shadow-sm sticky top-24">
@@ -166,7 +165,7 @@ function OrderSummary({ total }: { total: number }) {
           <span>Kargo</span>
           {isFreeShipping
             ? <span className="text-flora-600 font-medium">Ücretsiz</span>
-            : <span>{formatPrice(kargo)}</span>
+            : <span className="font-medium text-amber-700">Alıcı ödemeli</span>
           }
         </div>
         {!isFreeShipping && (

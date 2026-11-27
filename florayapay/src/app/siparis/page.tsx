@@ -179,9 +179,11 @@ export default function SiparisPage() {
     : 0
 
   const eftIndirimTutar = total * EFT_INDIRIM
-  const kargoUcreti = total >= siteConfig.freeShippingThreshold ? 0 : (siteConfig.shippingFee ?? 0)
+  // Ücretsiz kargo eşiği altında kargo sitede tahsil edilmez: ALICI ÖDEMELİ gönderilir (toplama eklenmez).
+  // ERP de siparişe "Kargo: ALICI ÖDEMELİ" notu yazar (backend web-orders.service.ts).
+  const aliciOdemeli = total < siteConfig.freeShippingThreshold
   const genelToplam = Math.max(0,
-    (odemeYontemi === 'eft' ? total - eftIndirimTutar : total) - promoIndirimTutar + kargoUcreti
+    (odemeYontemi === 'eft' ? total - eftIndirimTutar : total) - promoIndirimTutar
   )
 
   function set(key: keyof typeof form, val: string) {
@@ -236,7 +238,7 @@ export default function SiparisPage() {
       urunler,
       '',
       `*Toplam:* ${fmt(genelToplam)}`,
-      `*Kargo:* ${kargoUcreti === 0 ? 'Ücretsiz' : fmt(kargoUcreti)}`,
+      `*Kargo:* ${aliciOdemeli ? 'Alıcı ödemeli (teslimatta kargoya ödenir)' : 'Ücretsiz'}`,
     ]
       .filter(Boolean)
       .join('\n')
@@ -764,11 +766,16 @@ export default function SiparisPage() {
                     )}
                     <div className="flex justify-between text-[#8C8A82]">
                       <span>Kargo</span>
-                      {kargoUcreti === 0
-                        ? <span className="text-[#5C7A62] font-medium">Ücretsiz</span>
-                        : <span>{fmt(kargoUcreti)}</span>
+                      {aliciOdemeli
+                        ? <span className="font-medium text-[#8A5A00]">Alıcı ödemeli</span>
+                        : <span className="text-[#5C7A62] font-medium">Ücretsiz</span>
                       }
                     </div>
+                    {aliciOdemeli && (
+                      <p className="text-[11px] leading-snug text-[#8C8A82]">
+                        {fmt(siteConfig.freeShippingThreshold)} altındaki siparişlerde kargo ücreti teslimatta kargo firmasına ödenir. {fmt(siteConfig.freeShippingThreshold - total)} daha ekleyin, kargo ücretsiz olsun.
+                      </p>
+                    )}
                     <div className="flex justify-between font-bold text-[#0D1510] text-base pt-1 border-t border-[#E0DDD4]">
                       <span>Toplam</span>
                       <span>{fmt(genelToplam)}</span>
