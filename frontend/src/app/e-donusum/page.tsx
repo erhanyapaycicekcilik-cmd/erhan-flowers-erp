@@ -397,7 +397,7 @@ export default function EDonusumPage() {
                         {r.lastError && <div className="mt-1 max-w-md text-xs text-red-600">Son deneme hatası: {r.lastError}</div>}
                       </td>
                       <td className="px-3 py-2">
-                        {editingAmountId === r.sourceId && r.sourceType === 'MARKETPLACE_ORDER' ? (
+                        {editingAmountId === Number(r.sourceId) && r.sourceType === 'MARKETPLACE_ORDER' ? (
                           <span className="flex items-center gap-1">
                             <input
                               type="number"
@@ -408,19 +408,25 @@ export default function EDonusumPage() {
                               autoFocus
                             />
                             <button
+                              type="button"
                               className="rounded bg-green-600 px-1.5 py-0.5 text-xs text-white"
-                              onClick={() => run(`fix-amount-${r.sourceId}`, async () => {
+                              onClick={async () => {
                                 const v = parseFloat(editingAmountVal.replace(',', '.'));
-                                if (!v || v <= 0) throw new Error('Geçersiz tutar');
-                                await api(`/integrations/marketplace-orders/${r.sourceId}/total-amount`, {
-                                  method: 'PATCH', json: { totalAmount: v },
-                                });
-                                setEditingAmountId(null);
-                                await loadPending();
-                                return `Tutar ${money(v)} olarak güncellendi.`;
-                              })}
-                            >✓</button>
+                                if (!v || v <= 0) { setMsg({ type: 'err', text: 'Geçersiz tutar' }); return; }
+                                try {
+                                  await api(`/integrations/marketplace-orders/${Number(r.sourceId)}/total-amount`, {
+                                    method: 'PATCH', json: { totalAmount: v },
+                                  });
+                                  setEditingAmountId(null);
+                                  await loadPending();
+                                  setMsg({ type: 'ok', text: `Tutar ${money(v)} olarak güncellendi.` });
+                                } catch (e) {
+                                  setMsg({ type: 'err', text: (e as Error).message });
+                                }
+                              }}
+                            >✓ Kaydet</button>
                             <button
+                              type="button"
                               className="rounded border px-1.5 py-0.5 text-xs text-gray-500"
                               onClick={() => setEditingAmountId(null)}
                             >✕</button>
@@ -430,9 +436,10 @@ export default function EDonusumPage() {
                             {money(r.amount)}
                             {r.sourceType === 'MARKETPLACE_ORDER' && (
                               <button
+                                type="button"
                                 title="Tutarı düzelt (platform indirimi düşülmemişse)"
                                 className="ml-1 rounded border px-1 py-0.5 text-xs text-orange-600"
-                                onClick={() => { setEditingAmountId(r.sourceId); setEditingAmountVal(String(r.amount)); }}
+                                onClick={() => { setEditingAmountId(Number(r.sourceId)); setEditingAmountVal(String(r.amount)); }}
                               >Düzelt</button>
                             )}
                           </span>
