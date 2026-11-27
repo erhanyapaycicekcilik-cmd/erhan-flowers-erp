@@ -71,6 +71,8 @@ export type EInvoiceDraft = {
   } | null;
   lines: EInvoiceDraftLine[];
   totalInclVat: number;
+  /** Dükkan satışı kanalı: STORE, PHONE, WHATSAPP, INSTAGRAM vb. */
+  retailChannel?: string | null;
 };
 
 export type EInvoiceIssueResult = {
