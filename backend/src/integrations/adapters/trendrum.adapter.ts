@@ -176,7 +176,22 @@ export class TrendrumAdapter extends BaseIntegrationAdapter {
         return words.length > 0 && words.every((w) => name.includes(w));
       })
       .sort((a, b) => leaf(a.name).length - leaf(b.name).length);
-    return candidates[0]?.id ?? null;
+    if (candidates[0]) return candidates[0].id;
+    return this.decorFallbackCategoryId(wanted);
+  }
+
+  // Trendrum'da "Yapay Ağaç / Yapay Bitki" gibi ayrı kategori yok. Yapay çiçek/ağaç/bitki ürünleri
+  // dekorasyon altındaki "Yapay & Kuru Çiçek" kategorisine gider (ör. Ev & Yaşam > Ev > Ev Dekorasyon > Yapay & Kuru Çiçek).
+  // Sadece yolunda "dekor" geçen kategoriler aday olur (ör. "Yapay Göğüs" gibi alakasız kategoriler seçilmez).
+  private decorFallbackCategoryId(wanted: string): string | null {
+    const isPlant = /\b(yapay|agac|cicek|bitki|sarmasik|bonsai|zeytin|bambu|palmiye|orkide|buket|aranjman|dikey bahce|cim)\b/.test(wanted);
+    if (!isPlant) return null;
+    const leaf = (name: string) => this.norm(name.split('>').pop() ?? name);
+    const decor = this.categoryCache.filter((c) => this.norm(c.name).includes('dekor'));
+    const pick = decor.find((c) => leaf(c.name).includes('yapay') && leaf(c.name).includes('cicek'))
+      ?? decor.find((c) => leaf(c.name).includes('yapay'))
+      ?? decor.find((c) => leaf(c.name).includes('cicek'));
+    return pick?.id ?? null;
   }
 
   // Kategori bulunamadığında hata mesajında gösterilecek en yakın Trendrum kategorileri
