@@ -15,6 +15,11 @@ type AuthenticatedRequest = Request & { user?: { id: number; name: string; email
 export class SalesController {
   constructor(private readonly sales: SalesService) {}
 
+  @Get('products/gallery')
+  productGallery(@Query('q') q = '') {
+    return this.sales.productGallery(q);
+  }
+
   @Get('products/search')
   searchProducts(@Query('q') query = '', @Query('category') category = '') {
     return this.sales.searchProducts(query, category);
