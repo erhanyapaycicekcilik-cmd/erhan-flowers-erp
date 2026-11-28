@@ -105,7 +105,15 @@ export class DriveSyncService {
     let failed = 0;
     const errors: string[] = [];
     try {
-      const rootId = await this.rootFolder();
+      let rootId: string;
+      try {
+        rootId = await this.rootFolder();
+      } catch (error) {
+        // Ör. "Google Drive API has not been used in project … or it is disabled" → kullanıcıya aynen göster
+        const message = this.message(error);
+        this.logger.warn(`Drive ana klasörü açılamadı: ${message}`);
+        return { ok: false, synced: 0, failed: 0, errors: [message], message: `Drive'a erişilemedi: ${this.driveHint(message)}` };
+      }
       const variants = await this.prisma.trendyolProductVariant.findMany({
         where: this.pendingWhere(),
         select: { id: true, productName: true, currentModelCode: true, barcode: true, images: true, product: { select: { imageUrls: true } } },
@@ -262,6 +270,14 @@ export class DriveSyncService {
       INSERT INTO app_settings (key, value, updated_at) VALUES (${key}, ${value}, NOW())
       ON CONFLICT (key) DO UPDATE SET value = ${value}, updated_at = NOW()
     `;
+  }
+
+  private driveHint(message: string) {
+    if (/has not been used|is disabled|accessNotConfigured|SERVICE_DISABLED/i.test(message)) {
+      return "Google Cloud projesinde 'Google Drive API' kapalı. console.cloud.google.com → APIs & Services → Library → Google Drive API → Enable, birkaç dakika sonra tekrar deneyin.";
+    }
+    if (/insufficient|scope|401|invalid_grant/i.test(message)) return 'Drive izni geçersiz; "Google Drive\'ı bağla" ile yeniden bağlanın.';
+    return message.slice(0, 300);
   }
 
   private message(error: unknown) {
