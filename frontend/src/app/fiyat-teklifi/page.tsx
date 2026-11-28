@@ -249,12 +249,24 @@ export default function FiyatTeklifiPage() {
 
             {/* Grid */}
             <div className="bg-white border border-gray-200 rounded-xl p-3">
-              {gallery.length === 0 && !galleryLoading && (
-                <div className="py-12 text-center text-gray-400 text-sm">
-                  {galleryQ ? 'Sonuç bulunamadı' : 'Ürünler yükleniyor...'}
+              {galleryLoading && (
+                <div className="py-12 text-center text-gray-400 text-sm flex flex-col items-center gap-2">
+                  <Loader2 className="w-6 h-6 animate-spin" />
+                  <span>Ürünler yükleniyor...</span>
                 </div>
               )}
-              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+              {!galleryLoading && gallery.length === 0 && (
+                <div className="py-12 text-center text-gray-400 text-sm flex flex-col items-center gap-3">
+                  <Package className="w-8 h-8 opacity-30" />
+                  <span>{galleryQ ? 'Sonuç bulunamadı' : 'Ürünler getirilemedi'}</span>
+                  {!galleryQ && (
+                    <button onClick={() => loadGallery('')} className="text-blue-600 text-xs underline">
+                      Tekrar dene
+                    </button>
+                  )}
+                </div>
+              )}
+              <div className={`grid grid-cols-3 sm:grid-cols-4 gap-2 ${galleryLoading ? 'hidden' : ''}`}>
                 {gallery.map(p => {
                   const inQuote = items.find(i => i.id === p.id)
                   const src = imgSrc(p.imageUrl)
