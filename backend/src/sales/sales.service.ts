@@ -83,7 +83,7 @@ export class SalesService {
       barcode: v.barcode,
       modelCode: v.currentModelCode ?? v.proposedModelCode,
       imageUrl: this.firstImage(v.images),
-      price: Number(v.productCostDraft?.salePrice ?? v.trendyolSalePrice ?? v.marketplaceSalePrice ?? 0),
+      price: Number(v.productCostDraft?.salePrice ?? v.trendyolSalePrice ?? v.productCostDraft?.marketplaceSalePrice ?? 0),
       storeCode: v.storeCode,
     }));
   }
