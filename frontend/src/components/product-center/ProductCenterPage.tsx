@@ -443,6 +443,30 @@ export default function ProductCenterPage({ storeMode = 'ERHAN' }: { storeMode?:
   const [quickForm, setQuickForm] = useState<QuickForm>(() => ({ ...emptyQuickForm, storeCode: storeMode }));
   // Sayfanın mağazası sabittir: /products = Erhan Flowers, /flora/urunler = Flora Yapay Çiçek
   const [activeStore, setActiveStore] = useState<StoreCode>(storeMode);
+  // Google Drive — Flora saksısız ağaç fotoğrafları "Flora Saksısız" klasörüne
+  const [driveStatus, setDriveStatus] = useState<{ connected: boolean; email: string | null; folderName: string; folderUrl: string | null; pending: number; done: number } | null>(null);
+  const [driveSyncing, setDriveSyncing] = useState(false);
+  useEffect(() => {
+    if (storeMode !== 'FLORA') return;
+    api<NonNullable<typeof driveStatus>>('/integrations/drive/status').then(setDriveStatus).catch(() => setDriveStatus(null));
+    try {
+      const drive = new URLSearchParams(window.location.search).get('drive');
+      if (drive === 'connected') setMessage('Google Drive bağlandı. Flora saksısız ağaçlarının fotoğrafları "Flora Saksısız" klasörüne yükleniyor.');
+      if (drive === 'error') setMessage('Google Drive bağlanamadı. Tekrar deneyin.');
+    } catch { /* yok say */ }
+  }, [storeMode]);
+  async function syncDriveNow() {
+    setDriveSyncing(true);
+    try {
+      const result = await api<{ message: string; errors?: string[] }>('/integrations/drive/sync', { method: 'POST' });
+      setMessage(`Drive: ${result.message}${result.errors?.length ? ` — ${result.errors.join(' | ')}` : ''}`);
+      setDriveStatus(await api<NonNullable<typeof driveStatus>>('/integrations/drive/status'));
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Drive senkronu başarısız.');
+    } finally {
+      setDriveSyncing(false);
+    }
+  }
   const [quickResult, setQuickResult] = useState<QuickResult | null>(null);
   const [quickSaving, setQuickSaving] = useState(false);
   const [quickKeepCategory, setQuickKeepCategory] = useState(true);
@@ -2211,6 +2235,21 @@ export default function ProductCenterPage({ storeMode = 'ERHAN' }: { storeMode?:
           <span className="rounded bg-pink-600 px-2 py-1 text-white">Flora Yapay Çiçek</span>
           Bu sayfadaki ürünler sadece Flora&apos;nın Trendyol / Hepsiburada / N11 / Trendrum hesaplarına gider. Model kodu FL- ile başlar; Erhan Flowers&apos;a ve erhanflowers.com sitesine gitmez.
           <a href="/orders?magaza=FLORA" className="ml-auto rounded-md border border-pink-300 bg-white px-3 py-1.5 text-pink-700 hover:bg-pink-100">Flora Siparişleri</a>
+          <div className="flex w-full flex-wrap items-center gap-2 border-t border-pink-200 pt-2 text-xs">
+            <span className="font-black">Google Drive · &quot;{driveStatus?.folderName ?? 'Flora Saksısız'}&quot;:</span>
+            {driveStatus?.connected ? (
+              <>
+                <span>Bağlı ({driveStatus.email ?? 'hesap'}) · Yüklenen ürün: {driveStatus.done} · Bekleyen: {driveStatus.pending}</span>
+                {driveStatus.folderUrl && <a href={driveStatus.folderUrl} target="_blank" rel="noreferrer" className="underline">Klasörü aç</a>}
+                <button type="button" className="rounded border border-pink-300 bg-white px-2 py-1 text-pink-700" disabled={driveSyncing} onClick={syncDriveNow}>{driveSyncing ? 'Yükleniyor…' : "Drive'a şimdi yükle"}</button>
+              </>
+            ) : (
+              <>
+                <span>Bağlı değil. Saksısız ağaçların fotoğrafları ürün adıyla açılan klasörlere otomatik yüklenir.</span>
+                <a href={`${apiBaseUrl}/integrations/gmail/auth?purpose=drive`} className="rounded bg-pink-600 px-2 py-1 text-white">Google Drive&apos;ı bağla</a>
+              </>
+            )}
+          </div>
         </div>
       ) : (
         <div className="mb-4 flex flex-wrap items-center gap-3 rounded-md border border-emerald-300 bg-emerald-50 p-3 text-sm font-semibold text-emerald-800">

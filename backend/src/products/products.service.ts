@@ -1190,7 +1190,8 @@ export class ProductsService {
 
   async getVariantsWithoutDriveFolder() {
     return this.prisma.trendyolProductVariant.findMany({
-      where: { status: 'ACTIVE', driveFolderId: null },
+      // Flora ürünleri dış Drive otomasyonuna verilmez; Flora saksısız ağaçlarını ERP kendisi yükler (DriveSyncService)
+      where: { status: 'ACTIVE', driveFolderId: null, storeCode: 'ERHAN' },
       select: {
         id: true,
         productName: true,
