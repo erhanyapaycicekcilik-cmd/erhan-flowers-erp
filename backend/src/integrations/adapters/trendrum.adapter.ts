@@ -87,8 +87,19 @@ export class TrendrumAdapter extends BaseIntegrationAdapter {
       });
       if (!res.ok) return;
       const data = await res.json() as { data?: unknown[] };
-      const items = (data.data ?? []) as Record<string, unknown>[];
-      this.categoryCache = items.map((c) => ({ id: String(c._id ?? c.id ?? ''), name: String(c.name ?? '') }));
+      // Alt kategoriler (children / subcategories / sub_categories) de listeye alınır
+      const flat: Array<{ id: string; name: string }> = [];
+      const walk = (list: unknown, parent = '') => {
+        if (!Array.isArray(list)) return;
+        for (const raw of list as Record<string, unknown>[]) {
+          const id = String(raw._id ?? raw.id ?? '');
+          const name = String(raw.name ?? raw.title ?? '');
+          if (id && name) flat.push({ id, name: parent ? `${parent} > ${name}` : name });
+          walk(raw.children ?? raw.subcategories ?? raw.sub_categories ?? raw.subCategories, parent ? `${parent} > ${name}` : name);
+        }
+      };
+      walk(data.data ?? []);
+      this.categoryCache = flat;
     } catch { /* kategori listesi çekilemedi, devam */ }
   }
 
@@ -107,21 +118,50 @@ export class TrendrumAdapter extends BaseIntegrationAdapter {
     } catch { /* marka listesi çekilemedi */ }
   }
 
+  // Türkçe karakter / büyük-küçük harf duyarsız karşılaştırma ("Yapay Agac" = "Yapay Ağaç")
+  private norm(value: string): string {
+    return value
+      .toLocaleLowerCase('tr-TR')
+      .replace(/ç/g, 'c').replace(/ğ/g, 'g').replace(/ı/g, 'i').replace(/i̇/g, 'i').replace(/ö/g, 'o').replace(/ş/g, 's').replace(/ü/g, 'u')
+      .replace(/[^a-z0-9]+/g, ' ')
+      .trim();
+  }
+
+  // Önce birebir, sonra en derin (son) kategori adı, sonra kelimelerin hepsini içeren en kısa kategori
   private findCategoryId(categoryName: string): string | null {
-    if (!categoryName) return null;
-    const lower = categoryName.toLowerCase();
-    const match = this.categoryCache.find((c) => c.name.toLowerCase() === lower)
-      ?? this.categoryCache.find((c) => c.name.toLowerCase().includes(lower))
-      ?? this.categoryCache.find((c) => lower.includes(c.name.toLowerCase()));
-    return match?.id ?? null;
+    const wanted = this.norm(categoryName);
+    if (!wanted) return null;
+    const leaf = (name: string) => this.norm(name.split('>').pop() ?? name);
+    const exact = this.categoryCache.find((c) => this.norm(c.name) === wanted)
+      ?? this.categoryCache.find((c) => leaf(c.name) === wanted);
+    if (exact) return exact.id;
+    const words = wanted.split(' ').filter((w) => w.length >= 3);
+    const candidates = this.categoryCache
+      .filter((c) => {
+        const name = this.norm(c.name);
+        return words.length > 0 && words.every((w) => name.includes(w));
+      })
+      .sort((a, b) => leaf(a.name).length - leaf(b.name).length);
+    return candidates[0]?.id ?? null;
+  }
+
+  // Kategori bulunamadığında hata mesajında gösterilecek en yakın Trendrum kategorileri
+  private nearestCategories(categoryName: string, limit = 5): string[] {
+    const words = this.norm(categoryName).split(' ').filter((w) => w.length >= 3);
+    return this.categoryCache
+      .map((c) => ({ c, score: words.filter((w) => this.norm(c.name).includes(w)).length }))
+      .filter((x) => x.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, limit)
+      .map((x) => `${x.c.name} (ID: ${x.c.id})`);
   }
 
   private findBrandId(brandName: string): string | null {
-    if (!brandName) return null;
-    const lower = brandName.toLowerCase();
-    const match = this.brandCache.find((b) => b.name.toLowerCase() === lower)
-      ?? this.brandCache.find((b) => b.name.toLowerCase().includes(lower))
-      ?? this.brandCache.find((b) => lower.includes(b.name.toLowerCase()));
+    const lower = this.norm(brandName);
+    if (!lower) return null;
+    const match = this.brandCache.find((b) => this.norm(b.name) === lower)
+      ?? this.brandCache.find((b) => this.norm(b.name).includes(lower))
+      ?? this.brandCache.find((b) => this.norm(b.name) && lower.includes(this.norm(b.name)));
     return match?.id ?? null;
   }
 
@@ -263,14 +303,16 @@ export class TrendrumAdapter extends BaseIntegrationAdapter {
       return {
         ok: false,
         status: 'FAILED',
-        message: `Trendrum: "${categoryName}" kategorisi bulunamadı. Ürün kaydında Trendrum kategori ID'si (trendrumCategoryId) girilmeli.`,
+        message: this.categoryCache.length === 0
+          ? `Trendrum: kategori listesi alınamadı (API). "${categoryName}" eşleştirilemedi; biraz sonra tekrar deneyin.`
+          : `Trendrum: "${categoryName}" kategorisi Trendrum'da bulunamadı.${this.nearestCategories(categoryName).length ? ` En yakınlar: ${this.nearestCategories(categoryName).join(' · ')}` : ''} Ürünün kanal kategorisi adını Trendrum'daki adla aynı yapın.`,
       };
     }
     if (!brand_id) {
       return {
         ok: false,
         status: 'FAILED',
-        message: `Trendrum: "${brandName}" markası bulunamadı. Ürün kaydında Trendrum marka ID'si (trendrumBrandId) girilmeli.`,
+        message: `Trendrum: "${brandName}" markası Trendrum'da kayıtlı değil. Trendrum satıcı panelinden bu markayı mağazanıza ekletin (marka başvurusu), sonra tekrar gönderin.`,
       };
     }
 
