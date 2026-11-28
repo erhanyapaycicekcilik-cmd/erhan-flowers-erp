@@ -60,6 +60,34 @@ export class SalesService {
     private readonly products: ProductsService,
   ) {}
 
+  async productGallery(query: string) {
+    const q = query.trim();
+    const where: Record<string, unknown> = { status: 'ACTIVE' };
+    if (q.length >= 2) {
+      where['OR'] = [
+        { barcode: { contains: q, mode: 'insensitive' } },
+        { productName: { contains: q, mode: 'insensitive' } },
+        { currentModelCode: { contains: q, mode: 'insensitive' } },
+        { proposedModelCode: { contains: q, mode: 'insensitive' } },
+      ];
+    }
+    const variants = await this.prisma.trendyolProductVariant.findMany({
+      where: where as any,
+      include: { productCostDraft: true },
+      orderBy: { updatedAt: 'desc' },
+      take: 60,
+    });
+    return variants.map((v) => ({
+      id: v.id,
+      name: v.productName,
+      barcode: v.barcode,
+      modelCode: v.currentModelCode ?? v.proposedModelCode,
+      imageUrl: this.firstImage(v.images),
+      price: Number(v.productCostDraft?.salePrice ?? v.trendyolSalePrice ?? v.marketplaceSalePrice ?? 0),
+      storeCode: v.storeCode,
+    }));
+  }
+
   async searchProducts(query: string, category = '') {
     const cleanQuery = query.trim();
     const cleanCategory = category.trim();
