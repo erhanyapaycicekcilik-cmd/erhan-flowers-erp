@@ -91,7 +91,9 @@ export class TrendrumAdapter extends BaseIntegrationAdapter {
         if (!raw || typeof raw !== 'object') continue;
         const id = String(raw._id ?? raw.id ?? raw.category_id ?? raw.categoryId ?? '');
         const ownName = String(raw.name ?? raw.title ?? raw.category_name ?? raw.categoryName ?? '');
-        const path = parent ? `${parent} > ${ownName}` : ownName;
+        // Trendrum full_path veriyor (ör. "Ev & Yaşam > Dekorasyon > Yapay Ağaç")
+        const fullPath = typeof raw.full_path === 'string' && raw.full_path.trim() ? raw.full_path.trim() : '';
+        const path = fullPath || (parent ? `${parent} > ${ownName}` : ownName);
         if (id && ownName && !seen.has(id)) { seen.add(id); flat.push({ id, name: path }); }
         walk(raw.children ?? raw.subcategories ?? raw.sub_categories ?? raw.subCategories ?? raw.childs ?? raw.child_categories, path);
       }
@@ -100,12 +102,18 @@ export class TrendrumAdapter extends BaseIntegrationAdapter {
       const candidates = [body?.data?.data, body?.data?.categories, body?.data?.items, body?.data, body?.categories, body?.items, body?.results, body];
       return (candidates.find((c) => Array.isArray(c)) as unknown[]) ?? [];
     };
-    const lastPageOf = (body: Record<string, any>): number => Number(
-      body?.meta?.last_page ?? body?.data?.last_page ?? body?.last_page ?? body?.meta?.total_pages ?? body?.data?.meta?.last_page ?? body?.total_pages ?? 1,
-    ) || 1;
+    // Trendrum sayfa bilgisini "pagination" alanında veriyor; alan adları kesin bilinmediği için
+    // bilinen bir son sayfa yoksa yeni kategori gelmeyene kadar sonraki sayfalar istenir (en fazla 100 sayfa).
+    const lastPageOf = (body: Record<string, any>): number | null => {
+      const value = Number(
+        body?.pagination?.last_page ?? body?.pagination?.lastPage ?? body?.pagination?.total_pages ?? body?.pagination?.totalPages ?? body?.pagination?.pages
+        ?? body?.meta?.last_page ?? body?.meta?.pagination?.last_page ?? body?.meta?.total_pages ?? body?.data?.last_page ?? body?.last_page ?? body?.total_pages,
+      );
+      return Number.isFinite(value) && value > 0 ? value : null;
+    };
     try {
       let page = 1;
-      let lastPage = 1;
+      let lastPage = 100;
       do {
         const url = page === 1 ? `${TRENDRUM_API}/categories` : `${TRENDRUM_API}/categories?page=${page}`;
         const res = await fetch(url, { headers, signal: AbortSignal.timeout(15000) });
@@ -113,9 +121,10 @@ export class TrendrumAdapter extends BaseIntegrationAdapter {
         const body = (await res.json()) as Record<string, any>;
         const items = listOf(body);
         if (page === 1) {
-          lastPage = Math.min(lastPageOf(body), 50);
+          lastPage = Math.min(lastPageOf(body) ?? 100, 100);
+          if (body?.pagination) this.categoryDiag = `pagination: ${JSON.stringify(body.pagination).slice(0, 200)}; `;
           const first = items[0] as Record<string, unknown> | undefined;
-          this.categoryDiag = `yanıt anahtarları: ${Object.keys(body ?? {}).join(',')}; ilk kayıt alanları: ${first ? Object.keys(first).join(',') : '-'}`;
+          this.categoryDiag += `yanıt anahtarları: ${Object.keys(body ?? {}).join(',')}; ilk kayıt alanları: ${first ? Object.keys(first).join(',') : '-'}`;
         }
         const before = flat.length;
         walk(items);
