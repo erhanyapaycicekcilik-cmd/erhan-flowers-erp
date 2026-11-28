@@ -20,6 +20,8 @@ import { AmazonAdapter } from './adapters/amazon.adapter';
 import { IntegrationCenterService } from './services/integration-center.service';
 import { isSiteOnlyModelCode } from '../common/site-only';
 import { FLORA_MODEL_PREFIX, FLORA_PLATFORMS, StoreCode } from '../common/store';
+import { checkPriceDrop } from '../common/price-guard';
+import { computeRecipeCapacities, listedQuantity, readSharedStockSettings, SharedStockSettings } from '../common/shared-stock';
 
 const platforms: Array<{ platform: IntegrationPlatform; displayName: string; hidden?: boolean }> = [
   { platform: 'TRENDYOL', displayName: 'Trendyol' },
@@ -67,6 +69,18 @@ const AUTO_SYNC_PLATFORMS: IntegrationPlatform[] = ['TRENDYOL', 'HEPSIBURADA', '
 const AUTO_SYNC_INTERVAL_MS = 60 * 1000;
 
 const FLORA_BLOCK_MESSAGE = `Flora Yapay Çiçek mağazasının ürünü (${FLORA_MODEL_PREFIX}) Erhan Flowers hesabına gönderilmez.`;
+
+// Pazaryerine fiyat/stok güncellemesi. allowPriceDrop: fiyat korumasını bilerek atla (sadece toplu indirim gibi açık kullanıcı işlemleri).
+export type PricePushPayload = {
+  [key: string]: unknown;
+  barcode?: string | null;
+  trendyolBarcode?: string | null;
+  modelCode?: string | null;
+  salePrice?: number;
+  listPrice?: number;
+  stockQuantity?: number;
+  allowPriceDrop?: boolean;
+};
 
 @Injectable()
 export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
@@ -702,25 +716,98 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
 
   // Maliyet ekranından tek bir ürünün fiyat/stoğunu pazaryerine gönderir
   // (ürünü yeniden oluşturmadan, sadece fiyat günceller).
-  async pushPrice(platformValue: string, payload: { barcode?: string; salePrice?: number; listPrice?: number; stockQuantity?: number }) {
+  async pushPrice(platformValue: string, rawPayload: PricePushPayload) {
     const platform = this.platform(platformValue);
-    if (this.isSiteOnlyPayload(payload)) return { ok: false, message: 'Sadece sitede satılan ürün (WEB-), pazaryerine gönderilmez.' };
-    if (await this.isFloraPayload(payload)) return { ok: false, message: FLORA_BLOCK_MESSAGE };
+    if (this.isSiteOnlyPayload(rawPayload)) return { ok: false, message: 'Sadece sitede satılan ürün (WEB-), pazaryerine gönderilmez.' };
+    if (await this.isFloraPayload(rawPayload)) return { ok: false, message: FLORA_BLOCK_MESSAGE };
+    const { payload, guardMessage } = await this.applyListingRules('ERHAN', platform, rawPayload);
     const adapter = await this.adapter(platform);
     const result = await adapter.pushPrice(payload);
     await this.log(platform, 'PUSH_PRICE', result.ok ? 'SUCCESS' : 'FAILED', result.message, payload.barcode ?? null, null, { salePrice: payload.salePrice, stockQuantity: payload.stockQuantity });
-    return result;
+    return guardMessage ? { ...result, priceGuarded: true, message: `${result.message} ${guardMessage}` } : result;
   }
 
-  async pushProduct(platformValue: string, payload: unknown) {
+  // ── Pazaryerine giden her fiyat/stok için ortak kurallar ─────────
+  // 1) Fiyat koruması: gönderilen fiyat, o mağazanın bilinen güncel platform fiyatının %10'undan
+  //    (PRICE_DROP_GUARD_PERCENT) fazla altındaysa fiyat GÖNDERİLMEZ, mevcut fiyat korunur.
+  //    Bilerek indirim yapan akışlar (Toplu Zam/İndirim) `allowPriceDrop: true` gönderir.
+  // 2) Ortak stok (mod ON): ürünün onaylı reçetesi varsa ilan adedi reçetedeki stok kartlarından
+  //    hesaplanır (Erhan + Flora aynı depo). Bilerek 0 gönderilen (satışa kapatma) 0 kalır.
+  private async applyListingRules(store: StoreCode, platform: IntegrationPlatform, rawPayload: PricePushPayload): Promise<{ payload: PricePushPayload; guardMessage?: string }> {
+    const { allowPriceDrop, ...rest } = rawPayload ?? {};
+    let payload: PricePushPayload = rest;
+    const salePrice = Number(payload.salePrice ?? 0);
+    const values = [payload.barcode, payload.trendyolBarcode, payload.modelCode]
+      .map((v) => String(v ?? '').trim())
+      .filter(Boolean);
+    if (!values.length) return { payload };
+    const variant = await this.prisma.trendyolProductVariant.findFirst({
+      where: {
+        storeCode: store,
+        OR: [
+          { barcode: { in: values } },
+          { currentModelCode: { in: values, mode: 'insensitive' } },
+          { supplierStockCode: { in: values, mode: 'insensitive' } },
+        ],
+      },
+      select: { id: true, trendyolSalePrice: true, n11SalePrice: true, hepsiburadaSalePrice: true },
+    });
+    if (!variant) return { payload };
+
+    // Ortak stok
+    const requestedStock = payload.stockQuantity;
+    if (requestedStock !== undefined && requestedStock !== null && Number(requestedStock) > 0) {
+      const settings = await this.sharedStockSettings();
+      if (settings.mode === 'ON') {
+        const capacity = (await computeRecipeCapacities(this.prisma, [variant.id])).get(variant.id);
+        if (capacity) payload = { ...payload, stockQuantity: listedQuantity(capacity.capacity, settings.buffer) };
+      }
+    }
+
+    // Fiyat koruması
+    if (allowPriceDrop === true || !(salePrice > 0)) return { payload };
+    const trendyol = Number(variant.trendyolSalePrice ?? 0);
+    const current =
+      platform === 'N11' ? Number(variant.n11SalePrice ?? 0) || trendyol
+      : platform === 'HEPSIBURADA' ? Number(variant.hepsiburadaSalePrice ?? 0) || trendyol
+      : trendyol;
+    const check = checkPriceDrop(salePrice, current);
+    if (!check.blocked) return { payload };
+    const listPrice = Math.max(Number(payload.listPrice ?? 0), Math.ceil(current * 1.1));
+    const guardMessage = `Fiyat koruması: ${salePrice} TL (%${check.dropPercent} düşüş) gönderilmedi, mevcut ${current} TL korundu. Bilerek indirim için Toplu Zam/İndirim ekranını kullanın.`;
+    await this.log(store === 'ERHAN' ? platform : `${platform}_${store}`, 'PRICE_GUARD', 'BLOCKED', guardMessage, payload.barcode ?? payload.modelCode ?? null, null, {
+      attemptedPrice: salePrice,
+      currentPrice: current,
+      dropPercent: check.dropPercent,
+    }).catch(() => undefined);
+    this.logger.warn(`[${store} ${platform}] ${payload.barcode ?? payload.modelCode}: ${guardMessage}`);
+    return { payload: { ...payload, salePrice: current, listPrice }, guardMessage };
+  }
+
+  private sharedStockCache: { value: SharedStockSettings; expiresAt: number } | null = null;
+  private async sharedStockSettings(): Promise<SharedStockSettings> {
+    const now = Date.now();
+    if (this.sharedStockCache && this.sharedStockCache.expiresAt > now) return this.sharedStockCache.value;
+    const value = await readSharedStockSettings(this.prisma);
+    this.sharedStockCache = { value, expiresAt: now + 60_000 };
+    return value;
+  }
+
+  clearSharedStockCache() {
+    this.sharedStockCache = null;
+  }
+
+  async pushProduct(platformValue: string, rawPayload: unknown) {
     const platform = this.platform(platformValue);
-    if (this.isSiteOnlyPayload(payload)) return { ok: false, message: 'Sadece sitede satılan ürün (WEB-), pazaryerine gönderilmez.' };
-    if (await this.isFloraPayload(payload)) return { ok: false, message: FLORA_BLOCK_MESSAGE };
+    if (this.isSiteOnlyPayload(rawPayload)) return { ok: false, message: 'Sadece sitede satılan ürün (WEB-), pazaryerine gönderilmez.' };
+    if (await this.isFloraPayload(rawPayload)) return { ok: false, message: FLORA_BLOCK_MESSAGE };
+    // Otomatik yayınlar (ürün kaydı, stok kartı, maliyet onayı) fiyatı pushProduct ile gönderir → aynı koruma burada da
+    const { payload, guardMessage } = await this.applyListingRules('ERHAN', platform, (rawPayload ?? {}) as PricePushPayload);
     const adapter = await this.adapter(platform);
     const result = await adapter.pushProduct(payload);
-    const barcode = (payload as Record<string, unknown>)?.barcode as string | undefined;
+    const barcode = payload.barcode ?? undefined;
     await this.log(platform, 'PUSH_PRODUCT', result.ok ? 'SUCCESS' : 'FAILED', result.message, barcode ?? null, null, {});
-    return result;
+    return guardMessage ? { ...result, priceGuarded: true, message: `${result.message} ${guardMessage}` } : result;
   }
 
   // ── Mağaza ayrımı ─────────────────────────────────────────────
@@ -749,7 +836,7 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
 
   // Flora ürününün fiyat/stoğunu Flora'nın KENDİ hesaplarına gönderir (ürün açmaz, sadece günceller).
   // API bilgisi girilmemiş platformlar atlanır.
-  async pushPriceForStore(store: StoreCode, payload: { barcode?: string; modelCode?: string; salePrice?: number; listPrice?: number; stockQuantity?: number }, platforms: readonly string[] = FLORA_PLATFORMS) {
+  async pushPriceForStore(store: StoreCode, payload: PricePushPayload, platforms: readonly string[] = FLORA_PLATFORMS) {
     if (store === 'ERHAN') {
       const results = [];
       for (const platform of platforms) results.push({ platform, ...(await this.pushPrice(platform, payload)) });
@@ -767,9 +854,10 @@ export class IntegrationsService implements OnModuleInit, OnModuleDestroy {
         continue;
       }
       try {
-        const result = await adapter.pushPrice(payload);
-        await this.log(`${platform}_${store}`, 'PUSH_PRICE', result.ok ? 'SUCCESS' : 'FAILED', result.message, payload.barcode ?? null, null, { salePrice: payload.salePrice, stockQuantity: payload.stockQuantity });
-        results.push({ platform, ok: result.ok, message: result.message });
+        const guarded = await this.applyListingRules(store, platform, payload);
+        const result = await adapter.pushPrice(guarded.payload);
+        await this.log(`${platform}_${store}`, 'PUSH_PRICE', result.ok ? 'SUCCESS' : 'FAILED', result.message, guarded.payload.barcode ?? null, null, { salePrice: guarded.payload.salePrice, stockQuantity: guarded.payload.stockQuantity });
+        results.push({ platform, ok: result.ok, message: guarded.guardMessage ? `${result.message} ${guarded.guardMessage}` : result.message });
       } catch (error) {
         results.push({ platform, ok: false, message: this.errorMessage(error) });
       }

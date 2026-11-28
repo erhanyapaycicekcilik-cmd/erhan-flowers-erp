@@ -241,6 +241,9 @@ export class IntegrationCenterService {
     values.USERNAME = values.USERNAME || values.API_KEY || values.MERCHANT_ID || '';
     values.API_SECRET = values.API_SECRET || values.PASSWORD || '';
     values.PASSWORD = values.PASSWORD || values.API_SECRET || '';
+    // Hepsiburada ürün/fiyat API'si önce SECRET_KEY'e bakar; boş kalırsa adaptör ERHAN'ın .env
+    // anahtarına düşüyordu (Flora merchant + Erhan anahtarı → HB 403). Mağazanın kendi şifresiyle doldur.
+    values.SECRET_KEY = values.SECRET_KEY || values.API_SECRET || values.PASSWORD || '';
     const required: Record<string, string[]> = {
       TRENDYOL: ['SUPPLIER_ID', 'API_KEY', 'API_SECRET'],
       N11: ['API_KEY', 'API_SECRET'],

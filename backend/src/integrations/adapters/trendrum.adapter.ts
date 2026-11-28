@@ -77,19 +77,64 @@ export class TrendrumAdapter extends BaseIntegrationAdapter {
     };
   }
 
-  // Trendruum'dan tüm kategorileri çekip cache'e yükler
+  // Trendruum'dan tüm kategorileri çekip cache'e yükler.
+  // Yanıt biçimi kesin bilinmediği için esnek: data | data.data | data.categories | items; sayfalıysa
+  // (meta.last_page / last_page / links.next / total_pages) tüm sayfalar gezilir; alt kategoriler düzleştirilir.
+  private categoryDiag = '';
   private async loadCategories(headers: Record<string, string>): Promise<void> {
     if (this.categoryCache.length > 0) return;
+    const flat: Array<{ id: string; name: string }> = [];
+    const seen = new Set<string>();
+    const walk = (list: unknown, parent = '') => {
+      if (!Array.isArray(list)) return;
+      for (const raw of list as Record<string, unknown>[]) {
+        if (!raw || typeof raw !== 'object') continue;
+        const id = String(raw._id ?? raw.id ?? raw.category_id ?? raw.categoryId ?? '');
+        const ownName = String(raw.name ?? raw.title ?? raw.category_name ?? raw.categoryName ?? '');
+        // Trendrum full_path veriyor (ör. "Ev & Yaşam > Dekorasyon > Yapay Ağaç")
+        const fullPath = typeof raw.full_path === 'string' && raw.full_path.trim() ? raw.full_path.trim() : '';
+        const path = fullPath || (parent ? `${parent} > ${ownName}` : ownName);
+        if (id && ownName && !seen.has(id)) { seen.add(id); flat.push({ id, name: path }); }
+        walk(raw.children ?? raw.subcategories ?? raw.sub_categories ?? raw.subCategories ?? raw.childs ?? raw.child_categories, path);
+      }
+    };
+    const listOf = (body: Record<string, any>): unknown[] => {
+      const candidates = [body?.data?.data, body?.data?.categories, body?.data?.items, body?.data, body?.categories, body?.items, body?.results, body];
+      return (candidates.find((c) => Array.isArray(c)) as unknown[]) ?? [];
+    };
+    // Trendrum sayfa bilgisini "pagination" alanında veriyor; alan adları kesin bilinmediği için
+    // bilinen bir son sayfa yoksa yeni kategori gelmeyene kadar sonraki sayfalar istenir (en fazla 100 sayfa).
+    const lastPageOf = (body: Record<string, any>): number | null => {
+      const value = Number(
+        body?.pagination?.last_page ?? body?.pagination?.lastPage ?? body?.pagination?.total_pages ?? body?.pagination?.totalPages ?? body?.pagination?.pages
+        ?? body?.meta?.last_page ?? body?.meta?.pagination?.last_page ?? body?.meta?.total_pages ?? body?.data?.last_page ?? body?.last_page ?? body?.total_pages,
+      );
+      return Number.isFinite(value) && value > 0 ? value : null;
+    };
     try {
-      const res = await fetch(`${TRENDRUM_API}/categories`, {
-        headers,
-        signal: AbortSignal.timeout(10000),
-      });
-      if (!res.ok) return;
-      const data = await res.json() as { data?: unknown[] };
-      const items = (data.data ?? []) as Record<string, unknown>[];
-      this.categoryCache = items.map((c) => ({ id: String(c._id ?? c.id ?? ''), name: String(c.name ?? '') }));
-    } catch { /* kategori listesi çekilemedi, devam */ }
+      let page = 1;
+      let lastPage = 100;
+      do {
+        const url = page === 1 ? `${TRENDRUM_API}/categories` : `${TRENDRUM_API}/categories?page=${page}`;
+        const res = await fetch(url, { headers, signal: AbortSignal.timeout(15000) });
+        if (!res.ok) { this.categoryDiag = `kategori isteği HTTP ${res.status}`; break; }
+        const body = (await res.json()) as Record<string, any>;
+        const items = listOf(body);
+        if (page === 1) {
+          lastPage = Math.min(lastPageOf(body) ?? 100, 100);
+          if (body?.pagination) this.categoryDiag = `pagination: ${JSON.stringify(body.pagination).slice(0, 200)}; `;
+          const first = items[0] as Record<string, unknown> | undefined;
+          this.categoryDiag += `yanıt anahtarları: ${Object.keys(body ?? {}).join(',')}; ilk kayıt alanları: ${first ? Object.keys(first).join(',') : '-'}`;
+        }
+        const before = flat.length;
+        walk(items);
+        if (flat.length === before) break; // yeni kayıt gelmiyorsa dur
+        page += 1;
+      } while (page <= lastPage);
+      this.categoryCache = flat;
+    } catch (error) {
+      this.categoryDiag = `kategori listesi alınamadı: ${error instanceof Error ? error.message : String(error)}`;
+    }
   }
 
   // Trendruum'dan marka listesini cache'e yükler
@@ -107,21 +152,65 @@ export class TrendrumAdapter extends BaseIntegrationAdapter {
     } catch { /* marka listesi çekilemedi */ }
   }
 
+  // Türkçe karakter / büyük-küçük harf duyarsız karşılaştırma ("Yapay Agac" = "Yapay Ağaç")
+  private norm(value: string): string {
+    return value
+      .toLocaleLowerCase('tr-TR')
+      .replace(/ç/g, 'c').replace(/ğ/g, 'g').replace(/ı/g, 'i').replace(/i̇/g, 'i').replace(/ö/g, 'o').replace(/ş/g, 's').replace(/ü/g, 'u')
+      .replace(/[^a-z0-9]+/g, ' ')
+      .trim();
+  }
+
+  // Önce birebir, sonra en derin (son) kategori adı, sonra kelimelerin hepsini içeren en kısa kategori
   private findCategoryId(categoryName: string): string | null {
-    if (!categoryName) return null;
-    const lower = categoryName.toLowerCase();
-    const match = this.categoryCache.find((c) => c.name.toLowerCase() === lower)
-      ?? this.categoryCache.find((c) => c.name.toLowerCase().includes(lower))
-      ?? this.categoryCache.find((c) => lower.includes(c.name.toLowerCase()));
-    return match?.id ?? null;
+    const wanted = this.norm(categoryName);
+    if (!wanted) return null;
+    const leaf = (name: string) => this.norm(name.split('>').pop() ?? name);
+    const exact = this.categoryCache.find((c) => this.norm(c.name) === wanted)
+      ?? this.categoryCache.find((c) => leaf(c.name) === wanted);
+    if (exact) return exact.id;
+    const words = wanted.split(' ').filter((w) => w.length >= 3);
+    const candidates = this.categoryCache
+      .filter((c) => {
+        const name = this.norm(c.name);
+        return words.length > 0 && words.every((w) => name.includes(w));
+      })
+      .sort((a, b) => leaf(a.name).length - leaf(b.name).length);
+    if (candidates[0]) return candidates[0].id;
+    return this.decorFallbackCategoryId(wanted);
+  }
+
+  // Trendrum'da "Yapay Ağaç / Yapay Bitki" gibi ayrı kategori yok. Yapay çiçek/ağaç/bitki ürünleri
+  // dekorasyon altındaki "Yapay & Kuru Çiçek" kategorisine gider (ör. Ev & Yaşam > Ev > Ev Dekorasyon > Yapay & Kuru Çiçek).
+  // Sadece yolunda "dekor" geçen kategoriler aday olur (ör. "Yapay Göğüs" gibi alakasız kategoriler seçilmez).
+  private decorFallbackCategoryId(wanted: string): string | null {
+    const isPlant = /\b(yapay|agac|cicek|bitki|sarmasik|bonsai|zeytin|bambu|palmiye|orkide|buket|aranjman|dikey bahce|cim)\b/.test(wanted);
+    if (!isPlant) return null;
+    const leaf = (name: string) => this.norm(name.split('>').pop() ?? name);
+    const decor = this.categoryCache.filter((c) => this.norm(c.name).includes('dekor'));
+    const pick = decor.find((c) => leaf(c.name).includes('yapay') && leaf(c.name).includes('cicek'))
+      ?? decor.find((c) => leaf(c.name).includes('yapay'))
+      ?? decor.find((c) => leaf(c.name).includes('cicek'));
+    return pick?.id ?? null;
+  }
+
+  // Kategori bulunamadığında hata mesajında gösterilecek en yakın Trendrum kategorileri
+  private nearestCategories(categoryName: string, limit = 5): string[] {
+    const words = this.norm(categoryName).split(' ').filter((w) => w.length >= 3);
+    return this.categoryCache
+      .map((c) => ({ c, score: words.filter((w) => this.norm(c.name).includes(w)).length }))
+      .filter((x) => x.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, limit)
+      .map((x) => `${x.c.name} (ID: ${x.c.id})`);
   }
 
   private findBrandId(brandName: string): string | null {
-    if (!brandName) return null;
-    const lower = brandName.toLowerCase();
-    const match = this.brandCache.find((b) => b.name.toLowerCase() === lower)
-      ?? this.brandCache.find((b) => b.name.toLowerCase().includes(lower))
-      ?? this.brandCache.find((b) => lower.includes(b.name.toLowerCase()));
+    const lower = this.norm(brandName);
+    if (!lower) return null;
+    const match = this.brandCache.find((b) => this.norm(b.name) === lower)
+      ?? this.brandCache.find((b) => this.norm(b.name).includes(lower))
+      ?? this.brandCache.find((b) => this.norm(b.name) && lower.includes(this.norm(b.name)));
     return match?.id ?? null;
   }
 
@@ -263,14 +352,16 @@ export class TrendrumAdapter extends BaseIntegrationAdapter {
       return {
         ok: false,
         status: 'FAILED',
-        message: `Trendrum: "${categoryName}" kategorisi bulunamadı. Ürün kaydında Trendrum kategori ID'si (trendrumCategoryId) girilmeli.`,
+        message: this.categoryCache.length === 0
+          ? `Trendrum: kategori listesi alınamadı (${this.categoryDiag || 'API'}). "${categoryName}" eşleştirilemedi; biraz sonra tekrar deneyin.`
+          : `Trendrum: "${categoryName}" kategorisi Trendrum'da bulunamadı.${this.nearestCategories(categoryName).length ? ` En yakınlar: ${this.nearestCategories(categoryName).join(' · ')}` : ` Trendrum'dan ${this.categoryCache.length} kategori alındı, örnek: ${this.categoryCache.slice(0, 8).map((c) => c.name).join(' · ')} (${this.categoryDiag}).`} Ürünün kanal kategorisi adını Trendrum'daki adla aynı yapın.`,
       };
     }
     if (!brand_id) {
       return {
         ok: false,
         status: 'FAILED',
-        message: `Trendrum: "${brandName}" markası bulunamadı. Ürün kaydında Trendrum marka ID'si (trendrumBrandId) girilmeli.`,
+        message: `Trendrum: "${brandName}" markası Trendrum'da kayıtlı değil. Trendrum satıcı panelinden bu markayı mağazanıza ekletin (marka başvurusu), sonra tekrar gönderin.`,
       };
     }
 

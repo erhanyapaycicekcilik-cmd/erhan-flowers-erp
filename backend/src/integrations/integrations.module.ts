@@ -13,6 +13,8 @@ import { CredentialVaultService } from './services/credential-vault.service';
 import { IntegrationCenterService } from './services/integration-center.service';
 import { OrderSyncService } from './services/order-sync.service';
 import { GmailOrderService } from './services/gmail-order.service';
+import { DriveSyncService } from './services/drive-sync.service';
+import { DriveController } from './drive.controller';
 import { HepsiburadaSyncService } from './services/hepsiburada-sync.service';
 import { FloraSyncService } from './services/flora-sync.service';
 import { GmailController } from './gmail.controller';
@@ -20,8 +22,8 @@ import { HepsiburadaWebhookController } from './hepsiburada-webhook.controller';
 
 @Module({
   imports: [PrismaModule, AuthModule, StaffTasksModule],
-  controllers: [IntegrationsController, GmailController, HepsiburadaWebhookController],
-  providers: [IntegrationsService, IntegrationCenterService, CredentialVaultService, OrderSyncService, GmailOrderService, HepsiburadaSyncService, FloraSyncService, TrendyolAdapter, HepsiburadaAdapter, N11Adapter, TicimaxAdapter, MockMarketplaceAdapter],
+  controllers: [IntegrationsController, GmailController, DriveController, HepsiburadaWebhookController],
+  providers: [IntegrationsService, IntegrationCenterService, CredentialVaultService, OrderSyncService, GmailOrderService, DriveSyncService, HepsiburadaSyncService, FloraSyncService, TrendyolAdapter, HepsiburadaAdapter, N11Adapter, TicimaxAdapter, MockMarketplaceAdapter],
   exports: [IntegrationsService, IntegrationCenterService, TrendyolAdapter, HepsiburadaAdapter, N11Adapter, TicimaxAdapter, OrderSyncService, GmailOrderService, HepsiburadaSyncService, FloraSyncService],
 })
 export class IntegrationsModule {}

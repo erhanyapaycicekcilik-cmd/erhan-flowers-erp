@@ -1,0 +1,5354 @@
+'use client';
+
+import { FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import { Boxes, Calculator, ChevronDown, CheckCircle2, Copy, Edit3, ExternalLink, Eye, Facebook, FileText, ImageIcon, Instagram, PackagePlus, Plus, Printer, RefreshCw, Save, Search, Send, Sparkles, Trash2, Upload, X, XCircle } from 'lucide-react';
+import { AdminShell } from '@/components/AdminShell';
+import { api, apiBaseUrl, apiFileUrl, getStoredToken } from '@/lib/api';
+import type { Category, CurrentUser, MediaFile } from '@/types';
+import trendyolFieldMap from '@/config/channel-field-maps/trendyol-yapay-kuru-cicek.json';
+
+type Entry = {
+  id: number;
+  variantId: number;
+  productId: number | null;
+  productName: string;
+  barcode: string;
+  modelCode: string;
+  stockCode?: string;
+  categoryId: number | null;
+  categoryName: string | null;
+  familyId: number | null;
+  familyName: string | null;
+  sizeOptionId: number | null;
+  potOptionId: number | null;
+  templateId: number | null;
+  brand: string;
+  channelCategoryName: string;
+  colorVariant: string;
+  description: string;
+  stockQuantity: number;
+  salePrice: number;
+  n11SalePrice?: number;
+  hepsiburadaSalePrice?: number;
+  commissionPercent: number;
+  images: string[];
+  costStatus: string;
+  totalCost: number;
+  seoApprovalStatus: string;
+  status: 'ACTIVE' | 'PASSIVE';
+  storeCode?: StoreCode;
+};
+
+// Mağazalar birbirinden bağımsız: ürün ya Erhan Flowers'a ya Flora Yapay Çiçek'e aittir.
+type StoreCode = 'ERHAN' | 'FLORA';
+const STORES: Array<{ code: StoreCode; label: string; brand: string }> = [
+  { code: 'ERHAN', label: 'Erhan Flowers', brand: 'Erhan Flowers' },
+  { code: 'FLORA', label: 'Flora Yapay Çiçek', brand: 'Flora Yapay Çiçek' },
+];
+const storeLabel = (code?: string) => STORES.find((s) => s.code === code)?.label ?? 'Erhan Flowers';
+// Sayfanın açık olduğu mağazanın markası: SEO adı, açıklama, hashtag ve hazır olma kontrollerinde kullanılır.
+// Flora sayfasında "Flora Yapay Çiçek", Ürün Merkezi'nde "Erhan Flowers". Hesaplama/formüller aynıdır.
+let currentBrand = 'Erhan Flowers';
+let currentSiteUrl = 'https://erhanflowers.com';
+const STORE_PAGE_PATH: Record<StoreCode, string> = { ERHAN: '/products', FLORA: '/flora/urunler' };
+// Mağazaya göre ürün gönderilebilen pazaryerleri
+const STORE_QUICK_PLATFORMS: Record<StoreCode, Array<{ value: string; label: string }>> = {
+  ERHAN: [{ value: 'TRENDYOL', label: 'Trendyol' }, { value: 'N11', label: 'N11' }, { value: 'HEPSIBURADA', label: 'Hepsiburada' }],
+  FLORA: [{ value: 'TRENDYOL', label: 'Trendyol' }, { value: 'HEPSIBURADA', label: 'Hepsiburada' }, { value: 'N11', label: 'N11' }, { value: 'TRENDRUM', label: 'Trendrum' }],
+};
+const FLORA_FULL_CHANNELS = ['TRENDYOL', 'HEPSIBURADA', 'N11', 'TRENDRUM'];
+
+type Family = {
+  id: number;
+  familyName: string;
+  templates?: Array<{ id: number; templateName: string }>;
+  sizeOptions?: Array<{ id: number; sizeLabel: string }>;
+  potOptions?: Array<{ id: number; potName: string }>;
+};
+
+type CostDetail = {
+  hasSavedCostDraft?: boolean;
+  costDraft: {
+    status?: string;
+    salePrice: number;
+    profitMarginPercent: number;
+    commissionPercent: number;
+    vatPercent: number;
+    shippingCost: number;
+    desi: number;
+    marketplaceMarkupPercent: number;
+    campaignBufferPercent: number;
+    totalCost?: number;
+    items: Array<{ name: string; group: string; quantity: number; unit: string; source: string; stockCardId: number | null; manualUnitCost: number; automaticUnitCost: number; totalCost?: number; isActive?: boolean; isDefaultExpense?: boolean; defaultExpenseKey?: string | null; defaultAmount?: number }>;
+    pots: Array<{ name: string; potType?: string | null; color?: string | null; quantity: number; unit?: string; source: string; stockCardId: number | null; manualUnitCost: number; automaticUnitCost: number; totalCost?: number }>;
+  };
+};
+
+type StockCard = {
+  id: number;
+  name: string;
+  sku?: string | null;
+  category?: string | null;
+  model?: string | null;
+  barcode?: string | null;
+  potColor?: string | null;
+  potType?: string | null;
+  potSize?: string | null;
+  height?: string | null;
+  productFamily?: string | null;
+  productType?: string | null;
+  imagePath?: string | null;
+  images?: Array<{ id?: number; filePath: string; isMain?: boolean }>;
+  unit: string;
+  automaticUnitCost: number;
+  manualUnitCost: number;
+  stockQuantity: number;
+  status?: 'ACTIVE' | 'PASSIVE';
+};
+
+type ComponentRole = 'LEAF' | 'TRUNK' | 'FLOWER' | 'BRANCH' | 'POT' | 'STONE' | 'PACKAGING' | 'CONSUMABLE' | 'AUXILIARY' | 'OTHER';
+
+type DefaultExpense = {
+  id: number;
+  expenseKey: string;
+  name: string;
+  defaultAmount: number;
+  isActive: boolean;
+  status: 'ACTIVE' | 'PASSIVE';
+};
+
+type PricingSummary = {
+  materialCost: number;
+  shippingCost: number;
+  costWithShipping: number;
+  shopSalePrice: number;
+  siteSalePrice: number;
+  ecommerceMarkup35Amount: number;
+  vatAmount: number;
+  commissionAmount: number;
+  marketplaceBufferAmount: number;
+  campaignBufferAmount: number;
+  targetProfitAmount: number;
+  enteredSalePrice: number;
+  estimatedNetProfit: number;
+  estimatedProfitRate: number;
+  suggestedSalePrice: number;
+  minimumSalePrice: number;
+};
+
+type ChannelPricing = {
+  key: string;
+  label: string;
+  salePrice: number;
+  netPriceWithoutVat: number;
+  vatPercent: number;
+  vatAmount: number;
+  commissionPercent: number;
+  commissionAmount: number;
+  shippingCost: number;
+  customerShippingCharge: number;
+  businessShippingCost: number;
+  paymentFeePercent: number;
+  paymentFeeAmount: number;
+  serviceFee: number;
+  otherExpense: number;
+  netProfit: number;
+  netMarginPercent: number;
+  suggestedMinimumSalePrice: number;
+  status: 'Uygun' | 'Eksik veri';
+};
+
+type GeminiSeoResult = {
+  productName: string;
+  description: string;
+};
+
+type GeminiReferenceSearchResult = {
+  query: string;
+  googleImagesUrl: string;
+  note?: string;
+};
+
+type ImageGenerationStatus = {
+  openAiReady: boolean;
+  geminiReady: boolean;
+  ready: boolean;
+  provider: string | null;
+  message: string;
+};
+
+type ExcelExportResult = {
+  fileName: string;
+  mimeType: string;
+  contentBase64: string;
+  total: number;
+  missingByProduct: Array<{ id: number; productName: string; missingFields: string[] }>;
+};
+
+type QuickForm = {
+  productName: string;
+  categoryId: string;
+  productType: string;
+  sizeVariant: string;
+  shopPrice: number;
+  sitePrice: number;
+  marketplaceSalePrice: number;
+  description: string;
+  initialStockQuantity: number;
+  mainImageUrl: string;
+  platforms: string[];
+  storeCode: StoreCode;
+};
+
+type QuickResult = {
+  productId: number;
+  variantId: number;
+  stockCardId: number | null;
+  productName: string;
+  modelCode: string;
+  stockCode: string;
+  barcode: string;
+  initialStockQuantity: number;
+  shopPrice: number;
+  sitePrice: number;
+  publishResult?: { success: number; failed: number; results: Array<{ platform: string; ok: boolean; errorMessage?: string | null; batchRequestId?: string | null; listingUploadId?: string | null }> };
+};
+
+type PriceResearch = {
+  productName: string;
+  competitorPrices: string[];
+  note: string;
+};
+
+type AutoStockCardCandidate = {
+  id: number;
+  name: string;
+  sku: string | null;
+  model: string | null;
+  barcode: string | null;
+  category: string | null;
+  status: 'ACTIVE' | 'PASSIVE';
+  createdAt: string;
+  stockQuantity: number;
+  movementCount: number;
+  linkedRecipeCount: number;
+  productName: string | null;
+  hardDeleteAllowed: boolean;
+  recommendedAction: 'hard-delete' | 'passive';
+  warning: string | null;
+};
+
+type CompositeBuilder = {
+  productKind: CompositeProductKind;
+  productStockCardId: string;
+  productSearch: string;
+  leafStockCardId: string;
+  leafSearch: string;
+  trunkStockCardId: string;
+  trunkSearch: string;
+  potStockCardId: string;
+  potSearch: string;
+};
+
+type CompositeProductKind = 'TREE' | 'PLANT' | 'BAMBOO';
+
+const emptyForm = {
+  storeCode: 'ERHAN' as StoreCode,
+  variantId: '',
+  productId: '',
+  productName: '',
+  barcode: '',
+  modelCode: '',
+  stockCode: '',
+  categoryId: '',
+  shopCategoryId: '',
+  familyId: '',
+  sizeOptionId: '',
+  potOptionId: '',
+  templateId: '',
+  brand: 'Erhan Flowers',
+  channelCategoryName: '',
+  colorVariant: '',
+  description: '',
+  stockQuantity: 0,
+  salePrice: 0,
+  n11SalePrice: 0,
+  hepsiburadaSalePrice: 0,
+  commissionPercent: 25,
+  images: [] as string[],
+  status: 'ACTIVE' as 'ACTIVE' | 'PASSIVE',
+  productHeight: '',
+  potType: '',
+  potSize: '',
+  stemCount: '',
+  branchCount: '',
+  leavesPerBranch: '',
+  leafCount: '',
+  potW: '',
+  potD: '',
+  potH: '',
+  potVolumeLitre: '',
+  catalogCategory: '',
+  catalogSubCategory: '',
+};
+
+const emptyQuickForm: QuickForm = {
+  productName: '',
+  categoryId: '',
+  productType: '',
+  sizeVariant: '',
+  shopPrice: 0,
+  sitePrice: 0,
+  marketplaceSalePrice: 0,
+  description: '',
+  initialStockQuantity: 0,
+  mainImageUrl: '',
+  platforms: ['TRENDYOL'],
+  storeCode: 'ERHAN',
+};
+
+const emptyPriceResearch: PriceResearch = {
+  productName: '',
+  competitorPrices: ['', '', ''],
+  note: '',
+};
+
+const emptyCompositeBuilder: CompositeBuilder = {
+  productKind: 'TREE',
+  productStockCardId: '',
+  productSearch: '',
+  leafStockCardId: '',
+  leafSearch: '',
+  trunkStockCardId: '',
+  trunkSearch: '',
+  potStockCardId: '',
+  potSearch: '',
+};
+
+const compositeProductKinds: Array<{ key: CompositeProductKind; label: string }> = [
+  { key: 'TREE', label: 'Ağaç Gövde' },
+  { key: 'PLANT', label: 'Bitki / Çiçek' },
+  { key: 'BAMBOO', label: 'Bambu' },
+];
+
+const CATS: Record<string, { label: string; subs: string[] }> = {
+  Agaclar:        { label: 'Ağaçlar',                   subs: ['Yeşil Ağaçlar', 'Hazır Ağaçlar', 'Renkli Ağaçlar', 'Bambu Ağaçlar', 'Palmiye ve Areka Ağaçlar', 'Saksısız Ağaçlar'] },
+  Bambu:          { label: 'Bambu',                     subs: ['Tekli Bambu', 'Plastik Separatör', 'MDF Separatör', 'Fiber Separatör'] },
+  YapayKursekler: { label: 'Yapay Çiçekler',            subs: ['Renkli Çiçekler', 'Yeşil Çiçekler'] },
+  Buketler:       { label: 'Buketler',                  subs: [] },
+  DikeyBahce:     { label: 'Dikey Bahçeler',            subs: ['Paneller', 'Kapı Önü Dekorlar', 'Tavan Dekorları'] },
+  Sarmasiklar:    { label: 'Sarmaşıklar',               subs: ['Yeşil Sarmaşıklar', 'Renkli Sarmaşıklar'] },
+  BonsaiZeytin:   { label: 'Bonsai ve Zeytin Ağaçları', subs: ['Bonsai', 'Zeytin Ağacı'] },
+  SaksiAranjman:  { label: 'Saksı Aranjmanları',        subs: [] },
+  YapayBitkiler:  { label: 'Yapay Bitkiler',            subs: ['Yeşil Bitkiler', 'Renkli Bitkiler', 'Yapraklar'] },
+  Saksilar:       { label: 'Saksılar',                  subs: ['Metal Saksılar', 'Plastik Saksılar', 'MDF Saksılar', 'Fiber Saksılar', 'Ahşap Saksılar', 'Beton Saksılar', 'Yanmaz Saksılar'] },
+}
+const CATS_KEYS = Object.keys(CATS)
+
+const steps = ['Ürün Bilgileri', 'Reçete/Malzeme', 'Maliyet/Fiyat', 'Görsel/SEO', 'Kanallara Gönder'];
+const visibleStepIndexes = [0, 1, 2, 3, 4] as const;
+const channels = ['SHOP', 'SITE', 'TRENDYOL', 'HEPSIBURADA', 'N11', 'TRENDRUM', 'PAZARAMA', 'WHATSAPP'] as const;
+// Aynı ürünü Flora mağazasının Trendyol hesabına da açar (barkod aynı, model/stok kodu FL- ön ekli).
+const FLORA_TRENDYOL_CHANNEL = 'TRENDYOL_FLORA';
+const publishableChannels = ['TRENDYOL', 'HEPSIBURADA', 'N11', 'TRENDRUM', 'PAZARAMA'] as const;
+const treeVisualSlots = [
+  { title: '01 Beyaz ana görsel', detail: 'Pazaryeri ana fotoğrafı: beyaz fon, ürün ortada, tam boy.' },
+  { title: '02 Otel lobisi / dükkan', detail: 'Ağaç gerçek showroom, mağaza veya otel lobisinde duruyormuş gibi.' },
+  { title: '03 Modern salon / ofis', detail: 'Ev veya kurumsal kullanım için salon/ofis köşesinde doğal görünüm.' },
+  { title: '04 Yakın detay', detail: 'Yaprak, gövde, saksı, taş ve malzeme kalitesini gösteren yakın çekim.' },
+  { title: '05 Giriş / ölçü algısı', detail: 'Kapı, konsol veya koridor yanında ürün boyunu anlatan kullanım görseli.' },
+];
+const treeVisualImageLimit = treeVisualSlots.length;
+const flowerVisualSlots = [
+  { title: '01 Beyaz ana görsel', detail: 'Pazaryeri ana fotoğrafı: beyaz fon, çiçek ortada, tam boy.' },
+  { title: '02 Ev – koltuk / cam kenarı', detail: 'Koltuk yanında veya pencere kenarında doğal günışığıyla ev atmosferi.' },
+  { title: '03 Ofis masası', detail: 'Modern ofis masasında, laptop veya kahve yanında kurumsal hediye atmosferi.' },
+  { title: '04 Kafe / restoran', detail: 'Sıcak ambiyans ışığında kafe masasında cappuccino yanında.' },
+  { title: '05 Yakın çekim – yaprak', detail: 'Çiçek yaprakları ve taç yaprakları; renk tonu ve malzeme kalitesi detayı.' },
+  { title: '06 Yakın çekim – saksı / ambalaj', detail: 'Saksı, vazo veya ambalaj yakın çekimi; sunum ve paketleme kalitesi.' },
+  { title: '07 E-ticaret hero', detail: 'Pastel arka planlı, ürün tam ortada, müşteriyi sepete eklemeye yönlendiren hero görsel.' },
+];
+const flowerVisualImageLimit = flowerVisualSlots.length;
+const flowerGeneratedImagePrefix = '/uploads/flower-standard/';
+
+const TRENDYOL_COLOR_OPTIONS = [
+  'Çok Renkli', 'Beyaz', 'Siyah', 'Kırmızı', 'Pembe', 'Mor', 'Mavi', 'Lacivert',
+  'Yeşil', 'Haki', 'Sarı', 'Turuncu', 'Bej', 'Krem', 'Ekru', 'Kahverengi',
+  'Gri', 'Gümüş', 'Altın', 'Bordo', 'Turkuaz', 'Şeffaf',
+];
+
+const TRENDYOL_FLOWER_TYPE_OPTIONS = [
+  'Gül', 'Papatya', 'Ayçiçeği', 'Lale', 'Lavanta', 'Sarmaşık',
+  'Ağaç', 'Manolya', 'Çiçek Buketi', 'Buket', 'Demet', 'Yaprak',
+  'Tek Dal', 'Saksı', 'Pamuk',
+];
+const treeVisualSourceReadyText = 'Bilgisayardan yüklenen ürün görseli seçildi. Bileşenden otomatik görsel hazırlama şimdilik kapalı.';
+const compositeGeneratedImagePrefix = '/uploads/composite-products/';
+const productImageAutomationDisabled = true;
+
+export default function ProductCenterPage({ storeMode = 'ERHAN' }: { storeMode?: StoreCode }) {
+  const isFloraPage = storeMode === 'FLORA';
+  currentBrand = STORES.find((s) => s.code === storeMode)!.brand;
+  currentSiteUrl = isFloraPage ? '' : 'https://erhanflowers.com';
+  const [entries, setEntries] = useState<Entry[]>([]);
+  const [importingExcel, setImportingExcel] = useState(false);
+  const [importingTrendyol, setImportingTrendyol] = useState(false);
+  const [trendyolImportResult, setTrendyolImportResult] = useState<{ created: number; updated: number; skipped: number; errors: string[] } | null>(null);
+  const [broadcastingAll, setBroadcastingAll] = useState(false);
+  const [broadcastResult, setBroadcastResult] = useState<{ total: number; sent: number; skipped: number; errors: number; platformErrors?: number } | null>(null);
+  const [broadcastingImages, setBroadcastingImages] = useState(false);
+  const [broadcastImagesResult, setBroadcastImagesResult] = useState<{ sent: number; errors: number } | null>(null);
+  const [sendingToPazarama, setSendingToPazarama] = useState(false);
+  const [pazaramaResult, setPazaramaResult] = useState<{ total: number; sent: number; errors: number } | null>(null);
+  const [syncingFromTrendyol, setSyncingFromTrendyol] = useState(false);
+  const [syncFromTrendyolResult, setSyncFromTrendyolResult] = useState<{ updated: number; notFound: number; total: number; error?: string } | null>(null);
+  const [syncingSitePrices, setSyncingSitePrices] = useState(false);
+  const [syncSitePricesResult, setSyncSitePricesResult] = useState<{ updated: number; skipped: number } | null>(null);
+  const [syncingTrendyolProducts, setSyncingTrendyolProducts] = useState(false);
+  const [syncTrendyolProductsResult, setSyncTrendyolProductsResult] = useState<{ inserted: number; updated: number; skipped: number; error?: string } | null>(null);
+  const [fixingSitePrices, setFixingSitePrices] = useState(false);
+  const [fixSitePricesResult, setFixSitePricesResult] = useState<{ updated: number; skipped: number } | null>(null);
+  const [recalculating, setRecalculating] = useState(false);
+  const [backfillingCosts, setBackfillingCosts] = useState(false);
+  const [backfillResult, setBackfillResult] = useState<{ checked: number; created: number; skipped: number } | null>(null);
+  const [openingTrendyolPanel, setOpeningTrendyolPanel] = useState(false);
+  const [productTrendyolEntry, setProductTrendyolEntry] = useState<Entry | null>(null);
+  const [productTrendyolForm, setProductTrendyolForm] = useState({ categoryId: '', salePrice: '', listPrice: '', description: '', color: '', flowerType: '', vatRate: '20', desi: '1', barcode: '', modelCode: '' });
+  const [productTrendyolCompany, setProductTrendyolCompany] = useState<'ERHAN' | 'FLORA' | 'BOTH'>('ERHAN');
+  const [productTrendyolResult, setProductTrendyolResult] = useState<{ ok: boolean; message: string } | null>(null);
+  const [productTrendyolSending, setProductTrendyolSending] = useState(false);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [shopCategories, setShopCategories] = useState<any[]>([]);
+  const [erhCodePreview, setErhCodePreview] = useState('');
+  const [families, setFamilies] = useState<Family[]>([]);
+  const [mediaFiles, setMediaFiles] = useState<MediaFile[]>([]);
+  const [stockCards, setStockCards] = useState<StockCard[]>([]);
+  const [defaultExpenses, setDefaultExpenses] = useState<DefaultExpense[]>([]);
+  const [form, setForm] = useState(() => ({ ...emptyForm, storeCode: storeMode, brand: STORES.find((st) => st.code === storeMode)!.brand }));
+  // Satış fiyatı elle girildi / öneri butonuyla seçildi mi? Değilse maliyetten otomatik hesaplanır.
+  // Ayrı state: form tamamı kayıt isteğine gönderildiği için forma eklenmez.
+  const [salePriceManual, setSalePriceManual] = useState(false);
+  const [step, setStep] = useState(0);
+  const [sourceRecipeId, setSourceRecipeId] = useState('');
+  const [costDetail, setCostDetail] = useState<CostDetail | null>(null);
+  const [selectedChannels, setSelectedChannels] = useState<string[]>(storeMode === 'FLORA' ? [...FLORA_FULL_CHANNELS] : ['SHOP', 'SITE', 'TRENDYOL', 'HEPSIBURADA', 'N11', 'TRENDRUM', 'PAZARAMA']);
+  const [allowIncomplete, setAllowIncomplete] = useState(true);
+  const [query, setQuery] = useState('');
+  const [familyPickerOpen, setFamilyPickerOpen] = useState(false);
+  const [familySearch, setFamilySearch] = useState('');
+  const [message, setMessage] = useState('');
+  const [sendMessage, setSendMessage] = useState('');
+  const [sendResults, setSendResults] = useState<Array<{ platform: string; rawPlatform: string; ok: boolean; message: string; batchId: string | null }>>([]);
+  const [sendingChannels, setSendingChannels] = useState(false);
+  const [quickForm, setQuickForm] = useState<QuickForm>(() => ({ ...emptyQuickForm, storeCode: storeMode }));
+  // Sayfanın mağazası sabittir: /products = Erhan Flowers, /flora/urunler = Flora Yapay Çiçek
+  const [activeStore, setActiveStore] = useState<StoreCode>(storeMode);
+  // Google Drive — Flora saksısız ağaç fotoğrafları "Flora Saksısız" klasörüne
+  const [driveStatus, setDriveStatus] = useState<{ connected: boolean; email: string | null; folderName: string; folderUrl: string | null; pending: number; done: number } | null>(null);
+  const [driveSyncing, setDriveSyncing] = useState(false);
+  useEffect(() => {
+    if (storeMode !== 'FLORA') return;
+    api<NonNullable<typeof driveStatus>>('/integrations/drive/status').then(setDriveStatus).catch(() => setDriveStatus(null));
+    try {
+      const drive = new URLSearchParams(window.location.search).get('drive');
+      if (drive === 'connected') setMessage('Google Drive bağlandı. Flora saksısız ağaçlarının fotoğrafları "Flora Saksısız" klasörüne yükleniyor.');
+      if (drive === 'error') setMessage('Google Drive bağlanamadı. Tekrar deneyin.');
+    } catch { /* yok say */ }
+  }, [storeMode]);
+  async function syncDriveNow() {
+    setDriveSyncing(true);
+    try {
+      const result = await api<{ message: string; errors?: string[] }>('/integrations/drive/sync', { method: 'POST' });
+      setMessage(`Drive: ${result.message}${result.errors?.length ? ` — ${result.errors.join(' | ')}` : ''}`);
+      setDriveStatus(await api<NonNullable<typeof driveStatus>>('/integrations/drive/status'));
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Drive senkronu başarısız.');
+    } finally {
+      setDriveSyncing(false);
+    }
+  }
+  const [quickResult, setQuickResult] = useState<QuickResult | null>(null);
+  const [quickSaving, setQuickSaving] = useState(false);
+  const [quickKeepCategory, setQuickKeepCategory] = useState(true);
+  const [quickKeepProductType, setQuickKeepProductType] = useState(true);
+  const [quickKeepPrices, setQuickKeepPrices] = useState(true);
+  const [compositeBuilder, setCompositeBuilder] = useState(emptyCompositeBuilder);
+  const [compositeOpen, setCompositeOpen] = useState(false);
+  const [quickFormOpen, setQuickFormOpen] = useState(false);
+  const [cleanupItems, setCleanupItems] = useState<AutoStockCardCandidate[]>([]);
+  const [cleanupLoading, setCleanupLoading] = useState(false);
+  const [showPassiveEntries, setShowPassiveEntries] = useState(false);
+  const [productListOpen, setProductListOpen] = useState(false);
+  const [entryFilter, setEntryFilter] = useState<'all' | 'done' | 'missing'>('all');
+  const [identityGenerating, setIdentityGenerating] = useState(false);
+  const [imagePickerOpen, setImagePickerOpen] = useState(false);
+  const [treeVisualOpen, setTreeVisualOpen] = useState(false);
+  const [treeVisualGenerating, setTreeVisualGenerating] = useState(false);
+  const [flowerVisualOpen, setFlowerVisualOpen] = useState(false);
+  const [flowerVisualGenerating, setFlowerVisualGenerating] = useState(false);
+  const [compositeImageGenerating, setCompositeImageGenerating] = useState(false);
+  const [compositeImageError, setCompositeImageError] = useState('');
+  const [imageGenerationStatus, setImageGenerationStatus] = useState<ImageGenerationStatus | null>(null);
+  const [referenceSearchLoading, setReferenceSearchLoading] = useState(false);
+  const [referenceImageUrl, setReferenceImageUrl] = useState('');
+  const [imageUrlInput, setImageUrlInput] = useState('');
+  const [referenceSearchResult, setReferenceSearchResult] = useState<GeminiReferenceSearchResult | null>(null);
+  const [componentPickerOpen, setComponentPickerOpen] = useState(false);
+  const [stockCardsLoading, setStockCardsLoading] = useState(false);
+  const [priceResearch, setPriceResearch] = useState(emptyPriceResearch);
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
+  const [missingPanelOpen, setMissingPanelOpen] = useState(false);
+  const costSectionRef = useRef<HTMLDivElement | null>(null);
+
+  function newFormFor(store: StoreCode) {
+    return { ...emptyForm, storeCode: store, brand: STORES.find((s) => s.code === store)!.brand };
+  }
+
+  function switchStore(store: StoreCode) {
+    setActiveStore(store);
+    setQuickForm((current) => ({ ...current, storeCode: store, platforms: ['TRENDYOL'] }));
+    setQuickResult(null);
+    // Diğer mağazanın ürünü açıksa formu o mağaza için boşalt
+    setForm((current) => (current.variantId && current.storeCode !== store ? newFormFor(store) : { ...current, storeCode: store, brand: current.variantId ? current.brand : STORES.find((s) => s.code === store)!.brand }));
+    setSelectedChannels(store === 'FLORA' ? [...FLORA_FULL_CHANNELS] : ['SHOP', 'SITE', 'TRENDYOL', 'HEPSIBURADA', 'N11', 'TRENDRUM', 'PAZARAMA']);
+  }
+
+
+  async function load() {
+    const [entryData, categoryData, shopCategoryData, familyData, mediaData, stockCardData, defaultExpenseData, userData, imageStatusData] = await Promise.all([
+      api<Entry[]>('/product-center/entries').catch(() => []),
+      api<Category[]>('/categories').catch(() => []),
+      api<any[]>('/shop-categories').catch(() => []),
+      api<Family[]>('/production-costs/families').catch(() => []),
+      api<MediaFile[]>('/media').catch(() => []),
+      api<StockCard[]>('/stock-cards').catch(() => []),
+      api<DefaultExpense[]>('/production-costs/default-expenses').catch(() => []),
+      api<CurrentUser>('/auth/me').catch(() => null),
+      api<ImageGenerationStatus>('/media/image-generation-status').catch(() => null),
+    ]);
+    setEntries(entryData.map(normalizeEntry));
+    setCategories(categoryData.map((category) => ({ ...category, name: cleanText(category.name) })));
+    const flatShopCats: any[] = [];
+    (Array.isArray(shopCategoryData) ? shopCategoryData : []).forEach((c: any) => {
+      flatShopCats.push(c);
+      c.children?.forEach((ch: any) => flatShopCats.push({ ...ch, _indent: true }));
+    });
+    setShopCategories(flatShopCats);
+    setFamilies(familyData.map(normalizeFamily));
+    setMediaFiles(mediaData);
+    setStockCards(normalizeStockCards(stockCardData));
+    setCurrentUser(userData);
+    setImageGenerationStatus(imageStatusData);
+    setDefaultExpenses(defaultExpenseData.map((expense) => ({
+      ...expense,
+      name: cleanText(expense.name),
+      defaultAmount: Number(expense.defaultAmount || 0),
+    })));
+  }
+
+  function downloadWhatsAppCsv() {
+    const activeEntries = entries.filter((e) => e.status === 'ACTIVE' && e.salePrice > 0);
+    const header = ['id', 'title', 'description', 'availability', 'condition', 'price', 'link', 'image_link', 'brand', 'google_product_category'].join(',');
+    const rows = activeEntries.map((e) => {
+      const id = e.barcode || e.modelCode || String(e.id);
+      const title = `"${(e.productName || '').replace(/"/g, '""')}"`;
+      const description = `"${(e.description || e.productName || '').replace(/"/g, '""')}"`;
+      const price = `${e.salePrice.toFixed(2)} TRY`;
+      const link = `https://www.erhanflowers.com/urun/${e.modelCode || e.barcode || e.id}`;
+      const imageLink = e.images?.[0] ? (e.images[0].startsWith('http') ? e.images[0] : `https://api.erhanflowers.com${e.images[0]}`) : '';
+      const brand = `"${(e.brand || 'Erhan Flowers').replace(/"/g, '""')}"`;
+      return [id, title, description, 'in stock', 'new', price, link, imageLink, brand, '5122'].join(',');
+    });
+    const csv = [header, ...rows].join('\n');
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `whatsapp-katalog-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    window.URL.revokeObjectURL(url);
+    setMessage(`WhatsApp Katalog CSV hazırlandı: ${activeEntries.length} ürün.`);
+  }
+
+  async function downloadCatalogExcel() {
+    try {
+      const token = getStoredToken();
+      const res = await fetch(`${apiBaseUrl}/products/export-excel-by-category`, {
+        credentials: 'include',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) throw new Error('İndirme başarısız');
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `kategori-katalog-${new Date().toISOString().slice(0, 10)}.xlsx`;
+      link.click();
+      window.URL.revokeObjectURL(url);
+    } catch {
+      setMessage('Katalog Excel indirilemedi.');
+    }
+  }
+
+  async function downloadUnlinkedExcel() {
+    try {
+      const result = await api<{ fileName: string; mimeType: string; contentBase64: string; total: number }>('/product-center/export/excel');
+      const binary = atob(result.contentBase64);
+      const bytes = new Uint8Array(binary.length);
+      for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+      const url = window.URL.createObjectURL(new Blob([bytes], { type: result.mimeType }));
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = result.fileName;
+      link.click();
+      window.URL.revokeObjectURL(url);
+      setMessage(`${result.total} bağlanmamış ürün Excel'e aktarıldı.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Excel dışa aktarılamadı.');
+    }
+  }
+
+  async function importExcelFile(file: File) {
+    setImportingExcel(true);
+    try {
+      const data = new FormData();
+      data.append('file', file);
+      const result = await api<{ ok: boolean; total: number; created: number; updated: number; errors: Array<{ row: number; message: string }> }>('/product-center/import/excel', {
+        method: 'POST',
+        body: data,
+      });
+      const summary = `${result.total} satır işlendi: ${result.created} yeni bağlandı, ${result.updated} güncellendi.`;
+      setMessage(result.errors.length ? `${summary} ${result.errors.length} satırda hata: ${result.errors.slice(0, 5).map((error) => `Satır ${error.row}: ${error.message}`).join(' | ')}` : summary);
+      await load();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Excel yüklenemedi.');
+    } finally {
+      setImportingExcel(false);
+    }
+  }
+
+  async function refreshStockCards() {
+    setStockCardsLoading(true);
+    try {
+      const stockCardData = await api<StockCard[]>('/stock-cards');
+      setStockCards(normalizeStockCards(stockCardData));
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Stok kartları güncellenemedi.');
+    } finally {
+      setStockCardsLoading(false);
+    }
+  }
+
+  async function refreshImageGenerationStatus() {
+    const status = await api<ImageGenerationStatus>('/media/image-generation-status');
+    setImageGenerationStatus(status);
+    if (status.ready) {
+      setCompositeImageError((current) => current.includes('OPENAI_API_KEY') ? '' : current);
+    }
+    return status;
+  }
+
+  async function openComponentPicker() {
+    setComponentPickerOpen(true);
+    await refreshStockCards();
+  }
+
+  async function loadCleanupItems() {
+    setCleanupLoading(true);
+    try {
+      setCleanupItems(await api<AutoStockCardCandidate[]>('/product-center/cleanup/auto-stock-cards'));
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Deneme stok kartları listelenemedi.');
+    } finally {
+      setCleanupLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    load().catch((error) => setMessage(error.message));
+    const id = Number(new URLSearchParams(window.location.search).get('variantId'));
+    if (id) api<Entry>(`/product-center/entries/${id}`).then((entry) => editEntry(normalizeEntry(entry))).catch(() => null);
+  }, []);
+
+  useEffect(() => {
+    const catalogCat = (form as any).catalogCategory;
+    const shopCatId = (form as any).shopCategoryId;
+    if (!catalogCat && !shopCatId) { setErhCodePreview(''); return; }
+    const params = catalogCat
+      ? `catalogCategory=${encodeURIComponent(catalogCat)}`
+      : `shopCategoryId=${shopCatId}`;
+    api<{ modelCode: string }>(`/product-center/next-model-code?${params}`)
+      .then((r) => {
+        setErhCodePreview(r.modelCode);
+        if (!form.modelCode) setForm((c) => ({ ...c, modelCode: r.modelCode }));
+      })
+      .catch(() => setErhCodePreview(''));
+  }, [(form as any).catalogCategory, (form as any).shopCategoryId]);
+
+  useEffect(() => {
+    if (form.variantId || !form.productName.trim() || !form.categoryId) return;
+    if (form.barcode && form.modelCode && form.stockCode) return;
+    const timer = window.setTimeout(() => {
+      generateIdentity('all', true).catch(() => setIdentityGenerating(false));
+    }, 150);
+    return () => window.clearTimeout(timer);
+  }, [form.variantId, form.productName, form.categoryId, form.colorVariant, form.barcode, form.modelCode, form.stockCode]);
+
+  const family = useMemo(() => families.find((item) => String(item.id) === form.familyId), [families, form.familyId]);
+  const filteredFamilies = useMemo(() => {
+    const needle = familySearch.trim().toLocaleLowerCase('tr-TR');
+    if (!needle) return families;
+    return families.filter((item) => [item.familyName, ...((item.templates ?? []).map((template) => template.templateName))].join(' ').toLocaleLowerCase('tr-TR').includes(needle));
+  }, [families, familySearch]);
+  // İlk yükleme son güncellenen 1000 ürünü getirir; aranan ürün bunların dışındaysa sunucuda tüm ürünlerde ara ve listeye ekle
+  useEffect(() => {
+    const term = query.trim();
+    if (term.length < 3) return;
+    const timer = setTimeout(() => {
+      api<Entry[]>(`/product-center/entries?search=${encodeURIComponent(term)}`)
+        .then((found) => {
+          if (!found?.length) return;
+          setEntries((current) => {
+            const known = new Set(current.map((entry) => entry.variantId));
+            const extra = found.map(normalizeEntry).filter((entry) => !known.has(entry.variantId));
+            return extra.length ? [...current, ...extra] : current;
+          });
+        })
+        .catch(() => null);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [query]);
+  const visibleEntries = useMemo(() => {
+    const needle = query.trim().toLocaleLowerCase('tr-TR');
+    let base = (showPassiveEntries ? entries : entries.filter((entry) => entry.status !== 'PASSIVE')).filter((entry) => (entry.storeCode ?? 'ERHAN') === activeStore);
+    if (entryFilter === 'done') base = base.filter((e) => e.costStatus === 'Tamamlandı');
+    if (entryFilter === 'missing') base = base.filter((e) => e.costStatus !== 'Tamamlandı');
+    if (needle) base = base.filter((entry) => [entry.productName, entry.barcode, entry.modelCode, entry.familyName, entry.categoryName].filter(Boolean).join(' ').toLocaleLowerCase('tr-TR').includes(needle));
+    return [...base].sort((a, b) => b.variantId - a.variantId);
+  }, [entries, query, showPassiveEntries, entryFilter, activeStore]);
+  const copySources = useMemo(() => entries.filter((entry) => entry.variantId !== Number(form.variantId) && entry.costStatus !== 'Maliyet Girilmedi'), [entries, form.variantId]);
+  const activeDraft = costDetail?.costDraft ?? defaultCostDraft(Number(form.salePrice), Number(form.commissionPercent));
+  const currentCostStatus = costDetail?.hasSavedCostDraft
+    ? costDetail.costDraft.status === 'APPROVED' ? 'Tamamlandı' : 'Taslak'
+    : entries.find((entry) => entry.variantId === Number(form.variantId))?.costStatus ?? 'Maliyet Girilmedi';
+  const pricing = useMemo(() => calculatePricing(activeDraft, Number(form.salePrice), Number(form.commissionPercent)), [activeDraft, form.salePrice, form.commissionPercent]);
+  const channelPricing = useMemo(() => calculateChannelPricing(activeDraft, Number(form.salePrice), Number(form.commissionPercent)), [activeDraft, form.salePrice, form.commissionPercent]);
+  const hasStockRecipe = activeDraft.items.some(isStockRecipeItem);
+  // Stok bileşenleri/maliyet değişince fiyatı yeniden hesapla. Önceki üründen kalan fiyat yeni ürüne taşınmasın.
+  useEffect(() => {
+    if (salePriceManual || !hasStockRecipe) return;
+    const suggested = pricing.suggestedSalePrice;
+    if (suggested > 0 && Math.abs(suggested - Number(form.salePrice || 0)) > 0.009) {
+      setForm((current) => ({ ...current, salePrice: suggested }));
+    }
+  }, [salePriceManual, hasStockRecipe, pricing.suggestedSalePrice, form.salePrice]);
+  const priceResearchSummary = useMemo(() => calculatePriceResearch(priceResearch, pricing.suggestedSalePrice), [priceResearch, pricing.suggestedSalePrice]);
+  const productStockMatches = useMemo(() => stockCards
+    .filter((stockCard) => stockCard.status !== 'PASSIVE')
+    .map((stockCard) => ({ stockCard, score: stockSuggestionScore(stockCard, form.productName, form.productName, form.productName) }))
+    .filter((item) => item.score > 0)
+    .sort((a, b) => b.score - a.score || a.stockCard.name.localeCompare(b.stockCard.name, 'tr'))
+    .slice(0, 8), [stockCards, form.productName]);
+  const productStockSuggestions = useMemo(() => productStockMatches.map((item) => item.stockCard), [productStockMatches]);
+  const bestAutoStockMatch = productStockMatches[0]?.score >= 18 ? productStockMatches[0].stockCard : null;
+  const activeStockCardOptions = useMemo(() => stockCards
+    .filter((stockCard) => stockCard.status !== 'PASSIVE' || isProtectedCompositeStockCard(stockCard))
+    .sort((a, b) => a.name.localeCompare(b.name, 'tr')), [stockCards]);
+  const compositeProductOptions = useMemo(() => activeStockCardOptions
+    .filter((stockCard) => inferComponentRole(stockCard) !== 'POT')
+    .filter((stockCard) => compositeProductKind(stockCard) === compositeBuilder.productKind), [activeStockCardOptions, compositeBuilder.productKind]);
+  const compositeLeafOptions = useMemo(() => activeStockCardOptions
+    .filter((stockCard) => ['LEAF', 'FLOWER', 'BRANCH'].includes(inferComponentRole(stockCard)) && !isCompositeTrunkStockCard(stockCard)), [activeStockCardOptions]);
+  const compositeTrunkOptions = useMemo(() => activeStockCardOptions
+    .filter(isCompositeTrunkStockCard), [activeStockCardOptions]);
+  const compositePotOptions = useMemo(() => activeStockCardOptions.filter((stockCard) => inferComponentRole(stockCard) === 'POT'), [activeStockCardOptions]);
+  const filteredCompositeProductOptions = useMemo(() => filterStockCardOptions(compositeProductOptions, compositeBuilder.productSearch, form.productName).slice(0, 8), [compositeBuilder.productSearch, compositeProductOptions, form.productName]);
+  const filteredCompositeLeafOptions = useMemo(() => filterStockCardOptions(compositeLeafOptions, compositeBuilder.leafSearch, form.productName).slice(0, 8), [compositeBuilder.leafSearch, compositeLeafOptions, form.productName]);
+  const filteredCompositeTrunkOptions = useMemo(() => filterStockCardOptions(compositeTrunkOptions, compositeBuilder.trunkSearch || 'ağaç gövde bambu dal', form.productName).slice(0, 8), [compositeBuilder.trunkSearch, compositeTrunkOptions, form.productName]);
+  const filteredCompositePotOptions = useMemo(() => filterStockCardOptions(compositePotOptions, compositeBuilder.potSearch, form.productName).slice(0, 8), [compositeBuilder.potSearch, compositePotOptions, form.productName]);
+  const selectedCompositeProduct = useMemo(() => stockCards.find((stockCard) => stockCard.id === Number(compositeBuilder.productStockCardId)) ?? null, [compositeBuilder.productStockCardId, stockCards]);
+  const selectedCompositeLeaf = useMemo(() => stockCards.find((stockCard) => stockCard.id === Number(compositeBuilder.leafStockCardId)) ?? null, [compositeBuilder.leafStockCardId, stockCards]);
+  const selectedCompositeTrunk = useMemo(() => stockCards.find((stockCard) => stockCard.id === Number(compositeBuilder.trunkStockCardId)) ?? null, [compositeBuilder.trunkStockCardId, stockCards]);
+  const selectedCompositePot = useMemo(() => stockCards.find((stockCard) => stockCard.id === Number(compositeBuilder.potStockCardId)) ?? null, [compositeBuilder.potStockCardId, stockCards]);
+  const selectedCompositeComponents = useMemo(
+    () => [selectedCompositeProduct, selectedCompositeLeaf, selectedCompositeTrunk].filter((stockCard): stockCard is StockCard => Boolean(stockCard)),
+    [selectedCompositeLeaf, selectedCompositeProduct, selectedCompositeTrunk],
+  );
+  const selectedCompositeRows = useMemo(
+    () => [
+      selectedCompositeProduct ? { title: 'Ana kaynak', stockCard: selectedCompositeProduct } : null,
+      selectedCompositeLeaf ? { title: 'Yaprak / bitki', stockCard: selectedCompositeLeaf } : null,
+      selectedCompositeTrunk ? { title: 'Gövde / bambu', stockCard: selectedCompositeTrunk } : null,
+      selectedCompositePot ? { title: 'Saksı', stockCard: selectedCompositePot } : null,
+    ].filter((item): item is { title: string; stockCard: StockCard } => Boolean(item)),
+    [selectedCompositeLeaf, selectedCompositePot, selectedCompositeProduct, selectedCompositeTrunk],
+  );
+  const selectedCompositeVisualSource = selectedCompositeProduct ?? selectedCompositeLeaf ?? selectedCompositeTrunk;
+  const selectedCompositeProductImage = useMemo(() => stockCardPrimaryImage(selectedCompositeVisualSource), [selectedCompositeVisualSource]);
+  const selectedCompositePotImage = useMemo(() => stockCardPrimaryImage(selectedCompositePot), [selectedCompositePot]);
+  const compositeGeneratedImages = useMemo(() => form.images.filter((image) => image.startsWith(compositeGeneratedImagePrefix)).slice(0, treeVisualImageLimit), [form.images]);
+  const visibleCompositeImageError = useMemo(() => {
+    if (!compositeImageError) return '';
+    if (imageGenerationStatus?.ready && compositeImageError.includes('OPENAI_API_KEY')) return '';
+    return compositeImageError;
+  }, [compositeImageError, imageGenerationStatus]);
+  const compositeReady = Boolean(selectedCompositeComponents.length > 0 && selectedCompositePot);
+  const compositeImageReady = Boolean(compositeReady && selectedCompositeProductImage && selectedCompositePotImage);
+  const seoProductNameSuggestion = useMemo(() => buildSeoProductName(form.productName, bestAutoStockMatch, categories, activeDraft), [form.productName, bestAutoStockMatch, categories, activeDraft]);
+  const suggestedMediaFiles = useMemo(() => {
+    const productText = normalizeSearchText([form.productName, form.modelCode, form.stockCode, form.barcode].filter(Boolean).join(' '));
+    return mediaFiles
+      .map((file) => {
+        const fileText = normalizeSearchText([file.fileName, file.folderName, file.filePath].filter(Boolean).join(' '));
+        const score = productText && fileText.includes(productText) ? 30 : searchTokens(productText).filter((token) => fileText.includes(token)).length * 8;
+        return { file, score };
+      })
+      .sort((a, b) => b.score - a.score || new Date(b.file.createdAt).getTime() - new Date(a.file.createdAt).getTime())
+      .slice(0, 60)
+      .map((item) => item.file);
+  }, [mediaFiles, form.productName, form.modelCode, form.stockCode, form.barcode]);
+  const missing = useMemo(() => {
+    const list = [];
+    if (!form.productName.trim()) list.push('Ürün adı');
+    if (!form.categoryId) list.push('Kategori');
+    if (!form.description.trim()) list.push('Açıklama');
+    if (Number(form.salePrice) <= 0) list.push('Satış fiyatı');
+    if (form.images.length === 0) list.push('Ana görsel');
+    return list;
+  }, [form]);
+  const ownerMode = currentUser?.role === 'OWNER';
+  const preparation = useMemo(() => buildPreparationStatus(form, activeDraft, currentCostStatus), [activeDraft, currentCostStatus, form]);
+  const trendyolReadiness = useMemo(() => buildTrendyolReadiness(form, activeDraft), [activeDraft, form]);
+  const canResearch = preparation.blockingMissing.length === 0 && trendyolReadiness.blockingMissing.length === 0;
+  const saleStageLabel = salePreparationStage(preparation, trendyolReadiness, canResearch);
+
+  function update(name: string, value: unknown) {
+    if (name === 'salePrice') setSalePriceManual(true);
+    setForm((current) => {
+      if (name === 'categoryId') {
+        const category = categories.find((item) => String(item.id) === String(value));
+        return { ...current, categoryId: value as string, channelCategoryName: category?.name ?? current.channelCategoryName };
+      }
+      return { ...current, [name]: value };
+    });
+  }
+
+  function updatePriceResearch(name: keyof PriceResearch, value: unknown) {
+    setPriceResearch((current) => ({ ...current, [name]: value }));
+  }
+
+  function updateCompetitorPrice(index: number, value: string) {
+    setPriceResearch((current) => ({
+      ...current,
+      competitorPrices: current.competitorPrices.map((item, itemIndex) => itemIndex === index ? value : item),
+    }));
+  }
+
+  function addCompetitorPriceRow() {
+    setPriceResearch((current) => ({ ...current, competitorPrices: [...current.competitorPrices, ''] }));
+  }
+
+  function openResearchUrl(target: 'GOOGLE' | 'SHOPPING' | 'TRENDYOL' | 'HEPSIBURADA') {
+    const query = (priceResearch.productName || form.productName || seoProductNameSuggestion || '').trim();
+    if (!query) {
+      setMessage('Fiyat araştırması için önce ürün adı yazın.');
+      return;
+    }
+
+    const encoded = encodeURIComponent(query);
+    const urls = {
+      GOOGLE: `https://www.google.com/search?q=${encoded}+fiyat`,
+      SHOPPING: `https://www.google.com/search?tbm=shop&q=${encoded}`,
+      TRENDYOL: `https://www.trendyol.com/sr?q=${encoded}`,
+      HEPSIBURADA: `https://www.hepsiburada.com/ara?q=${encoded}`,
+    };
+    const opened = window.open(urls[target], '_blank');
+    if (!opened) {
+      window.location.href = urls[target];
+    }
+    setMessage(`${query} için arama açıldı.`);
+  }
+
+  function openProductNameSeoSearch(target: 'GOOGLE' | 'SHOPPING' | 'TRENDYOL') {
+    const query = (seoProductNameSuggestion || form.productName || priceResearch.productName || '').trim();
+    if (!query) {
+      setMessage('SEO araması için önce ürün adı yazın.');
+      return;
+    }
+
+    const encoded = encodeURIComponent(query);
+    const urls = {
+      GOOGLE: `https://www.google.com/search?q=${encoded}`,
+      SHOPPING: `https://www.google.com/search?tbm=shop&q=${encoded}`,
+      TRENDYOL: `https://www.trendyol.com/sr?q=${encoded}`,
+    };
+    const opened = window.open(urls[target], '_blank');
+    if (!opened) {
+      window.location.href = urls[target];
+    }
+    setMessage(`${query} için SEO araması açıldı.`);
+  }
+
+  function openErpContextLink(target: 'STOCK' | 'COST' | 'MARKET' | 'COMPETITOR' | 'MEDIA') {
+    const productQuery = encodeURIComponent((form.productName || priceResearch.productName || seoProductNameSuggestion || '').trim());
+    const urls = {
+      STOCK: `/stock-cards${form.stockCode ? `?q=${encodeURIComponent(form.stockCode)}` : productQuery ? `?q=${productQuery}` : ''}`,
+      COST: form.variantId ? `/production-costs/products/${form.variantId}` : '/production-costs',
+      MARKET: productQuery ? `/market-analizi?query=${productQuery}` : '/market-analizi',
+      COMPETITOR: productQuery ? `/market-analizi?tab=deep&query=${productQuery}` : '/market-analizi?tab=deep',
+      MEDIA: form.variantId ? `/media?variantId=${form.variantId}` : '/media',
+    };
+    const opened = window.open(urls[target], '_blank', 'noopener,noreferrer');
+    if (!opened) window.location.href = urls[target];
+  }
+
+  function applyPriceResearch() {
+    const name = priceResearch.productName.trim();
+    const suggestedPrice = priceResearchSummary.suggestedPrice;
+    if (name) update('productName', name);
+    if (suggestedPrice > 0) update('salePrice', suggestedPrice);
+    setMessage(suggestedPrice > 0 ? `Fiyat araştırması uygulandı: ${money(suggestedPrice)}` : 'Ürün adı uygulandı; rakip fiyat girerseniz fiyat önerisi de oluşur.');
+  }
+
+  useEffect(() => {
+    if (form.variantId || !form.productName.trim()) return;
+    const categoryId = bestAutoStockMatch
+      ? findCategoryIdForStock(bestAutoStockMatch, categories, form.productName)
+      : findCategoryIdForProductName(form.productName, categories);
+    setForm((current) => {
+      const nextCategoryId = categoryId ? String(categoryId) : current.categoryId;
+      if (current.categoryId || !nextCategoryId) return current;
+      const category = categories.find((item) => String(item.id) === nextCategoryId);
+      return { ...current, categoryId: nextCategoryId, channelCategoryName: category?.name ?? current.channelCategoryName };
+    });
+  }, [bestAutoStockMatch?.id, categories, form.productName, form.variantId]);
+
+  function goToPreviousStep() {
+    const currentIndex = visibleStepIndexes.findIndex((item) => item === step);
+    const safeIndex = currentIndex >= 0 ? currentIndex : 0;
+    setStep(visibleStepIndexes[Math.max(0, safeIndex - 1)]);
+  }
+
+  function goToNextStep() {
+    const currentIndex = visibleStepIndexes.findIndex((item) => item === step);
+    const safeIndex = currentIndex >= 0 ? currentIndex : 0;
+    setStep(visibleStepIndexes[Math.min(visibleStepIndexes.length - 1, safeIndex + 1)]);
+  }
+
+  function updateQuick(name: keyof QuickForm, value: unknown) {
+    setQuickForm((current) => ({ ...current, [name]: value }));
+  }
+
+  function updateCompositeBuilder(name: keyof CompositeBuilder, value: string) {
+    setCompositeBuilder((current) => ({ ...current, [name]: value }));
+  }
+
+  function selectCompositeStock(type: 'product' | 'leaf' | 'trunk' | 'pot', stockCard: StockCard) {
+    const stockImage = stockCardPrimaryImage(stockCard);
+    setCompositeImageError('');
+    setForm((current) => {
+      const updates: Record<string, unknown> = {
+        images: current.images.filter((image) => image !== stockImage && !image.startsWith(compositeGeneratedImagePrefix)),
+      };
+      if (type === 'pot') {
+        const resolvedPotType = stockCard.potType ?? stockCard.productType ?? stockCard.category ?? '';
+        const resolvedPotSize = stockCard.potSize ?? '';
+        if (resolvedPotType && !(current as any).potType) updates.potType = resolvedPotType;
+        if (resolvedPotSize && !(current as any).potSize) updates.potSize = resolvedPotSize;
+      }
+      if ((type === 'product' || type === 'trunk') && stockCard.height && !(current as any).productHeight) {
+        updates.productHeight = stockCard.height;
+      }
+      return { ...current, ...updates };
+    });
+    setCompositeBuilder((current) => {
+      if (type === 'product') return { ...current, productStockCardId: String(stockCard.id), productSearch: stockCard.name };
+      if (type === 'leaf') return { ...current, leafStockCardId: String(stockCard.id), leafSearch: stockCard.name };
+      if (type === 'trunk') return { ...current, trunkStockCardId: String(stockCard.id), trunkSearch: stockCard.name };
+      return { ...current, potStockCardId: String(stockCard.id), potSearch: stockCard.name };
+    });
+    setMessage(stockImage ? `${stockCard.name} kaynak olarak seçildi. Her bileşen reçeteye ayrı satır olarak eklenecek.` : `${stockCard.name} seçildi; stok kartında görsel yok.`);
+  }
+
+  async function uploadQuickImage(files: FileList | null) {
+    const file = files?.[0];
+    if (!file || !file.type.startsWith('image/')) {
+      setMessage('Ana ürün görseli seçin.');
+      return;
+    }
+
+    const data = new FormData();
+    data.append('folderName', quickForm.productName || 'Hızlı Ürün Kaydı');
+    data.append('file', file);
+    const media = await api<MediaFile>('/media/upload', { method: 'POST', body: data });
+    updateQuick('mainImageUrl', media.filePath);
+    setMessage('Ana görsel yüklendi.');
+  }
+
+  async function saveQuickEntry(event: FormEvent, sendNow = false) {
+    event.preventDefault();
+    setQuickSaving(true);
+    try {
+      const result = await api<{ ok: boolean } & QuickResult>('/product-center/entries/quick', {
+        method: 'POST',
+        json: {
+          ...quickForm,
+          categoryId: Number(quickForm.categoryId),
+          shopPrice: Number(quickForm.shopPrice),
+          sitePrice: Number(quickForm.sitePrice),
+          initialStockQuantity: Number(quickForm.initialStockQuantity),
+        },
+      });
+
+      let publishResult: QuickResult['publishResult'] | undefined;
+      if (sendNow && quickForm.platforms.length > 0) {
+        try {
+          const pub = await api<{ success: number; failed: number; results: Array<{ platform: string; ok: boolean; errorMessage?: string | null; batchRequestId?: string | null; listingUploadId?: string | null }> }>('/publishing/send', {
+            method: 'POST',
+            json: { variantIds: [result.variantId], platforms: quickForm.platforms, allowIncomplete: true },
+          });
+          publishResult = pub;
+        } catch {
+          publishResult = { success: 0, failed: quickForm.platforms.length, results: quickForm.platforms.map((p) => ({ platform: p, ok: false, errorMessage: 'Gönderim başlatılamadı.' })) };
+        }
+      }
+
+      setQuickResult({ ...result, publishResult });
+      await load();
+      setMessage(sendNow ? 'Ürün kaydedildi ve kanallara gönderildi.' : 'Ürün başarıyla kaydedildi.');
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Hızlı ürün kaydı tamamlanamadı.');
+    } finally {
+      setQuickSaving(false);
+    }
+  }
+
+  function newQuickEntry() {
+    setQuickForm((current) => ({
+      ...emptyQuickForm,
+      categoryId: quickKeepCategory ? current.categoryId : '',
+      productType: quickKeepProductType ? current.productType : '',
+      shopPrice: quickKeepPrices ? current.shopPrice : 0,
+      sitePrice: quickKeepPrices ? current.sitePrice : 0,
+      platforms: current.platforms,
+      storeCode: current.storeCode,
+    }));
+    setQuickResult(null);
+  }
+
+  function toggleQuickPlatform(platform: string) {
+    setQuickForm((current) => ({
+      ...current,
+      platforms: current.platforms.includes(platform)
+        ? current.platforms.filter((p) => p !== platform)
+        : [...current.platforms, platform],
+    }));
+  }
+
+  function editQuickResult() {
+    if (!quickResult) return;
+    const entry = entries.find((item) => item.variantId === quickResult.variantId);
+    if (entry) editEntry(entry);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  async function printQuickBarcode() {
+    if (!quickResult) return;
+    const response = await fetch(`${apiBaseUrl}/barcodes/${quickResult.productId}/pdf`, {
+      method: 'POST',
+      credentials: 'include',
+    });
+    if (!response.ok) {
+      setMessage('Barkod PDF oluşturulamadı.');
+      return;
+    }
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${quickResult.modelCode}-barcode.pdf`;
+    link.click();
+    window.URL.revokeObjectURL(url);
+  }
+
+  function editEntry(entry: Entry) {
+    setSalePriceManual(Number(entry.salePrice || 0) > 0);
+    const entryStore: StoreCode = entry.storeCode === 'FLORA' ? 'FLORA' : 'ERHAN';
+    if (entryStore !== storeMode) {
+      // Diğer mağazanın ürünü bu sayfada düzenlenmez — kendi sayfasında açılır
+      window.location.href = `${STORE_PAGE_PATH[entryStore]}?id=${entry.variantId}`;
+      return;
+    }
+    setForm({
+      ...emptyForm,
+      storeCode: entryStore,
+      variantId: String(entry.variantId),
+      productId: entry.productId ? String(entry.productId) : '',
+      productName: entry.productName,
+      barcode: entry.barcode,
+      modelCode: entry.modelCode,
+      stockCode: entry.stockCode || '',
+      categoryId: entry.categoryId ? String(entry.categoryId) : '',
+      shopCategoryId: (entry as any).shopCategoryId ? String((entry as any).shopCategoryId) : '',
+      familyId: entry.familyId ? String(entry.familyId) : '',
+      sizeOptionId: entry.sizeOptionId ? String(entry.sizeOptionId) : '',
+      potOptionId: entry.potOptionId ? String(entry.potOptionId) : '',
+      templateId: entry.templateId ? String(entry.templateId) : '',
+      brand: entry.brand || STORES.find((st) => st.code === entryStore)!.brand,
+      channelCategoryName: entry.channelCategoryName || '',
+      colorVariant: entry.colorVariant || '',
+      description: entry.description || '',
+      stockQuantity: Number(entry.stockQuantity || 0),
+      salePrice: Number(entry.salePrice || 0),
+      n11SalePrice: Number((entry as any).n11SalePrice || 0),
+      hepsiburadaSalePrice: Number((entry as any).hepsiburadaSalePrice || 0),
+      commissionPercent: Number(entry.commissionPercent || 20),
+      images: entry.images ?? [],
+      status: entry.status,
+      productHeight: (entry as any).productHeight || '',
+      potType: (entry as any).potType || '',
+      potSize: (entry as any).potSize || '',
+      stemCount: (entry as any).stemCount ? String((entry as any).stemCount) : '',
+      branchCount: (entry as any).branchCount ? String((entry as any).branchCount) : '',
+      leavesPerBranch: (entry as any).leavesPerBranch ? String((entry as any).leavesPerBranch) : '',
+      leafCount: (entry as any).leafCount ? String((entry as any).leafCount) : '',
+      ...(() => {
+        const ps = (entry as any).potSize || '';
+        const nums = ps.match(/\d+(\.\d+)?/g)?.map(Number) || [];
+        const [w=0,d=0,h=0] = nums;
+        return {
+          potW: w ? String(w) : '',
+          potD: d ? String(d) : '',
+          potH: h ? String(h) : '',
+          potVolumeLitre: w&&d&&h ? ((w*d*h)/1000).toFixed(1) : '',
+        };
+      })(),
+      catalogCategory: (entry as any).catalogCategory || '',
+      catalogSubCategory: (entry as any).catalogSubCategory || '',
+    });
+    setStep(0);
+    loadCost(entry.variantId).catch(() => setCostDetail(null));
+  }
+
+  async function saveEntry(event?: FormEvent) {
+    event?.preventDefault();
+    if (!form.variantId && form.images.length === 0) {
+      setMessage('⚠️ Görsel olmadan yeni ürün kaydedilemez. Lütfen önce görsel yükleyin.');
+      return;
+    }
+    const result = await api<{ ok: boolean; entry: Entry }>('/product-center/entries', {
+      method: 'POST',
+      json: {
+        ...form,
+        variantId: form.variantId ? Number(form.variantId) : undefined,
+        productId: form.productId ? Number(form.productId) : undefined,
+        categoryId: Number(form.categoryId),
+        shopCategoryId: (form as any).shopCategoryId ? Number((form as any).shopCategoryId) : undefined,
+        familyId: form.familyId ? Number(form.familyId) : undefined,
+        sizeOptionId: form.sizeOptionId ? Number(form.sizeOptionId) : undefined,
+        potOptionId: form.potOptionId ? Number(form.potOptionId) : undefined,
+        templateId: form.templateId ? Number(form.templateId) : undefined,
+        stockQuantity: Number(form.stockQuantity),
+        salePrice: Number(form.salePrice),
+        n11SalePrice: Number(form.n11SalePrice) || Number(form.salePrice),
+        hepsiburadaSalePrice: Number(form.hepsiburadaSalePrice) || Number(form.salePrice),
+        commissionPercent: Number(form.commissionPercent),
+        stemCount: (form as any).stemCount ? Number((form as any).stemCount) : undefined,
+        branchCount: (form as any).branchCount ? Number((form as any).branchCount) : undefined,
+        leavesPerBranch: (form as any).leavesPerBranch ? Number((form as any).leavesPerBranch) : undefined,
+        leafCount: (form as any).leafCount ? Number((form as any).leafCount) : undefined,
+        catalogCategory: (form as any).catalogCategory || null,
+        catalogSubCategory: (form as any).catalogSubCategory || null,
+      },
+    });
+    const costSaved = costDetail ? await saveCostDraftForVariant(result.entry.variantId, false) : false;
+    editEntry(result.entry);
+    if (costSaved) await loadCost(result.entry.variantId);
+    await load();
+    setMessage('Ürün kartı ve maliyet kaydı birlikte kaydedildi.');
+    return result.entry;
+  }
+
+  async function generateIdentity(target: 'barcode' | 'codes' | 'all' = 'all', silent = false) {
+    if (!form.categoryId) {
+      if (!silent) setMessage('Kod üretmek için önce kategori seçin.');
+      return;
+    }
+    setIdentityGenerating(true);
+    const result = await api<{ modelCode: string; stockCode: string; barcode: string }>('/product-center/entries/identity', {
+      method: 'POST',
+      json: {
+        storeCode: storeMode,
+        productName: form.productName,
+        categoryId: Number(form.categoryId),
+        channelCategoryName: form.channelCategoryName,
+        colorVariant: form.colorVariant,
+      },
+    });
+    setIdentityGenerating(false);
+    setForm((current) => ({
+      ...current,
+      modelCode: target !== 'barcode' && !current.modelCode ? result.modelCode : current.modelCode,
+      stockCode: target !== 'barcode' && !current.stockCode ? result.stockCode : current.stockCode,
+      barcode: target !== 'codes' && !current.barcode ? result.barcode : current.barcode,
+    }));
+    if (!silent) setMessage(target === 'barcode' ? 'Barkod üretildi.' : target === 'codes' ? 'Model kodu ve stok kodu üretildi.' : 'Barkod, model kodu ve stok kodu üretildi.');
+  }
+
+  function matchSalesStock(stockCard: StockCard) {
+    applySalesStockMatch(stockCard, false);
+  }
+
+  function buildCompositeProductFromStock() {
+    const productStock = stockCards.find((stockCard) => stockCard.id === Number(compositeBuilder.productStockCardId));
+    const leafStock = stockCards.find((stockCard) => stockCard.id === Number(compositeBuilder.leafStockCardId));
+    const trunkStock = stockCards.find((stockCard) => stockCard.id === Number(compositeBuilder.trunkStockCardId));
+    const potStock = stockCards.find((stockCard) => stockCard.id === Number(compositeBuilder.potStockCardId));
+    const componentStocks = [productStock, leafStock, trunkStock].filter((stockCard): stockCard is StockCard => Boolean(stockCard));
+    if (componentStocks.length === 0 || !potStock) {
+      setMessage('Önce en az bir ağaç/bitki/yaprak/gövde ve bir saksı stok kartı seçin.');
+      return;
+    }
+
+    const materialItems = componentStocks.map((stockCard) => {
+      const role = inferComponentRole(stockCard);
+      const cost = Number(stockCard.automaticUnitCost || stockCard.manualUnitCost || 0);
+      return {
+        name: stockCard.name,
+        group: componentRoleGroup(role, stockCard),
+        quantity: 1,
+        unit: stockCard.unit,
+        source: 'AUTO',
+        stockCardId: stockCard.id,
+        manualUnitCost: 0,
+        automaticUnitCost: cost,
+        totalCost: cost,
+        isActive: true,
+        isDefaultExpense: false,
+        defaultExpenseKey: null,
+        defaultAmount: 0,
+      };
+    });
+    const productCost = materialItems.reduce((sum, item) => sum + Number(item.totalCost || 0), 0);
+    const potCost = Number(potStock.automaticUnitCost || potStock.manualUnitCost || 0);
+    const totalCost = roundMoney(productCost + potCost);
+    const primaryStock = productStock ?? leafStock ?? trunkStock!;
+    const matchedCategoryId = findCategoryIdForStock(primaryStock, categories, primaryStock.name);
+    const matchedCategory = categories.find((category) => category.id === matchedCategoryId);
+    const productName = titleCaseTr(dedupeSeoWords([...componentStocks.map((stockCard) => stockCard.name), potStock.name].join(' ')));
+    const stockQuantity = Math.max(0, Math.min(...[...componentStocks, potStock].map((stockCard) => Number(stockCard.stockQuantity || 0))));
+    const suggestedSalePrice = totalCost > 0 ? roundMoney(totalCost * 2.4) : 0;
+
+    setForm((current) => ({
+      ...current,
+      productName,
+      categoryId: matchedCategoryId ? String(matchedCategoryId) : current.categoryId,
+      channelCategoryName: matchedCategory?.name ?? current.channelCategoryName,
+      colorVariant: [extractSizeText(productName), potStock.productType || potStock.category || potStock.name].filter(Boolean).join(' / '),
+      stockQuantity: Math.trunc(stockQuantity),
+      salePrice: salePriceManual && Number(current.salePrice || 0) > 0 ? current.salePrice : suggestedSalePrice,
+    }));
+
+    setCostDetail({
+      hasSavedCostDraft: costDetail?.hasSavedCostDraft,
+      costDraft: normalizeDraftTotals({
+        ...defaultCostDraft(Number(form.salePrice || suggestedSalePrice), Number(form.commissionPercent)),
+        items: materialItems,
+        pots: [{
+          name: potStock.name,
+          potType: potStock.productType ?? potStock.category ?? 'Saksı',
+          color: potStock.potColor ?? null,
+          quantity: 1,
+          unit: potStock.unit,
+          source: 'AUTO',
+          stockCardId: potStock.id,
+          manualUnitCost: 0,
+          automaticUnitCost: potCost,
+          totalCost: potCost,
+        }],
+      }),
+    });
+
+    window.setTimeout(() => costSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
+    setMessage(`${productName} satış ürünü hazırlandı. Seçilen parçalar alttaki reçete/maliyet tablosuna eklendi.`);
+  }
+
+  async function generateCompositeProductImage() {
+    if (!selectedCompositeVisualSource || !selectedCompositePot) {
+      setMessage('Önce en az bir ağaç/bitki/yaprak/gövde ve saksı seçin.');
+      return;
+    }
+    if (!selectedCompositeProductImage || !selectedCompositePotImage) {
+      setMessage('Satış görseli üretmek için seçilen ana kaynak ve saksı stok kartlarında görsel olmalı.');
+      return;
+    }
+
+    setCompositeImageGenerating(true);
+    setCompositeImageError('');
+    try {
+      const status = await refreshImageGenerationStatus();
+      if (!status.ready) {
+        setCompositeImageError(status.message);
+        setMessage(status.message);
+        return;
+      }
+      const result = await api<{ image?: string; images?: string[]; note?: string }>('/media/composite-product-image', {
+        method: 'POST',
+        json: {
+          productStockCardId: selectedCompositeVisualSource.id,
+          potStockCardId: selectedCompositePot.id,
+          productId: form.productId || undefined,
+          productName: form.productName || `${selectedCompositeVisualSource.name} ${selectedCompositePot.name}`,
+          folderName: form.modelCode || form.productName || `${selectedCompositeVisualSource.name} ${selectedCompositePot.name}`,
+          referenceImageUrl: referenceImageUrl.trim() || undefined,
+        },
+      });
+      const generatedImages = result.images?.length ? result.images : result.image ? [result.image] : [];
+      update('images', generatedImages.slice(0, treeVisualImageLimit));
+      await load();
+      setMessage(result.note || 'Standart 5 satış görseli oluşturuldu.');
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Satış görseli oluşturulamadı.';
+      setCompositeImageError(errorMessage);
+      setMessage(errorMessage);
+    } finally {
+      setCompositeImageGenerating(false);
+    }
+  }
+
+  async function openGeminiReferenceSearch() {
+    if (!selectedCompositeVisualSource || !selectedCompositePot) {
+      setMessage('Benzer görsel aramak için önce en az bir ana kaynak ve saksı seçin.');
+      return;
+    }
+    setReferenceSearchLoading(true);
+    try {
+      const result = await api<GeminiReferenceSearchResult>('/products/gemini-reference-search', {
+        method: 'POST',
+        json: {
+          productName: form.productName || `${selectedCompositeVisualSource.name} ${selectedCompositePot.name}`,
+          productStockName: selectedCompositeVisualSource.name,
+          potStockName: selectedCompositePot.name,
+          productKind: compositeProductKindLabel(compositeBuilder.productKind),
+        },
+      });
+      setReferenceSearchResult(result);
+      window.open(result.googleImagesUrl, '_blank', 'noopener,noreferrer');
+      setMessage(result.note || `Gemini arama kelimesi hazırladı: ${result.query}`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Gemini referans araması hazırlanamadı.');
+    } finally {
+      setReferenceSearchLoading(false);
+    }
+  }
+
+  function matchComponentStock(role: ComponentRole, stockCard: StockCard, quantity = 1) {
+    const draft = normalizeDraftTotals(costDetail?.costDraft ?? defaultCostDraft(Number(form.salePrice), Number(form.commissionPercent)));
+    const unitCost = Number(stockCard.automaticUnitCost || stockCard.manualUnitCost || 0);
+    const matchedCategoryId = findCategoryIdForStock(stockCard, categories, form.productName);
+    if (matchedCategoryId && !form.categoryId) {
+      const category = categories.find((item) => item.id === matchedCategoryId);
+      setForm((current) => current.categoryId ? current : { ...current, categoryId: String(matchedCategoryId), channelCategoryName: category?.name ?? current.channelCategoryName });
+    }
+    if (role === 'POT') {
+      const resolvedPotType = stockCard.potType ?? stockCard.productType ?? stockCard.category ?? 'Saksı';
+      const resolvedPotSize = stockCard.potSize ?? '';
+      setForm((current) => ({
+        ...current,
+        ...(!( current as any).potType && resolvedPotType ? { potType: resolvedPotType } : {}),
+        ...(!( current as any).potSize && resolvedPotSize ? { potSize: resolvedPotSize } : {}),
+      }));
+      const nextPot = {
+        name: stockCard.name,
+        potType: resolvedPotType,
+        color: null,
+        quantity,
+        unit: stockCard.unit,
+        source: 'AUTO',
+        stockCardId: stockCard.id,
+        manualUnitCost: 0,
+        automaticUnitCost: unitCost,
+        totalCost: unitCost * quantity,
+      };
+      setCostDetail({
+        hasSavedCostDraft: costDetail?.hasSavedCostDraft,
+        costDraft: normalizeDraftTotals({ ...draft, pots: [nextPot] }),
+      });
+      setMessage(`${stockCard.name} saksı olarak eşleştirildi (adet: ${quantity}).`);
+      return;
+    }
+
+    if ((role === 'TRUNK' || role === 'LEAF' || role === 'FLOWER') && stockCard.height) {
+      setForm((current) => (current as any).productHeight ? current : { ...current, productHeight: stockCard.height });
+    }
+    const roleName = componentRoleLabel(role);
+    const group = componentRoleGroup(role, stockCard);
+    const nextItem = {
+      name: stockCard.name,
+      group,
+      quantity,
+      unit: stockCard.unit,
+      source: 'AUTO',
+      stockCardId: stockCard.id,
+      manualUnitCost: 0,
+      automaticUnitCost: unitCost,
+      totalCost: unitCost * quantity,
+    };
+    const remainingItems = draft.items.filter((item) => {
+      if (item.stockCardId === stockCard.id) return false;
+      if (role === 'LEAF' || role === 'TRUNK') return normalizeSearchText(item.name) !== normalizeSearchText(roleName);
+      return true;
+    });
+    setCostDetail({
+      hasSavedCostDraft: costDetail?.hasSavedCostDraft,
+      costDraft: normalizeDraftTotals({
+        ...draft,
+        items: [...remainingItems, { ...nextItem, name: stockCard.name || roleName }],
+      }),
+    });
+    setMessage(`${stockCard.name} ${roleName.toLocaleLowerCase('tr-TR')} olarak eklendi (adet: ${quantity}).`);
+  }
+
+  function applySalesStockMatch(stockCard: StockCard, silent = false) {
+    const draft = normalizeDraftTotals(costDetail?.costDraft ?? defaultCostDraft(Number(form.salePrice), Number(form.commissionPercent)));
+    if (draft.items.some((item) => item.stockCardId === stockCard.id)) return;
+    const nextItem = {
+      name: stockCard.name,
+      group: 'OTHER',
+      quantity: 1,
+      unit: stockCard.unit,
+      source: 'AUTO',
+      stockCardId: stockCard.id,
+      manualUnitCost: 0,
+      automaticUnitCost: Number(stockCard.automaticUnitCost || stockCard.manualUnitCost || 0),
+      totalCost: Number(stockCard.automaticUnitCost || stockCard.manualUnitCost || 0),
+    };
+    setCostDetail({
+      hasSavedCostDraft: costDetail?.hasSavedCostDraft,
+      costDraft: normalizeDraftTotals({
+        ...draft,
+        items: [...draft.items.filter((item) => item.stockCardId !== stockCard.id), nextItem],
+      }),
+    });
+    setMessage(`${stockCard.name} satışta stoktan düşecek şekilde 1 ${stockCard.unit} olarak eşleştirildi.`);
+  }
+
+  async function passiveEntry(entry: Entry) {
+    const ok = window.confirm(`${entry.productName} Ürün Merkezi aktif listesinden kaldırılacak. Stok kartı ve görsel dosyası silinmez. Devam edilsin mi?`);
+    if (!ok) return;
+
+    await api<{ ok: boolean }>(`/product-center/entries/${entry.variantId}/passive`, { method: 'POST' });
+    setEntries((current) => current.map((item) => item.variantId === entry.variantId ? { ...item, status: 'PASSIVE' } : item));
+    if (form.variantId === String(entry.variantId)) {
+      setForm(newFormFor(activeStore)); setSalePriceManual(false);
+      setCostDetail(null);
+      setStep(0);
+    }
+    await load();
+    setMessage('Ürün pasife alındı ve aktif listeden kaldırıldı.');
+  }
+
+  async function copyRecipe() {
+    const entry = form.variantId ? null : await saveEntry();
+    const variantId = Number(form.variantId || entry?.variantId);
+    if (!variantId || !sourceRecipeId) return setMessage('Önce reçetesi olan kaynak ürünü seçin.');
+    const result = await api<{ warning?: string | null }>(`/product-center/entries/${variantId}/copy-recipe`, {
+      method: 'POST',
+      json: { sourceVariantId: Number(sourceRecipeId) },
+    });
+    await loadCost(variantId);
+    await load();
+    setMessage(result.warning || 'Reçete ve maliyet ayarları kopyalandı.');
+  }
+
+  async function startTemplateRecipe() {
+    const entry = form.variantId ? null : await saveEntry();
+    const variantId = Number(form.variantId || entry?.variantId);
+    if (!variantId) return setMessage('Önce ürünü kaydedin.');
+    await api(`/production-costs/variants/${variantId}/start-template`, { method: 'POST' });
+    await loadCost(variantId);
+    await load();
+    setMessage('Seçili şablondan reçete taslağı başlatıldı.');
+  }
+
+  async function loadCost(variantId = Number(form.variantId)) {
+    if (!variantId) return;
+    setCostDetail(normalizeCostDetail(await api<CostDetail>(`/production-costs/variants/${variantId}/detail`)));
+  }
+
+  async function saveCost(approve = false) {
+    if (!form.variantId || !costDetail) return setMessage('Önce ürünü kaydedin ve reçeteyi hazırlayın.');
+    try {
+      const result = await saveCostDraftForVariant(Number(form.variantId), approve);
+      if (result) {
+        setCostDetail(normalizeCostDetail({ hasSavedCostDraft: true, costDraft: result.costDraft }));
+      }
+      await loadCost();
+      await load();
+      setMessage(approve ? 'Maliyet onaylandı.' : 'Maliyet taslak kaydedildi.');
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Maliyet kaydedilemedi.');
+    }
+  }
+
+  async function saveCostDraftForVariant(variantId: number, approve = false) {
+    const draft = costDetail?.costDraft;
+    if (!variantId || !draft) return false;
+    const result = await api<{ ok: boolean; costDraft: CostDetail['costDraft'] }>(`/production-costs/variants/${variantId}/${approve ? 'cost-approve' : 'cost-draft'}`, {
+      method: 'POST',
+      json: {
+        salePrice: Number(form.salePrice),
+        profitMarginPercent: draft.profitMarginPercent,
+        commissionPercent: Number(form.commissionPercent),
+        vatPercent: draft.vatPercent,
+        shippingCost: draft.shippingCost,
+        desi: draft.desi,
+        marketplaceMarkupPercent: draft.marketplaceMarkupPercent,
+        campaignBufferPercent: draft.campaignBufferPercent,
+        items: draft.items,
+        pots: draft.pots,
+      },
+    });
+    return result;
+  }
+
+  function updateCostDraft(nextDraft: CostDetail['costDraft']) {
+    setCostDetail((current) => ({ ...current, costDraft: normalizeDraftTotals(nextDraft) }));
+  }
+
+  function addManualItem() {
+    const draft = costDetail?.costDraft ?? defaultCostDraft(Number(form.salePrice), Number(form.commissionPercent));
+    updateCostDraft({
+      ...draft,
+      items: [
+        ...draft.items,
+        { name: 'Yeni malzeme', group: 'OTHER', quantity: 1, unit: 'adet', source: 'MANUAL', stockCardId: null, manualUnitCost: 0, automaticUnitCost: 0, totalCost: 0 },
+      ],
+    });
+  }
+
+  function addManualPot() {
+    const draft = costDetail?.costDraft ?? defaultCostDraft(Number(form.salePrice), Number(form.commissionPercent));
+    updateCostDraft({
+      ...draft,
+      pots: [
+        ...draft.pots,
+        { name: 'Saksı', quantity: 1, source: 'MANUAL', stockCardId: null, manualUnitCost: 0, automaticUnitCost: 0, totalCost: 0 },
+      ],
+    });
+  }
+
+  function addExpenseItem(seed: { name: string; group: string; amount: number; defaultExpenseKey?: string | null }) {
+    const draft = costDetail?.costDraft ?? defaultCostDraft(Number(form.salePrice), Number(form.commissionPercent));
+    const nextItem = {
+      name: seed.name,
+      group: seed.group,
+      quantity: 1,
+      unit: 'TL',
+      source: 'MANUAL',
+      stockCardId: null,
+      manualUnitCost: Number(seed.amount || 0),
+      automaticUnitCost: 0,
+      totalCost: Number(seed.amount || 0),
+      isActive: true,
+      isDefaultExpense: Boolean(seed.defaultExpenseKey),
+      defaultExpenseKey: seed.defaultExpenseKey ?? null,
+      defaultAmount: Number(seed.amount || 0),
+    };
+    updateCostDraft({
+      ...draft,
+      items: [
+        ...draft.items.filter((item) => !seed.defaultExpenseKey || item.defaultExpenseKey !== seed.defaultExpenseKey),
+        nextItem,
+      ],
+    });
+    setMessage(`${seed.name} maliyete eklendi.`);
+  }
+
+  function addDefaultExpense(expense: DefaultExpense) {
+    addExpenseItem({
+      name: expense.name,
+      group: defaultExpenseGroup(expense),
+      amount: Number(expense.defaultAmount || 0),
+      defaultExpenseKey: expense.expenseKey,
+    });
+  }
+
+  function addBlankExpenseRows() {
+    const draft = costDetail?.costDraft ?? defaultCostDraft(Number(form.salePrice), Number(form.commissionPercent));
+    const rows = [
+      { name: 'Paketleme', group: 'PACKAGING' },
+      { name: 'İşçilik', group: 'LABOR' },
+      { name: 'Genel gider', group: 'OTHER' },
+    ].map((item) => ({
+      ...item,
+      quantity: 1,
+      unit: 'TL',
+      source: 'MANUAL',
+      stockCardId: null,
+      manualUnitCost: 0,
+      automaticUnitCost: 0,
+      totalCost: 0,
+      isActive: true,
+      isDefaultExpense: false,
+      defaultExpenseKey: null,
+      defaultAmount: 0,
+    }));
+    updateCostDraft({ ...draft, items: [...draft.items, ...rows] });
+    setMessage('Paketleme, işçilik ve genel gider satırları eklendi.');
+  }
+
+  async function uploadImages(files: FileList | null) {
+    if (!files?.length) return;
+    const remainingSlots = Math.max(0, flowerVisualImageLimit - form.images.length);
+    if (remainingSlots === 0) return setMessage(`En fazla ${flowerVisualImageLimit} ürün görseli seçilebilir.`);
+    setMessage('Görseller yükleniyor...');
+    try {
+      const uploaded: string[] = [];
+      for (const file of Array.from(files).filter((item) => item.type.startsWith('image/')).slice(0, remainingSlots)) {
+        const data = new FormData();
+        data.append('folderName', [form.modelCode, form.barcode, form.productName].filter(Boolean).join('_') || 'Ürün Merkezi');
+        data.append('file', file);
+        if (form.productId) data.append('productId', form.productId);
+        const media = await api<MediaFile>('/media/upload', { method: 'POST', body: data });
+        uploaded.push(media.filePath);
+      }
+      if (uploaded.length === 0) {
+        setMessage('Görsel dosyası seçilemedi.');
+        return;
+      }
+      const nextImages = Array.from(new Set([...form.images, ...uploaded])).slice(0, flowerVisualImageLimit);
+      update('images', nextImages);
+      await load();
+      setMessage('Görseller eklendi.');
+    } catch (error) {
+      setMessage(error instanceof Error ? `Görsel yüklenemedi: ${error.message}` : 'Görsel yüklenemedi.');
+    }
+  }
+
+  function selectMediaImage(filePath: string) {
+    if (form.images.includes(filePath)) return;
+    if (form.images.length >= flowerVisualImageLimit) return setMessage(`En fazla ${flowerVisualImageLimit} ürün görseli seçilebilir.`);
+    const nextImages = [...form.images, filePath].slice(0, flowerVisualImageLimit);
+    update('images', nextImages);
+    setMessage(nextImages.length < flowerVisualImageLimit ? `${flowerVisualImageLimit - nextImages.length} görsel daha seçilebilir.` : `${flowerVisualImageLimit} görsel seçildi.`);
+  }
+
+  function removeProductImage(filePath: string) {
+    const nextImages = form.images.filter((image) => image !== filePath);
+    update('images', nextImages);
+    setMessage(nextImages.length < flowerVisualImageLimit ? `${flowerVisualImageLimit - nextImages.length} görsel daha seçilebilir.` : `${flowerVisualImageLimit} görsel seçildi.`);
+  }
+
+  function addImageByUrl() {
+    const url = imageUrlInput.trim();
+    if (!url) return;
+    if (form.images.includes(url)) { setMessage('Bu görsel zaten eklenmiş.'); return; }
+    if (form.images.length >= flowerVisualImageLimit) { setMessage(`En fazla ${flowerVisualImageLimit} görsel eklenebilir.`); return; }
+    update('images', [...form.images, url]);
+    setImageUrlInput('');
+    setMessage('Görsel URL\'si eklendi.');
+  }
+
+  async function downloadAllChannelExcels() {
+    const entry = await saveEntry();
+    const variantId = Number(entry?.variantId || form.variantId);
+    if (!variantId) { setMessage('Excel için önce ürünü kaydedin.'); return; }
+    for (const platform of publishableChannels) {
+      try {
+        const result = await api<ExcelExportResult>('/publishing/excel-export', {
+          method: 'POST',
+          json: { variantIds: [variantId], platform },
+        });
+        const binary = atob(result.contentBase64);
+        const bytes = new Uint8Array(binary.length);
+        for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+        const url = window.URL.createObjectURL(new Blob([bytes], { type: result.mimeType }));
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = result.fileName;
+        link.click();
+        window.URL.revokeObjectURL(url);
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      } catch { /* devam et */ }
+    }
+    setMessage('Tüm kanal Excel dosyaları indirildi.');
+  }
+
+  function applyTreeVisualStandard() {
+    update('images', form.images.slice(0, treeVisualSlots.length));
+    setMessage(form.images.length > 0 ? treeVisualSourceReadyText : 'Ağaç standardı açıldı; önce 1 ana ürün görseli seç.');
+  }
+
+  async function generateFlowerVisualSet() {
+    const sourceImage = form.images[0];
+    if (!sourceImage) {
+      setMessage('Önce 1 ana ürün görseli seç.');
+      setImagePickerOpen(true);
+      return;
+    }
+    setFlowerVisualGenerating(true);
+    try {
+      const result = await api<{ images: string[]; note?: string }>('/media/flower-standard-set', {
+        method: 'POST',
+        json: {
+          imagePath: sourceImage,
+          productId: form.productId || undefined,
+          folderName: form.modelCode || form.productName || 'Cicek Gorsel Seti',
+        },
+      });
+      update('images', result.images.slice(0, flowerVisualImageLimit));
+      await load();
+      setMessage(result.note || `7 görsel seti hazırlandı.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : '7 görsel seti oluşturulamadı.');
+    } finally {
+      setFlowerVisualGenerating(false);
+    }
+  }
+
+  async function generateTreeVisualSet() {
+    const sourceImage = form.images[0];
+    if (!sourceImage) {
+      setMessage('Önce 1 ana ürün görseli seç.');
+      setImagePickerOpen(true);
+      return;
+    }
+    setTreeVisualGenerating(true);
+    try {
+      const result = await api<{ images: string[]; note?: string }>('/media/tree-standard-set', {
+        method: 'POST',
+        json: {
+          imagePath: sourceImage,
+          productId: form.productId || undefined,
+          folderName: form.modelCode || form.productName || 'Ağaç Standart Görsel',
+        },
+      });
+      update('images', result.images.slice(0, treeVisualImageLimit));
+      await load();
+      setMessage(result.note || `Ağaç standart ${treeVisualImageLimit} görsel oluşturuldu.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Ağaç standart görsel seti oluşturulamadı.');
+    } finally {
+      setTreeVisualGenerating(false);
+    }
+  }
+
+  async function createShopCard() {
+    const entry = form.variantId ? null : await saveEntry();
+    const variantId = Number(form.variantId || entry?.variantId);
+    if (!variantId) return setMessage('Önce ürünü kaydedin.');
+    const result = await api<{ pdfPath: string }>(`/product-center/entries/${variantId}/shop-card`, { method: 'POST' });
+    setMessage('Dükkan PDF kartı oluşturuldu.');
+    window.open(apiFileUrl(result.pdfPath), '_blank', 'noopener,noreferrer');
+  }
+
+  async function generateSeoDescription() {
+    const seedProductName = form.productName.trim() || seoProductNameSuggestion;
+    if (!seedProductName.trim()) return setMessage('Önce ürün adı girin veya stok bileşeni seçin.');
+    const potNames = activeDraft.pots.map((pot) => [pot.name, pot.potType, pot.color].filter(Boolean).join(' ')).filter(Boolean);
+    const materialNames = activeDraft.items.filter(isStockRecipeItem).map((item) => item.name).filter(Boolean);
+    const fillerMaterial = materialNames.find((name) => /taş|tas|alçı|alci|strafor|dolgu/i.test(name)) ?? '';
+    const payload = {
+      brand: currentBrand,
+      productName: seedProductName,
+      productHeight: (form as any).productHeight || extractSizeText(seedProductName),
+      potType: (form as any).potType || potNames[0] || form.colorVariant,
+      potSize: (form as any).potSize || extractSizeText([form.colorVariant, ...potNames].join(' ')),
+      fillerMaterial,
+      stemCount: (form as any).stemCount || undefined,
+      branchCount: (form as any).branchCount || undefined,
+      leavesPerBranch: (form as any).leavesPerBranch || undefined,
+      leafCount: (form as any).leafCount || undefined,
+      potVolumeLitre: (form as any).potVolumeLitre || undefined,
+    };
+
+    try {
+      const result = await api<GeminiSeoResult>('/products/gemini-seo', {
+        method: 'POST',
+        json: payload,
+      });
+      update('productName', result.productName || form.productName);
+      update('description', result.description);
+      setMessage('SEO açıklaması, bakım ve temizlik bilgisi oluşturuldu.');
+    } catch (error) {
+      const fallback = buildLocalSeoContent(payload);
+      update('productName', fallback.productName);
+      update('description', fallback.description);
+      setMessage('Gemini cevap vermedi; SEO adı ve açıklama sistem içinden oluşturuldu.');
+    }
+  }
+
+  async function sendToChannels() {
+    if (!hasStockRecipe) {
+      const ok = window.confirm('Bu üründe stok bileşeni (ağaç/bitki/saksı) seçilmedi, satış fiyatı maliyetten hesaplanmadı. Yine de gönderilsin mi?');
+      if (!ok) return;
+    }
+    if (!canResearch && !allowIncomplete) {
+      const blockers = [...preparation.blockingMissing, ...trendyolReadiness.blockingMissing];
+      const text = `Gönderim yapılamadı. Eksik alanlar: ${blockers.join(', ') || 'Ürün hazırlığı tamamlanmadı.'}`;
+      setMessage(text);
+      setSendMessage(text);
+      setMissingPanelOpen(true);
+      return;
+    }
+    const platforms = selectedChannels.filter((item) => (publishableChannels as readonly string[]).includes(item) || item === FLORA_TRENDYOL_CHANNEL);
+    if (platforms.length === 0) {
+      const text = 'Dükkan ve web sitesi kontrolleri hazır. Pazaryeri gönderimi için Trendyol, Hepsiburada, N11 veya Ticimax seçin.';
+      setMessage(text);
+      setSendMessage(text);
+      return;
+    }
+    setSendingChannels(true);
+    setSendMessage('Gönderiliyor...');
+    setSendResults([]);
+    try {
+      const entry = form.variantId ? null : await saveEntry();
+      const variantId = Number(form.variantId || entry?.variantId);
+      const result = await api<{ success: number; failed: number; results: Array<{ ok: boolean; platform?: string; errorMessage?: string | null; successMessage?: string | null; batchRequestId?: string | null; listingUploadId?: string | null }> }>('/publishing/send', {
+        method: 'POST',
+        json: { variantIds: [variantId], platforms, allowIncomplete },
+      });
+      const rows = result.results.map((item) => ({
+        platform: channelLabel(item.platform ?? '?'),
+        rawPlatform: item.platform ?? '',
+        ok: item.ok,
+        message: item.ok ? (item.successMessage ?? 'Gönderildi') : (item.errorMessage ?? 'Hata'),
+        batchId: item.batchRequestId || item.listingUploadId || null,
+      }));
+      const text = `Gönderim tamamlandı. Başarılı: ${result.success}, Hatalı: ${result.failed}.`;
+      setMessage(text);
+      setSendMessage(text);
+      setSendResults(rows);
+    } catch (error) {
+      const text = `Gönderim başarısız: ${error instanceof Error ? error.message : 'Bilinmeyen hata.'}`;
+      setMessage(text);
+      setSendMessage(text);
+      setSendResults([]);
+    } finally {
+      setSendingChannels(false);
+    }
+  }
+
+  function openProductTrendyol(entry: Entry) {
+    const name = entry.productName?.toLowerCase() ?? '';
+    const isTree = /ağaç|agac|ficus|palm|schef|yuca|dracena|monstera|benjam/.test(name);
+    const existingDesc = entry.description ?? '';
+    const autoDesc = existingDesc || buildLocalSeoContent({ productName: entry.productName ?? '' }).description;
+    const descWithHint = isTree && !autoDesc.toLowerCase().includes('saksısız')
+      ? autoDesc + '\n\nNot: Ürün saksısız gönderilmektedir.'
+      : autoDesc;
+    setProductTrendyolEntry(entry);
+    setProductTrendyolCompany(entry.storeCode === 'FLORA' ? 'FLORA' : 'ERHAN');
+    setProductTrendyolResult(null);
+    setProductTrendyolForm({
+      categoryId: '',
+      salePrice: String(entry.salePrice ?? ''),
+      listPrice: String(entry.salePrice ?? ''),
+      description: descWithHint,
+      color: '',
+      flowerType: '',
+      vatRate: '20',
+      desi: '1',
+      barcode: entry.barcode || `EF${String(entry.variantId).padStart(8, '0')}`,
+      modelCode: entry.modelCode || `EF-${String(entry.variantId).padStart(6, '0')}`,
+    });
+  }
+
+  async function submitProductTrendyolForCompany(companyCode: 'ERHAN' | 'FLORA') {
+    if (!productTrendyolEntry) return { ok: false, message: 'Ürün seçilmedi.' };
+    const json = {
+      categoryId: Number(productTrendyolForm.categoryId),
+      salePrice: Number(productTrendyolForm.salePrice),
+      listPrice: Number(productTrendyolForm.listPrice || productTrendyolForm.salePrice),
+      description: productTrendyolForm.description,
+      color: productTrendyolForm.color,
+      flowerType: productTrendyolForm.flowerType,
+      vatRate: Number(productTrendyolForm.vatRate),
+      desi: Number(productTrendyolForm.desi),
+      barcode: productTrendyolForm.barcode || undefined,
+      modelCode: productTrendyolForm.modelCode || undefined,
+      companyCode,
+    };
+    const result = await api<{ ok: boolean; message: string }>(`/product-center/entries/${productTrendyolEntry.variantId}/trendyol-publish`, { method: 'POST', json });
+    return { ok: result.ok, message: `[${companyCode}] ${result.message}` };
+  }
+
+  async function submitProductTrendyol(event: FormEvent) {
+    event.preventDefault();
+    if (!productTrendyolEntry) return;
+    setProductTrendyolSending(true);
+    setProductTrendyolResult(null);
+    try {
+      if (productTrendyolCompany === 'BOTH') {
+        const [r1, r2] = await Promise.all([
+          submitProductTrendyolForCompany('ERHAN'),
+          submitProductTrendyolForCompany('FLORA'),
+        ]);
+        setProductTrendyolResult({ ok: r1.ok && r2.ok, message: `${r1.message}\n${r2.message}` });
+      } else {
+        const result = await submitProductTrendyolForCompany(productTrendyolCompany);
+        setProductTrendyolResult(result);
+      }
+    } catch (error) {
+      setProductTrendyolResult({ ok: false, message: error instanceof Error ? error.message : 'Trendyol gönderimi başarısız.' });
+    } finally {
+      setProductTrendyolSending(false);
+    }
+  }
+
+  async function openTrendyolPanel() {
+    if (!form.barcode) {
+      setSendMessage('Panel linki için önce barkod gerekli.');
+      return;
+    }
+    setOpeningTrendyolPanel(true);
+    try {
+      const result = await api<{ ok: boolean; message: string; panelUrl?: string }>(`/integrations/products/trendyol/panel-link/${form.barcode}`);
+      if (result.ok && result.panelUrl) {
+        window.open(result.panelUrl, '_blank');
+      } else {
+        setSendMessage(`Panel linki alınamadı: ${result.message}`);
+      }
+    } catch (error) {
+      setSendMessage(error instanceof Error ? error.message : 'Panel linki alınamadı.');
+    } finally {
+      setOpeningTrendyolPanel(false);
+    }
+  }
+
+  async function downloadChannelExcel(platform: 'TRENDYOL' | 'HEPSIBURADA' | 'N11' | 'TICIMAX') {
+    const entry = await saveEntry();
+    const variantId = Number(entry?.variantId || form.variantId);
+    if (!variantId) return setMessage('Excel için önce ürünü kaydedin.');
+    const result = await api<ExcelExportResult>('/publishing/excel-export', {
+      method: 'POST',
+      json: { variantIds: [variantId], platform },
+    });
+    const binary = atob(result.contentBase64);
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+    const url = window.URL.createObjectURL(new Blob([bytes], { type: result.mimeType }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = result.fileName;
+    link.click();
+    window.URL.revokeObjectURL(url);
+    const missingCount = result.missingByProduct.reduce((sum, item) => sum + item.missingFields.length, 0);
+    setMessage(missingCount > 0 ? `${channelLabel(platform)} Excel hazırlandı; ${missingCount} eksik alan uyarısı var.` : `${channelLabel(platform)} Excel hazırlandı.`);
+  }
+
+  async function cleanupAutoStockCard(item: AutoStockCardCandidate, action: 'passive' | 'hard-delete') {
+    const actionText = action === 'hard-delete' ? 'kalıcı olarak silinecek' : 'pasife alınacak';
+    const confirmed = window.confirm(`${item.name} ${actionText}. Görsel dosyaları silinmez. Devam edilsin mi?`);
+    if (!confirmed) return;
+    try {
+      await api(`/product-center/cleanup/auto-stock-cards/${item.id}`, {
+        method: 'POST',
+        json: { action },
+      });
+      await Promise.all([load(), loadCleanupItems()]);
+      setMessage(action === 'hard-delete' ? 'Deneme stok kartı kalıcı olarak silindi.' : 'Deneme stok kartı pasife alındı.');
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Temizlik işlemi tamamlanamadı.');
+    }
+  }
+
+  return (
+    <AdminShell title={isFloraPage ? 'Flora Yapay Çiçek — Ürün Merkezi' : 'Ürün Merkezi'}>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className={`text-xl font-bold ${isFloraPage ? 'text-pink-700' : ''}`}>{isFloraPage ? 'Flora Yapay Çiçek — Ürün Merkezi' : 'Birleşik Ürün Merkezi'}</h2>
+          <p className="text-sm text-slate-500">Ürün, reçete, maliyet ve kanal gönderimi tek akış içinde yönetilir.</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button className="btn btn-primary" onClick={() => { setQuickFormOpen((v) => !v); setQuickResult(null); }}><PackagePlus size={17} /> Hızlı Ürün Ekle</button>
+          {isFloraPage ? (
+            // Flora sayfasında Erhan'ın toplu işlem butonları yok
+            <button className="btn btn-secondary" onClick={() => load()}><RefreshCw size={17} /> Yenile</button>
+          ) : (<>
+          <button className="btn btn-secondary" onClick={downloadUnlinkedExcel}><FileText size={17} /> Bağlanmamış Ürünler Excel</button>
+          <button className="btn btn-secondary" onClick={downloadWhatsAppCsv}><FileText size={17} /> WhatsApp Katalog CSV</button>
+          <button className="btn btn-secondary" onClick={downloadCatalogExcel}><FileText size={17} /> Kategori Bazlı Excel İndir</button>
+          <label className="btn btn-secondary cursor-pointer">
+            <Upload size={17} /> {importingExcel ? 'Yükleniyor...' : 'Excel ile Toplu Yükle'}
+            <input type="file" accept=".xlsx,.xls" className="hidden" disabled={importingExcel} onChange={(event) => { const file = event.target.files?.[0]; if (file) importExcelFile(file); event.target.value = ''; }} />
+          </label>
+          <button
+            className="btn btn-secondary"
+            disabled={recalculating}
+            onClick={async () => {
+              if (!confirm('Tüm ürünlerin pazaryeri fiyatları mevcut maliyet verilerinden yeniden hesaplanacak ve kaydedilecek. Devam edilsin mi?')) return;
+              setRecalculating(true);
+              try {
+                const result = await api<{ updated: number; total: number }>('/production-costs/recalculate-marketplace-prices', { method: 'POST' });
+                alert(`Pazaryeri fiyatları güncellendi: ${result.updated} / ${result.total} ürün`);
+              } catch {
+                alert('Fiyat hesaplama sırasında hata oluştu.');
+              } finally {
+                setRecalculating(false);
+              }
+            }}
+          >
+            {recalculating ? <RefreshCw size={17} className="animate-spin" /> : <Send size={17} />}
+            {recalculating ? 'Hesaplanıyor...' : 'Pazaryeri Fiyatlarını Hesapla'}
+          </button>
+          <label className={`btn btn-primary${importingTrendyol ? ' opacity-50 pointer-events-none' : ''}`} style={{ cursor: 'pointer' }}>
+            {importingTrendyol ? <><RefreshCw size={17} className="animate-spin" /> Trendyol Excel Aktarılıyor...</> : <><Upload size={17} /> Trendyol Excel'den Aktar (-%20 Fiyat)</>}
+            <input type="file" accept=".xlsx,.xls" className="hidden" disabled={importingTrendyol} onChange={async (e) => {
+              const file = e.target.files?.[0];
+              if (!file) return;
+              if (!confirm(`"${file.name}" dosyasındaki ürünler Trendyol fiyatının %20 altında sitePrice ile ERP'ye aktarılacak. Devam?`)) { e.target.value = ''; return; }
+              setImportingTrendyol(true);
+              setTrendyolImportResult(null);
+              try {
+                const fd = new FormData();
+                fd.append('file', file);
+                const token = localStorage.getItem(`auth_token_${window.location.hostname}_${window.location.port || 'default'}`) ?? localStorage.getItem('auth_token');
+                const res = await fetch(`${apiBaseUrl}/products/import-trendyol-excel`, { method: 'POST', body: fd, credentials: 'include', headers: token ? { Authorization: `Bearer ${token}` } : {} });
+                if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error((err as any).message || `HTTP ${res.status}`); }
+                const result = await res.json();
+                setTrendyolImportResult({ created: result.created ?? 0, updated: result.updated ?? 0, skipped: result.skipped ?? 0, errors: result.errors ?? [] });
+                if ((result.created ?? 0) > 0 || (result.updated ?? 0) > 0) load();
+              } catch (err) { alert('Aktarım sırasında hata oluştu: ' + (err instanceof Error ? err.message : String(err))); } finally { setImportingTrendyol(false); e.target.value = ''; }
+            }} />
+          </label>
+          <button
+            className="btn btn-secondary"
+            disabled={broadcastingAll}
+            onClick={async () => {
+              if (!confirm('Tüm aktif ürünlerin fiyat ve stoğu Trendyol, N11, Hepsiburada, Trendrum ve Pazarama\'ya gönderilecek. Devam edilsin mi?')) return;
+              setBroadcastingAll(true);
+              setBroadcastResult(null);
+              try {
+                const result = await api<{ started?: boolean; total?: number; sent?: number; skipped?: number; errors?: number; platformErrors?: number }>('/products/broadcast-all', { method: 'POST' });
+                setBroadcastResult(result.started ? { total: 0, sent: 0, skipped: 0, errors: 0, message: 'Toplu yayın arka planda başlatıldı. 3-5 dakika içinde tamamlanır.' } as any : result);
+              } catch {
+                alert('Toplu yayın sırasında hata oluştu.');
+              } finally {
+                setBroadcastingAll(false);
+              }
+            }}
+          >
+            {broadcastingAll ? <RefreshCw size={17} className="animate-spin" /> : <Send size={17} />}
+            {broadcastingAll ? 'Platformlara Gönderiliyor...' : 'Tüm Ürünleri Platformlara Gönder'}
+          </button>
+          <button
+            className="btn btn-secondary"
+            disabled={broadcastingImages}
+            onClick={async () => {
+              if (!confirm('Tüm aktif ürünlerin görselleri Trendyol, N11, Hepsiburada ve Trendrum\'a gönderilecek. Bu işlem birkaç dakika sürebilir. Devam edilsin mi?')) return;
+              setBroadcastingImages(true);
+              setBroadcastImagesResult(null);
+              try {
+                const result = await api<{ sent: number; errors: number }>('/products/broadcast-images-all', { method: 'POST' });
+                setBroadcastImagesResult(result);
+              } catch {
+                alert('Görsel gönderimi sırasında hata oluştu.');
+              } finally {
+                setBroadcastingImages(false);
+              }
+            }}
+          >
+            {broadcastingImages ? <RefreshCw size={17} className="animate-spin" /> : <Send size={17} />}
+            {broadcastingImages ? 'Görseller Gönderiliyor...' : 'Tüm Görselleri Platformlara Gönder'}
+          </button>
+          <button
+            className="btn btn-secondary"
+            disabled={sendingToPazarama}
+            onClick={async () => {
+              if (!confirm('Tüm aktif ürünler Pazarama\'ya gönderilecek. Bu işlem birkaç dakika sürebilir. Devam edilsin mi?')) return;
+              setSendingToPazarama(true);
+              setPazaramaResult(null);
+              try {
+                const result = await api<{ total: number; sent: number; errors: number }>('/products/send-to-pazarama', { method: 'POST' });
+                setPazaramaResult(result);
+              } catch (err) {
+                alert('Pazarama gönderimi sırasında hata oluştu: ' + (err instanceof Error ? err.message : String(err)));
+              } finally {
+                setSendingToPazarama(false);
+              }
+            }}
+          >
+            {sendingToPazarama ? <RefreshCw size={17} className="animate-spin" /> : <Send size={17} />}
+            {sendingToPazarama ? 'Pazarama\'ya Gönderiliyor...' : 'Tüm Ürünleri Pazarama\'ya Gönder'}
+          </button>
+          {pazaramaResult && (
+            <p className="text-sm text-gray-600">Pazarama: {pazaramaResult.sent} gönderildi, {pazaramaResult.errors} hata (toplam {pazaramaResult.total})</p>
+          )}
+          <button
+            className="btn btn-secondary"
+            disabled={syncingFromTrendyol}
+            onClick={async () => {
+              if (!confirm('Trendyol\'dan tüm ürünlerin adları ve görselleri çekilecek, ERP güncellenerek diğer platformlara yayılacak. Devam edilsin mi?')) return;
+              setSyncingFromTrendyol(true);
+              setSyncFromTrendyolResult(null);
+              try {
+                const result = await api<{ updated: number; notFound: number; total: number; error?: string }>('/products/sync-from-trendyol', { method: 'POST' });
+                setSyncFromTrendyolResult(result);
+              } catch (e: unknown) {
+                setSyncFromTrendyolResult({ updated: 0, notFound: 0, total: 0, error: e instanceof Error ? e.message : 'Bağlantı hatası' });
+              } finally {
+                setSyncingFromTrendyol(false);
+              }
+            }}
+          >
+            {syncingFromTrendyol ? <RefreshCw size={17} className="animate-spin" /> : <RefreshCw size={17} />}
+            {syncingFromTrendyol ? 'Trendyol\'dan Çekiliyor...' : 'Trendyol\'dan Ad/Görsel Güncelle'}
+          </button>
+          {syncFromTrendyolResult && (
+            <span className={`text-sm ${syncFromTrendyolResult.error ? 'text-red-600' : 'text-green-600'}`}>
+              {syncFromTrendyolResult.error
+                ? `Trendyol hatası: ${syncFromTrendyolResult.error}`
+                : `Trendyol: ${syncFromTrendyolResult.total} ürün kontrol edildi, ${syncFromTrendyolResult.updated} güncellendi, ${syncFromTrendyolResult.notFound} eşleşmedi.`}
+            </span>
+          )}
+          <button
+            className="btn btn-secondary"
+            disabled={syncingSitePrices}
+            onClick={async () => {
+              if (!confirm('Site fiyatı (sitePrice) girilmemiş tüm ürünlere Trendyol satış fiyatı otomatik atanacak. Devam edilsin mi?')) return;
+              setSyncingSitePrices(true);
+              setSyncSitePricesResult(null);
+              try {
+                const result = await api<{ updated: number; skipped: number }>('/public/catalog/admin/sync-site-prices', { method: 'POST' });
+                setSyncSitePricesResult(result);
+              } catch (e: unknown) {
+                alert(e instanceof Error ? e.message : 'Hata oluştu');
+              } finally {
+                setSyncingSitePrices(false);
+              }
+            }}
+          >
+            {syncingSitePrices ? <RefreshCw size={17} className="animate-spin" /> : <RefreshCw size={17} />}
+            {syncingSitePrices ? 'Site Fiyatları Dolduruluyor...' : 'Trendyol\'dan Site Fiyatı Doldur'}
+          </button>
+          {syncSitePricesResult && (
+            <span className="text-sm text-green-600">
+              {syncSitePricesResult.updated} ürüne site fiyatı atandı, {syncSitePricesResult.skipped} atlandı.
+            </span>
+          )}
+          <button
+            className="btn btn-secondary"
+            disabled={fixingSitePrices}
+            onClick={async () => {
+              if (!confirm('Tüm aktif ürünlerde site fiyatı = piyasa fiyatı × %80 olarak güncellenecek. Devam edilsin mi?')) return;
+              setFixingSitePrices(true);
+              setFixSitePricesResult(null);
+              try {
+                const result = await api<{ updated: number; skipped: number }>('/products/backfill-site-price', { method: 'POST' });
+                setFixSitePricesResult(result);
+              } catch (e: unknown) {
+                alert(e instanceof Error ? e.message : 'Hata oluştu');
+              } finally {
+                setFixingSitePrices(false);
+              }
+            }}
+          >
+            {fixingSitePrices ? <RefreshCw size={17} className="animate-spin" /> : <RefreshCw size={17} />}
+            {fixingSitePrices ? 'Site Fiyatları Düzeltiliyor...' : 'Site Fiyatlarını Düzelt (%80)'}
+          </button>
+          {fixSitePricesResult && (
+            <span className="text-sm text-green-600">
+              {fixSitePricesResult.updated} ürün düzeltildi, {fixSitePricesResult.skipped} zaten doğruydu.
+            </span>
+          )}
+          <button
+            className="btn btn-secondary"
+            disabled={syncingTrendyolProducts}
+            onClick={async () => {
+              if (!confirm('Trendyol\'daki tüm ürünler ERP\'ye çekilecek. Yeni ürünler eklenecek, mevcut ürünlerin fiyat/stok/görseli güncellenecek. Devam edilsin mi?')) return;
+              setSyncingTrendyolProducts(true);
+              setSyncTrendyolProductsResult(null);
+              try {
+                const result = await api<{ inserted: number; updated: number; skipped: number; error?: string }>('/products/trendyol-full-sync', { method: 'POST' });
+                setSyncTrendyolProductsResult(result);
+              } catch (e: unknown) {
+                setSyncTrendyolProductsResult({ created: 0, updated: 0, deactivated: 0, error: e instanceof Error ? e.message : 'Hata oluştu' });
+              } finally {
+                setSyncingTrendyolProducts(false);
+              }
+            }}
+          >
+            {syncingTrendyolProducts ? <RefreshCw size={17} className="animate-spin" /> : <RefreshCw size={17} />}
+            {syncingTrendyolProducts ? 'Trendyol Senkronize Ediliyor...' : 'Trendyol\'dan Ürün Senkronize Et'}
+          </button>
+          {syncTrendyolProductsResult && (
+            <span className={`text-sm ${syncTrendyolProductsResult.error ? 'text-red-600' : 'text-green-600'}`}>
+              {syncTrendyolProductsResult.error
+                ? `Trendyol hatası: ${syncTrendyolProductsResult.error}`
+                : `Trendyol: ${syncTrendyolProductsResult.inserted} yeni ürün, ${syncTrendyolProductsResult.updated} güncellendi, ${syncTrendyolProductsResult.skipped} atlandı.`}
+            </span>
+          )}
+          <button
+            className="btn btn-secondary"
+            disabled={backfillingCosts}
+            onClick={async () => {
+              if (!confirm('Barkodu olan tüm ürünler için eksik maliyet taslakları oluşturulacak. Devam edilsin mi?')) return;
+              setBackfillingCosts(true);
+              setBackfillResult(null);
+              try {
+                const result = await api<{ checked: number; created: number; skipped: number }>('/products/backfill-cost-drafts', { method: 'POST' });
+                setBackfillResult(result);
+              } catch {
+                alert('Maliyet taslağı oluşturma sırasında hata oluştu.');
+              } finally {
+                setBackfillingCosts(false);
+              }
+            }}
+          >
+            {backfillingCosts ? <RefreshCw size={17} className="animate-spin" /> : <RefreshCw size={17} />}
+            {backfillingCosts ? 'Maliyet Taslakları Oluşturuluyor...' : 'Eksik Maliyet Taslakları Oluştur'}
+          </button>
+          <button className="btn btn-secondary" onClick={() => load()}><RefreshCw size={17} /> Yenile</button>
+          </>)}
+        </div>
+      </div>
+      {backfillResult && (
+        <div className="mb-4 rounded-md bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800">
+          Maliyet taslağı oluşturma tamamlandı — Kontrol edilen: {backfillResult.checked} | Oluşturulan: {backfillResult.created} | Atlandı: {backfillResult.skipped}
+          <button className="ml-3 text-amber-500 hover:underline" onClick={() => setBackfillResult(null)}>×</button>
+        </div>
+      )}
+      {trendyolImportResult && (
+        <div className="mb-4 rounded-md bg-green-50 px-3 py-2 text-sm font-semibold text-green-800">
+          Trendyol aktarımı tamamlandı — Yeni: {trendyolImportResult.created} | Güncellendi: {trendyolImportResult.updated} | Atlandı: {trendyolImportResult.skipped} | Hata: {trendyolImportResult.errors?.length ?? 0}
+          {(trendyolImportResult.errors?.length ?? 0) > 0 && <div className="mt-1 text-xs font-normal text-red-600">{trendyolImportResult.errors.slice(0, 5).join(' | ')}</div>}
+          <button className="ml-3 text-green-500 hover:underline" onClick={() => setTrendyolImportResult(null)}>×</button>
+        </div>
+      )}
+      {broadcastResult && (
+        <div className="mb-4 rounded-md bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-800">
+          {(broadcastResult as any).message ?? `Toplu yayın tamamlandı — Toplam: ${broadcastResult.total} | Gönderildi: ${broadcastResult.sent} | Atlandı: ${broadcastResult.skipped} | Hata: ${broadcastResult.errors}${broadcastResult.platformErrors != null && broadcastResult.platformErrors !== broadcastResult.errors ? ` (platform hatası: ${broadcastResult.platformErrors})` : ''}`}
+          <button className="ml-3 text-blue-500 hover:underline" onClick={() => setBroadcastResult(null)}>×</button>
+        </div>
+      )}
+      {broadcastImagesResult && (
+        <div className="mb-4 rounded-md bg-purple-50 px-3 py-2 text-sm font-semibold text-purple-800">
+          Görsel gönderimi tamamlandı — Gönderildi: {broadcastImagesResult.sent} | Hata: {broadcastImagesResult.errors}
+          <button className="ml-3 text-purple-500 hover:underline" onClick={() => setBroadcastImagesResult(null)}>×</button>
+        </div>
+      )}
+      {/* Mağaza şeridi: /products = Erhan Flowers, /flora/urunler = Flora Yapay Çiçek (aynı ekran, aynı hesaplama) */}
+      {isFloraPage ? (
+        <div className="mb-4 flex flex-wrap items-center gap-3 rounded-md border-2 border-pink-300 bg-pink-50 p-3 text-sm font-semibold text-pink-800">
+          <span className="rounded bg-pink-600 px-2 py-1 text-white">Flora Yapay Çiçek</span>
+          Bu sayfadaki ürünler sadece Flora&apos;nın Trendyol / Hepsiburada / N11 / Trendrum hesaplarına gider. Model kodu FL- ile başlar; Erhan Flowers&apos;a ve erhanflowers.com sitesine gitmez.
+          <a href="/orders?magaza=FLORA" className="ml-auto rounded-md border border-pink-300 bg-white px-3 py-1.5 text-pink-700 hover:bg-pink-100">Flora Siparişleri</a>
+          <div className="flex w-full flex-wrap items-center gap-2 border-t border-pink-200 pt-2 text-xs">
+            <span className="font-black">Google Drive · &quot;{driveStatus?.folderName ?? 'Flora Saksısız'}&quot;:</span>
+            {driveStatus?.connected ? (
+              <>
+                <span>Bağlı ({driveStatus.email ?? 'hesap'}) · Yüklenen ürün: {driveStatus.done} · Bekleyen: {driveStatus.pending}</span>
+                {driveStatus.folderUrl && <a href={driveStatus.folderUrl} target="_blank" rel="noreferrer" className="underline">Klasörü aç</a>}
+                <button type="button" className="rounded border border-pink-300 bg-white px-2 py-1 text-pink-700" disabled={driveSyncing} onClick={syncDriveNow}>{driveSyncing ? 'Yükleniyor…' : "Drive'a şimdi yükle"}</button>
+              </>
+            ) : (
+              <>
+                <span>Bağlı değil. Saksısız ağaçların fotoğrafları ürün adıyla açılan klasörlere otomatik yüklenir.</span>
+                <a href={`${apiBaseUrl}/integrations/gmail/auth?purpose=drive`} className="rounded bg-pink-600 px-2 py-1 text-white">Google Drive&apos;ı bağla</a>
+              </>
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className="mb-4 flex flex-wrap items-center gap-3 rounded-md border border-emerald-300 bg-emerald-50 p-3 text-sm font-semibold text-emerald-800">
+          Bu sayfa sadece <b>Erhan Flowers</b> ürünleri içindir.
+          <a href="/flora/urunler" className="ml-auto rounded-md border border-pink-300 bg-white px-3 py-1.5 text-pink-700 hover:bg-pink-50">Flora Yapay Çiçek ürünleri → ayrı sayfa</a>
+        </div>
+      )}
+      {message && <div className="mb-4 rounded-md bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800">{message}</div>}
+
+      <div className="mb-4 flex flex-wrap gap-2 rounded-md border border-line bg-white p-3">
+        <button type="button" className="btn btn-secondary min-h-9 px-3 text-xs" onClick={() => openErpContextLink('STOCK')}><ExternalLink size={14} /> Stokta Aç</button>
+        <button type="button" className="btn btn-secondary min-h-9 px-3 text-xs" onClick={() => openErpContextLink('COST')}><ExternalLink size={14} /> Maliyeti Aç</button>
+        <button type="button" className="btn btn-secondary min-h-9 px-3 text-xs" onClick={() => openErpContextLink('MARKET')}><ExternalLink size={14} /> Pazar Analizi</button>
+        <button type="button" className="btn btn-secondary min-h-9 px-3 text-xs" onClick={() => openErpContextLink('COMPETITOR')}><ExternalLink size={14} /> Rakip Araştır</button>
+        <button type="button" className="btn btn-secondary min-h-9 px-3 text-xs" onClick={() => openErpContextLink('MEDIA')}><ExternalLink size={14} /> Medyayı Aç</button>
+      </div>
+
+      <section className={quickFormOpen ? 'mb-6 rounded-md border border-emerald-200 bg-emerald-50 p-4' : 'hidden'}>
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-black">Hızlı Yeni Ürün Kaydı — {storeLabel(quickForm.storeCode)}</h2>
+            <p className="text-sm text-slate-500">Model kodu, stok kodu ve barkod kayıtta otomatik oluşur.</p>
+          </div>
+          <div className="flex flex-wrap gap-2 text-xs font-semibold text-slate-600">
+            <label className="flex items-center gap-1 rounded-md border border-line px-2 py-1"><input type="checkbox" checked={quickKeepCategory} onChange={(event) => setQuickKeepCategory(event.target.checked)} /> Kategori kalsın</label>
+            <label className="flex items-center gap-1 rounded-md border border-line px-2 py-1"><input type="checkbox" checked={quickKeepProductType} onChange={(event) => setQuickKeepProductType(event.target.checked)} /> Tür kalsın</label>
+            <label className="flex items-center gap-1 rounded-md border border-line px-2 py-1"><input type="checkbox" checked={quickKeepPrices} onChange={(event) => setQuickKeepPrices(event.target.checked)} /> Fiyatlar kalsın</label>
+          </div>
+        </div>
+
+        <form onSubmit={saveQuickEntry} className="grid gap-4 lg:grid-cols-4">
+          <Field label="Ürün adı"><input className="field" value={quickForm.productName} onChange={(event) => updateQuick('productName', event.target.value)} required /></Field>
+          <Field label="Ana kategori"><select className="field" value={quickForm.categoryId} onChange={(event) => updateQuick('categoryId', event.target.value)} required><option value="">Seçin</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></Field>
+          <Field label="Ürün türü"><input className="field" value={quickForm.productType} onChange={(event) => updateQuick('productType', event.target.value)} placeholder="Yapay ağaç, çiçek, saksı" required /></Field>
+          <Field label="Ölçü veya varyant"><input className="field" value={quickForm.sizeVariant} onChange={(event) => updateQuick('sizeVariant', event.target.value)} placeholder="180 cm, beyaz, 30x30" required /></Field>
+          <Field label="Pazaryeri satış fiyatı (TL)"><MoneyInput value={quickForm.marketplaceSalePrice} onChange={(value) => updateQuick('marketplaceSalePrice', value)} /></Field>
+          <Field label="Dükkan satış fiyatı"><MoneyInput value={quickForm.shopPrice} onChange={(value) => updateQuick('shopPrice', value)} /></Field>
+          <Field label="Site satış fiyatı"><MoneyInput value={quickForm.sitePrice} onChange={(value) => updateQuick('sitePrice', value)} /></Field>
+          <Field label="Başlangıç stok"><input className="field" type="number" min="0" step="1" value={Number(quickForm.initialStockQuantity || 0)} onChange={(event) => updateQuick('initialStockQuantity', decimalValue(event.target.value))} required /></Field>
+          <Field label="Ana ürün görseli">
+            <label className="field flex cursor-pointer items-center justify-between gap-2">
+              <span className="truncate">{quickForm.mainImageUrl ? 'Görsel seçildi' : 'Görsel yükle'}</span>
+              <ImageIcon size={16} className="shrink-0 text-slate-400" />
+              <input className="hidden" type="file" accept="image/*" onChange={(event) => uploadQuickImage(event.target.files)} />
+            </label>
+          </Field>
+          <label className="block text-sm font-semibold text-slate-600 lg:col-span-4"><span className="mb-1 block">Açıklama (pazaryerinde görünür)</span><textarea className="field min-h-[72px] w-full resize-y" value={quickForm.description} onChange={(event) => updateQuick('description', event.target.value)} placeholder="Ürün açıklaması — Trendyol, N11, HB ilanlarında görünür" /></label>
+          <div className="lg:col-span-4">
+            <div className="mb-3 flex flex-wrap items-center gap-3">
+              <span className="text-sm font-semibold text-slate-600">Kanallara gönder:</span>
+              <span className={`rounded-md px-2 py-1 text-xs font-black ${quickForm.storeCode === 'FLORA' ? 'bg-pink-100 text-pink-700' : 'bg-emerald-100 text-emerald-700'}`}>{storeLabel(quickForm.storeCode)} hesapları</span>
+              {STORE_QUICK_PLATFORMS[quickForm.storeCode].map((p) => (
+                <label key={p.value} className="flex cursor-pointer items-center gap-1.5 rounded-md border border-line bg-white px-3 py-1.5 text-sm font-semibold">
+                  <input type="checkbox" checked={quickForm.platforms.includes(p.value)} onChange={() => toggleQuickPlatform(p.value)} />
+                  {p.label}
+                </label>
+              ))}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button className="btn btn-secondary" type="submit" disabled={quickSaving}><Save size={16} /> {quickSaving ? 'Kaydediliyor…' : 'Sadece Kaydet'}</button>
+              <button className="btn btn-primary" type="button" disabled={quickSaving || quickForm.platforms.length === 0} onClick={(e) => saveQuickEntry(e as any, true)}>
+                <Send size={16} /> {quickSaving ? 'Gönderiliyor…' : `Kaydet ve ${quickForm.platforms.length > 0 ? quickForm.platforms.map(channelLabel).join(' + ') : 'Kanallara'} Gönder`}
+              </button>
+              <button className="btn btn-secondary" type="button" onClick={newQuickEntry}><PackagePlus size={16} /> Yeni Ürün Ekle</button>
+            </div>
+          </div>
+        </form>
+
+        {quickResult && (
+          <div className="mt-5 rounded-md border border-emerald-200 bg-emerald-50 p-4">
+            <div className="mb-3 flex items-center gap-2 font-black text-emerald-800"><CheckCircle2 size={18} /> Ürün başarıyla kaydedildi</div>
+            <div className="grid gap-3 text-sm md:grid-cols-2 xl:grid-cols-4">
+              <Info label="Ürün adı" value={quickResult.productName} />
+              <Info label="Model kodu" value={quickResult.modelCode} />
+              <Info label="Stok kodu" value={quickResult.stockCode} />
+              <Info label="Barkod" value={quickResult.barcode} />
+              <Info label="Başlangıç stok" value={number(quickResult.initialStockQuantity)} />
+              <Info label="Dükkan fiyatı" value={money(quickResult.shopPrice)} />
+              <Info label="Site fiyatı" value={money(quickResult.sitePrice)} />
+            </div>
+            {quickResult.publishResult && (
+              <div className="mt-4">
+                <div className="mb-2 text-sm font-semibold text-slate-700">Kanal Gönderim Sonucu</div>
+                <div className="flex flex-wrap gap-2">
+                  {quickResult.publishResult.results.map((r) => (
+                    <div key={r.platform} className={`flex flex-col gap-1 rounded-md px-3 py-2 text-sm font-semibold ${r.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
+                      <div className="flex items-center gap-2">
+                        {r.ok ? <CheckCircle2 size={15} /> : <XCircle size={15} />}
+                        {channelLabel(r.platform)}: {r.ok ? (r.batchRequestId ? 'Kuyruğa alındı' : 'Gönderildi') : (r.errorMessage ?? 'Hata')}
+                      </div>
+                      {r.ok && <TrendyolBatchStatus platform={r.platform} batchId={r.batchRequestId || r.listingUploadId} />}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button type="button" className="btn btn-primary" onClick={newQuickEntry}><PackagePlus size={16} /> Yeni Ürün Ekle</button>
+              <button type="button" className="btn btn-secondary" onClick={() => window.open(`/products?variantId=${quickResult.variantId}`, '_self')}><Eye size={16} /> Ürünü Görüntüle</button>
+              <button type="button" className="btn btn-secondary" onClick={printQuickBarcode}><Printer size={16} /> Barkod Yazdır</button>
+              <button type="button" className="btn btn-secondary" onClick={editQuickResult}><Edit3 size={16} /> Ürünü Düzenle</button>
+            </div>
+          </div>
+        )}
+      </section>
+
+      <section className="hidden">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-black">Deneme Ürün Stok Kartları</h2>
+            <p className="text-sm text-slate-500">Ürün Merkezi tarafından geçmişte otomatik oluşmuş olabilecek satış ürünü stok kartlarını güvenli şekilde kontrol eder.</p>
+          </div>
+          <button className="btn btn-secondary" type="button" onClick={loadCleanupItems} disabled={cleanupLoading}>
+            <RefreshCw size={17} />
+            {cleanupLoading ? 'Kontrol ediliyor' : 'Şüpheli Kartları Listele'}
+          </button>
+        </div>
+        {cleanupItems.length > 0 ? (
+          <div className="overflow-x-auto rounded-md border border-line">
+            <table className="w-full min-w-[980px] text-sm">
+              <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
+                <tr>
+                  <th className="px-3 py-2">Ürün / Stok kartı</th>
+                  <th className="px-3 py-2">Stok kodu</th>
+                  <th className="px-3 py-2">Model</th>
+                  <th className="px-3 py-2">Barkod</th>
+                  <th className="px-3 py-2">Oluşturma</th>
+                  <th className="px-3 py-2">Stok</th>
+                  <th className="px-3 py-2">Bağlantı</th>
+                  <th className="px-3 py-2">Aksiyon</th>
+                </tr>
+              </thead>
+              <tbody>
+                {cleanupItems.map((item) => (
+                  <tr key={item.id} className="border-t border-line">
+                    <td className="px-3 py-2">
+                      <div className="font-bold">{item.name}</div>
+                      <div className="text-xs text-slate-500">{item.productName || 'Ürün eşleşmesi'} · {item.category || '-'}</div>
+                      {item.warning && <div className="mt-1 text-xs font-semibold text-amber-700">{item.warning}</div>}
+                    </td>
+                    <td className="px-3 py-2">{item.sku || '-'}</td>
+                    <td className="px-3 py-2">{item.model || '-'}</td>
+                    <td className="px-3 py-2">{item.barcode || '-'}</td>
+                    <td className="px-3 py-2">{new Date(item.createdAt).toLocaleDateString('tr-TR')}</td>
+                    <td className="px-3 py-2">{number(item.stockQuantity)}</td>
+                    <td className="px-3 py-2">{item.movementCount} hareket · {item.linkedRecipeCount} reçete</td>
+                    <td className="px-3 py-2">
+                      <div className="flex flex-wrap gap-2">
+                        <button type="button" className="btn btn-secondary min-h-9 px-3 text-xs" onClick={() => cleanupAutoStockCard(item, 'passive')}>Pasife al</button>
+                        {item.hardDeleteAllowed && <button type="button" className="btn btn-danger min-h-9 px-3 text-xs" onClick={() => cleanupAutoStockCard(item, 'hard-delete')}>Sil</button>}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="rounded-md border border-dashed border-line p-4 text-sm font-semibold text-slate-500">Listelemek için kontrol düğmesine basın.</div>
+        )}
+      </section>
+
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <button type="button" className="btn btn-secondary min-h-9 px-3 text-xs" onClick={() => setProductListOpen((current) => !current)}>
+            <Boxes size={15} />
+            {productListOpen ? 'Ürün listesini kapat' : 'Ürün listesini aç'}
+          </button>
+          <button type="button" className="btn btn-secondary min-h-9 px-3 text-xs" onClick={() => { setForm(newFormFor(activeStore)); setSalePriceManual(false); setCostDetail(null); setStep(0); }}>
+            <PackagePlus size={15} />
+            Yeni ürün
+          </button>
+        </div>
+        <ProductNameStartPanel
+          value={form.productName}
+          suggestion={seoProductNameSuggestion}
+          stage={saleStageLabel}
+          canResearch={canResearch}
+          onChange={(value) => update('productName', value)}
+          onUseSuggestion={() => update('productName', seoProductNameSuggestion)}
+          onGenerate={generateSeoDescription}
+          onOpenSeoSearch={openProductNameSeoSearch}
+        />
+
+        {/* Stok bileşenleri — ürün adının hemen altında */}
+        <div className="rounded-md border border-line bg-slate-50 p-4 space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <div className="font-bold">Stok bileşenleri</div>
+              <div className="mt-1 text-xs text-slate-500">{componentSummary(activeDraft)}</div>
+            </div>
+            <button type="button" className="btn btn-secondary" onClick={openComponentPicker}><Search size={16} /> Stok bileşenlerini seç</button>
+          </div>
+
+          {/* Saksı fiziksel özellikleri — saksı seçilince görünür */}
+          {activeDraft.pots.length > 0 && (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 border-t border-line pt-3">
+              <div className="sm:col-span-2 lg:col-span-4 text-xs font-semibold text-slate-500 uppercase tracking-wide">Saksı özellikleri</div>
+              <Field label="Saksı tipi">
+                <input className="field" value={(form as any).potType || ''} onChange={(e) => update('potType' as any, e.target.value)} placeholder="Kare Saksı" />
+              </Field>
+              <div>
+                <label className="label">Saksı ebatları (cm)</label>
+                <div className="flex items-center gap-1">
+                  <input className="field w-14 text-center" type="number" min="0" value={(form as any).potW || ''} onChange={(e) => {
+                    update('potW' as any, e.target.value);
+                    const w=Number(e.target.value),d=Number((form as any).potD||e.target.value),h=Number((form as any).potH);
+                    const size=[w,d,h].filter(Boolean).map(n=>n+'cm').join('×'); update('potSize' as any, size);
+                    if(w&&d&&h) update('potVolumeLitre' as any, ((w*d*h)/1000).toFixed(1));
+                  }} placeholder="G" title="Genişlik" />
+                  <span className="text-gray-400 text-xs">×</span>
+                  <input className="field w-14 text-center" type="number" min="0" value={(form as any).potD || ''} onChange={(e) => {
+                    update('potD' as any, e.target.value);
+                    const w=Number((form as any).potW),d=Number(e.target.value),h=Number((form as any).potH);
+                    const size=[w,d,h].filter(Boolean).map(n=>n+'cm').join('×'); update('potSize' as any, size);
+                    if(w&&d&&h) update('potVolumeLitre' as any, ((w*d*h)/1000).toFixed(1));
+                  }} placeholder="D" title="Derinlik" />
+                  <span className="text-gray-400 text-xs">×</span>
+                  <input className="field w-14 text-center" type="number" min="0" value={(form as any).potH || ''} onChange={(e) => {
+                    update('potH' as any, e.target.value);
+                    const w=Number((form as any).potW),d=Number((form as any).potD),h=Number(e.target.value);
+                    const size=[w,d,h].filter(Boolean).map(n=>n+'cm').join('×'); update('potSize' as any, size);
+                    if(w&&d&&h) update('potVolumeLitre' as any, ((w*d*h)/1000).toFixed(1));
+                  }} placeholder="Y" title="Yükseklik" />
+                  {(form as any).potVolumeLitre && <span className="text-xs font-semibold text-emerald-700 whitespace-nowrap">={(form as any).potVolumeLitre}L</span>}
+                </div>
+                <input className="field mt-1 text-xs" value={(form as any).potSize || ''} onChange={(e) => update('potSize' as any, e.target.value)} placeholder="28×28×30cm" />
+              </div>
+            </div>
+          )}
+
+          {/* Bitki/yaprak fiziksel özellikleri — bitki/yaprak/gövde seçilince görünür */}
+          {activeDraft.items.some((i: any) => i.stockCardId) && (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 border-t border-line pt-3">
+              <div className="sm:col-span-2 lg:col-span-4 text-xs font-semibold text-slate-500 uppercase tracking-wide">Fiziksel özellikler</div>
+              <Field label="Ürün boyu">
+                <input className="field" value={(form as any).productHeight || ''} onChange={(e) => update('productHeight' as any, e.target.value)} placeholder="180 cm" />
+              </Field>
+              <Field label="Gövde sayısı">
+                <input className="field" type="number" min="0" value={(form as any).stemCount || ''} onChange={(e) => update('stemCount' as any, e.target.value)} placeholder="3" />
+              </Field>
+              <Field label="Şal (dal) sayısı">
+                <input className="field" type="number" min="0" value={(form as any).branchCount || ''} onChange={(e) => {
+                  update('branchCount' as any, e.target.value);
+                  const b = Number(e.target.value); const l = Number((form as any).leavesPerBranch);
+                  if (b && l) update('leafCount' as any, String(b * l));
+                }} placeholder="12" />
+              </Field>
+              <Field label="Dal başına yaprak">
+                <input className="field" type="number" min="0" value={(form as any).leavesPerBranch || ''} onChange={(e) => {
+                  update('leavesPerBranch' as any, e.target.value);
+                  const b = Number((form as any).branchCount); const l = Number(e.target.value);
+                  if (b && l) update('leafCount' as any, String(b * l));
+                }} placeholder="36" />
+              </Field>
+              <Field label={`Yaprak sayısı${(form as any).branchCount && (form as any).leavesPerBranch ? ` (${(form as any).branchCount}×${(form as any).leavesPerBranch}=${Number((form as any).branchCount)*Number((form as any).leavesPerBranch)})` : ''}`}>
+                <input className="field" type="number" min="0" value={(form as any).leafCount || ''} onChange={(e) => update('leafCount' as any, e.target.value)} placeholder="432" />
+              </Field>
+            </div>
+          )}
+        </div>
+        {productListOpen && <section className="panel overflow-hidden">
+          <div className="space-y-3 border-b border-line p-4">
+            <input className="field" placeholder="Ürün, barkod, model ara" value={query} onChange={(event) => setQuery(event.target.value)} />
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex gap-1">
+                {(['all', 'done', 'missing'] as const).map((f) => (
+                  <button key={f} type="button"
+                    className={`rounded-md border px-3 py-1 text-xs font-semibold ${entryFilter === f ? 'border-brand bg-emerald-50 text-brand' : 'border-line bg-white text-slate-500'}`}
+                    onClick={() => setEntryFilter(f)}>
+                    {f === 'all' ? 'Tümü' : f === 'done' ? '✓ Tamamlanan' : '⚠ Eksik maliyet'}
+                  </button>
+                ))}
+              </div>
+              <label className="flex items-center gap-2 text-xs font-semibold text-slate-500 ml-auto">
+                <input type="checkbox" checked={showPassiveEntries} onChange={(event) => setShowPassiveEntries(event.target.checked)} />
+                Pasifleri göster
+              </label>
+            </div>
+          </div>
+          <div className="grid max-h-[400px] gap-3 overflow-auto p-3 md:grid-cols-2 xl:grid-cols-4">
+            {visibleEntries.map((entry) => (
+              <div key={entry.variantId} className={`rounded-md border border-line p-3 transition hover:bg-slate-50 ${entry.status === 'PASSIVE' ? 'bg-slate-50 opacity-70' : ''}`}>
+                <div className="flex gap-3">
+                  <ProductImage images={entry.images} />
+                  <div className="min-w-0 flex-1">
+                    <div className="line-clamp-2 font-bold">{entry.productName}</div>
+                    <div className="mt-1 text-xs text-slate-500">{entry.barcode} / {entry.modelCode || '-'}</div>
+                    {entry.storeCode === 'FLORA' && <span className="mt-1 inline-block rounded bg-pink-100 px-2 py-0.5 text-[11px] font-black text-pink-700">Flora Yapay Çiçek</span>}
+                    <div className="mt-2 flex flex-wrap gap-1 text-xs">
+                      <span className="rounded bg-emerald-50 px-2 py-1 text-emerald-700">{money(entry.salePrice)}</span>
+                      {entry.costStatus && entry.costStatus !== 'Maliyet Girilmedi' && (
+                        <span className={`rounded px-2 py-1 ${entry.costStatus === 'Tamamlandı' ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'}`}>{entry.costStatus}</span>
+                      )}
+                    </div>
+                  </div>
+                  {entry.status === 'PASSIVE' && <span className="self-start rounded bg-slate-200 px-2 py-1 text-xs font-bold text-slate-600">Pasif</span>}
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button type="button" className="btn btn-secondary min-h-9 px-3 text-xs" onClick={() => editEntry(entry)}><Edit3 size={14} /> Düzenle</button>
+                  <button type="button" className="btn btn-secondary min-h-9 px-3 text-xs" onClick={() => window.open(`/urun-duzenle/${entry.variantId}`, '_blank')} title="Açıklama/görsel düzenle">↗</button>
+                  {entry.status !== 'PASSIVE' && (
+                    <button type="button" className="btn btn-danger min-h-9 px-3 text-xs" onClick={() => passiveEntry(entry)}><Trash2 size={14} /> Pasife al</button>
+                  )}
+                  <button type="button" className="btn btn-secondary min-h-9 px-3 text-xs" onClick={() => openProductTrendyol(entry)}><Send size={14} /> Trendyol</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>}
+
+        <section className="panel p-5">
+          <div className="hidden">
+            <div className="rounded-md border border-line bg-white p-4">
+              <div className="flex gap-4">
+                <ProductImage images={form.images} />
+                <div className="min-w-0 flex-1">
+                  <div className="text-xs font-bold uppercase text-slate-400">Ürünü Satışa Açma Merkezi</div>
+                  <h3 className="mt-1 line-clamp-2 text-lg font-black">{form.productName || 'Yeni ürün'}</h3>
+                  <div className="mt-2 grid gap-2 text-xs sm:grid-cols-4">
+                    <Info label="Model" value={form.modelCode || 'Otomatik'} />
+                    <Info label="Stok" value={form.stockCode || 'Otomatik'} />
+                    <Info label="Barkod" value={form.barcode || 'Otomatik'} />
+                    <Info label="Satış fiyatı" value={money(form.salePrice)} />
+                  </div>
+                </div>
+              </div>
+            </div>
+            <LiveMarginPanel pricing={pricing} channels={channelPricing} />
+          </div>
+
+          <div className="hidden">
+            {visibleStepIndexes.map((index, order) => {
+              const label = steps[index];
+              return (
+              <button key={label} type="button" className={`rounded-md border px-3 py-2 text-sm font-semibold ${step === index ? 'border-brand bg-emerald-50 text-brand' : 'border-line bg-white text-slate-600'}`} onClick={() => setStep(index)}>
+                {order + 1}. {label}
+              </button>
+              );
+            })}
+          </div>
+
+          <form onSubmit={saveEntry} className="space-y-6">
+            {(
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="hidden">
+                  <input className="hidden" value={form.productName} onChange={(event) => update('productName', event.target.value)} readOnly />
+                  {seoProductNameSuggestion && seoProductNameSuggestion !== form.productName.trim() && (
+                    <button type="button" className="mt-2 w-full rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-left text-xs font-semibold text-emerald-800" onClick={() => update('productName', seoProductNameSuggestion)}>
+                      Google ürün adı önerisi: {seoProductNameSuggestion}
+                    </button>
+                  )}
+                </div>
+                <div className="md:col-span-2 xl:col-span-4">
+                  <div className="rounded-md border border-line bg-slate-50 p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <div className="font-bold">Stok bileşenleri</div>
+                        <div className="mt-1 text-xs text-slate-500">{componentSummary(activeDraft)}</div>
+                      </div>
+                      <button type="button" className="btn btn-secondary" onClick={openComponentPicker}><Search size={16} /> Stok bileşenlerini seç</button>
+                    </div>
+                  </div>
+                </div>
+                <Field label="Kategori"><select className="field" value={form.categoryId} onChange={(event) => update('categoryId', event.target.value)}><option value="">Seçin</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></Field>
+                <div>
+                  <Field label="Site kategorisi (ERH kodu için)">
+                    <select
+                      className="field"
+                      value={(form as any).shopCategoryId || ''}
+                      onChange={(e) => setForm((c) => ({ ...c, shopCategoryId: e.target.value }))}
+                    >
+                      <option value="">— Seçin —</option>
+                      {shopCategories.map((c) => (
+                        <option key={c.id} value={c.id}>{c._indent ? `  └ ${c.name}` : c.name}</option>
+                      ))}
+                    </select>
+                  </Field>
+                  {erhCodePreview && (
+                    <div className="mt-1 flex items-center gap-2">
+                      <span className="text-xs text-slate-500">ERH model kodu:</span>
+                      <span className="rounded bg-blue-50 px-2 py-0.5 text-xs font-mono font-bold text-blue-700">{erhCodePreview}</span>
+                    </div>
+                  )}
+                </div>
+                <Field label="Katalog Kategorisi">
+                  <select
+                    className="field"
+                    value={CATS_KEYS.find(k => CATS[k].label === (form as any).catalogCategory) || ''}
+                    onChange={(e) => setForm((c) => ({ ...c, catalogCategory: e.target.value ? CATS[e.target.value].label : '', catalogSubCategory: '' }))}
+                  >
+                    <option value="">— Seçin —</option>
+                    {CATS_KEYS.map((k) => (
+                      <option key={k} value={k}>{CATS[k].label}</option>
+                    ))}
+                  </select>
+                </Field>
+                {(() => {
+                  const catKey = CATS_KEYS.find(k => CATS[k].label === (form as any).catalogCategory)
+                  const subs = catKey ? CATS[catKey].subs : []
+                  if (!subs.length) return null
+                  return (
+                    <Field label="Alt Kategori">
+                      <select
+                        className="field"
+                        value={(form as any).catalogSubCategory || ''}
+                        onChange={(e) => setForm((c) => ({ ...c, catalogSubCategory: e.target.value }))}
+                      >
+                        <option value="">— Seçin —</option>
+                        {subs.map((s) => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                    </Field>
+                  )
+                })()}
+                <Field label="Renk / çeşit"><input className="field" value={form.colorVariant} onChange={(event) => update('colorVariant', event.target.value)} /></Field>
+                {/* Fiziksel özellikler */}
+                <Field label="Ürün boyu"><input className="field" value={(form as any).productHeight || ''} onChange={(e) => update('productHeight' as any, e.target.value)} placeholder="180 cm" /></Field>
+                <Field label="Gövde sayısı"><input className="field" type="number" min="0" value={(form as any).stemCount || ''} onChange={(e) => update('stemCount' as any, e.target.value)} placeholder="3" /></Field>
+                <Field label="Dal sayısı"><input className="field" type="number" min="0" value={(form as any).branchCount || ''} onChange={(e) => {
+                  update('branchCount' as any, e.target.value);
+                  const b = Number(e.target.value); const l = Number((form as any).leavesPerBranch);
+                  if (b && l) update('leafCount' as any, String(b * l));
+                }} placeholder="12" /></Field>
+                <Field label="Dal başına yaprak"><input className="field" type="number" min="0" value={(form as any).leavesPerBranch || ''} onChange={(e) => {
+                  update('leavesPerBranch' as any, e.target.value);
+                  const b = Number((form as any).branchCount); const l = Number(e.target.value);
+                  if (b && l) update('leafCount' as any, String(b * l));
+                }} placeholder="36" /></Field>
+                <Field label={`Yaprak sayısı${(form as any).branchCount && (form as any).leavesPerBranch ? ` (${(form as any).branchCount}×${(form as any).leavesPerBranch}=${Number((form as any).branchCount)*Number((form as any).leavesPerBranch)})` : ''}`}><input className="field" type="number" min="0" value={(form as any).leafCount || ''} onChange={(e) => update('leafCount' as any, e.target.value)} placeholder="432" /></Field>
+                <Field label="Saksı tipi"><input className="field" value={(form as any).potType || ''} onChange={(e) => update('potType' as any, e.target.value)} placeholder="Kare Saksı" /></Field>
+                <div>
+                  <label className="label">Saksı ebatları (cm)</label>
+                  <div className="flex items-center gap-1">
+                    <input className="field w-16 text-center" type="number" min="0" value={(form as any).potW || ''} onChange={(e) => {
+                      update('potW' as any, e.target.value);
+                      const w=Number(e.target.value),d=Number((form as any).potD||e.target.value),h=Number((form as any).potH);
+                      const size=[w,d,h].filter(Boolean).map(n=>n+'cm').join('×'); update('potSize' as any, size);
+                      if(w&&d&&h) update('potVolumeLitre' as any, ((w*d*h)/1000).toFixed(1));
+                    }} placeholder="G" title="Genişlik" />
+                    <span className="text-gray-400 text-xs">×</span>
+                    <input className="field w-16 text-center" type="number" min="0" value={(form as any).potD || ''} onChange={(e) => {
+                      update('potD' as any, e.target.value);
+                      const w=Number((form as any).potW),d=Number(e.target.value),h=Number((form as any).potH);
+                      const size=[w,d,h].filter(Boolean).map(n=>n+'cm').join('×'); update('potSize' as any, size);
+                      if(w&&d&&h) update('potVolumeLitre' as any, ((w*d*h)/1000).toFixed(1));
+                    }} placeholder="D" title="Derinlik" />
+                    <span className="text-gray-400 text-xs">×</span>
+                    <input className="field w-16 text-center" type="number" min="0" value={(form as any).potH || ''} onChange={(e) => {
+                      update('potH' as any, e.target.value);
+                      const w=Number((form as any).potW),d=Number((form as any).potD),h=Number(e.target.value);
+                      const size=[w,d,h].filter(Boolean).map(n=>n+'cm').join('×'); update('potSize' as any, size);
+                      if(w&&d&&h) update('potVolumeLitre' as any, ((w*d*h)/1000).toFixed(1));
+                    }} placeholder="Y" title="Yükseklik" />
+                    {(form as any).potVolumeLitre && <span className="text-xs font-semibold text-emerald-700 whitespace-nowrap">= {(form as any).potVolumeLitre} L</span>}
+                  </div>
+                  <input className="field mt-1 text-xs" value={(form as any).potSize || ''} onChange={(e) => update('potSize' as any, e.target.value)} placeholder="28×28×30cm (düzenlenebilir)" />
+                </div>
+                {false && <div className="md:col-span-2 xl:col-span-4">
+                  <div className="rounded-md border border-emerald-200 bg-emerald-50">
+                    <button
+                      type="button"
+                      className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
+                      onClick={() => setCompositeOpen((v) => !v)}
+                    >
+                      <div className="flex items-center gap-2 font-black text-emerald-900"><Sparkles size={18} /> ChatGPT ürün hazırlayıcı</div>
+                      <ChevronDown size={16} className={`text-emerald-700 transition-transform ${compositeOpen ? 'rotate-180' : ''}`} />
+                    </button>
+                    {compositeOpen && (
+                    <div className="border-t border-emerald-200 p-4">
+                    <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+                      <div className="text-xs font-semibold text-emerald-800">Ağaç/bitki, yaprak, gövde/bambu ve saksıyı ayrı seç; her biri reçeteye ayrı stok satırı olarak eklensin.</div>
+                      <button type="button" className="btn btn-secondary min-h-9 px-3 text-xs" onClick={refreshStockCards} disabled={stockCardsLoading}>
+                        <RefreshCw size={14} className={stockCardsLoading ? 'animate-spin' : ''} /> Stokları yenile
+                      </button>
+                    </div>
+                    <div className="grid gap-3 lg:grid-cols-2 2xl:grid-cols-[1fr_1fr_1fr_1fr_auto]">
+                      <Field label="1. Ağaç / bitki ana kaynak">
+                        <div className="mb-2 flex flex-wrap gap-2">
+                          {compositeProductKinds.map((kind) => (
+                            <button
+                              key={kind.key}
+                              type="button"
+                              className={`rounded-md border px-3 py-2 text-xs font-bold ${compositeBuilder.productKind === kind.key ? 'border-emerald-700 bg-emerald-700 text-white' : 'border-emerald-200 bg-white text-emerald-900'}`}
+                              onClick={() => setCompositeBuilder((current) => ({ ...current, productKind: kind.key, productStockCardId: '', productSearch: '', leafStockCardId: '', leafSearch: '', trunkStockCardId: '', trunkSearch: '' }))}
+                            >
+                              {kind.label}
+                            </button>
+                          ))}
+                        </div>
+                        <input className="field bg-white" value={compositeBuilder.productSearch} onChange={(event) => setCompositeBuilder((current) => ({ ...current, productSearch: event.target.value, productStockCardId: '' }))} placeholder="Ağaç gövde, ürün adı, stok kodu, model veya barkod yazın" />
+                        <StockSearchResults
+                          options={filteredCompositeProductOptions}
+                          selectedId={selectedCompositeProduct?.id ?? null}
+                          emptyText={`${compositeProductKindLabel(compositeBuilder.productKind)} için uygun stok kartı bulunamadı.`}
+                          onSelect={(stockCard) => selectCompositeStock('product', stockCard)}
+                        />
+                      </Field>
+                      <Field label="2. Yaprak / bitki / çiçek">
+                        <div className="mb-2 rounded-md border border-emerald-200 bg-white px-3 py-2 text-xs font-bold text-emerald-900">Yaprak, sarmaşık, çiçek veya bitki stok kartları</div>
+                        <input className="field bg-white" value={compositeBuilder.leafSearch} onChange={(event) => setCompositeBuilder((current) => ({ ...current, leafSearch: event.target.value, leafStockCardId: '' }))} placeholder="Yaprak, bitki, çiçek, stok kodu veya barkod yazın" />
+                        <StockSearchResults
+                          options={filteredCompositeLeafOptions}
+                          selectedId={selectedCompositeLeaf?.id ?? null}
+                          emptyText="Yaprak / bitki stok kartı bulunamadı."
+                          onSelect={(stockCard) => selectCompositeStock('leaf', stockCard)}
+                        />
+                      </Field>
+                      <Field label="3. Gövde / bambu">
+                        <div className="mb-2 rounded-md border border-emerald-200 bg-white px-3 py-2 text-xs font-bold text-emerald-900">Gövde, bambu, dal veya taşıyıcı stok kartları</div>
+                        <input className="field bg-white" value={compositeBuilder.trunkSearch} onChange={(event) => setCompositeBuilder((current) => ({ ...current, trunkSearch: event.target.value, trunkStockCardId: '' }))} placeholder="Gövde, bambu, dal, stok kodu veya barkod yazın" />
+                        <StockSearchResults
+                          options={filteredCompositeTrunkOptions}
+                          selectedId={selectedCompositeTrunk?.id ?? null}
+                          emptyText="Gövde / bambu stok kartı bulunamadı."
+                          onSelect={(stockCard) => selectCompositeStock('trunk', stockCard)}
+                        />
+                      </Field>
+                      <Field label="4. Saksılar">
+                        <div className="mb-2 rounded-md border border-emerald-200 bg-white px-3 py-2 text-xs font-bold text-emerald-900">Sadece saksı stok kartları</div>
+                        <input className="field bg-white" value={compositeBuilder.potSearch} onChange={(event) => setCompositeBuilder((current) => ({ ...current, potSearch: event.target.value, potStockCardId: '' }))} placeholder="Saksı adı, stok kodu, model veya barkod yazın" />
+                        <StockSearchResults
+                          options={filteredCompositePotOptions}
+                          selectedId={selectedCompositePot?.id ?? null}
+                          emptyText="Saksı stok kartı bulunamadı."
+                          onSelect={(stockCard) => selectCompositeStock('pot', stockCard)}
+                        />
+                      </Field>
+                      <div className="flex flex-col justify-end gap-2">
+                        <button type="button" className="btn btn-primary w-full justify-center" onClick={buildCompositeProductFromStock} disabled={!compositeReady}>
+                          <Sparkles size={16} /> Ürünü hazırla ve alta ekle
+                        </button>
+                        <button type="button" className="btn btn-secondary w-full justify-center" onClick={generateCompositeProductImage} disabled={productImageAutomationDisabled || !compositeImageReady || compositeImageGenerating}>
+                          <ImageIcon size={16} /> Bileşenden görsel pasif
+                        </button>
+                        <button type="button" className="btn btn-secondary w-full justify-center" onClick={openGeminiReferenceSearch} disabled={!compositeReady || referenceSearchLoading}>
+                          <ExternalLink size={16} /> {referenceSearchLoading ? 'Aranıyor...' : 'Gemini referans ara'}
+                        </button>
+                      </div>
+                    </div>
+                    <div className="mt-3 rounded-md border border-emerald-200 bg-white p-3">
+                      <Field label="İnternetten bulunan referans görsel URL">
+                        <input className="field" value={referenceImageUrl} onChange={(event) => setReferenceImageUrl(event.target.value)} placeholder="Benzer ürün referans görsel adresini buraya yapıştırın" />
+                      </Field>
+                      {referenceSearchResult && (
+                        <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs font-semibold text-slate-500">
+                          <span>Arama: {referenceSearchResult.query}</span>
+                          <button type="button" className="btn btn-secondary min-h-8 px-2 text-xs" onClick={() => window.open(referenceSearchResult.googleImagesUrl, '_blank', 'noopener,noreferrer')}>
+                            <ExternalLink size={13} /> Tekrar aç
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                    <div className="mt-3 grid gap-2 text-xs font-semibold md:grid-cols-3 xl:grid-cols-5">
+                      <StockReferencePreview title="Ana kaynak" stockCard={selectedCompositeProduct} imagePath={stockCardPrimaryImage(selectedCompositeProduct)} />
+                      <StockReferencePreview title="Yaprak / bitki" stockCard={selectedCompositeLeaf} imagePath={stockCardPrimaryImage(selectedCompositeLeaf)} />
+                      <StockReferencePreview title="Gövde / bambu" stockCard={selectedCompositeTrunk} imagePath={stockCardPrimaryImage(selectedCompositeTrunk)} />
+                      <StockReferencePreview title="Saksı görseli" stockCard={selectedCompositePot} imagePath={selectedCompositePotImage} />
+                      <div className="rounded-md border border-emerald-200 bg-white px-3 py-2 text-emerald-900">{compositeReady ? `Satılabilir adet: ${number(Math.min(...[...selectedCompositeComponents, selectedCompositePot].filter(Boolean).map((stockCard) => Number(stockCard?.stockQuantity || 0))))}` : 'En az bir kaynak ve saksı seçilince hazır'}</div>
+                    </div>
+                    {selectedCompositeRows.length > 0 && (
+                      <div className="mt-3 rounded-md border border-emerald-300 bg-white p-3">
+                        <div className="mb-2 text-xs font-black uppercase text-emerald-700">Alta eklenecek seçilen parçalar</div>
+                        <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+                          {selectedCompositeRows.map(({ title, stockCard }) => {
+                            const unitCost = Number(stockCard.automaticUnitCost || stockCard.manualUnitCost || 0);
+                            return (
+                              <div key={`${title}-${stockCard.id}`} className="rounded-md border border-emerald-100 bg-emerald-50 px-3 py-2">
+                                <div className="text-[11px] font-black uppercase text-emerald-700">{title}</div>
+                                <div className="mt-1 line-clamp-2 text-sm font-bold text-slate-900">{stockCard.name}</div>
+                                <div className="mt-1 text-xs font-semibold text-slate-500">{stockCard.sku || stockCard.model || `#${stockCard.id}`} · Stok {number(stockCard.stockQuantity)} · {money(unitCost)}</div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                    {compositeReady && !compositeImageReady && (
+                      <div className="mt-2 rounded-md bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+                        Satış görseli üretmek için seçilen ana kaynak ve saksı stok kartlarında görsel olmalı.
+                      </div>
+                    )}
+                    {form.productName && activeDraft.pots.length > 0 && (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <button type="button" className="btn btn-secondary min-h-9 px-3 text-xs" onClick={generateSeoDescription}><FileText size={14} /> SEO metni hazırla</button>
+                        <button type="button" className="btn btn-primary min-h-9 px-3 text-xs" onClick={() => setImagePickerOpen(true)}><Upload size={14} /> Bilgisayardan görsel yükle</button>
+                        <button type="button" className="btn btn-secondary min-h-9 px-3 text-xs" disabled><ImageIcon size={14} /> Bileşenden görsel pasif</button>
+                      </div>
+                    )}
+                  </div>
+                    )}
+                  </div>
+                </div>}
+                <div className="md:col-span-2 xl:col-span-4">
+                  <Field label="Google SEO uyumlu satış ürün adı">
+                    <input className="field" value={form.productName} onChange={(event) => update('productName', event.target.value)} placeholder="Yaprak, gövde ve saksıyı seçtikten sonra final ürün adını yazın" />
+                    {seoProductNameSuggestion && seoProductNameSuggestion !== form.productName.trim() && (
+                      <button type="button" className="mt-2 w-full rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-left text-xs font-semibold text-emerald-800" onClick={() => update('productName', seoProductNameSuggestion)}>
+                        Google ürün adı önerisi: {seoProductNameSuggestion}
+                      </button>
+                    )}
+                    <button type="button" className="btn btn-secondary mt-2 w-full justify-center" onClick={generateSeoDescription}><FileText size={16} /> Gemini ile SEO adı ve açıklama oluştur</button>
+                  </Field>
+                </div>
+              </div>
+            )}
+
+            {(
+              <div ref={costSectionRef} className="space-y-4">
+                <div className="rounded-md border border-line p-4">
+                  <div className="mb-1 flex items-center gap-2 font-bold"><Copy size={17} /> Benzer üründen reçete kopyala</div>
+                  <p className="mb-3 text-xs text-slate-500">Kaynak ürün, reçetesi daha önce hazırlanmış üründür. Seçerseniz malzeme ve maliyet satırları bu ürüne kopyalanır.</p>
+                  <div className="grid gap-3 md:grid-cols-[1fr_auto]">
+                    <select className="field" value={sourceRecipeId} onChange={(event) => setSourceRecipeId(event.target.value)}>
+                      <option value="">Kaynak ürün seçin</option>
+                      {copySources.map((entry) => <option key={entry.variantId} value={entry.variantId}>{entry.productName} - {entry.costStatus}</option>)}
+                    </select>
+                    <button type="button" className="btn btn-primary" onClick={copyRecipe}><Copy size={16} /> Reçeteyi Kopyala</button>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" className="btn btn-secondary" onClick={startTemplateRecipe}><Copy size={16} /> Şablondan Başlat</button>
+                  <button type="button" className="btn btn-secondary" onClick={addManualItem}><Plus size={16} /> Malzeme Satırı</button>
+                  <button type="button" className="btn btn-secondary" onClick={addManualPot}><Plus size={16} /> Saksı Satırı</button>
+                </div>
+                <div className="rounded-md border border-line bg-slate-50 p-4">
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <div className="font-bold">Paketleme, işçilik ve genel gider</div>
+                      <div className="text-xs text-slate-500">Ürünü satışa açmadan önce maliyete hızlı ekleyin; stoktan düşmez, ürün maliyetine dahil olur.</div>
+                    </div>
+                    <button type="button" className="btn btn-secondary min-h-9 px-3 text-xs" onClick={addBlankExpenseRows}>
+                      <Plus size={15} /> Boş Gider Satırları
+                    </button>
+                  </div>
+                  <div className="grid gap-2 md:grid-cols-3">
+                    {defaultExpenses.filter((expense) => expense.status !== 'PASSIVE' && expense.isActive).map((expense) => (
+                      <button
+                        type="button"
+                        key={expense.id}
+                        className="rounded-md border border-line bg-white p-3 text-left text-xs transition hover:border-brand"
+                        onClick={() => addDefaultExpense(expense)}
+                      >
+                        <div className="font-bold">{expense.name}</div>
+                        <div className="mt-1 text-slate-500">{groupLabel(defaultExpenseGroup(expense))} · {money(expense.defaultAmount)}</div>
+                      </button>
+                    ))}
+                    {defaultExpenses.length === 0 && (
+                      <>
+                        <button type="button" className="rounded-md border border-line bg-white p-3 text-left text-xs transition hover:border-brand" onClick={() => addExpenseItem({ name: 'Paketleme', group: 'PACKAGING', amount: 100 })}>
+                          <div className="font-bold">Paketleme</div>
+                          <div className="mt-1 text-slate-500">Paketleme · 100,00 TL</div>
+                        </button>
+                        <button type="button" className="rounded-md border border-line bg-white p-3 text-left text-xs transition hover:border-brand" onClick={() => addExpenseItem({ name: 'İşçilik', group: 'LABOR', amount: 100 })}>
+                          <div className="font-bold">İşçilik</div>
+                          <div className="mt-1 text-slate-500">İşçilik · 100,00 TL</div>
+                        </button>
+                        <button type="button" className="rounded-md border border-line bg-white p-3 text-left text-xs transition hover:border-brand" onClick={() => addExpenseItem({ name: 'Genel gider', group: 'OTHER', amount: 100 })}>
+                          <div className="font-bold">Genel gider</div>
+                          <div className="mt-1 text-slate-500">Diğer · 100,00 TL</div>
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+                <CostTable detail={costDetail} stockCards={stockCards} productName={form.productName} onChange={updateCostDraft} />
+              </div>
+            )}
+
+            {(
+              <div className="space-y-4">
+                <div className="grid gap-4 lg:grid-cols-2">
+                  <Field label="Komisyon %"><PercentInput value={form.commissionPercent} onChange={(value) => update('commissionPercent', value)} /></Field>
+                  <Field label="Hedef kâr %"><PercentInput value={activeDraft.profitMarginPercent} onChange={(value) => updateCostDraft({ ...activeDraft, profitMarginPercent: value })} /></Field>
+                  <Field label="KDV %"><PercentInput value={activeDraft.vatPercent} onChange={(value) => updateCostDraft({ ...activeDraft, vatPercent: value })} /></Field>
+                  <Field label="Kargo maliyeti"><MoneyInput value={activeDraft.shippingCost} onChange={(value) => updateCostDraft({ ...activeDraft, shippingCost: value })} /></Field>
+                  <Field label="Kampanya Tamponu %"><PercentInput value={activeDraft.campaignBufferPercent} onChange={(value) => updateCostDraft({ ...activeDraft, campaignBufferPercent: value })} /></Field>
+                  <Field label="Desi (paket ağırlığı)"><input type="number" min={0} step={0.1} value={Number(activeDraft.desi) || ''} onChange={(e) => updateCostDraft({ ...activeDraft, desi: Number(e.target.value) })} className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500" placeholder="ör. 2.5" /></Field>
+                </div>
+                <p className="text-xs font-semibold text-slate-500">E-ticaret fiyatına, site fiyatı üzerine sabit %35 ek pay uygulanır.</p>
+                <VisiblePricingGuide
+                  summary={pricing}
+                  draft={activeDraft}
+                  selectedSalePrice={Number(form.salePrice)}
+                  onUseShop={() => update('salePrice', pricing.shopSalePrice)}
+                  onUseSite={() => update('salePrice', pricing.siteSalePrice)}
+                  onUseEcommerce={() => update('salePrice', pricing.suggestedSalePrice)}
+                />
+                <Field label="Seçilen satış fiyatı"><MoneyInput value={form.salePrice} onChange={(value) => update('salePrice', value)} /><div className="mt-1 text-xs font-semibold text-slate-500">Yukarıdaki önerilerden birini seçebilir veya elle girebilirsin; pazaryerlerine bu fiyat gider.</div>
+                  <div className="mt-1 text-xs font-bold">
+                    {!hasStockRecipe ? (
+                      <span className="text-amber-700">Stok bileşeni seçilmedi — fiyat maliyetten hesaplanamıyor.</span>
+                    ) : salePriceManual ? (
+                      <span className="text-slate-600">Fiyat elle seçildi. <button type="button" className="underline text-emerald-700" onClick={() => setSalePriceManual(false)}>Maliyetten otomatik hesapla</button></span>
+                    ) : (
+                      <span className="text-emerald-700">Fiyat maliyetten otomatik hesaplanıyor (e-ticaret önerisi).</span>
+                    )}
+                  </div></Field>
+                {ownerMode ? (
+                  <details className="rounded-md border border-line bg-slate-50 p-4">
+                    <summary className="cursor-pointer text-sm font-black text-ink">Owner kâr ve kanal fiyat analizi</summary>
+                    <div className="mt-4 space-y-4">
+                      <PricingRules summary={pricing} draft={activeDraft} onUseSuggested={() => update('salePrice', pricing.suggestedSalePrice)} />
+                      <ChannelPricingBoard
+                        channels={channelPricing}
+                        onUseSuggested={(price) => update('salePrice', price)}
+                      />
+                      <div className="grid gap-4 lg:grid-cols-2">
+                        <Summary label="Toplam maliyet" value={money(pricing.materialCost)} />
+                        <Summary label="Durum" value={currentCostStatus} />
+                      </div>
+                    </div>
+                  </details>
+                ) : (
+                  <div className="rounded-md border border-line bg-slate-50 p-4 text-sm font-semibold text-slate-600">
+                    Kâr ve kanal fiyat analizi sadece sistem sahibi rolüne açıktır.
+                  </div>
+                )}
+                <div className="flex gap-2 lg:col-span-2">
+                  <button type="button" className="btn btn-secondary" onClick={() => saveCost(false)}><Save size={16} /> Taslak Kaydet</button>
+                  <button type="button" className="btn btn-primary" onClick={() => saveCost(true)}><CheckCircle2 size={16} /> Maliyeti Onayla</button>
+                </div>
+              </div>
+            )}
+
+            {(
+              <div className="space-y-4">
+                <div className="flex gap-2">
+                  <input
+                    className="field flex-1"
+                    type="url"
+                    placeholder="Görsel URL yapıştır (https://...)"
+                    value={imageUrlInput}
+                    onChange={(event) => setImageUrlInput(event.target.value)}
+                    onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); addImageByUrl(); } }}
+                  />
+                  <button type="button" className="btn btn-primary shrink-0" onClick={addImageByUrl}><Plus size={16} /> URL Ekle</button>
+                </div>
+                <button type="button" className="btn btn-secondary w-full justify-center" onClick={() => setImagePickerOpen(true)}><Upload size={16} /> Bilgisayardan Görsel Yükle ({form.images.length}/{treeVisualImageLimit})</button>
+                <button type="button" className="btn btn-primary w-full justify-center" onClick={createShopCard}><FileText size={16} /> Dükkan PDF Kartı Oluştur</button>
+                <button type="button" className="btn btn-secondary w-full justify-center" disabled><ImageIcon size={16} /> Bileşenden / ChatGPT görsel pasif</button>
+                <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm font-semibold text-emerald-800">
+                  Ağaç ürünlerinde görsel sırası: beyaz ana görsel, otel lobisi/dükkan, salon/ofis, yakın detay, giriş/ölçü alanı.
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  {form.images.map((image) => (
+                    <button type="button" key={image} className="group relative overflow-hidden rounded-md border border-line" onClick={() => removeProductImage(image)}>
+                      <img className="aspect-square w-full object-cover" src={normalizeImage(image)} alt="Ürün görseli" />
+                      <span className="absolute inset-x-0 bottom-0 bg-red-600 px-2 py-1 text-xs font-bold text-white opacity-0 transition group-hover:opacity-100">Kaldır</span>
+                    </button>
+                  ))}
+                  {[].map((file: MediaFile) => (
+                    <button type="button" key={file.id} className="overflow-hidden rounded-md border border-line" onClick={() => update('images', form.images.includes(file.filePath) ? form.images : [...form.images, file.filePath])}>
+                      <img className="aspect-square w-full object-cover" src={normalizeImage(file.filePath)} alt={file.fileName} />
+                    </button>
+                  ))}
+                </div>
+                {form.images.length === 0 ? (
+                  <div className="rounded-md bg-amber-50 p-3 text-sm font-semibold text-amber-800">Bilgisayarından ürün görseli yükle.</div>
+                ) : (
+                  <div className="rounded-md bg-emerald-50 p-3 text-sm font-semibold text-emerald-800">{treeVisualSourceReadyText}</div>
+                )}
+                <div className="rounded-md border border-line p-4">
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                    <div className="font-bold">SEO Açıklaması</div>
+                    <button type="button" className="btn btn-secondary" onClick={generateSeoDescription}><FileText size={16} /> Gemini ile Oluştur</button>
+                  </div>
+                  <textarea className="field min-h-40" value={form.description} onChange={(event) => update('description', event.target.value)} />
+                </div>
+                <SocialShareDraftPanel
+                  productName={form.productName}
+                  description={form.description}
+                  categoryName={categories.find((category) => String(category.id) === form.categoryId)?.name || form.channelCategoryName}
+                  colorVariant={form.colorVariant}
+                  image={form.images[0] ? normalizeImage(form.images[0]) : ''}
+                  onCopy={(text) => {
+                    navigator.clipboard.writeText(text)
+                      .then(() => setMessage('Instagram/Facebook paylaşım metni panoya kopyalandı.'))
+                      .catch(() => setMessage('Metin kopyalanamadı. Tarayıcı izinlerini kontrol edin.'));
+                  }}
+                />
+              </div>
+            )}
+
+            {(
+              <div className="space-y-4">
+                {missing.length > 0 && <div className="rounded-md bg-amber-50 p-3 text-sm font-semibold text-amber-800">Eksik alanlar: {missing.join(', ')}</div>}
+                <div className="rounded-md border border-line bg-slate-50 p-4">
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <div className="font-bold">Final kodları</div>
+                      <div className="text-xs text-slate-500">Barkod, model kodu ve stok kodu ürün finalinde kontrol edilir; boş kalırsa kayıtta otomatik oluşur.</div>
+                    </div>
+                    <button type="button" className="btn btn-secondary" onClick={() => generateIdentity('all')} disabled={identityGenerating}>
+                      <RefreshCw size={16} /> Kodları hazırla
+                    </button>
+                  </div>
+                  <div className="grid gap-3 md:grid-cols-3">
+                    <Field label="Barkod"><input className="field" value={form.barcode} onChange={(event) => update('barcode', event.target.value)} placeholder="Otomatik oluşur" /></Field>
+                    <Field label="Model kodu"><input className="field" value={form.modelCode} onChange={(event) => update('modelCode', event.target.value.toUpperCase())} placeholder="Otomatik oluşur" /></Field>
+                    <Field label="Stok kodu"><input className="field" value={form.stockCode} onChange={(event) => update('stockCode', event.target.value.toUpperCase())} placeholder="Otomatik oluşur" /></Field>
+                  </div>
+                  {identityGenerating && <div className="mt-2 flex items-center gap-2 text-xs font-semibold text-slate-500"><RefreshCw size={14} /> Barkod, model kodu ve stok kodu hazırlanıyor.</div>}
+                </div>
+                <div className="grid gap-2 md:grid-cols-4">
+                  {(form.storeCode === 'FLORA' ? FLORA_FULL_CHANNELS : (channels as readonly string[])).map((channel) => (
+                    <label key={channel} className="flex items-center gap-2 rounded-md border border-line px-3 py-2 text-sm font-semibold">
+                      <input type="checkbox" checked={selectedChannels.includes(channel)} onChange={(event) => setSelectedChannels((current) => event.target.checked ? [...current, channel] : current.filter((item) => item !== channel))} />
+                      {channelLabel(channel)}
+                    </label>
+                  ))}
+                </div>
+                <div className="rounded-md border border-emerald-200 bg-emerald-50 p-4">
+                  <div className="mb-3 font-bold text-emerald-900">Kanal fiyatları (her platforma ayrı fiyat)</div>
+                  <div className="grid gap-3 md:grid-cols-3">
+                    <Field label="Trendyol satış fiyatı (TL)"><MoneyInput value={form.salePrice} onChange={(value) => { update('salePrice', value); if (!form.n11SalePrice) update('n11SalePrice', value); if (!form.hepsiburadaSalePrice) update('hepsiburadaSalePrice', value); }} /></Field>
+                    <Field label="N11 satış fiyatı (TL)"><MoneyInput value={form.n11SalePrice || form.salePrice} onChange={(value) => update('n11SalePrice', value)} /></Field>
+                    <Field label="Hepsiburada satış fiyatı (TL)"><MoneyInput value={form.hepsiburadaSalePrice || form.salePrice} onChange={(value) => update('hepsiburadaSalePrice', value)} /></Field>
+                  </div>
+                </div>
+                <ChannelComparisonTable channels={channelPricing.filter((item) => selectedChannels.includes(item.key))} compact />
+                <div className="flex flex-wrap items-center gap-3 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800">
+                  <span>Tüm pazaryerlerine gönderilecek stok adedi:</span>
+                  <input
+                    className="w-20 rounded-md border border-emerald-300 bg-white px-2 py-1 text-sm font-bold text-emerald-900"
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={Number(form.stockQuantity || 0)}
+                    onChange={(event) => update('stockQuantity', decimalValue(event.target.value))}
+                  />
+                  <span className="text-xs font-normal text-emerald-700">Bileşen stoğu değildir, sadece reçete/maliyet için kullanılır; buradaki adet Trendyol, Hepsiburada, N11 ve Ticimax&apos;a aynı şekilde gider.</span>
+                </div>
+                <div className="rounded-md border border-line bg-slate-50 p-4">
+                  <div className="mb-3">
+                    <div className="font-bold">Excel şablonu ile dışa aktar</div>
+                    <div className="text-xs text-slate-500">Ürün, pazaryerinin kendi Excel şablonu bozulmadan doldurulur. Entegrasyon gönderimi ayrı yapılır.</div>
+                  </div>
+                  <div className="mb-2">
+                    <button type="button" className="btn btn-primary w-full justify-center" onClick={downloadAllChannelExcels}>
+                      <FileText size={16} /> Tüm Kanallar İçin Excel İndir (Trendyol + Hepsiburada + N11 + Ticimax)
+                    </button>
+                  </div>
+                  <div className="grid gap-2 md:grid-cols-4">
+                    {publishableChannels.map((platform) => (
+                      <button key={platform} type="button" className="btn btn-secondary justify-center" onClick={() => downloadChannelExcel(platform)}>
+                        <FileText size={16} /> {channelLabel(platform)} Excel
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {ownerMode && <label className="flex items-center gap-2 rounded-md border border-line px-3 py-2 text-sm font-semibold"><input type="checkbox" checked={allowIncomplete} onChange={(event) => setAllowIncomplete(event.target.checked)} /> Owner özel onayıyla eksik kanal uyarısını geç</label>}
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" className="btn btn-primary" onClick={sendToChannels} disabled={sendingChannels}>
+                    {sendingChannels ? <RefreshCw size={16} className="animate-spin" /> : <Send size={16} />} {sendingChannels ? 'Gönderiliyor...' : 'Kanallara Gönder'}
+                  </button>
+                  <button type="button" className="btn btn-secondary" onClick={openTrendyolPanel} disabled={openingTrendyolPanel}>
+                    <ExternalLink size={16} /> {openingTrendyolPanel ? 'Bağlanıyor...' : "Trendyol'da Aç (Satıcı Paneli)"}
+                  </button>
+                </div>
+                <p className="text-xs text-slate-500">Trendyol&apos;un API&apos;si zaten yayındaki bir görseli silmeyi desteklemiyor (sadece ekleme yapabiliyoruz) — istenmeyen görseli kaldırmak için satıcı panelini kullanman gerekiyor.</p>
+                {sendMessage && (
+                  <div className="flex flex-col gap-1">
+                    <div className="rounded-md bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-600">{sendMessage}</div>
+                    {sendResults.map((r) => (
+                      <div key={r.platform} className={`rounded-md px-3 py-2 text-xs font-semibold break-all ${r.ok ? 'bg-emerald-50 text-emerald-800' : 'bg-red-50 text-red-800'}`}>
+                        <span className="font-bold">{r.platform}:</span> {r.message}
+                        {r.ok && <TrendyolBatchStatus platform={r.rawPlatform} batchId={r.batchId} />}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {!form.variantId && form.images.length === 0 && (
+              <div className="rounded-md bg-amber-50 border border-amber-200 px-3 py-2 text-xs font-semibold text-amber-800">
+                ⚠️ Görsel yüklemeden yeni ürün kaydedilemez — lütfen önce görsel ekleyin.
+              </div>
+            )}
+
+            <div className="mt-6 flex flex-wrap justify-between gap-2 border-t border-line pt-4">
+              <button type="button" className="btn btn-secondary" onClick={() => { setForm(newFormFor(activeStore)); setSalePriceManual(false); setCostDetail(null); setStep(0); }}><PackagePlus size={16} /> Yeni Ürün</button>
+              <div className="flex gap-2">
+                <button type="button" className="hidden" onClick={goToPreviousStep}>Geri</button>
+                <button
+                  className="btn btn-primary"
+                  type="submit"
+                  disabled={!form.variantId && form.images.length === 0}
+                  title={!form.variantId && form.images.length === 0 ? 'Görsel olmadan yeni ürün kaydedilemez' : undefined}
+                ><Save size={16} /> Kaydet</button>
+                <button type="button" className="hidden" onClick={goToNextStep}>İleri</button>
+              </div>
+            </div>
+          </form>
+        </section>
+      </div>
+      <BottomMissingProductPanel
+        open={missingPanelOpen}
+        onToggle={() => setMissingPanelOpen((current) => !current)}
+        stage={saleStageLabel}
+        preparation={preparation}
+        channelReadiness={trendyolReadiness}
+        canResearch={canResearch}
+      />
+      {imagePickerOpen && (
+        <PickerModal title={`Ürün Görselleri (${form.images.length}/${treeVisualImageLimit})`} onClose={() => setImagePickerOpen(false)}>
+          <div className="space-y-4">
+            <label className="btn btn-secondary w-full justify-center">
+              <ImageIcon size={16} /> Bilgisayardan görsel yükle
+              <input className="hidden" type="file" accept="image/*" multiple onChange={(event) => uploadImages(event.target.files)} />
+            </label>
+            {form.images[0] && imageGenerationStatus?.ready && (
+              <button
+                type="button"
+                className="btn btn-primary w-full justify-center"
+                disabled={flowerVisualGenerating}
+                onClick={() => { setImagePickerOpen(false); setFlowerVisualOpen(true); }}
+              >
+                ✨ 7 Görsel Seti Üret (Ev · Ofis · Kafe · Detay · Hero)
+              </button>
+            )}
+            {form.images.length === 0 ? (
+              <div className="rounded-md bg-amber-50 p-3 text-sm font-semibold text-amber-800">1 ana ürün görseli yükle veya seç — sonra "7 Görsel Seti Üret" ile AI otomatik hazırlar.</div>
+            ) : (
+              <div className="rounded-md bg-emerald-50 p-3 text-sm font-semibold text-emerald-800">Ana görsel seçildi. "7 Görsel Seti Üret" butonuna basarak devam et.</div>
+            )}
+            <div className="grid max-h-[520px] gap-3 overflow-auto sm:grid-cols-2 lg:grid-cols-3">
+              {suggestedMediaFiles.map((file) => {
+                const selected = form.images.includes(file.filePath);
+                return (
+                  <button
+                    type="button"
+                    key={file.id}
+                    className={`overflow-hidden rounded-md border text-left ${selected ? 'border-brand ring-2 ring-emerald-100' : 'border-line'}`}
+                    onClick={() => selected ? removeProductImage(file.filePath) : selectMediaImage(file.filePath)}
+                  >
+                    <img className="aspect-square w-full object-cover" src={normalizeImage(file.filePath)} alt={file.fileName} />
+                    <div className="p-2 text-xs font-semibold text-slate-600">
+                      <div className="line-clamp-1">{file.fileName}</div>
+                      <div className="line-clamp-1 text-slate-400">{file.folderName}</div>
+                      <div className={selected ? 'mt-1 text-brand' : 'mt-1 text-slate-500'}>{selected ? 'Seçildi' : 'Seç'}</div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </PickerModal>
+      )}
+      {treeVisualOpen && (
+        <PickerModal title="Bilgisayardan görsel yükleme aktif" onClose={() => setTreeVisualOpen(false)}>
+          <div className="space-y-4">
+            <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm font-semibold text-emerald-800">
+              Bileşenden otomatik görsel hazırlama şimdilik kapalı. Ürün görselini bilgisayardan yükleyerek çalışmaya devam edebilirsin.
+            </div>
+            {compositeReady && (
+              <button type="button" className="btn btn-secondary w-full justify-center" disabled>
+                <ImageIcon size={16} /> Bileşenden görsel pasif
+              </button>
+            )}
+            {compositeReady && imageGenerationStatus && (
+              <div className={`rounded-md border p-3 text-sm font-semibold ${imageGenerationStatus.ready ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-amber-200 bg-amber-50 text-amber-800'}`}>
+                Görsel motoru: {imageGenerationStatus.message}
+              </div>
+            )}
+            {visibleCompositeImageError && (
+              <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">
+                {visibleCompositeImageError}
+              </div>
+            )}
+            {compositeReady && (
+              <div className="grid gap-2 text-xs font-semibold md:grid-cols-3">
+                <StockReferencePreview title="Kaynak ana görsel" stockCard={selectedCompositeVisualSource} imagePath={selectedCompositeProductImage} />
+                <StockReferencePreview title="Kaynak saksı" stockCard={selectedCompositePot} imagePath={selectedCompositePotImage} />
+                <div className="rounded-md border border-emerald-200 bg-white px-3 py-2 text-emerald-900">
+                  {referenceImageUrl.trim() ? 'Referans görsel stili kullanılacak' : 'Referans URL eklenirse kadraj/stil ondan alınır'}
+                </div>
+              </div>
+            )}
+            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+              {treeVisualSlots.map((slot, index) => {
+                const image = compositeReady ? compositeGeneratedImages[index] : form.images[index];
+                return (
+                  <div key={slot.title} className="rounded-md border border-line bg-white p-3">
+                    <div className="mb-2">
+                      <div className="font-black">{slot.title}</div>
+                      <div className="mt-1 text-xs text-slate-500">{slot.detail}</div>
+                    </div>
+                    {image ? (
+                      <button type="button" className="group relative block overflow-hidden rounded-md border border-line" onClick={() => removeProductImage(image)}>
+                        <img className="aspect-square w-full object-cover" src={normalizeImage(image)} alt={slot.title} />
+                        <span className="absolute inset-x-0 bottom-0 bg-red-600 px-2 py-1 text-xs font-bold text-white opacity-0 transition group-hover:opacity-100">Bu görseli kaldır</span>
+                      </button>
+                    ) : compositeReady ? (
+                      <div className="flex aspect-square w-full items-center justify-center rounded-md border border-dashed border-emerald-200 bg-emerald-50 p-4 text-center text-sm font-semibold text-emerald-800">
+                        Bileşenden görsel hazırlama şimdilik kapalı
+                      </div>
+                    ) : index > 0 && form.images[0] ? (
+                      <div className="flex aspect-square w-full items-center justify-center rounded-md border border-dashed border-emerald-200 bg-emerald-50 p-4 text-center text-sm font-semibold text-emerald-800">
+                        Otomatik 5 görsel hazırlama şimdilik kapalı
+                      </div>
+                    ) : (
+                      <button type="button" className="flex aspect-square w-full items-center justify-center rounded-md border border-dashed border-line bg-slate-50 text-center text-sm font-semibold text-slate-500" onClick={() => { setTreeVisualOpen(false); setImagePickerOpen(true); }}>
+                        Görsel seç / yükle
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            <div className="flex flex-wrap justify-end gap-2">
+              {!compositeReady && (
+                <button type="button" className="btn btn-primary" onClick={() => { setTreeVisualOpen(false); setImagePickerOpen(true); }}><Upload size={16} /> Bilgisayardan görsel yükle</button>
+              )}
+              <button type="button" className="btn btn-primary" onClick={() => { setTreeVisualOpen(false); setImagePickerOpen(true); }}>
+                <Upload size={16} /> Bilgisayardan görsel yükle
+              </button>
+            </div>
+          </div>
+        </PickerModal>
+      )}
+      {flowerVisualOpen && (
+        <PickerModal title="Çiçek 7 Görsel Seti – AI ile Üret" onClose={() => setFlowerVisualOpen(false)}>
+          <div className="space-y-4">
+            <div className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm font-semibold text-rose-800">
+              Ana fotoğrafı seçtikten sonra "7 Görsel Üret" butonuna bas. AI otomatik olarak beyaz arka plan, ev, ofis, kafe, yaprak detayı, saksı detayı ve hero görselini hazırlar (~3 dakika).
+            </div>
+            {imageGenerationStatus && (
+              <div className={`rounded-md border p-3 text-sm font-semibold ${imageGenerationStatus.ready ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-amber-200 bg-amber-50 text-amber-800'}`}>
+                Görsel motoru: {imageGenerationStatus.message}
+              </div>
+            )}
+            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {flowerVisualSlots.map((slot, index) => {
+                const image = form.images[index];
+                return (
+                  <div key={slot.title} className="rounded-md border border-line bg-white p-3">
+                    <div className="mb-2">
+                      <div className="text-sm font-black">{slot.title}</div>
+                      <div className="mt-1 text-xs text-slate-500">{slot.detail}</div>
+                    </div>
+                    {image ? (
+                      <button type="button" className="group relative block overflow-hidden rounded-md border border-line" onClick={() => removeProductImage(image)}>
+                        <img className="aspect-square w-full object-cover" src={normalizeImage(image)} alt={slot.title} />
+                        <span className="absolute inset-x-0 bottom-0 bg-red-600 px-2 py-1 text-xs font-bold text-white opacity-0 transition group-hover:opacity-100">Kaldır</span>
+                      </button>
+                    ) : index === 0 ? (
+                      <button type="button" className="flex aspect-square w-full items-center justify-center rounded-md border border-dashed border-rose-300 bg-rose-50 text-center text-sm font-semibold text-rose-600" onClick={() => { setFlowerVisualOpen(false); setImagePickerOpen(true); }}>
+                        Ana fotoğraf seç / yükle
+                      </button>
+                    ) : (
+                      <div className="flex aspect-square w-full items-center justify-center rounded-md border border-dashed border-slate-200 bg-slate-50 p-3 text-center text-xs text-slate-400">
+                        {flowerVisualGenerating ? 'Üretiliyor...' : 'AI üretecek'}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            <div className="flex flex-wrap justify-end gap-2">
+              <button type="button" className="btn btn-secondary" onClick={() => { setFlowerVisualOpen(false); setImagePickerOpen(true); }}>
+                <Upload size={16} /> Ana fotoğraf yükle
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={!form.images[0] || flowerVisualGenerating || !imageGenerationStatus?.ready}
+                onClick={generateFlowerVisualSet}
+              >
+                {flowerVisualGenerating ? '⏳ Üretiliyor (~3 dk)...' : '✨ 7 Görsel Üret'}
+              </button>
+            </div>
+          </div>
+        </PickerModal>
+      )}
+      {componentPickerOpen && (
+        <PickerModal title="Stok Bileşenleri Seç" onClose={() => setComponentPickerOpen(false)}>
+          <ComponentStockMatcher
+            productName={form.productName}
+            stockCards={stockCards}
+            selectedIds={new Set([...activeDraft.items, ...activeDraft.pots].map((item) => item.stockCardId).filter(Boolean) as number[])}
+            onSelect={matchComponentStock}
+            onClose={() => setComponentPickerOpen(false)}
+            onRefresh={refreshStockCards}
+            loading={stockCardsLoading}
+          />
+        </PickerModal>
+      )}
+      {familyPickerOpen && (
+        <PickerModal title="Ürün Grubu Seç" onClose={() => setFamilyPickerOpen(false)}>
+          <input className="field mb-3" autoFocus placeholder="Ficus, Areka, Bambu veya şablon ara" value={familySearch} onChange={(event) => setFamilySearch(event.target.value)} />
+          <div className="max-h-[420px] overflow-auto rounded-md border border-line">
+            {filteredFamilies.map((item) => (
+              <button
+                type="button"
+                key={item.id}
+                className="block w-full border-b border-line px-3 py-3 text-left hover:bg-slate-50"
+                onClick={() => {
+                  update('familyId', String(item.id));
+                  update('templateId', item.templates?.[0]?.id ? String(item.templates[0].id) : '');
+                  setFamilyPickerOpen(false);
+                }}
+              >
+                <div className="font-bold">{item.familyName}</div>
+                <div className="mt-1 text-xs text-slate-500">{item.templates?.map((template) => template.templateName).join(', ') || 'Şablon yok'}</div>
+              </button>
+            ))}
+          </div>
+        </PickerModal>
+      )}
+
+      {productTrendyolEntry && (
+        <div className="fixed inset-0 z-50 flex items-start justify-end bg-black/40" onClick={() => { setProductTrendyolEntry(null); setProductTrendyolResult(null); }}>
+          <aside className="flex h-full w-full max-w-sm flex-col bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-line px-5 py-4">
+              <div className="font-bold">Trendyol&apos;a Satışa Aç</div>
+              <button type="button" className="text-slate-400 hover:text-slate-600" onClick={() => { setProductTrendyolEntry(null); setProductTrendyolResult(null); }}><X size={20} /></button>
+            </div>
+            <form className="flex-1 overflow-y-auto p-5" onSubmit={submitProductTrendyol}>
+              <div className="mb-3 rounded-md bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700">
+                Trendyol&apos;a göndermek için aşağıdaki alanları doldurun.
+              </div>
+
+              <div className="space-y-3">
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-slate-600">Trendyol Kategori ID <span className="text-red-500">*</span></label>
+                  <input
+                    className="field"
+                    type="number"
+                    placeholder="Ör: 2995"
+                    required
+                    value={productTrendyolForm.categoryId}
+                    onChange={(e) => setProductTrendyolForm({ ...productTrendyolForm, categoryId: e.target.value })}
+                  />
+                  <div className="mt-1 text-xs text-slate-400">Yapay &amp; Kuru Çiçek: 2995 · Saksı: 2615</div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-slate-600">Satış Fiyatı (₺) <span className="text-red-500">*</span></label>
+                    <input
+                      className="field"
+                      type="number"
+                      step="0.01"
+                      min="0.01"
+                      required
+                      value={productTrendyolForm.salePrice}
+                      onChange={(e) => setProductTrendyolForm({ ...productTrendyolForm, salePrice: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-slate-600">Liste Fiyatı (₺)</label>
+                    <input
+                      className="field"
+                      type="number"
+                      step="0.01"
+                      placeholder="Satış fiyatı ile aynı"
+                      value={productTrendyolForm.listPrice}
+                      onChange={(e) => setProductTrendyolForm({ ...productTrendyolForm, listPrice: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-slate-600">Ürün Açıklaması</label>
+                  <textarea
+                    className="field min-h-20 resize-y"
+                    placeholder="Ürün açıklaması..."
+                    value={productTrendyolForm.description}
+                    onChange={(e) => setProductTrendyolForm({ ...productTrendyolForm, description: e.target.value })}
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-slate-600">Renk</label>
+                    <select
+                      className="field"
+                      value={productTrendyolForm.color}
+                      onChange={(e) => setProductTrendyolForm({ ...productTrendyolForm, color: e.target.value })}
+                    >
+                      <option value="">Seçin</option>
+                      {TRENDYOL_COLOR_OPTIONS.map((c) => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-slate-600">Çiçek Tipi</label>
+                    <select
+                      className="field"
+                      value={productTrendyolForm.flowerType}
+                      onChange={(e) => setProductTrendyolForm({ ...productTrendyolForm, flowerType: e.target.value })}
+                    >
+                      <option value="">Seçin</option>
+                      {TRENDYOL_FLOWER_TYPE_OPTIONS.map((f) => <option key={f} value={f}>{f}</option>)}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-slate-600">KDV Oranı (%)</label>
+                    <select
+                      className="field"
+                      value={productTrendyolForm.vatRate}
+                      onChange={(e) => setProductTrendyolForm({ ...productTrendyolForm, vatRate: e.target.value })}
+                    >
+                      <option value="10">%10</option>
+                      <option value="20">%20</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-slate-600">Desi</label>
+                    <input
+                      className="field"
+                      type="number"
+                      step="0.1"
+                      min="0.1"
+                      value={productTrendyolForm.desi}
+                      onChange={(e) => setProductTrendyolForm({ ...productTrendyolForm, desi: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-slate-600">Barkod</label>
+                    <input
+                      className="field"
+                      placeholder="Barkod"
+                      value={productTrendyolForm.barcode}
+                      onChange={(e) => setProductTrendyolForm({ ...productTrendyolForm, barcode: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-slate-600">Model Kodu</label>
+                    <input
+                      className="field"
+                      placeholder="Model kodu"
+                      value={productTrendyolForm.modelCode}
+                      onChange={(e) => setProductTrendyolForm({ ...productTrendyolForm, modelCode: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                {/ağaç|agac|ficus|palm|schef|yuca|dracena|monstera|benjam/.test((productTrendyolEntry.productName ?? '').toLowerCase()) && (
+                  <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+                    ⚠️ Ağaç ürünü — açıklamada &quot;saksısız gönderilmektedir&quot; bilgisi mutlaka yer almalıdır.
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-4 rounded-md border border-line bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-600">
+                Hesap: <span className="font-black text-slate-800">{storeLabel(productTrendyolEntry?.storeCode)}</span> Trendyol — ürün sadece kendi mağazasının hesabına gönderilir.
+              </div>
+
+              {productTrendyolResult && (
+                <div className={`mt-4 rounded-md px-3 py-2 text-sm font-semibold whitespace-pre-line ${productTrendyolResult.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
+                  {productTrendyolResult.message}
+                </div>
+              )}
+
+              <button className="btn btn-primary mt-5 w-full" disabled={productTrendyolSending}>
+                <Send size={17} />
+                {productTrendyolSending ? 'Gönderiliyor...' : 'Trendyol\'a Gönder'}
+              </button>
+
+              <a
+                href="https://partner.trendyol.com/product-list"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-3 flex items-center justify-center gap-2 text-xs font-semibold text-slate-500 hover:text-brand"
+              >
+                <ExternalLink size={13} />
+                Trendyol Satıcı Paneli&apos;nde kontrol et
+              </a>
+            </form>
+          </aside>
+        </div>
+      )}
+    </AdminShell>
+  );
+}
+
+type ReadinessItem = {
+  label: string;
+  status: 'done' | 'missing' | 'warning' | 'auto';
+  detail: string;
+};
+
+type ReadinessSummary = {
+  items: ReadinessItem[];
+  blockingMissing: string[];
+  autoFillable: string[];
+};
+
+function buildPreparationStatus(form: typeof emptyForm, draft: CostDetail['costDraft'], costStatus: string): ReadinessSummary {
+  const recipeCount = draft.items.filter(isStockRecipeItem).length + draft.pots.length;
+  const items: ReadinessItem[] = [
+    readiness('Ürün adı', Boolean(form.productName.trim()), 'Satış başlığı ve açıklama için temel alan.'),
+    readiness('Model kodu', Boolean(form.modelCode), form.modelCode ? 'Hazır.' : 'Kategori seçilirse otomatik üretilebilir.', 'auto'),
+    readiness('Barkod', Boolean(form.barcode), form.barcode ? 'Hazır.' : 'Kategori seçilirse otomatik üretilebilir.', 'auto'),
+    readiness('Ana kategori', Boolean(form.categoryId), 'Kanal alanlarını ve kod üretimini besler.'),
+    readiness('Stok bağlantısı / reçete', recipeCount > 0, recipeCount > 0 ? `${recipeCount} bileşen bağlı.` : 'Stok bileşeni veya reçete seçilmeli.'),
+    readiness('Ana görsel', form.images.length > 0, form.images.length > 0 ? treeVisualSourceReadyText : 'Ağaç standardı için 1 ana görsel seçilmeli.'),
+    readiness('Açıklama', Boolean(form.description.trim()), form.description.trim() ? 'Hazır.' : 'SEO açıklaması otomatik önerilebilir.', 'auto'),
+    readiness('Satış fiyatı', Number(form.salePrice) > 0, 'Fiyat araştırması ve kanal kontrolü için gerekir.'),
+    readiness('KDV', Number(draft.vatPercent) > 0, 'Finansal alan; owner onayıyla netleşmeli.', Number(draft.vatPercent) > 0 ? 'done' : 'warning'),
+    readiness('Desi / kargo', Number(draft.desi) > 0 && Number(draft.shippingCost) >= 0, 'Desi uydurulmamalı; ürün paketine göre kontrol edilmeli.', Number(draft.desi) > 0 ? 'done' : 'warning'),
+    readiness('Maliyet taslağı', costStatus !== 'Maliyet Girilmedi', costStatus || 'Maliyet bilgisi bekliyor.', costStatus === 'Maliyet Girilmedi' ? 'warning' : 'done'),
+  ];
+  return summarizeReadiness(items);
+}
+
+function buildTrendyolReadiness(form: typeof emptyForm, draft: CostDetail['costDraft']): ReadinessSummary {
+  const values: Record<string, unknown> = {
+    barcode: form.barcode,
+    modelCode: form.modelCode,
+    brand: form.brand || currentBrand,
+    channelCategoryName: form.channelCategoryName || trendyolFieldMap.categoryCode,
+    productName: form.productName,
+    description: form.description,
+    salePrice: Number(form.salePrice),
+    stockQuantity: Number(form.stockQuantity),
+    vatPercent: Number(draft.vatPercent),
+  };
+
+  const requiredItems = trendyolFieldMap.requiredFields.map((field) => {
+    const value = field.erpField ? values[field.erpField] : field.defaultValue;
+    const filled = value !== null && value !== undefined && String(value).trim() !== '' && Number(value) !== 0;
+    const canAutoFill = ['constant', 'templateDefault', 'erpOrDefault', 'erpOrSuggestion', 'ownerConfirm'].includes(field.fill);
+    return readiness(
+      field.channelField,
+      filled || canAutoFill,
+      filled ? 'ERP alanından doldurulur.' : canAutoFill ? 'Sistem öneri veya varsayılan değer hazırlayabilir.' : 'Kullanıcıdan istenmeli.',
+      filled ? 'done' : canAutoFill ? 'auto' : 'missing',
+    );
+  });
+
+  const recommendedItems: ReadinessItem[] = [
+    readiness('Stok Kodu', Boolean(form.stockCode || form.modelCode), form.stockCode ? 'ERP stok kodundan gelir.' : 'Model kodu stok kodu olarak önerilebilir.', 'auto'),
+    readiness('Ağaç görsel seti', form.images.length > 0, form.images.length > 0 ? treeVisualSourceReadyText : 'Ağaç standardı için 1 ana görsel seçilmeli.'),
+    readiness('Sevkiyat Tipi', true, 'Trendyol Excelinde boş bırakılır.', 'auto'),
+    readiness('Sevkiyat Süresi', true, 'Varsayılan öneri: 2 gün.', 'auto'),
+  ];
+
+  return summarizeReadiness([...requiredItems, ...recommendedItems]);
+}
+
+function readiness(label: string, done: boolean, detail: string, fallback: ReadinessItem['status'] = 'missing'): ReadinessItem {
+  return { label, status: done ? 'done' : fallback, detail };
+}
+
+function summarizeReadiness(items: ReadinessItem[]): ReadinessSummary {
+  return {
+    items,
+    blockingMissing: items.filter((item) => item.status === 'missing').map((item) => item.label),
+    autoFillable: items.filter((item) => item.status === 'auto').map((item) => item.label),
+  };
+}
+
+function salePreparationStage(preparation: ReadinessSummary, channelReadiness: ReadinessSummary, canResearch: boolean) {
+  if (canResearch) return 'Araştırma bekliyor';
+  if (preparation.blockingMissing.length > 0) return 'Ürün bilgisi eksik';
+  if (channelReadiness.blockingMissing.length > 0) return 'Kanal alanları eksik';
+  return 'Satışa hazır';
+}
+
+function readinessLabel(status: ReadinessItem['status']) {
+  if (status === 'done') return 'Tamam';
+  if (status === 'auto') return 'Öneri';
+  if (status === 'warning') return 'Uyarı';
+  return 'Eksik';
+}
+
+function readinessColor(status: ReadinessItem['status']) {
+  if (status === 'done') return 'bg-emerald-100 text-emerald-700';
+  if (status === 'auto') return 'bg-sky-100 text-sky-700';
+  if (status === 'warning') return 'bg-amber-100 text-amber-800';
+  return 'bg-red-100 text-red-700';
+}
+
+function PreparationStatusPanel({
+  stage,
+  preparation,
+  channelReadiness,
+  canResearch,
+  selected,
+}: {
+  stage: string;
+  preparation: ReadinessSummary;
+  channelReadiness: ReadinessSummary;
+  canResearch: boolean;
+  selected: boolean;
+}) {
+  return (
+    <section className="panel p-4">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <div className="text-xs font-bold uppercase text-slate-400">Satışa hazırlık durumu</div>
+          <h3 className="mt-1 text-lg font-black">{stage}</h3>
+        </div>
+        <span className={`rounded px-3 py-2 text-xs font-bold ${canResearch ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-800'}`}>
+          {canResearch ? 'Araştırma açıldı' : 'Hazırlık devam ediyor'}
+        </span>
+      </div>
+
+      {!selected && (
+        <div className="mb-4 rounded-md border border-dashed border-line bg-slate-50 p-3 text-sm font-semibold text-slate-600">
+          Önce mevcut bir ürünü seçin veya yeni satış ürünü taslağına ürün adı girin.
+        </div>
+      )}
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        <ReadinessList title="Ürün hazırlık checklist" items={preparation.items} />
+        <ReadinessList title={`${trendyolFieldMap.label} kanal alanları`} items={channelReadiness.items} />
+      </div>
+    </section>
+  );
+}
+
+function ProductNameStartPanel({
+  value,
+  suggestion,
+  stage,
+  canResearch,
+  onChange,
+  onUseSuggestion,
+  onGenerate,
+  onOpenSeoSearch,
+}: {
+  value: string;
+  suggestion: string;
+  stage: string;
+  canResearch: boolean;
+  onChange: (value: string) => void;
+  onUseSuggestion: () => void;
+  onGenerate: () => void;
+  onOpenSeoSearch: (target: 'GOOGLE' | 'SHOPPING' | 'TRENDYOL') => void;
+}) {
+  return (
+    <section className="panel p-4">
+      <div className="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-end">
+        <div>
+          <div className="text-xs font-bold uppercase text-slate-400">Başlangıç</div>
+          <label className="mt-2 block">
+            <span className="mb-1 block text-sm font-black text-ink">Ürün adı yazılımı</span>
+            <input
+              className="field min-h-12 text-base font-semibold"
+              value={value}
+              onChange={(event) => onChange(event.target.value)}
+              placeholder="Örn: Yapay Benjamin Ağacı 180 cm siyah saksıda"
+              autoFocus
+            />
+          </label>
+          {suggestion && suggestion !== value.trim() && (
+            <button type="button" className="mt-2 w-full rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-left text-xs font-semibold text-emerald-800" onClick={onUseSuggestion}>
+              Ürün adı önerisi: {suggestion}
+            </button>
+          )}
+        </div>
+        <div className="flex flex-wrap gap-2 lg:justify-end">
+          <span className={`flex min-h-10 items-center rounded px-3 text-xs font-bold ${canResearch ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-800'}`}>{stage}</span>
+          <button type="button" className="btn btn-secondary" onClick={onGenerate}><FileText size={16} /> SEO adı ve açıklama</button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function BottomMissingProductPanel({
+  open,
+  onToggle,
+  stage,
+  preparation,
+  channelReadiness,
+  canResearch,
+}: {
+  open: boolean;
+  onToggle: () => void;
+  stage: string;
+  preparation: ReadinessSummary;
+  channelReadiness: ReadinessSummary;
+  canResearch: boolean;
+}) {
+  const missingItems = [...preparation.items, ...channelReadiness.items].filter((item) => item.status !== 'done');
+  const missingCount = missingItems.filter((item) => item.status === 'missing').length;
+  const warningCount = missingItems.filter((item) => item.status === 'warning' || item.status === 'auto').length;
+
+  return (
+    <div className={`fixed bottom-3 right-3 z-40 ${open ? 'w-[min(360px,calc(100vw-24px))]' : 'w-auto'}`}>
+      <div className={`rounded-md border border-line bg-white shadow-2xl ${open ? '' : 'max-w-[240px]'}`}>
+        <button type="button" className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left" onClick={onToggle}>
+          <div className="min-w-0">
+            {open && <div className="text-xs font-bold uppercase text-slate-400">Eksik ürün penceresi</div>}
+            <div className="truncate font-black text-ink">{canResearch ? 'Ürün hazır' : stage}</div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className={`whitespace-nowrap rounded px-2 py-1 text-xs font-bold ${canResearch ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-800'}`}>
+              {missingCount} eksik · {warningCount} uyarı
+            </span>
+            <span className="text-lg font-black text-slate-400">{open ? '×' : '+'}</span>
+          </div>
+        </button>
+        {open && (
+          <div className="max-h-[55vh] overflow-auto border-t border-line p-3">
+            {missingItems.length > 0 ? (
+              <div className="grid gap-2">
+                {missingItems.map((item, index) => (
+                  <div key={`${item.label}-${index}`} className="grid grid-cols-[82px_1fr] gap-2 rounded-md bg-slate-50 px-3 py-2 text-sm">
+                    <span className={`rounded px-2 py-1 text-center text-[11px] font-bold ${readinessColor(item.status)}`}>{readinessLabel(item.status)}</span>
+                    <div>
+                      <div className="font-bold text-ink">{item.label}</div>
+                      <div className="text-xs text-slate-500">{item.detail}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-md bg-emerald-50 p-3 text-sm font-semibold text-emerald-700">Eksik yok. Araştırma ve kanal hazırlığı açıldı.</div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ReadinessList({ title, items }: { title: string; items: ReadinessItem[] }) {
+  return (
+    <div className="rounded-md border border-line bg-white p-3">
+      <div className="mb-3 font-black">{title}</div>
+      <div className="grid gap-2">
+        {items.map((item) => (
+          <div key={item.label} className="grid grid-cols-[120px_1fr] gap-3 rounded-md bg-slate-50 px-3 py-2 text-sm">
+            <span className={`rounded px-2 py-1 text-center text-xs font-bold ${readinessColor(item.status)}`}>{readinessLabel(item.status)}</span>
+            <div>
+              <div className="font-bold text-ink">{item.label}</div>
+              <div className="text-xs text-slate-500">{item.detail}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function SocialShareDraftPanel({
+  productName,
+  description,
+  categoryName,
+  colorVariant,
+  image,
+  onCopy,
+}: {
+  productName: string;
+  description: string;
+  categoryName: string;
+  colorVariant: string;
+  image: string;
+  onCopy: (text: string) => void;
+}) {
+  const ready = Boolean(productName.trim() && description.trim() && image);
+  const productUrl = currentSiteUrl ? `${currentSiteUrl}/urunler?q=${encodeURIComponent(productName.trim())}` : '';
+  const hashtags = buildSocialHashtags(productName, categoryName, colorVariant);
+  const caption = [
+    `🌿 ${productName.trim() || 'Yeni ürün'}`,
+    '',
+    truncateSocialDescription(description),
+    '',
+    'Fiyat ve detay için internet sitemizi ziyaret edin:',
+    productUrl,
+    '',
+    hashtags.join(' '),
+  ].filter((line, index, lines) => line || (index > 0 && index < lines.length - 1)).join('\n');
+
+  return (
+    <section className="rounded-md border border-fuchsia-200 bg-fuchsia-50/40 p-4">
+      <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="flex items-center gap-2 font-black text-fuchsia-950"><Instagram size={19} /> Instagram / Facebook paylaşım taslağı</div>
+          <p className="mt-1 text-xs font-medium text-fuchsia-900/75">Bu adım yalnızca taslak oluşturur; sosyal hesaplarda gönderi yayınlamaz.</p>
+        </div>
+        <span className={`rounded-full px-3 py-1 text-xs font-bold ${ready ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-900'}`}>
+          {ready ? 'Paylaşım taslağı hazır' : 'Ürün bilgisi veya görsel bekliyor'}
+        </span>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-[180px_1fr]">
+        <div className="overflow-hidden rounded-md border border-fuchsia-200 bg-white">
+          {image ? <img src={image} alt={`${productName || 'Ürün'} paylaşım görseli`} className="aspect-square w-full object-cover" /> : <div className="flex aspect-square items-center justify-center p-4 text-center text-xs font-semibold text-slate-500"><ImageIcon size={20} className="mr-2" /> Ana ürün görseli bekleniyor</div>}
+        </div>
+        <div className="min-w-0">
+          <div className="mb-2 flex items-center gap-2 text-sm font-bold text-slate-700"><Facebook size={16} className="text-blue-700" /> Gönderi metni</div>
+          <pre className="max-h-64 overflow-auto whitespace-pre-wrap rounded-md border border-fuchsia-100 bg-white p-3 font-sans text-sm leading-6 text-slate-700">{caption}</pre>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button type="button" className="btn btn-secondary" onClick={() => onCopy(caption)} disabled={!productName.trim()}><Copy size={16} /> Metni Kopyala</button>
+            <a className="btn btn-secondary" href={productUrl} target="_blank" rel="noreferrer"><ExternalLink size={16} /> Mağaza Linkini Aç</a>
+            <button type="button" className="btn btn-primary opacity-60" disabled title="Meta bağlantısı tamamlandığında aktif olur"><Send size={16} /> Bağlantı sonrası yayınla</button>
+          </div>
+        </div>
+      </div>
+      <p className="mt-3 text-xs text-slate-500">Instagram açıklamasındaki bağlantı metin olarak görünür. Meta bağlantısı tamamlandığında bu taslak, onay düğmesiyle doğrudan Instagram ve Facebook&apos;ta yayınlanacak.</p>
+    </section>
+  );
+}
+
+function truncateSocialDescription(description: string) {
+  const normalized = description.trim().replace(/\s+/g, ' ');
+  if (!normalized) return 'Yeni ürünümüz için detaylar ve sipariş bilgisi internet sitemizde.';
+  return normalized.length > 360 ? `${normalized.slice(0, 357).trimEnd()}...` : normalized;
+}
+
+function buildSocialHashtags(productName: string, categoryName: string, colorVariant: string) {
+  const tokens = [productName, categoryName, colorVariant]
+    .join(' ')
+    .toLocaleLowerCase('tr-TR')
+    .replace(/ç/g, 'c').replace(/ğ/g, 'g').replace(/ı/g, 'i').replace(/ö/g, 'o').replace(/ş/g, 's').replace(/ü/g, 'u')
+    .split(/[^a-z0-9]+/)
+    .filter((token) => token.length >= 4)
+    .filter((token, index, list) => list.indexOf(token) === index)
+    .slice(0, 4)
+    .map((token) => `#${token}`);
+  const brandTag = `#${currentBrand.replace(/ç/gi, 'c').replace(/ğ/gi, 'g').replace(/ı/g, 'i').replace(/İ/g, 'I').replace(/ö/gi, 'o').replace(/ş/gi, 's').replace(/ü/gi, 'u').replace(/[^A-Za-z0-9]/g, '')}`;
+  return Array.from(new Set([brandTag, '#YapayCicek', '#YapayAgac', '#EvDekorasyonu', '#OfisDekorasyonu', ...tokens]));
+}
+
+function Field({ label, children }: { label: string; children: ReactNode }) {
+  return <label className="block text-sm font-semibold text-slate-600"><span className="mb-1 block">{label}</span>{children}</label>;
+}
+
+function Summary({ label, value }: { label: string; value: string }) {
+  return <div className="rounded-md border border-line p-4"><div className="text-sm text-slate-500">{label}</div><div className="mt-1 text-xl font-bold">{value}</div></div>;
+}
+
+function Info({ label, value }: { label: string; value: string }) {
+  return <div className="rounded-md border border-emerald-200 bg-white px-3 py-2"><div className="text-xs font-semibold text-slate-500">{label}</div><div className="mt-1 font-bold text-ink">{value}</div></div>;
+}
+
+function componentSummary(draft: CostDetail['costDraft']) {
+  const names = [
+    ...draft.items.filter(isStockRecipeItem),
+    ...draft.pots,
+  ].map((item) => cleanText(item.name)).filter(Boolean);
+  if (names.length === 0) return 'Henüz stok bileşeni seçilmedi.';
+  return names.slice(0, 4).join(', ') + (names.length > 4 ? ` +${names.length - 4}` : '');
+}
+
+function MoneyInput({ value, onChange }: { value: number; onChange: (value: number) => void }) {
+  return <input className="field" type="number" step="0.01" inputMode="decimal" value={Number(value || 0)} onChange={(event) => onChange(decimalValue(event.target.value))} />;
+}
+
+function MoneyTextInput({ value, onChange, placeholder }: { value: string; onChange: (value: string) => void; placeholder: string }) {
+  return (
+    <input
+      className="field"
+      inputMode="decimal"
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      placeholder={placeholder}
+    />
+  );
+}
+
+function PercentInput({ value, onChange }: { value: number; onChange: (value: number) => void }) {
+  return <input className="field" type="number" step="0.01" inputMode="decimal" value={Number(value || 0)} onChange={(event) => onChange(decimalValue(event.target.value))} />;
+}
+
+function PickerModal({ title, children, onClose }: { title: string; children: ReactNode; onClose: () => void }) {
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') onClose();
+    }
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 p-4" onMouseDown={onClose}>
+      <div className="flex max-h-[calc(100vh-2rem)] w-full max-w-5xl flex-col rounded-md bg-white shadow-xl" onMouseDown={(event) => event.stopPropagation()}>
+        <div className="shrink-0 flex items-center justify-between border-b border-line px-4 py-3">
+          <div className="font-black">{title}</div>
+          <button type="button" className="btn btn-secondary min-h-9 px-3" onClick={onClose} aria-label="Kapat"><X size={16} /> Kapat</button>
+        </div>
+        <div className="min-h-0 overflow-auto p-4">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+function PriceResearchPanel({
+  value,
+  summary,
+  currentProductName,
+  onChange,
+  onPriceChange,
+  onAddPrice,
+  onOpenResearch,
+  onApply,
+}: {
+  value: PriceResearch;
+  summary: ReturnType<typeof calculatePriceResearch>;
+  currentProductName: string;
+  onChange: (name: keyof PriceResearch, value: unknown) => void;
+  onPriceChange: (index: number, value: string) => void;
+  onAddPrice: () => void;
+  onOpenResearch: (target: 'GOOGLE' | 'SHOPPING' | 'TRENDYOL' | 'HEPSIBURADA') => void;
+  onApply: () => void;
+}) {
+  const searchName = value.productName || currentProductName;
+
+  return (
+    <section className="panel p-4">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <div className="flex items-center gap-2 text-base font-black"><Search size={17} /> Fiyat Arastirma</div>
+          <div className="text-xs text-slate-500">Urun acmadan once Google ve pazaryeri fiyatlarini kontrol edip satis fiyatina aktarabilirsiniz.</div>
+        </div>
+        <button type="button" className="btn btn-primary min-h-9 px-3 text-xs" onClick={onApply}>
+          <Calculator size={15} /> Arastirmayi uygula
+        </button>
+      </div>
+
+      <div className="grid gap-3 lg:grid-cols-[1.2fr_1fr]">
+        <div className="space-y-3">
+          <Field label="Arastirilacak urun adi">
+            <input
+              className="field"
+              value={value.productName}
+              onChange={(event) => onChange('productName', event.target.value)}
+              placeholder={currentProductName || 'Orn: Yapay Benjamin Agaci 180 cm siyah saksida'}
+            />
+          </Field>
+          <div className="grid gap-2 sm:grid-cols-4">
+            <button type="button" className="btn btn-secondary min-h-9 justify-center px-3 text-xs" onClick={() => onOpenResearch('GOOGLE')}><ExternalLink size={14} /> Google</button>
+            <button type="button" className="btn btn-secondary min-h-9 justify-center px-3 text-xs" onClick={() => onOpenResearch('SHOPPING')}><ExternalLink size={14} /> Shopping</button>
+            <button type="button" className="btn btn-secondary min-h-9 justify-center px-3 text-xs" onClick={() => onOpenResearch('TRENDYOL')}><ExternalLink size={14} /> Trendyol</button>
+            <button type="button" className="btn btn-secondary min-h-9 justify-center px-3 text-xs" onClick={() => onOpenResearch('HEPSIBURADA')}><ExternalLink size={14} /> Hepsiburada</button>
+          </div>
+          <Field label="Not">
+            <input className="field" value={value.note} onChange={(event) => onChange('note', event.target.value)} placeholder="Rakip, kalite, saksı farkı veya kampanya notu" />
+          </Field>
+        </div>
+
+        <div className="rounded-md border border-line bg-slate-50 p-3">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <div className="text-sm font-black">Rakip fiyatlari</div>
+            <button type="button" className="btn btn-secondary min-h-8 px-2 text-xs" onClick={onAddPrice}><Plus size={13} /> Satir</button>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {value.competitorPrices.map((price, index) => (
+              <MoneyTextInput key={index} value={price} onChange={(next) => onPriceChange(index, next)} placeholder={`Rakip ${index + 1}`} />
+            ))}
+          </div>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            <Info label="Ortalama piyasa" value={summary.averagePrice > 0 ? money(summary.averagePrice) : '-'} />
+            <Info label="Dusuk / yuksek" value={summary.minPrice > 0 ? `${money(summary.minPrice)} / ${money(summary.maxPrice)}` : '-'} />
+            <Info label="Maliyet onerisi" value={summary.costSuggestedPrice > 0 ? money(summary.costSuggestedPrice) : '-'} />
+            <Info label="Satis onerisi" value={summary.suggestedPrice > 0 ? money(summary.suggestedPrice) : '-'} />
+          </div>
+        </div>
+      </div>
+      {searchName && <div className="mt-3 text-xs font-semibold text-slate-500">Arama kelimesi: {searchName}</div>}
+    </section>
+  );
+}
+
+function LiveMarginPanel({ pricing, channels }: { pricing: PricingSummary; channels: ChannelPricing[] }) {
+  const bestStatus = channels.every((item) => item.status === 'Uygun') ? 'Tüm kanallar uygun' : 'Kanal fiyatı kontrol et';
+  const weakest = channels.reduce((lowest, item) => item.netMarginPercent < lowest.netMarginPercent ? item : lowest, channels[0]);
+  return (
+    <aside className="rounded-md border border-slate-200 bg-slate-950 p-4 text-white">
+      <div className="text-xs font-bold uppercase text-emerald-300">Canlı maliyet özeti</div>
+      <div className="mt-3 grid gap-2">
+        <DarkRule label="Malzeme toplamı" value={money(pricing.materialCost)} />
+        <DarkRule label="Kargo / otomatik gider" value={money(pricing.shippingCost)} />
+        <DarkRule label="Toplam ürün maliyeti" value={money(pricing.costWithShipping)} strong />
+      </div>
+      <div className={`mt-3 rounded-md px-3 py-2 text-sm font-black ${bestStatus === 'Tüm kanallar uygun' ? 'bg-emerald-400 text-emerald-950' : 'bg-red-500 text-white'}`}>
+        {bestStatus}
+      </div>
+      {weakest && <div className="mt-2 text-xs text-slate-300">En düşük marj: {weakest.label} %{number(weakest.netMarginPercent)}</div>}
+    </aside>
+  );
+}
+
+function DarkRule({ label, value, strong = false }: { label: string; value: string; strong?: boolean }) {
+  return (
+    <div className="rounded-md bg-white/10 px-3 py-2">
+      <div className="text-xs text-slate-300">{label}</div>
+      <div className={`${strong ? 'text-xl' : 'text-base'} font-black`}>{value}</div>
+    </div>
+  );
+}
+
+function ChannelPricingBoard({ channels, onUseSuggested }: { channels: ChannelPricing[]; onUseSuggested: (price: number) => void }) {
+  return (
+    <div className="space-y-3 rounded-md border border-line bg-white p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <div className="text-sm font-black text-ink">Kanal bazlı satış fiyatı</div>
+          <div className="text-xs text-slate-500">Dükkan, site ve tüm e-ticaret kanalları aynı fiyat sırasıyla hesaplanır.</div>
+        </div>
+      </div>
+      <div className="grid gap-3 xl:grid-cols-3">
+        {channels.map((channel) => {
+          const isOk = channel.status === 'Uygun';
+          return (
+            <div key={channel.key} className={`rounded-md border p-3 ${isOk ? 'border-emerald-200 bg-emerald-50' : 'border-red-200 bg-red-50'}`}>
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <div className={`text-sm font-black ${isOk ? 'text-emerald-900' : 'text-red-900'}`}>{channel.label}</div>
+                  <div className="mt-1 text-xs font-semibold text-slate-600">{channel.status}</div>
+                </div>
+                <div className={`rounded px-2 py-1 text-xs font-black ${isOk ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'}`}>%{number(channel.netMarginPercent)}</div>
+              </div>
+              <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                <Info label="Satış" value={money(channel.salePrice)} />
+                <Info label="Net kâr" value={money(channel.netProfit)} />
+                <Info label="Komisyon" value={money(channel.commissionAmount)} />
+                <Info label="Kargo yükü" value={money(channel.businessShippingCost)} />
+              </div>
+              <button type="button" className="btn btn-secondary mt-3 min-h-9 w-full justify-center text-xs" onClick={() => onUseSuggested(channel.suggestedMinimumSalePrice)}>
+                Minimumu kullan: {money(channel.suggestedMinimumSalePrice)}
+              </button>
+            </div>
+          );
+        })}
+      </div>
+      <ChannelComparisonTable channels={channels} />
+    </div>
+  );
+}
+
+function ChannelComparisonTable({ channels, compact = false }: { channels: ChannelPricing[]; compact?: boolean }) {
+  return (
+    <div className="overflow-x-auto rounded-md border border-line">
+      <table className="w-full min-w-[920px] text-sm">
+        <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
+          <tr>
+            <th className="px-3 py-2">Kanal</th>
+            <th className="px-3 py-2">KDV dahil satış</th>
+            <th className="px-3 py-2">KDV hariç</th>
+            <th className="px-3 py-2">Kargo</th>
+            <th className="px-3 py-2">Komisyon</th>
+            {!compact && <th className="px-3 py-2">POS / hizmet</th>}
+            <th className="px-3 py-2">Net kazanç</th>
+            <th className="px-3 py-2">Gerçek marj</th>
+            <th className="px-3 py-2">Durum</th>
+          </tr>
+        </thead>
+        <tbody>
+          {channels.map((channel) => (
+            <tr key={channel.key} className="border-t border-line">
+              <td className="px-3 py-2 font-bold">{channel.label}</td>
+              <td className="px-3 py-2">{money(channel.salePrice)}</td>
+              <td className="px-3 py-2">{money(channel.netPriceWithoutVat)}</td>
+              <td className="px-3 py-2">{money(channel.businessShippingCost)}</td>
+              <td className="px-3 py-2">{money(channel.commissionAmount)}</td>
+              {!compact && <td className="px-3 py-2">{money(channel.paymentFeeAmount + channel.serviceFee + channel.otherExpense)}</td>}
+              <td className="px-3 py-2 font-bold">{money(channel.netProfit)}</td>
+              <td className={`px-3 py-2 font-black ${channel.status === 'Uygun' ? 'text-emerald-700' : 'text-red-700'}`}>%{number(channel.netMarginPercent)}</td>
+              <td className="px-3 py-2">
+                <span className={`rounded px-2 py-1 text-xs font-black ${channel.status === 'Uygun' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>{channel.status}</span>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function VisiblePricingGuide({
+  summary,
+  draft,
+  selectedSalePrice,
+  onUseShop,
+  onUseSite,
+  onUseEcommerce,
+}: {
+  summary: PricingSummary;
+  draft: CostDetail['costDraft'];
+  selectedSalePrice: number;
+  onUseShop: () => void;
+  onUseSite: () => void;
+  onUseEcommerce: () => void;
+}) {
+  return (
+    <div className="rounded-md border border-emerald-200 bg-emerald-50 p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="text-sm font-black text-emerald-950">Satış fiyatı nasıl oluşur?</div>
+          <div className="mt-1 text-xs font-semibold text-emerald-800">
+            Tüm maliyet + %{number(draft.profitMarginPercent)} kâr + %{number(draft.vatPercent)} KDV = dükkan. Dükkan + kargo = site. Site + %35 = e-ticaret.
+          </div>
+        </div>
+        <div className="rounded bg-white px-3 py-2 text-xs font-black text-emerald-900">
+          Seçilen: {selectedSalePrice > 0 ? money(selectedSalePrice) : 'Henüz seçilmedi'}
+        </div>
+      </div>
+      <div className="mt-3 grid gap-3 lg:grid-cols-3">
+        <PricePickCard title="Dükkan fiyatı" detail="Mağaza içinde kullanılacak fiyat" value={summary.shopSalePrice} onUse={onUseShop} />
+        <PricePickCard title="Web site fiyatı" detail="Dükkan fiyatı + kargo" value={summary.siteSalePrice} onUse={onUseSite} />
+        <PricePickCard title="Pazaryeri fiyatı" detail="Tüm e-ticaret sitelerine gidecek fiyat" value={summary.suggestedSalePrice} onUse={onUseEcommerce} primary />
+      </div>
+    </div>
+  );
+}
+
+function PricePickCard({ title, detail, value, onUse, primary = false }: { title: string; detail: string; value: number; onUse: () => void; primary?: boolean }) {
+  return (
+    <div className={`rounded-md border bg-white p-3 ${primary ? 'border-emerald-400' : 'border-line'}`}>
+      <div className="text-xs font-bold text-slate-500">{title}</div>
+      <div className="mt-1 text-xl font-black text-ink">{money(value)}</div>
+      <div className="mt-1 min-h-8 text-xs font-semibold text-slate-500">{detail}</div>
+      <button type="button" className={`btn mt-3 min-h-9 w-full justify-center text-xs ${primary ? 'btn-primary' : 'btn-secondary'}`} onClick={onUse}>
+        Bu fiyatı kullan
+      </button>
+    </div>
+  );
+}
+
+function PricingRules({ summary, draft, onUseSuggested }: { summary: PricingSummary; draft: CostDetail['costDraft']; onUseSuggested: () => void }) {
+  const profitTone = summary.estimatedProfitRate >= 45 ? 'text-emerald-700' : 'text-red-700';
+  return (
+    <div className="rounded-md border border-line bg-slate-50 p-4">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <div className="text-sm font-black text-ink">Fiyat ve kâr kuralları</div>
+          <div className="text-xs text-slate-500">Hesap: tüm maliyet toplamı + %45 kâr + %20 KDV = dükkan; dükkan + kargo = site; site + %35 = e-ticaret.</div>
+        </div>
+        <button type="button" className="btn btn-primary min-h-9 px-3 text-xs" onClick={onUseSuggested}>
+          Önerilen fiyatı kullan
+        </button>
+      </div>
+      <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-4">
+        <Rule label="Tüm maliyet toplamı" value={money(summary.materialCost)} />
+        <Rule label={`Hedef kâr %${number(draft.profitMarginPercent)}`} value={money(summary.targetProfitAmount)} />
+        <Rule label={`KDV %${number(draft.vatPercent)}`} value={money(summary.vatAmount)} />
+        <Rule label="Dükkan satış fiyatı" value={money(summary.shopSalePrice)} strong />
+        <Rule label="Kargo maliyeti" value={money(summary.shippingCost)} />
+        <Rule label="Site satış fiyatı" value={money(summary.siteSalePrice)} strong />
+        <Rule label="E-ticaret +%35" value={money(summary.ecommerceMarkup35Amount)} />
+        <Rule label="E-ticaret satış fiyatı" value={money(summary.suggestedSalePrice)} strong />
+        <Rule label="Mevcut satışta net kâr" value={money(summary.estimatedNetProfit)} className={profitTone} />
+        <Rule label="Mevcut kâr oranı" value={`%${number(summary.estimatedProfitRate)}`} className={profitTone} />
+      </div>
+    </div>
+  );
+}
+
+function Rule({ label, value, strong, className = '' }: { label: string; value: string; strong?: boolean; className?: string }) {
+  return (
+    <div className="rounded-md border border-line bg-white p-3">
+      <div className="text-xs font-semibold text-slate-500">{label}</div>
+      <div className={`mt-1 ${strong ? 'text-xl font-black' : 'text-base font-bold'} ${className || 'text-ink'}`}>{value}</div>
+    </div>
+  );
+}
+
+function ProductImage({ images }: { images: string[] }) {
+  const src = images?.[0];
+  if (!src) return <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-md bg-slate-100 text-slate-400"><ImageIcon size={22} /></div>;
+  return <img className="h-16 w-16 shrink-0 rounded-md object-cover" src={normalizeImage(src)} alt="Ürün" />;
+}
+
+function ComponentStockMatcher({
+  productName,
+  stockCards,
+  selectedIds,
+  onSelect,
+  onClose,
+  onRefresh,
+  loading,
+}: {
+  productName: string;
+  stockCards: StockCard[];
+  selectedIds: Set<number>;
+  onSelect: (role: ComponentRole, stockCard: StockCard, quantity: number) => void;
+  onClose: () => void;
+  onRefresh: () => Promise<void>;
+  loading: boolean;
+}) {
+  const [search, setSearch] = useState('');
+  const [pending, setPending] = useState<{ stockCard: StockCard; role: ComponentRole } | null>(null);
+  const [qty, setQty] = useState('1');
+  const [added, setAdded] = useState<Array<{ name: string; qty: number; unit: string }>>([]);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const qtyRef = useRef<HTMLInputElement>(null);
+
+  const searchText = search.trim();
+  const rankingText = searchText || productName;
+  const suggestions = stockCards
+    .filter((sc) => sc.status !== 'PASSIVE')
+    .map((sc) => {
+      const role = inferComponentRole(sc);
+      const score = stockSuggestionScore(sc, rankingText, productName, sc.category ?? '') + componentRoleScore(sc, role);
+      return { stockCard: sc, role, score };
+    })
+    .filter((item) => !searchText || item.score > 0)
+    .sort((a, b) => b.score - a.score || a.stockCard.name.localeCompare(b.stockCard.name, 'tr'))
+    .slice(0, 100);
+
+  function selectCard(role: ComponentRole, stockCard: StockCard) {
+    setPending({ stockCard, role });
+    setQty('1');
+    setSearch('');
+    setTimeout(() => qtyRef.current?.select(), 50);
+  }
+
+  function confirmAdd() {
+    if (!pending) return;
+    const quantity = Math.max(0.01, Number(qty) || 1);
+    onSelect(pending.role, pending.stockCard, quantity);
+    setAdded((prev) => [...prev, { name: pending.stockCard.name, qty: quantity, unit: pending.stockCard.unit }]);
+    setPending(null);
+    setQty('1');
+    setTimeout(() => searchRef.current?.focus(), 50);
+  }
+
+  function cancelPending() {
+    setPending(null);
+    setQty('1');
+    setTimeout(() => searchRef.current?.focus(), 50);
+  }
+
+  return (
+    <div className="rounded-md border border-line bg-slate-50 p-4">
+      <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="font-bold">Stok bileşeni ara ve ekle</div>
+          <div className="text-xs text-slate-500">Arama yaz → ürünü seç → adet gir → Ekle. Birden fazla bileşen ekleyebilirsin.</div>
+        </div>
+        <div className="flex gap-2">
+          <button type="button" className="btn btn-secondary min-h-9 px-3 text-xs" onClick={onRefresh} disabled={loading}>
+            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> Yenile
+          </button>
+          <button type="button" className="btn btn-secondary min-h-9 px-3 text-xs" onClick={onClose}>Bitti / Kapat</button>
+        </div>
+      </div>
+
+      {added.length > 0 && (
+        <div className="mb-3 flex flex-wrap gap-2">
+          {added.map((item, i) => (
+            <span key={i} className="flex items-center gap-1 rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-800">
+              <CheckCircle2 size={12} /> {item.name} × {item.qty} {item.unit}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {pending ? (
+        <div className="mb-3 rounded-md border border-emerald-300 bg-emerald-50 p-4">
+          <div className="mb-2 font-bold text-emerald-900">{pending.stockCard.name}</div>
+          <div className="mb-3 text-xs text-slate-500">{componentRoleLabel(pending.role)} · {pending.stockCard.unit} · {money(pending.stockCard.automaticUnitCost || pending.stockCard.manualUnitCost)}</div>
+          <div className="flex items-center gap-3">
+            <label className="text-sm font-semibold text-slate-700">Adet:</label>
+            <input
+              ref={qtyRef}
+              className="field w-28 text-center text-lg font-bold"
+              type="number"
+              min="0.01"
+              step="1"
+              value={qty}
+              onChange={(e) => setQty(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') confirmAdd(); if (e.key === 'Escape') cancelPending(); }}
+            />
+            <button type="button" className="btn btn-primary" onClick={confirmAdd}>
+              <CheckCircle2 size={16} /> Ekle
+            </button>
+            <button type="button" className="btn btn-secondary" onClick={cancelPending}>İptal</button>
+          </div>
+        </div>
+      ) : (
+        <input
+          ref={searchRef}
+          className="field mb-3"
+          autoFocus
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder={`Stok adı, stok kodu veya barkod yaz${productName ? ` · Ürün: ${productName}` : ''}`}
+        />
+      )}
+
+      {!pending && (
+        <div className="max-h-[400px] overflow-auto rounded-md border border-line bg-white">
+          {loading ? (
+            <div className="p-4 text-sm font-semibold text-slate-500">Stok kartları güncelleniyor...</div>
+          ) : suggestions.length > 0 ? suggestions.map(({ stockCard, role }) => {
+            const selected = selectedIds.has(stockCard.id);
+            return (
+              <button
+                type="button"
+                key={stockCard.id}
+                className={`block w-full border-b border-line px-3 py-2.5 text-left transition hover:bg-emerald-50 ${selected ? 'bg-emerald-50' : 'bg-white'}`}
+                onClick={() => selectCard(role, stockCard)}
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <span className="font-semibold">{stockCard.name}</span>
+                    <span className="ml-2 text-xs text-slate-400">{stockCard.sku || ''}</span>
+                  </div>
+                  <div className="flex items-center gap-3 text-xs font-semibold text-slate-600">
+                    <span className="text-slate-400">{componentRoleLabel(role)}</span>
+                    <span>{money(stockCard.automaticUnitCost || stockCard.manualUnitCost)}</span>
+                    {selected && <span className="text-emerald-600">✓ Eklendi</span>}
+                  </div>
+                </div>
+              </button>
+            );
+          }) : (
+            <div className="p-4 text-sm text-slate-500">{searchText ? 'Sonuç bulunamadı.' : 'Aramak için bir şeyler yazın.'}</div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StockMatchSuggestions({
+  productName,
+  suggestions,
+  selectedIds,
+  onSelect,
+}: {
+  productName: string;
+  suggestions: StockCard[];
+  selectedIds: Set<number>;
+  onSelect: (stockCard: StockCard) => void;
+}) {
+  if (!productName.trim()) {
+    return <div className="rounded-md border border-dashed border-line p-4 text-sm font-semibold text-slate-500">Ürün adını yazınca stok eşleştirme önerileri burada görünür.</div>;
+  }
+
+  return (
+    <div className="rounded-md border border-line bg-slate-50 p-4">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <div className="font-bold">Stoktan eşleştir</div>
+          <div className="text-xs text-slate-500">Satışta stok düşmesi için ürün adından uygun stok kartını seçin.</div>
+        </div>
+        <button type="button" className="btn btn-secondary min-h-9 px-3 text-xs" onClick={() => suggestions[0] && onSelect(suggestions[0])} disabled={suggestions.length === 0}>
+          İlk öneriyi eşleştir
+        </button>
+      </div>
+      {suggestions.length > 0 ? (
+        <div className="grid gap-2 md:grid-cols-2">
+          {suggestions.map((stockCard) => {
+            const selected = selectedIds.has(stockCard.id);
+            return (
+              <button
+                type="button"
+                key={stockCard.id}
+                className={`rounded-md border bg-white p-3 text-left transition hover:border-brand ${selected ? 'border-brand ring-2 ring-emerald-100' : 'border-line'}`}
+                onClick={() => onSelect(stockCard)}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="font-bold">{stockCard.name}</div>
+                    <div className="mt-1 text-xs text-slate-500">{stockCard.sku || 'Stok kodu yok'} · {stockCard.category || 'Kategori yok'}</div>
+                  </div>
+                  <span className={`rounded px-2 py-1 text-xs font-bold ${selected ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>{selected ? 'Eşleşti' : '1 düş'}</span>
+                </div>
+                <div className="mt-2 text-xs font-semibold text-slate-600">Stok: {number(stockCard.stockQuantity)} {stockCard.unit} · Birim maliyet: {money(stockCard.automaticUnitCost)}</div>
+              </button>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="rounded-md border border-dashed border-line bg-white p-3 text-sm font-semibold text-slate-500">Bu ürün adına uygun aktif stok kartı bulunamadı. Stok ekranında “limon demet” gibi bir stok kartı olduğundan emin olun.</div>
+      )}
+    </div>
+  );
+}
+
+function StockSearchResults({
+  options,
+  selectedId,
+  emptyText,
+  onSelect,
+}: {
+  options: StockCard[];
+  selectedId: number | null;
+  emptyText: string;
+  onSelect: (stockCard: StockCard) => void;
+}) {
+  return (
+    <div className="mt-2 max-h-56 overflow-auto rounded-md border border-emerald-200 bg-white">
+      {options.length > 0 ? options.map((stockCard) => {
+        const selected = selectedId === stockCard.id;
+        return (
+          <button
+            type="button"
+            key={stockCard.id}
+            className={`block w-full border-b border-emerald-100 px-3 py-2 text-left text-xs font-semibold transition hover:bg-emerald-50 ${selected ? 'bg-emerald-100 text-emerald-900' : 'text-slate-700'}`}
+            onClick={() => onSelect(stockCard)}
+          >
+            <div className="font-bold">{stockCard.name}</div>
+            <div className="mt-1 text-slate-500">{stockCard.sku || stockCard.model || stockCard.barcode || 'Kod yok'} · Stok {number(stockCard.stockQuantity)} {stockCard.unit} · {money(stockCard.automaticUnitCost || stockCard.manualUnitCost)}</div>
+          </button>
+        );
+      }) : (
+        <div className="px-3 py-3 text-xs font-semibold text-slate-500">{emptyText}</div>
+      )}
+    </div>
+  );
+}
+
+function StockReferencePreview({ title, stockCard, imagePath }: { title: string; stockCard: StockCard | null; imagePath: string }) {
+  return (
+    <div className="rounded-md border border-emerald-200 bg-white p-2 text-emerald-900">
+      <div className="mb-2 font-bold">{title}</div>
+      {imagePath ? (
+        <div className="grid grid-cols-[56px_1fr] gap-2">
+          <img className="h-14 w-14 rounded-md border border-emerald-100 object-cover" src={normalizeImage(imagePath)} alt={stockCard?.name || title} />
+          <div className="min-w-0">
+            <div className="truncate font-bold">{stockCard?.name}</div>
+            <div className="mt-1 text-slate-500">{stockCard ? stockCardShortSummary(stockCard) : ''}</div>
+            <div className="mt-1 text-emerald-700">Kaynak olarak kullanılacak</div>
+          </div>
+        </div>
+      ) : (
+        <div className="rounded-md bg-slate-50 px-3 py-2 text-slate-500">{stockCard ? 'Bu stok kartında görsel yok' : 'Seçim bekliyor'}</div>
+      )}
+    </div>
+  );
+}
+
+function CostTable({ detail, stockCards, productName, onChange }: { detail: CostDetail | null; stockCards: StockCard[]; productName: string; onChange: (draft: CostDetail['costDraft']) => void }) {
+  const [stockPicker, setStockPicker] = useState<{ rowType: 'items' | 'pots'; index: number } | null>(null);
+  const [stockSearch, setStockSearch] = useState('');
+
+  if (!detail) return <div className="rounded-md border border-line p-4 text-sm text-slate-500">Şablondan başlat veya manuel satır ekle; malzeme listesi burada görünür.</div>;
+  const draft = detail.costDraft;
+  const rows = [...draft.items.map((item, index) => ({ ...item, rowType: 'items' as const, index })), ...draft.pots.map((pot, index) => ({ ...pot, group: 'POT', unit: pot.unit ?? 'adet', rowType: 'pots' as const, index }))];
+  const filteredStockCards = stockCards
+    .filter((stockCard) => stockCard.status !== 'PASSIVE')
+    .map((stockCard) => ({ stockCard, score: stockSuggestionScore(stockCard, stockSearch, productName, stockPicker ? rows.find((row) => row.rowType === stockPicker.rowType && row.index === stockPicker.index)?.name : '') }))
+    .filter((item) => item.score > 0)
+    .sort((a, b) => b.score - a.score || a.stockCard.name.localeCompare(b.stockCard.name, 'tr'))
+    .slice(0, 80)
+    .map((item) => item.stockCard);
+
+  function updateRow(row: (typeof rows)[number], key: string, value: unknown) {
+    const collection = row.rowType === 'items' ? [...draft.items] : [...draft.pots];
+    const nextRow = { ...collection[row.index], [key]: value } as any;
+    if (key === 'stockCardId') {
+      const stockCard = stockCards.find((item) => item.id === Number(value));
+      nextRow.stockCardId = Number(value) || null;
+      nextRow.name = stockCard?.name ?? nextRow.name;
+      nextRow.unit = stockCard?.unit ?? nextRow.unit;
+      nextRow.source = nextRow.stockCardId ? 'AUTO' : 'MANUAL';
+      nextRow.automaticUnitCost = Number(stockCard?.automaticUnitCost ?? 0);
+    }
+    collection[row.index] = nextRow;
+    onChange({ ...draft, [row.rowType]: collection });
+  }
+
+  function removeRow(row: (typeof rows)[number]) {
+    const collection = row.rowType === 'items' ? draft.items : draft.pots;
+    onChange({ ...draft, [row.rowType]: collection.filter((_, index) => index !== row.index) });
+  }
+
+  return (
+    <>
+      <div className="overflow-x-auto rounded-md border border-line">
+        <table className="w-full min-w-[980px] text-sm">
+          <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500"><tr><th className="px-3 py-2">Kalem</th><th className="px-3 py-2">Stok kartı</th><th className="px-3 py-2">Grup</th><th className="px-3 py-2">Miktar</th><th className="px-3 py-2">Birim</th><th className="px-3 py-2">Fiyat kaynağı</th><th className="px-3 py-2">Manuel maliyet</th><th className="px-3 py-2">Tutar</th><th className="px-3 py-2"></th></tr></thead>
+          <tbody>{rows.map((row) => <tr key={`${row.rowType}-${row.index}`} className="border-t border-line">
+            <td className="px-3 py-2"><input className="field min-w-36" value={row.name} onChange={(event) => updateRow(row, 'name', event.target.value)} /></td>
+            <td className="px-3 py-2">
+              <button type="button" className="field flex min-w-52 items-center justify-between text-left" onClick={() => { setStockPicker({ rowType: row.rowType, index: row.index }); setStockSearch(''); }}>
+                <span className="line-clamp-1">{stockCards.find((stockCard) => stockCard.id === row.stockCardId)?.name || 'Stok kartı ara'}</span>
+                <Search size={15} className="text-slate-400" />
+              </button>
+            </td>
+            <td className="px-3 py-2">{row.rowType === 'items' ? <select className="field min-w-32" value={row.group} onChange={(event) => updateRow(row, 'group', event.target.value)}>
+              {['LEAF_TRUNK', 'POT', 'CONSUMABLE', 'LABOR', 'PACKAGING', 'OTHER'].map((group) => <option key={group} value={group}>{groupLabel(group)}</option>)}
+            </select> : groupLabel('POT')}</td>
+            <td className="px-3 py-2"><input className="field w-24" type="number" step="0.001" inputMode="decimal" value={Number(row.quantity || 0)} onChange={(event) => updateRow(row, 'quantity', decimalValue(event.target.value))} /></td>
+            <td className="px-3 py-2"><input className="field w-24" value={row.unit} onChange={(event) => updateRow(row, 'unit', event.target.value)} disabled={row.rowType === 'pots'} /></td>
+            <td className="px-3 py-2"><select className="field w-40" value={row.source} onChange={(event) => updateRow(row, 'source', event.target.value)}>
+              <option value="AUTO">{sourceLabel('AUTO')}</option>
+              <option value="MANUAL">{sourceLabel('MANUAL')}</option>
+            </select></td>
+            <td className="px-3 py-2"><MoneyInput value={Number(row.manualUnitCost || 0)} onChange={(value) => updateRow(row, 'manualUnitCost', value)} /></td>
+            <td className="px-3 py-2 font-semibold">{money(Number(row.totalCost ?? Number(row.quantity || 0) * (row.source === 'MANUAL' ? Number(row.manualUnitCost || 0) : Number(row.automaticUnitCost || 0))))}</td>
+            <td className="px-3 py-2"><button type="button" className="btn btn-secondary min-h-9 px-3" onClick={() => removeRow(row)}><Trash2 size={15} /></button></td>
+          </tr>)}</tbody>
+        </table>
+      </div>
+      {stockPicker && (
+        <PickerModal title="Stok Kartı Seç" onClose={() => setStockPicker(null)}>
+          <input className="field mb-3" autoFocus placeholder="Yaprak, saksı, gövde, silikon veya stok kodu ara" value={stockSearch} onChange={(event) => setStockSearch(event.target.value)} />
+          <div className="max-h-[440px] overflow-auto rounded-md border border-line">
+            <button type="button" className="block w-full border-b border-line px-3 py-3 text-left hover:bg-slate-50" onClick={() => { updateRow({ ...rows.find((row) => row.rowType === stockPicker.rowType && row.index === stockPicker.index)!, rowType: stockPicker.rowType, index: stockPicker.index }, 'stockCardId', ''); setStockPicker(null); }}>
+              <div className="font-bold">Manuel fiyat gireceğim</div>
+              <div className="text-xs text-slate-500">Stok kartına bağlanmaz, satışta stok düşmez.</div>
+            </button>
+            {filteredStockCards.map((stockCard) => (
+              <button
+                type="button"
+                key={stockCard.id}
+                className="block w-full border-b border-line px-3 py-3 text-left hover:bg-slate-50"
+                onClick={() => {
+                  const target = rows.find((row) => row.rowType === stockPicker.rowType && row.index === stockPicker.index);
+                  if (target) updateRow(target, 'stockCardId', String(stockCard.id));
+                  setStockPicker(null);
+                }}
+              >
+                <div className="font-bold">{stockCard.name}</div>
+                <div className="mt-1 text-xs text-slate-500">{stockCard.sku || 'Stok kodu yok'} · Stok: {number(stockCard.stockQuantity)} {stockCard.unit} · Birim: {money(stockCard.automaticUnitCost)}</div>
+              </button>
+            ))}
+          </div>
+        </PickerModal>
+      )}
+    </>
+  );
+}
+
+function defaultCostDraft(salePrice: number, commissionPercent: number): CostDetail['costDraft'] {
+  return {
+    salePrice,
+    profitMarginPercent: 45,
+    commissionPercent: commissionPercent || 20,
+    vatPercent: 20,
+    shippingCost: 0,
+    desi: 0,
+    marketplaceMarkupPercent: 35,
+    campaignBufferPercent: 0,
+    totalCost: 0,
+    items: [],
+    pots: [],
+  };
+}
+
+function normalizeDraftTotals(draft: CostDetail['costDraft']): CostDetail['costDraft'] {
+  const items = draft.items.map((item) => ({ ...item, totalCost: lineTotal(item) }));
+  const pots = draft.pots.map((item) => ({ ...item, totalCost: lineTotal(item) }));
+  return {
+    ...draft,
+    items,
+    pots,
+    totalCost: roundMoney([...items, ...pots].reduce((sum, item) => sum + Number(item.totalCost || 0), 0)),
+  };
+}
+
+function calculatePricing(draft: CostDetail['costDraft'], salePrice: number, commissionPercent: number): PricingSummary {
+  const normalized = normalizeDraftTotals({ ...draft, commissionPercent: commissionPercent || draft.commissionPercent });
+  const materialCost = Number(normalized.totalCost || 0);
+  const shippingCost = Number(normalized.shippingCost || 0);
+  const enteredSalePrice = Number(salePrice || normalized.salePrice || 0);
+  const vatPercent = Number(normalized.vatPercent || 20);
+  const commissionRate = Number(commissionPercent || normalized.commissionPercent || 0) / 100;
+  const vatRateIncluded = vatPercent > 0 ? vatPercent / (100 + vatPercent) : 0;
+  const costWithShipping = roundMoney(materialCost + shippingCost);
+  const targetMarginRate = Number(normalized.profitMarginPercent || 45) / 100;
+  const targetProfitAmount = roundMoney(materialCost * targetMarginRate);
+  const profitIncludedBase = roundMoney(materialCost + targetProfitAmount);
+  const vatAmount = roundMoney(profitIncludedBase * (Math.max(vatPercent, 0) / 100));
+  const shopSalePrice = roundMoney(profitIncludedBase + vatAmount);
+  const siteSalePrice = roundMoney(shopSalePrice + shippingCost);
+  const ecommerceMarkupPercent = 35;
+  const ecommerceMarkup35Amount = roundMoney(siteSalePrice * (ecommerceMarkupPercent / 100));
+  const marketplaceBufferAmount = ecommerceMarkup35Amount;
+  const campaignBufferRate = Number(normalized.campaignBufferPercent || 0) / 100;
+  const campaignBufferAmount = roundMoney((siteSalePrice + ecommerceMarkup35Amount) * campaignBufferRate);
+  const minimumSalePrice = shopSalePrice;
+  const commissionAmount = roundMoney(shopSalePrice * commissionRate);
+  const suggestedSalePrice = roundMoney(siteSalePrice + ecommerceMarkup35Amount);
+  const enteredVatAmount = roundMoney(enteredSalePrice * vatRateIncluded);
+  const enteredCommissionAmount = roundMoney(enteredSalePrice * commissionRate);
+  const estimatedNetProfit = roundMoney(enteredSalePrice - enteredVatAmount - enteredCommissionAmount - costWithShipping);
+  const estimatedProfitRate = enteredSalePrice > 0 ? roundMoney((estimatedNetProfit / enteredSalePrice) * 100) : 0;
+
+  return {
+    materialCost,
+    shippingCost,
+    costWithShipping,
+    shopSalePrice,
+    siteSalePrice,
+    ecommerceMarkup35Amount,
+    vatAmount,
+    commissionAmount,
+    marketplaceBufferAmount,
+    campaignBufferAmount,
+    targetProfitAmount,
+    enteredSalePrice,
+    estimatedNetProfit,
+    estimatedProfitRate,
+    suggestedSalePrice,
+    minimumSalePrice,
+  };
+}
+
+function calculatePriceResearch(research: PriceResearch, costSuggestedPrice: number) {
+  const prices = research.competitorPrices
+    .map(parsePriceText)
+    .filter((price) => Number.isFinite(price) && price > 0);
+  const averagePrice = prices.length ? prices.reduce((sum, price) => sum + price, 0) / prices.length : 0;
+  const minPrice = prices.length ? Math.min(...prices) : 0;
+  const maxPrice = prices.length ? Math.max(...prices) : 0;
+  const marketBasedPrice = averagePrice > 0 ? averagePrice : 0;
+  const safeCostPrice = Number(costSuggestedPrice || 0);
+  const suggestedPrice = roundMoney(Math.max(marketBasedPrice, safeCostPrice));
+
+  return {
+    prices,
+    averagePrice: roundMoney(averagePrice),
+    minPrice: roundMoney(minPrice),
+    maxPrice: roundMoney(maxPrice),
+    costSuggestedPrice: roundMoney(safeCostPrice),
+    suggestedPrice,
+  };
+}
+
+function calculateChannelPricing(draft: CostDetail['costDraft'], salePrice: number, commissionPercent: number): ChannelPricing[] {
+  const normalized = normalizeDraftTotals(draft);
+  const productCost = Number(normalized.totalCost || 0);
+  const vatPercent = Number(normalized.vatPercent || 20);
+  const targetMarginPercent = Number(normalized.profitMarginPercent || 45);
+  const baseShipping = Number(normalized.shippingCost || 0);
+  const summary = calculatePricing(normalized, salePrice, commissionPercent);
+  // Komisyonsuz platformlar (SITE, TRENDRUM, PAZARAMA, WHATSAPP) e-ticaret fiyatının %80'ini alır
+  const noCommissionPrice = roundMoney(summary.suggestedSalePrice * 0.8);
+  const presets = [
+    { key: 'SHOP', label: 'Dükkan / Fiziki Mağaza', salePrice: summary.shopSalePrice, commissionPercent: 0, shippingCost: 0, customerShippingCharge: 0, paymentFeePercent: 0, serviceFee: 0, otherExpense: 0 },
+    { key: 'SITE', label: 'Mağaza Web Sitesi', salePrice: noCommissionPrice, commissionPercent: 0, shippingCost: baseShipping, customerShippingCharge: 0, paymentFeePercent: 0, serviceFee: 0, otherExpense: 0 },
+    { key: 'TRENDYOL', label: 'Trendyol', salePrice: summary.suggestedSalePrice, commissionPercent: 0, shippingCost: baseShipping, customerShippingCharge: 0, paymentFeePercent: 0, serviceFee: 0, otherExpense: 0 },
+    { key: 'HEPSIBURADA', label: 'Hepsiburada', salePrice: summary.suggestedSalePrice, commissionPercent: 0, shippingCost: baseShipping, customerShippingCharge: 0, paymentFeePercent: 0, serviceFee: 0, otherExpense: 0 },
+    { key: 'N11', label: 'N11', salePrice: summary.suggestedSalePrice, commissionPercent: 0, shippingCost: baseShipping, customerShippingCharge: 0, paymentFeePercent: 0, serviceFee: 0, otherExpense: 0 },
+    { key: 'TRENDRUM', label: 'Trendrum', salePrice: summary.suggestedSalePrice, commissionPercent: 0, shippingCost: baseShipping, customerShippingCharge: 0, paymentFeePercent: 0, serviceFee: 0, otherExpense: 0 },
+    { key: 'PAZARAMA', label: 'Pazarama', salePrice: summary.suggestedSalePrice, commissionPercent: 0, shippingCost: baseShipping, customerShippingCharge: 0, paymentFeePercent: 0, serviceFee: 0, otherExpense: 0 },
+    { key: 'WHATSAPP', label: 'WhatsApp Katalog', salePrice: noCommissionPrice, commissionPercent: 0, shippingCost: 0, customerShippingCharge: 0, paymentFeePercent: 0, serviceFee: 0, otherExpense: 0 },
+  ];
+
+  return presets.map((preset) => {
+    return calculateSingleChannelPricing({
+      ...preset,
+      productCost,
+      vatPercent,
+      targetMarginPercent,
+    });
+  });
+}
+
+function calculateSingleChannelPricing(input: {
+  key: string;
+  label: string;
+  salePrice: number;
+  productCost: number;
+  vatPercent: number;
+  targetMarginPercent: number;
+  commissionPercent: number;
+  shippingCost: number;
+  customerShippingCharge: number;
+  paymentFeePercent: number;
+  serviceFee: number;
+  otherExpense: number;
+}): ChannelPricing {
+  const vatIncludedRate = input.vatPercent > 0 ? input.vatPercent / (100 + input.vatPercent) : 0;
+  const commissionRate = Math.max(input.commissionPercent, 0) / 100;
+  const paymentFeeRate = Math.max(input.paymentFeePercent, 0) / 100;
+  const businessShippingCost = Math.max(0, Number(input.shippingCost || 0) - Number(input.customerShippingCharge || 0));
+  const fixedCosts = input.productCost + businessShippingCost + Number(input.serviceFee || 0) + Number(input.otherExpense || 0);
+  const suggestedMinimumSalePrice = roundMoney(input.salePrice);
+  const vatAmount = roundMoney(input.salePrice * vatIncludedRate);
+  const commissionAmount = roundMoney(input.salePrice * commissionRate);
+  const paymentFeeAmount = roundMoney(input.salePrice * paymentFeeRate);
+  const netPriceWithoutVat = roundMoney(input.salePrice - vatAmount);
+  const netProfit = roundMoney(input.salePrice - vatAmount - commissionAmount - paymentFeeAmount - fixedCosts);
+  const netMarginPercent = input.salePrice > 0 ? roundMoney((netProfit / input.salePrice) * 100) : 0;
+  const status = input.productCost <= 0 || input.salePrice <= 0
+    ? 'Eksik veri'
+    : 'Uygun';
+
+  return {
+    key: input.key,
+    label: input.label,
+    salePrice: input.salePrice,
+    netPriceWithoutVat,
+    vatPercent: input.vatPercent,
+    vatAmount,
+    commissionPercent: input.commissionPercent,
+    commissionAmount,
+    shippingCost: input.shippingCost,
+    customerShippingCharge: input.customerShippingCharge,
+    businessShippingCost,
+    paymentFeePercent: input.paymentFeePercent,
+    paymentFeeAmount,
+    serviceFee: input.serviceFee,
+    otherExpense: input.otherExpense,
+    netProfit,
+    netMarginPercent,
+    suggestedMinimumSalePrice,
+    status,
+  };
+}
+
+function lineTotal(item: { quantity: number; source: string; manualUnitCost: number; automaticUnitCost: number; totalCost?: number; isActive?: boolean }) {
+  if (item.isActive === false) return 0;
+  const quantity = Number(item.quantity || 0);
+  const unitCost = item.source === 'MANUAL' ? Number(item.manualUnitCost || 0) : Number(item.automaticUnitCost || 0);
+  return roundMoney(quantity * unitCost);
+}
+
+function normalizeImage(path: string) {
+  if (!path) return '';
+  if (/^https?:\/\//i.test(path)) return path;
+  return apiFileUrl(path);
+}
+
+function groupLabel(value: string) {
+  const labels: Record<string, string> = {
+    LEAF_TRUNK: 'Yaprak / gövde',
+    POT: 'Saksı',
+    CONSUMABLE: 'Sarf malzeme',
+    LABOR: 'İşçilik',
+    PACKAGING: 'Paketleme',
+    OTHER: 'Diğer',
+  };
+  return labels[value] ?? value;
+}
+
+function defaultExpenseGroup(expense: DefaultExpense) {
+  const text = normalizeSearchText(`${expense.expenseKey} ${expense.name}`);
+  if (/(^|[^a-z0-9])(paket|paketleme|ambalaj|karton|kutu|koli)([^a-z0-9]|$)/.test(text)) return 'PACKAGING';
+  if (/(^|[^a-z0-9])(iscilik|is|elektrik|su|personel)([^a-z0-9]|$)/.test(text)) return 'LABOR';
+  if (/(^|[^a-z0-9])(sarf|silikon|alci|strafor)([^a-z0-9]|$)/.test(text)) return 'CONSUMABLE';
+  return 'OTHER';
+}
+
+function isStockRecipeItem(item: CostDetail['costDraft']['items'][number]) {
+  if (item.stockCardId) return true;
+  if (item.isDefaultExpense) return false;
+  return !['LABOR', 'PACKAGING', 'CONSUMABLE', 'OTHER'].includes(item.group);
+}
+
+function componentRoleLabel(role: ComponentRole) {
+  const labels: Record<ComponentRole, string> = {
+    LEAF: 'Yaprak',
+    TRUNK: 'Gövde',
+    FLOWER: 'Çiçek / demet',
+    BRANCH: 'Dal',
+    POT: 'Saksı',
+    STONE: 'Taş / dolgu',
+    PACKAGING: 'Ambalaj',
+    CONSUMABLE: 'Sarf malzeme',
+    AUXILIARY: 'Yardımcı malzeme',
+    OTHER: 'Stok kartı',
+  };
+  return labels[role];
+}
+
+function componentRoleGroup(role: ComponentRole, stockCard: StockCard) {
+  if (role === 'POT') return 'POT';
+  if (role === 'PACKAGING') return 'PACKAGING';
+  if (role === 'CONSUMABLE') return 'CONSUMABLE';
+  if (role === 'LEAF' || role === 'TRUNK' || role === 'FLOWER' || role === 'BRANCH') return 'LEAF_TRUNK';
+  return inferCostGroupFromStockCard(stockCard);
+}
+
+function inferComponentRole(stockCard: StockCard): ComponentRole {
+  const text = normalizeSearchText([
+    stockCard.name,
+    stockCard.category,
+    stockCard.productFamily,
+    stockCard.productType,
+    stockCard.sku,
+  ].filter(Boolean).join(' '));
+  if (/(^|[^a-z0-9])(saksi|pot|kap|dekor)([^a-z0-9]|$)/.test(text)) return 'POT';
+  if (/(^|[^a-z0-9])(govde|trunk|iskelet|bambu)([^a-z0-9]|$)/.test(text)) return 'TRUNK';
+  if (/(^|[^a-z0-9])(yaprak|yapraklar|yapragi|yaprakli|yapraklari|leaf|sarmasik|ficus|palmiye|areka|benjamin)([^a-z0-9]|$)/.test(text)) return 'LEAF';
+  if (/(^|[^a-z0-9])(cicek|demet|buket|menekse|limon|lavanta|gul)([^a-z0-9]|$)/.test(text)) return 'FLOWER';
+  if (/(^|[^a-z0-9])(dal|branch)([^a-z0-9]|$)/.test(text)) return 'BRANCH';
+  if (/(^|[^a-z0-9])(tas|dolgu|cakil|mermer|dolomit|strafor|alci)([^a-z0-9]|$)/.test(text)) return 'STONE';
+  if (/(^|[^a-z0-9])(ambalaj|paket|kutu|koli|karton|poset|jelatin)([^a-z0-9]|$)/.test(text)) return 'PACKAGING';
+  if (/(^|[^a-z0-9])(sarf|silikon|yapistirici|bant|tel|vida|elektrik)([^a-z0-9]|$)/.test(text)) return 'CONSUMABLE';
+  if (/(^|[^a-z0-9])(yardimci|plastik|parca|aparat|destek|aksesuar|metal|demir)([^a-z0-9]|$)/.test(text)) return 'AUXILIARY';
+  return 'OTHER';
+}
+
+function inferCostGroupFromStockCard(stockCard: StockCard) {
+  const text = normalizeSearchText([
+    stockCard.name,
+    stockCard.category,
+    stockCard.productFamily,
+    stockCard.productType,
+  ].filter(Boolean).join(' '));
+  if (/(^|[^a-z0-9])(saksi|pot|kap|dekor)([^a-z0-9]|$)/.test(text)) return 'POT';
+  if (/(^|[^a-z0-9])(ambalaj|paket|kutu|koli|karton|poset|jelatin)([^a-z0-9]|$)/.test(text)) return 'PACKAGING';
+  if (/(^|[^a-z0-9])(sarf|silikon|yapistirici|bant|tel|vida|elektrik)([^a-z0-9]|$)/.test(text)) return 'CONSUMABLE';
+  if (/(^|[^a-z0-9])(yaprak|govde|agac|dal|cicek|demet|buket|ficus|bambu|lavanta|gul)([^a-z0-9]|$)/.test(text)) return 'LEAF_TRUNK';
+  return 'OTHER';
+}
+
+function sourceLabel(value: string) {
+  return value === 'AUTO' ? 'Stok kartı maliyeti' : 'Manuel fiyat';
+}
+
+function stockCardOptionLabel(stockCard: StockCard) {
+  return [
+    stockCard.name,
+    stockCard.sku || stockCard.model || stockCard.barcode || '',
+    `${number(stockCard.stockQuantity)} ${stockCard.unit}`,
+    money(stockCard.automaticUnitCost || stockCard.manualUnitCost),
+  ].filter(Boolean).join(' · ');
+}
+
+function stockCardShortSummary(stockCard: StockCard) {
+  return `${stockCard.name} · Stok ${number(stockCard.stockQuantity)} ${stockCard.unit} · ${money(stockCard.automaticUnitCost || stockCard.manualUnitCost)}`;
+}
+
+function stockCardPrimaryImage(stockCard: StockCard | null) {
+  if (!stockCard) return '';
+  return stockCard.images?.find((image) => image.isMain && image.filePath)?.filePath
+    ?? stockCard.images?.find((image) => image.filePath)?.filePath
+    ?? stockCard.imagePath
+    ?? '';
+}
+
+function compositeProductKind(stockCard: StockCard): CompositeProductKind {
+  const text = normalizeSearchText([
+    stockCard.name,
+    stockCard.sku,
+    stockCard.model,
+    stockCard.category,
+    stockCard.productFamily,
+    stockCard.productType,
+  ].filter(Boolean).join(' '));
+  if (/(^|[^a-z0-9])(bambu|bamboo)([^a-z0-9]|$)/.test(text)) return 'BAMBOO';
+  if (/(^|[^a-z0-9])(agac|ağaç|tree|ficus|palmiye|areka|zeytin|limon)([^a-z0-9]|$)/.test(text)) return 'TREE';
+  return 'PLANT';
+}
+
+function compositeProductKindLabel(kind: CompositeProductKind) {
+  const labels: Record<CompositeProductKind, string> = {
+    TREE: 'Ağaç',
+    PLANT: 'Bitki / Çiçek',
+    BAMBOO: 'Bambu',
+  };
+  return labels[kind];
+}
+
+function filterStockCardOptions(stockCards: StockCard[], search: string, productName: string) {
+  const needle = normalizeSearchText(search);
+  return stockCards
+    .map((stockCard) => {
+      const text = normalizeSearchText([
+        stockCard.name,
+        stockCard.sku,
+        stockCard.model,
+        stockCard.barcode,
+        stockCard.category,
+        stockCard.productFamily,
+        stockCard.productType,
+      ].filter(Boolean).join(' '));
+      const directScore = needle && text.includes(needle) ? 100 : 0;
+      const tokenScore = searchTokens(needle).filter((token) => text.includes(token)).length * 20;
+      const suggestionScore = stockSuggestionScore(stockCard, search || productName, productName, stockCard.category ?? '');
+      return { stockCard, score: directScore + tokenScore + suggestionScore };
+    })
+    .filter((item) => !needle || item.score > 0)
+    .sort((a, b) => b.score - a.score || a.stockCard.name.localeCompare(b.stockCard.name, 'tr'))
+    .map((item) => item.stockCard);
+}
+
+// Trendyol gönderimi asenkron işlenir; "kuyruğa alındı" gerçek sonuç değildir.
+// Bu buton Trendyol'a ürünün kabul edilip edilmediğini ve ret sebebini sorar.
+function TrendyolBatchStatus({ platform, batchId }: { platform: string; batchId?: string | null }) {
+  const [checking, setChecking] = useState(false);
+  const [status, setStatus] = useState<{ ok: boolean; message: string; batchStatus?: string } | null>(null);
+  if (!batchId || (platform !== 'TRENDYOL' && platform !== 'TRENDYOL_FLORA')) return null;
+  const company = platform === 'TRENDYOL_FLORA' ? 'FLORA' : 'ERHAN';
+
+  async function check() {
+    setChecking(true);
+    try {
+      const result = await api<{ ok: boolean; message: string; batchStatus?: string }>(`/integrations/products/TRENDYOL/batch-status/${encodeURIComponent(batchId!)}?company=${company}`);
+      setStatus(result);
+    } catch (error) {
+      setStatus({ ok: false, message: error instanceof Error ? error.message : 'Durum sorgulanamadı.' });
+    } finally {
+      setChecking(false);
+    }
+  }
+
+  const pending = status?.ok && status.batchStatus && status.batchStatus !== 'COMPLETED';
+  return (
+    <div className="mt-1 flex flex-col gap-1">
+      <button type="button" className="btn btn-secondary min-h-8 w-fit px-3 text-xs" onClick={check} disabled={checking}>
+        <RefreshCw size={13} className={checking ? 'animate-spin' : ''} /> {checking ? 'Sorgulanıyor…' : 'Trendyol durumunu kontrol et'}
+      </button>
+      {status && (
+        <div className={`rounded-md px-2 py-1 text-xs font-semibold break-words ${pending ? 'bg-amber-50 text-amber-800' : status.ok ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'}`}>
+          {pending ? '⏳ ' : status.ok ? '✓ ' : '✗ Reddedildi: '}{status.message}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function channelLabel(value: string) {
+  const labels: Record<string, string> = {
+    SHOP: 'Dükkan',
+    SITE: 'Web sitesi',
+    TRENDYOL: 'Trendyol',
+    TRENDYOL_FLORA: 'Trendyol (Flora)',
+    HEPSIBURADA: 'Hepsiburada',
+    N11: 'N11',
+    TICIMAX: 'Diğer / Ticimax',
+    TRENDRUM: 'Trendrum',
+    PAZARAMA: 'Pazarama',
+    WHATSAPP: 'WhatsApp Katalog',
+  };
+  return labels[value] ?? value;
+}
+
+function decimalValue(value: string) {
+  const parsed = Number(String(value || '').replace(',', '.'));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function parsePriceText(value: string) {
+  const clean = String(value ?? '').replace(/[^\d.,]/g, '').trim();
+  if (!clean) return 0;
+  const normalized = clean.includes(',') && clean.includes('.')
+    ? clean.replace(/\./g, '').replace(',', '.')
+    : clean.replace(',', '.');
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function extractSizeText(value: string) {
+  return value.match(/\b\d{2,3}\s*cm\b/i)?.[0] ?? value.match(/\b\d{1,3}\s*x\s*\d{1,3}(?:\s*x\s*\d{1,3})?\b/i)?.[0] ?? '';
+}
+
+function stockSuggestionScore(stockCard: StockCard, searchText: string, productName: string, rowName?: string) {
+  const haystack = normalizeSearchText([
+    stockCard.name,
+    stockCard.sku,
+    stockCard.model,
+    stockCard.barcode,
+    stockCard.category,
+    stockCard.productFamily,
+    stockCard.productType,
+    stockCard.unit,
+  ].filter(Boolean).join(' '));
+  const typedTokens = searchTokens(searchText);
+  const productTokens = searchTokens(productName);
+  const rowTokens = searchTokens(rowName ?? '');
+  const wantedTokens = Array.from(new Set([...typedTokens, ...rowTokens, ...productTokens.filter((token) => token.length >= 4)]));
+
+  if (wantedTokens.length === 0) return 1;
+
+  let score = 0;
+  for (const token of wantedTokens) {
+    if (!haystack.includes(token)) continue;
+    score += typedTokens.includes(token) ? 12 : rowTokens.includes(token) ? 9 : 4;
+  }
+
+  if (rowTokens.some((token) => ['saksi', 'pot'].includes(token)) && normalizeSearchText(`${stockCard.category ?? ''} ${stockCard.name}`).includes('saksi')) score += 14;
+  if (rowTokens.some((token) => ['govde', 'agac', 'yaprak'].includes(token)) && /govde|agac|yaprak|dal/.test(haystack)) score += 10;
+  if (productTokens.some((token) => haystack.includes(token))) score += 3;
+
+  return score;
+}
+
+function componentRoleScore(stockCard: StockCard, role: ComponentRole) {
+  const text = normalizeSearchText([
+    stockCard.name,
+    stockCard.sku,
+    stockCard.model,
+    stockCard.category,
+    stockCard.productFamily,
+    stockCard.productType,
+    stockCard.unit,
+  ].filter(Boolean).join(' '));
+
+  if (role === 'OTHER') return 1;
+  if (role === 'TRUNK') {
+    if (/(^|[^a-z0-9])(govde|govdeli|govdeleri|govdesi|trunk|iskelet|lifli)([^a-z0-9]|$)/.test(text)) return 100;
+    if (/(^|[^a-z0-9])(agac|bambu|dal|lif)([^a-z0-9]|$)/.test(text)) return 35;
+  }
+  if (role === 'LEAF') {
+    if (/(^|[^a-z0-9])(yaprak|yapraklar|yapragi|yaprakli|yapraklari|leaf|sarmasik|ficus|palmiye|areka|benjamin)([^a-z0-9]|$)/.test(text)) return 45;
+  }
+  if (role === 'FLOWER') {
+    if (/(^|[^a-z0-9])(cicek|demet|buket|menekse|limon|lavanta|gul)([^a-z0-9]|$)/.test(text)) return 45;
+  }
+  if (role === 'BRANCH') {
+    if (/(^|[^a-z0-9])(dal|branch)([^a-z0-9]|$)/.test(text)) return 45;
+  }
+  if (role === 'POT') {
+    if (/(^|[^a-z0-9])(saksi|pot|dekor|kap)([^a-z0-9]|$)/.test(text)) return 40;
+  }
+  if (role === 'STONE') {
+    if (/(^|[^a-z0-9])(tas|dolgu|cakil|mermer|dolomit|strafor|alci)([^a-z0-9]|$)/.test(text)) return 45;
+  }
+  if (role === 'PACKAGING') {
+    if (/(^|[^a-z0-9])(ambalaj|paket|kutu|koli|karton|poset|jelatin)([^a-z0-9]|$)/.test(text)) return 45;
+  }
+  if (role === 'CONSUMABLE') {
+    if (/(^|[^a-z0-9])(sarf|silikon|yapistirici|bant|tel|vida|elektrik)([^a-z0-9]|$)/.test(text)) return 45;
+  }
+  if (role === 'AUXILIARY') {
+    if (/(^|[^a-z0-9])(yardimci|plastik|parca|aparat|destek|aksesuar|metal|demir)([^a-z0-9]|$)/.test(text)) return 45;
+  }
+  return 0;
+}
+
+function isCompositeTrunkStockCard(stockCard: StockCard) {
+  if (isProtectedCompositeStockCard(stockCard)) return true;
+  const role = inferComponentRole(stockCard);
+  if (role === 'TRUNK' || role === 'BRANCH') return true;
+  const text = normalizeSearchText([
+    stockCard.name,
+    stockCard.sku,
+    stockCard.model,
+    stockCard.barcode,
+    stockCard.category,
+    stockCard.productFamily,
+    stockCard.productType,
+  ].filter(Boolean).join(' '));
+  const categoryText = normalizeSearchText(stockCard.category ?? '');
+  if (/agac.*govde|govde.*agac|bambu.*govde|govde.*bambu/.test(categoryText)) return true;
+  if (/(^|[^a-z0-9])(yaprak|yapraklar|yapragi|yaprakli|yapraklari|leaf|cicek|demet|buket|benjamin)([^a-z0-9]|$)/.test(text) && !/(^|[^a-z0-9])(govde|govdeli|govdeleri|govdesi|trunk|iskelet|lifli)([^a-z0-9]|$)/.test(text)) return false;
+  return /(^|[^a-z0-9])(govde|govdeli|govdeleri|govdesi|trunk|iskelet|bambu govde|dal|lifli|lif)([^a-z0-9]|$)/.test(text);
+}
+
+function isProtectedCompositeStockCard(stockCard: StockCard) {
+  const text = normalizeSearchText([stockCard.name, stockCard.category].filter(Boolean).join(' '));
+  return stockCard.id === 234 || (text.includes('agac govde') && text.includes('agac govdeleri'));
+}
+
+function findCategoryIdForStock(stockCard: StockCard, categories: Category[], productName: string) {
+  const stockCategory = normalizeSearchText(stockCard.category ?? '');
+  const stockText = normalizeSearchText(`${stockCard.name} ${stockCard.category ?? ''} ${stockCard.productType ?? ''} ${productName}`);
+  const exact = categories.find((category) => normalizeSearchText(category.name) === stockCategory);
+  if (exact) return exact.id;
+
+  const contains = findCategoryByDistinctiveName(stockText, categories);
+  if (contains) return contains.id;
+
+  if (/demet|buket|cicek|guller|gul|lavanta|limon/.test(stockText)) {
+    return findGenericCategory(categories, /cicek|buket/)?.id ?? null;
+  }
+  if (/agac|ficus|bambu|areka|palmiye|yapay/.test(stockText)) {
+    return findGenericCategory(categories, /agac|bambu/)?.id ?? null;
+  }
+  if (/saksi|pot|dekor/.test(stockText)) {
+    return categories.find((category) => /saksi|dekor/.test(normalizeSearchText(category.name)))?.id ?? null;
+  }
+  return null;
+}
+
+// Kategori adındaki genel kelimeler (ağaç, çiçek, yapay...) tek başına eşleşme sebebi olamaz.
+// Aksi halde "Muz Ağacı" ürünü "ağacı" kelimesi yüzünden "Zeytin Ağacı" kategorisine düşüyordu.
+const GENERIC_CATEGORY_TOKENS = new Set([
+  'yapay', 'agac', 'agaci', 'agaclar', 'agaclari', 'cicek', 'cicegi', 'cicekler', 'cicekleri', 'bitki', 'bitkisi', 'bitkiler', 'bitkileri',
+  'saksi', 'saksida', 'saksili', 'saksilar', 'plastik', 'dekoratif', 'dekor', 'buyuk', 'kucuk', 'orta', 'boy', 'yaprak', 'yaprakli', 'dal', 'dalli',
+  'model', 'urun', 'urunler', 'hazir', 'kuru', 'dogal', 'ithal', 've', 'ile',
+]);
+
+function distinctiveCategoryTokens(categoryName: string) {
+  return normalizeSearchText(categoryName)
+    .split(/[^a-z0-9]+/)
+    .filter((token) => token.length >= 3 && !GENERIC_CATEGORY_TOKENS.has(token));
+}
+
+function findCategoryByDistinctiveName(normalizedText: string, categories: Category[]) {
+  const words = new Set(normalizedText.split(/[^a-z0-9]+/).filter(Boolean));
+  return categories.find((category) => {
+    const categoryText = normalizeSearchText(category.name);
+    if (!categoryText) return false;
+    if (normalizedText.includes(categoryText)) return true;
+    return distinctiveCategoryTokens(category.name).some((token) => words.has(token) || (token.length >= 5 && normalizedText.includes(token)));
+  });
+}
+
+function findGenericCategory(categories: Category[], pattern: RegExp) {
+  // Belirli bir türe ait kategori (ör. Zeytin Ağacı) yerine genel kategoriyi (ör. Yapay Ağaçlar) tercih et.
+  return categories.find((category) => pattern.test(normalizeSearchText(category.name)) && distinctiveCategoryTokens(category.name).length === 0) ?? null;
+}
+
+function findCategoryIdForProductName(productName: string, categories: Category[]) {
+  const text = normalizeSearchText(productName);
+  const direct = findCategoryByDistinctiveName(text, categories);
+  if (direct) return direct.id;
+  if (/demet|buket|cicek|guller|gul|lavanta|limon/.test(text)) {
+    return findGenericCategory(categories, /cicek|buket/)?.id ?? null;
+  }
+  if (/agac|ficus|bambu|areka|palmiye|yapay/.test(text)) {
+    return findGenericCategory(categories, /agac|bambu/)?.id ?? null;
+  }
+  if (/saksi|pot|dekor/.test(text)) {
+    return categories.find((category) => /saksi|dekor/.test(normalizeSearchText(category.name)))?.id ?? null;
+  }
+  return null;
+}
+
+function buildSeoProductName(productName: string, stockCard: StockCard | null, categories: Category[], draft?: CostDetail['costDraft']) {
+  const recipeNames = draft ? [
+    ...draft.items.filter(isStockRecipeItem),
+    ...draft.pots,
+  ].map((item) => cleanSeoProductPart(item.name)).filter(Boolean).join(' ') : '';
+  const sourceName = cleanSeoProductPart(productName || recipeNames || stockCard?.name || '').trim();
+  if (sourceName.length < 3) return '';
+  const categoryName = stockCard ? categories.find((category) => category.id === findCategoryIdForStock(stockCard, categories, productName))?.name : '';
+  const size = extractSizeText(sourceName);
+  const parts = [
+    normalizeSearchText(sourceName).includes(normalizeSearchText(currentBrand)) ? '' : currentBrand,
+    sourceName,
+    size && !normalizeSearchText(sourceName).includes(normalizeSearchText(size)) ? size : '',
+    categoryName && shouldAppendCategoryToName(sourceName, categoryName) ? categoryName : '',
+  ].filter(Boolean);
+  return titleCaseTr(dedupeSeoWords(parts.join(' ').replace(/\s+/g, ' ').trim()));
+}
+
+function shouldAppendCategoryToName(sourceName: string, categoryName: string) {
+  const source = normalizeSearchText(sourceName);
+  const category = normalizeSearchText(categoryName);
+  if (!category || source.includes(category)) return false;
+  // Ürün adı zaten bir tür belirtiyorsa (ağaç/çiçek/bitki...) farklı bir tür adı eklenmez:
+  // "Muz Ağacı" adına "Zeytin Ağacı" eklemek ürünü yanlış tanıtır.
+  const sourceWords = source.split(/[^a-z0-9]+/).filter(Boolean);
+  const categoryStems = category.split(/[^a-z0-9]+/).filter((token) => token.length >= 3).map((token) => token.slice(0, 4));
+  return !categoryStems.some((stem) => sourceWords.some((word) => word.startsWith(stem)));
+}
+
+function buildLocalSeoContent(data: { productName: string; productHeight?: string; potType?: string; potSize?: string; fillerMaterial?: string }): GeminiSeoResult {
+  const productName = titleCaseTr(dedupeSeoWords(cleanSeoProductPart(data.productName || `${currentBrand} Yapay Çiçek`).trim()));
+  const details = [
+    data.productHeight ? `${data.productHeight} ölçüsüyle dekorasyonda dengeli bir görünüm sunar` : '',
+    data.potType ? `${data.potType} ile kullanıma hazır şekilde hazırlanır` : '',
+    data.potSize ? `saksı ölçüsü ${data.potSize} olarak planlanır` : '',
+    data.fillerMaterial ? `saksı içi ${data.fillerMaterial} dolgu ile tamamlanır` : '',
+  ].filter(Boolean);
+  const detailSentence = details.length ? `${details.join(', ')}.` : 'Ev, ofis, mağaza ve otel dekorasyonlarında doğal görünümlü tamamlayıcı ürün olarak kullanılabilir.';
+  const description = [
+    `${productName}, ${currentBrand} kalitesiyle hazırlanan dekoratif yapay çiçek ve bitki ürünüdür. ${detailSentence}`,
+    'Bakım gerektirmeyen yapısı sayesinde canlı bitki görünümünü pratik kullanım avantajıyla birleştirir. İç mekan dekorasyonunda giriş alanı, salon, vitrin, masa çevresi ve kurumsal alanlarda şık bir atmosfer oluşturur.',
+    'Yapay çiçek ve ağaç ürünlerinde temizlik için nemli ve yumuşak bir bez kullanınız. Kimyasal temizleyici, çamaşır suyu ve aşındırıcı malzemeler kullanmayınız. Ürünü doğrudan yoğun güneş ışığına, aşırı neme ve yüksek ısıya uzun süre maruz bırakmayınız. Formunu korumak için dalları ve yaprakları nazikçe şekillendiriniz.',
+  ].join('\n\n');
+  return { productName, description };
+}
+
+function cleanSeoProductPart(value: string) {
+  return cleanText(value)
+    .replace(/\b(genel\s*gider|kira|elektrik|su|işçilik|iscilik|paketleme|ambalaj|karton|silikon|strafor|alçı|alci)\b/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function dedupeSeoWords(value: string) {
+  const words = value.split(/\s+/).filter(Boolean);
+  const result: string[] = [];
+  for (let index = 0; index < words.length; index += 1) {
+    const currentPair = normalizeSearchText(`${words[index]} ${words[index + 1] ?? ''}`).trim();
+    const previousPair = normalizeSearchText(`${result[result.length - 2] ?? ''} ${result[result.length - 1] ?? ''}`).trim();
+    if (currentPair === 'erhan flowers' && previousPair === 'erhan flowers') {
+      index += 1;
+      continue;
+    }
+    result.push(words[index]);
+  }
+  return result.join(' ');
+}
+
+function titleCaseTr(value: string) {
+  return value
+    .toLocaleLowerCase('tr-TR')
+    .split(' ')
+    .map((word) => word.length <= 2 ? word.toLocaleUpperCase('tr-TR') : word.charAt(0).toLocaleUpperCase('tr-TR') + word.slice(1))
+    .join(' ');
+}
+
+function searchTokens(value: string) {
+  return normalizeSearchText(value)
+    .split(/[^a-z0-9]+/i)
+    .map((token) => token.trim())
+    .filter((token) => token.length >= 2 && !['cm', 've', 'ile', 'icin', 'renk', 'boy', 'adet', 'yapay'].includes(token));
+}
+
+function normalizeSearchText(value: string) {
+  return cleanText(value || '')
+    .toLocaleLowerCase('tr-TR')
+    .replace(/ı/g, 'i')
+    .replace(/ğ/g, 'g')
+    .replace(/ü/g, 'u')
+    .replace(/ş/g, 's')
+    .replace(/ö/g, 'o')
+    .replace(/ç/g, 'c')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/ı/g, 'i')
+    .replace(/ğ/g, 'g')
+    .replace(/ü/g, 'u')
+    .replace(/ş/g, 's')
+    .replace(/ö/g, 'o')
+    .replace(/ç/g, 'c');
+}
+
+function money(value: unknown) {
+  return `${Number(value || 0).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} TL`;
+}
+
+function number(value: unknown) {
+  return Number(value || 0).toLocaleString('tr-TR', { maximumFractionDigits: 2 });
+}
+
+function roundMoney(value: number) {
+  return Math.round((Number(value || 0) + Number.EPSILON) * 100) / 100;
+}
+
+function normalizeEntry(entry: Entry): Entry {
+  return {
+    ...entry,
+    productName: cleanText(entry.productName),
+    categoryName: entry.categoryName ? cleanText(entry.categoryName) : entry.categoryName,
+    familyName: entry.familyName ? cleanText(entry.familyName) : entry.familyName,
+    brand: cleanText(entry.brand),
+    channelCategoryName: cleanText(entry.channelCategoryName),
+    colorVariant: cleanText(entry.colorVariant),
+    description: cleanText(entry.description),
+    costStatus: cleanText(entry.costStatus),
+    seoApprovalStatus: cleanText(entry.seoApprovalStatus),
+  };
+}
+
+function normalizeStockCards(stockCards: StockCard[]) {
+  return stockCards.map((stockCard) => ({
+    ...stockCard,
+    name: cleanText(stockCard.name),
+    sku: stockCard.sku ? cleanText(stockCard.sku) : stockCard.sku,
+    unit: cleanText(stockCard.unit),
+  }));
+}
+
+function normalizeFamily(family: Family): Family {
+  return {
+    ...family,
+    familyName: cleanText(family.familyName),
+    templates: family.templates?.map((template) => ({
+      ...template,
+      templateName: cleanText(template.templateName),
+    })),
+    sizeOptions: family.sizeOptions?.map((option) => ({
+      ...option,
+      sizeLabel: cleanText(option.sizeLabel),
+    })),
+    potOptions: family.potOptions?.map((option) => ({
+      ...option,
+      potName: cleanText(option.potName),
+    })),
+  };
+}
+
+function normalizeCostDetail(detail: CostDetail): CostDetail {
+  return {
+    ...detail,
+    costDraft: {
+      ...detail.costDraft,
+      items: detail.costDraft.items.map((item) => ({
+        ...item,
+        name: cleanText(item.name),
+        group: cleanText(item.group),
+        unit: cleanText(item.unit),
+        source: cleanText(item.source),
+      })),
+      pots: detail.costDraft.pots.map((pot) => ({
+        ...pot,
+        name: cleanText(pot.name),
+        potType: pot.potType ? cleanText(pot.potType) : pot.potType,
+        color: pot.color ? cleanText(pot.color) : pot.color,
+        source: cleanText(pot.source),
+      })),
+    },
+  };
+}
+
+function cleanText(value: string) {
+  if (!value) return value;
+  return mojibakeReplacements.reduce((text, [bad, good]) => text.split(bad).join(good), value);
+}
+
+const mojibakeReplacements = [
+  ['\u00c3\u0152', 'Ü'],
+  ['\u00c3\u00bc', 'ü'],
+  ['\u00c3\u2013', 'Ö'],
+  ['\u00c3\u00b6', 'ö'],
+  ['\u00c3\u2021', 'Ç'],
+  ['\u00c3\u00a7', 'ç'],
+  ['\u00c4\u00b0', 'İ'],
+  ['\u00c4\u00b1', 'ı'],
+  ['\u00c4\u017d', 'Ğ'],
+  ['\u00c4\u0178', 'ğ'],
+  ['\u00c5\u009e', 'Ş'],
+  ['\u00c5\u017d', 'Ş'],
+  ['\u00c5\u0178', 'ş'],
+] as const;
