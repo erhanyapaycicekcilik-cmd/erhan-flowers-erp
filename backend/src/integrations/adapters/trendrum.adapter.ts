@@ -77,30 +77,55 @@ export class TrendrumAdapter extends BaseIntegrationAdapter {
     };
   }
 
-  // Trendruum'dan tüm kategorileri çekip cache'e yükler
+  // Trendruum'dan tüm kategorileri çekip cache'e yükler.
+  // Yanıt biçimi kesin bilinmediği için esnek: data | data.data | data.categories | items; sayfalıysa
+  // (meta.last_page / last_page / links.next / total_pages) tüm sayfalar gezilir; alt kategoriler düzleştirilir.
+  private categoryDiag = '';
   private async loadCategories(headers: Record<string, string>): Promise<void> {
     if (this.categoryCache.length > 0) return;
+    const flat: Array<{ id: string; name: string }> = [];
+    const seen = new Set<string>();
+    const walk = (list: unknown, parent = '') => {
+      if (!Array.isArray(list)) return;
+      for (const raw of list as Record<string, unknown>[]) {
+        if (!raw || typeof raw !== 'object') continue;
+        const id = String(raw._id ?? raw.id ?? raw.category_id ?? raw.categoryId ?? '');
+        const ownName = String(raw.name ?? raw.title ?? raw.category_name ?? raw.categoryName ?? '');
+        const path = parent ? `${parent} > ${ownName}` : ownName;
+        if (id && ownName && !seen.has(id)) { seen.add(id); flat.push({ id, name: path }); }
+        walk(raw.children ?? raw.subcategories ?? raw.sub_categories ?? raw.subCategories ?? raw.childs ?? raw.child_categories, path);
+      }
+    };
+    const listOf = (body: Record<string, any>): unknown[] => {
+      const candidates = [body?.data?.data, body?.data?.categories, body?.data?.items, body?.data, body?.categories, body?.items, body?.results, body];
+      return (candidates.find((c) => Array.isArray(c)) as unknown[]) ?? [];
+    };
+    const lastPageOf = (body: Record<string, any>): number => Number(
+      body?.meta?.last_page ?? body?.data?.last_page ?? body?.last_page ?? body?.meta?.total_pages ?? body?.data?.meta?.last_page ?? body?.total_pages ?? 1,
+    ) || 1;
     try {
-      const res = await fetch(`${TRENDRUM_API}/categories`, {
-        headers,
-        signal: AbortSignal.timeout(10000),
-      });
-      if (!res.ok) return;
-      const data = await res.json() as { data?: unknown[] };
-      // Alt kategoriler (children / subcategories / sub_categories) de listeye alınır
-      const flat: Array<{ id: string; name: string }> = [];
-      const walk = (list: unknown, parent = '') => {
-        if (!Array.isArray(list)) return;
-        for (const raw of list as Record<string, unknown>[]) {
-          const id = String(raw._id ?? raw.id ?? '');
-          const name = String(raw.name ?? raw.title ?? '');
-          if (id && name) flat.push({ id, name: parent ? `${parent} > ${name}` : name });
-          walk(raw.children ?? raw.subcategories ?? raw.sub_categories ?? raw.subCategories, parent ? `${parent} > ${name}` : name);
+      let page = 1;
+      let lastPage = 1;
+      do {
+        const url = page === 1 ? `${TRENDRUM_API}/categories` : `${TRENDRUM_API}/categories?page=${page}`;
+        const res = await fetch(url, { headers, signal: AbortSignal.timeout(15000) });
+        if (!res.ok) { this.categoryDiag = `kategori isteği HTTP ${res.status}`; break; }
+        const body = (await res.json()) as Record<string, any>;
+        const items = listOf(body);
+        if (page === 1) {
+          lastPage = Math.min(lastPageOf(body), 50);
+          const first = items[0] as Record<string, unknown> | undefined;
+          this.categoryDiag = `yanıt anahtarları: ${Object.keys(body ?? {}).join(',')}; ilk kayıt alanları: ${first ? Object.keys(first).join(',') : '-'}`;
         }
-      };
-      walk(data.data ?? []);
+        const before = flat.length;
+        walk(items);
+        if (flat.length === before) break; // yeni kayıt gelmiyorsa dur
+        page += 1;
+      } while (page <= lastPage);
       this.categoryCache = flat;
-    } catch { /* kategori listesi çekilemedi, devam */ }
+    } catch (error) {
+      this.categoryDiag = `kategori listesi alınamadı: ${error instanceof Error ? error.message : String(error)}`;
+    }
   }
 
   // Trendruum'dan marka listesini cache'e yükler
@@ -304,8 +329,8 @@ export class TrendrumAdapter extends BaseIntegrationAdapter {
         ok: false,
         status: 'FAILED',
         message: this.categoryCache.length === 0
-          ? `Trendrum: kategori listesi alınamadı (API). "${categoryName}" eşleştirilemedi; biraz sonra tekrar deneyin.`
-          : `Trendrum: "${categoryName}" kategorisi Trendrum'da bulunamadı.${this.nearestCategories(categoryName).length ? ` En yakınlar: ${this.nearestCategories(categoryName).join(' · ')}` : ''} Ürünün kanal kategorisi adını Trendrum'daki adla aynı yapın.`,
+          ? `Trendrum: kategori listesi alınamadı (${this.categoryDiag || 'API'}). "${categoryName}" eşleştirilemedi; biraz sonra tekrar deneyin.`
+          : `Trendrum: "${categoryName}" kategorisi Trendrum'da bulunamadı.${this.nearestCategories(categoryName).length ? ` En yakınlar: ${this.nearestCategories(categoryName).join(' · ')}` : ` Trendrum'dan ${this.categoryCache.length} kategori alındı, örnek: ${this.categoryCache.slice(0, 8).map((c) => c.name).join(' · ')} (${this.categoryDiag}).`} Ürünün kanal kategorisi adını Trendrum'daki adla aynı yapın.`,
       };
     }
     if (!brand_id) {
